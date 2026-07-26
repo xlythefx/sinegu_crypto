@@ -12,7 +12,6 @@ import {
   computeStrategyStats,
   groupTradesByStrategy,
 } from '../../lib/strategyStats'
-import './AdminStrategies.css'
 
 export default function AdminStrategies() {
   const { data, loading, error, reload } = useApiData(getStrategies)
@@ -96,43 +95,61 @@ export default function AdminStrategies() {
   return (
     <AdminLayout title="Strategies" subtitle="Performance per trading strategy.">
       {/* header */}
-      <div className="astrat-header" data-aos="fade-up">
-        <div className="astrat-header__left">
-          <span className="astrat-header__icon">
+      <div
+        className="flex flex-wrap items-center justify-between gap-3.5 mb-4 p-card border border-accent-line rounded-card bg-[linear-gradient(to_bottom_right,var(--accentSoft),var(--surface))]"
+        data-aos="fade-up"
+      >
+        <div className="flex items-center gap-3">
+          <span className="grid place-items-center w-[42px] h-[42px] border border-accent-line rounded-row bg-accent-soft text-accent">
             <Layers size={18} />
           </span>
           <div>
-            <div className="astrat-header__title">Strategy Overview</div>
-            <div className="astrat-header__desc">
+            <div className="font-display text-[15px] font-extrabold">
+              Strategy Overview
+            </div>
+            <div className="mt-px text-[12px] text-muted">
               Performance breakdown per trading strategy
             </div>
           </div>
         </div>
         {strategies.length > 0 && (
-          <span className="astrat-count">
+          <span className="flex items-center gap-[7px] py-[7px] px-3.5 border border-border rounded-pill bg-surface2 text-[12.5px] text-muted">
             <Activity size={13} />
-            <b>{strategies.length}</b>
+            <b className="text-text">{strategies.length}</b>
             {strategies.length === 1 ? 'strategy' : 'strategies'}
           </span>
         )}
       </div>
 
       {actionError && (
-        <p className="astrat-error" role="alert">
+        <p
+          className="mb-3.5 py-[9px] px-3 border border-[color-mix(in_srgb,var(--red)_30%,transparent)] rounded-field bg-[color-mix(in_srgb,var(--red)_8%,transparent)] text-[12.5px] text-red"
+          role="alert"
+        >
           {actionError}
         </p>
       )}
 
       {strategies.length === 0 ? (
-        <div className="astrat-empty" data-aos="fade-up" data-aos-delay="100">
+        <div
+          className="py-11 px-5 border border-dashed border-border rounded-card bg-surface2 text-center text-[13px] text-muted"
+          data-aos="fade-up"
+          data-aos-delay="100"
+        >
           No trades with strategy information found yet.
         </div>
       ) : (
         <>
           {/* strategy filter */}
-          <div className="astrat-filter" data-aos="fade-up" data-aos-delay="100">
-            <p className="astrat-filter__label">FILTER BY STRATEGY</p>
-            <div className="astrat-filter__grid">
+          <div
+            className="mb-[18px] p-card border border-border rounded-card bg-surface"
+            data-aos="fade-up"
+            data-aos-delay="100"
+          >
+            <p className="mb-[11px] font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-faint">
+              FILTER BY STRATEGY
+            </p>
+            <div className="grid grid-cols-3 gap-[9px] max-[640px]:grid-cols-2">
               <StrategyFilterBtn
                 active={selected === null}
                 onClick={() => setSelected(null)}
@@ -154,8 +171,11 @@ export default function AdminStrategies() {
             </div>
           </div>
 
-          {/* strategy cards */}
-          <div className="astrat-cards">
+          {/* strategy cards — re-mounts on filter change to replay the reveal */}
+          <div
+            key={selected ?? 'all'}
+            className="grid grid-cols-3 gap-[18px] items-start max-[1200px]:grid-cols-2 max-[760px]:grid-cols-1 animate-[fadeup_0.35s_ease-out]"
+          >
             {visible.map((s) => (
               <StrategyCard
                 key={s.key}
@@ -218,7 +238,11 @@ function StrategyFilterBtn({
       title={title}
       aria-pressed={active}
       onClick={onClick}
-      className={`astrat-filter-btn${active ? ' astrat-filter-btn--active' : ''}`}
+      className={`min-h-[58px] min-w-0 [overflow-wrap:break-word] py-2.5 px-3 border rounded-strip text-[12.5px] leading-[1.35] cursor-pointer transition-[background,border-color,color] duration-150 ${
+        active
+          ? 'bg-accent border-accent text-on-accent font-bold hover:bg-accent hover:border-accent'
+          : 'border-border bg-surface2 text-text font-semibold hover:border-accent-line hover:bg-accent-soft'
+      }`}
     >
       {children}
     </button>

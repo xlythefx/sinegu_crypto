@@ -11,9 +11,15 @@ import { getAdminDailyPnl } from '../../services/admin'
 import { displaySymbol } from '../../lib/chart'
 import { fmtMediumDate, fmtSignedMoney } from '../../lib/format'
 import type { DailyPnlDay } from '../../types/admin'
-import './AdminPnlCalendar.css'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+/** Base calendar cell (no background — set per-cell to keep blanks transparent). */
+const cellBase =
+  'relative flex flex-col justify-between items-start min-h-[82px] py-3 px-[13px] rounded-row border-0 text-left transition-[transform,box-shadow] duration-150 max-[700px]:min-h-[60px] max-[700px]:py-[9px] max-[700px]:px-2.5 max-[700px]:rounded-field'
+
+const navBtn =
+  'inline-flex items-center gap-1 h-8 px-3 rounded-btn border border-accent-soft bg-surface text-accent text-[12px] font-semibold cursor-pointer hover:enabled:bg-accent-soft disabled:opacity-45 disabled:cursor-not-allowed'
 
 interface Cell {
   day: number | null
@@ -97,32 +103,34 @@ export default function AdminPnlCalendar() {
   }, [selected])
 
   return (
-    <section className="apc-cal dcard" data-aos="fade-up" data-aos-delay="250">
-      <div className="dcard__title-row">
-        <span className="dchip">
+    <section
+      className="rounded-card border border-border bg-surface p-card"
+      data-aos="fade-up"
+      data-aos-delay="250"
+    >
+      <div className="flex items-center gap-2.5 mb-[14px]">
+        <span className="w-7 h-7 rounded-[9px] bg-accent-soft border border-accent-line grid place-items-center text-accent flex-none">
           <CalendarIcon size={16} />
         </span>
         <div>
-          <div className="dcard__title">Daily P&L Calendar</div>
-          <div className="dcard__sub">
+          <div className="font-display text-[15px] font-extrabold">
+            Daily P&L Calendar
+          </div>
+          <div className="text-[12px] text-muted mt-px">
             {winDays} green / {lossDays} red days · click a day for its trades
           </div>
         </div>
       </div>
 
-      <div className="apc-cal__nav">
-        <button
-          type="button"
-          className="apc-cal__nav-btn"
-          onClick={() => changeMonth(-1)}
-        >
+      <div className="flex items-center justify-between gap-2.5 mb-3">
+        <button type="button" className={navBtn} onClick={() => changeMonth(-1)}>
           <ChevronLeft size={14} />
           Previous
         </button>
-        <span className="apc-cal__month">{monthLabel}</span>
+        <span className="text-[13px] font-extrabold">{monthLabel}</span>
         <button
           type="button"
-          className="apc-cal__nav-btn"
+          className={navBtn}
           disabled={!canGoNext}
           onClick={() => canGoNext && changeMonth(1)}
         >
@@ -131,16 +139,26 @@ export default function AdminPnlCalendar() {
         </button>
       </div>
 
-      <div className="apc-cal__weekdays">
+      <div className="grid grid-cols-7 gap-2 mb-2">
         {WEEKDAYS.map((d) => (
-          <span key={d}>{d}</span>
+          <span
+            key={d}
+            className="text-center font-mono text-[10px] font-semibold uppercase tracking-[0.5px] text-faint"
+          >
+            {d}
+          </span>
         ))}
       </div>
 
-      <div className="apc-cal__grid">
+      <div
+        key={monthLabel}
+        className="grid grid-cols-7 gap-[9px] animate-[fadeup_0.35s_ease-out]"
+      >
         {cells.map((c, i) => {
           if (c.day === null)
-            return <div key={`blank-${i}`} className="apc-cal__cell apc-cal__cell--blank" />
+            return (
+              <div key={`blank-${i}`} className={`${cellBase} bg-transparent`} />
+            )
 
           const pnl = c.data?.total ?? 0
           const intensity =
@@ -151,34 +169,37 @@ export default function AdminPnlCalendar() {
               : pnl < 0
                 ? `rgba(255, 90, 90, ${intensity.toFixed(3)})`
                 : undefined
-          const cls =
-            pnl > 0
-              ? ' apc-cal__cell--pos'
-              : pnl < 0
-                ? ' apc-cal__cell--neg'
-                : ''
-          const active = c.iso === selected ? ' apc-cal__cell--active' : ''
-          const clickable = c.data ? ' apc-cal__cell--clickable' : ''
+          const active =
+            c.iso === selected ? ' outline outline-2 outline-accent outline-offset-1' : ''
+          const clickable = c.data
+            ? ' cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_8px_22px_rgba(0,0,0,0.22)]'
+            : ''
 
           return (
             <button
               type="button"
               key={`day-${c.iso}`}
-              className={`apc-cal__cell${cls}${active}${clickable}`}
+              className={`${cellBase} bg-surface2${active}${clickable}`}
               style={{ background: bg }}
               onClick={() => c.data && setSelected(c.iso === selected ? null : c.iso)}
               disabled={!c.data}
             >
-              <span className="apc-cal__day">{c.day}</span>
+              <span className="text-[11px] font-bold text-faint">{c.day}</span>
               <span
-                className={`apc-cal__pnl mono ${pnl > 0 ? 'is-pos' : pnl < 0 ? 'is-neg' : 'is-flat'}`}
+                className={`font-mono text-[12px] max-w-full overflow-hidden text-ellipsis ${
+                  pnl > 0
+                    ? 'font-extrabold text-green'
+                    : pnl < 0
+                      ? 'font-extrabold text-red'
+                      : 'font-semibold text-faint'
+                }`}
               >
                 {pnl === 0
                   ? '—'
                   : `${pnl > 0 ? '+' : '−'}$${Math.abs(pnl).toFixed(0)}`}
               </span>
               {c.data && c.data.trades.length > 0 && (
-                <span className="apc-cal__count mono">
+                <span className="absolute top-1.5 right-1.5 min-w-4 h-4 px-1 inline-flex items-center justify-center rounded-pill bg-surface border border-border font-mono text-[9.5px] font-bold text-muted">
                   {c.data.trades.length}
                 </span>
               )}
@@ -191,71 +212,80 @@ export default function AdminPnlCalendar() {
         selectedDay &&
         createPortal(
           <div
-            className="apc-cal__modal-overlay"
+            className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-[2px]"
             role="dialog"
             aria-modal="true"
             aria-label={`Trades on ${fmtMediumDate(selected)}`}
             onClick={() => setSelected(null)}
           >
-          <div
-            className="apc-cal__modal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="apc-cal__modal-head">
-              <div>
-                <div className="apc-cal__detail-title">
-                  {fmtMediumDate(selected)}
-                </div>
-                <div className="apc-cal__detail-sub">
-                  {selectedDay.trades.length} trade
-                  {selectedDay.trades.length === 1 ? '' : 's'} ·{' '}
-                  {selectedDay.wins}W / {selectedDay.losses}L · net{' '}
-                  <span
-                    className={`mono ${selectedDay.total < 0 ? 'is-neg' : 'is-pos'}`}
-                  >
-                    {fmtSignedMoney(selectedDay.total)}
-                  </span>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="apc-cal__detail-close"
-                onClick={() => setSelected(null)}
-                aria-label="Close"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="apc-cal__trades">
-              {selectedDay.trades.map((t, i) => {
-                const short = t.position_side === 'SHORT'
-                return (
-                  <div className="apc-cal__trade" key={`${t.symbol}-${i}`}>
-                    <div className="apc-cal__trade-left">
-                      <span className="apc-cal__trade-sym">
-                        {displaySymbol(t.symbol)}
-                      </span>
-                      <span
-                        className={`apc-cal__trade-side ${short ? 'is-short' : 'is-long'}`}
-                      >
-                        {t.position_side}
-                      </span>
-                      {t.strategy && (
-                        <span className="apc-cal__trade-strat">{t.strategy}</span>
-                      )}
-                    </div>
+            <div
+              className="flex max-h-[85vh] w-full max-w-[540px] flex-col overflow-hidden rounded-card border border-border bg-surface shadow-[0_30px_80px_rgba(0,0,0,0.45)]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3 border-b border-hair py-4 px-5">
+                <div>
+                  <div className="font-display text-[16px] font-extrabold">
+                    {fmtMediumDate(selected)}
+                  </div>
+                  <div className="text-[12.5px] text-muted mt-0.5">
+                    {selectedDay.trades.length} trade
+                    {selectedDay.trades.length === 1 ? '' : 's'} ·{' '}
+                    {selectedDay.wins}W / {selectedDay.losses}L · net{' '}
                     <span
-                      className={`apc-cal__trade-pnl mono ${t.realized_pnl < 0 ? 'is-neg' : 'is-pos'}`}
+                      className={`font-mono ${selectedDay.total < 0 ? 'text-red' : 'text-green'}`}
                     >
-                      {fmtSignedMoney(t.realized_pnl)}
+                      {fmtSignedMoney(selectedDay.total)}
                     </span>
                   </div>
-                )
-              })}
+                </div>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center w-[30px] h-[30px] rounded-btn border border-border bg-surface text-muted cursor-pointer shrink-0 hover:text-text hover:border-accent"
+                  onClick={() => setSelected(null)}
+                  aria-label="Close"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-2 overflow-y-auto p-4">
+                {selectedDay.trades.map((t, i) => {
+                  const short = t.position_side === 'SHORT'
+                  return (
+                    <div
+                      className="flex items-center justify-between gap-3 py-2.5 px-3 border border-hair rounded-field bg-surface"
+                      key={`${t.symbol}-${i}`}
+                    >
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className="font-bold text-[13.5px]">
+                          {displaySymbol(t.symbol)}
+                        </span>
+                        <span
+                          className={`font-mono text-[10px] font-semibold tracking-[0.06em] py-0.5 px-2 rounded-pill border ${
+                            short
+                              ? 'text-red border-[rgba(255,90,90,0.35)] bg-[rgba(255,90,90,0.08)]'
+                              : 'text-green border-[rgba(47,214,122,0.35)] bg-[rgba(47,214,122,0.08)]'
+                          }`}
+                        >
+                          {t.position_side}
+                        </span>
+                        {t.strategy && (
+                          <span className="text-[11.5px] text-faint">
+                            {t.strategy}
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        className={`font-mono text-[13.5px] font-extrabold shrink-0 ${t.realized_pnl < 0 ? 'text-red' : 'text-green'}`}
+                      >
+                        {fmtSignedMoney(t.realized_pnl)}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
-          </div>
-        </div>,
+          </div>,
           document.body,
         )}
     </section>

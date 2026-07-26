@@ -2,7 +2,6 @@ import { Activity, DollarSign, TrendingUp, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { fmtNum, fmtSignedMoney } from '../../lib/format'
 import type { MasterStats } from '../../types/admin'
-import './AdminStatCards.css'
 
 interface Stat {
   title: string
@@ -47,27 +46,36 @@ export default function AdminStatCards({ stats }: AdminStatCardsProps) {
   ]
 
   return (
-    <div className="astat" data-aos="fade-up" data-aos-delay="100">
+    <div
+      className="grid grid-cols-2 gap-stack grow-[2] basis-[480px] max-[700px]:grid-cols-1"
+      data-aos="fade-up"
+      data-aos-delay="100"
+    >
       {cards.map((s) => (
-        <div className="dcard astat__card" key={s.title}>
-          <div className="astat__head">
-            <span className="astat__title">{s.title}</span>
-            <span className="dchip">
+        <div
+          className="rounded-card border border-border bg-surface flex flex-col gap-2 py-[18px] px-5"
+          key={s.title}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[12.5px] font-bold text-muted">{s.title}</span>
+            <span className="w-7 h-7 rounded-[9px] bg-accent-soft border border-accent-line grid place-items-center text-accent flex-none">
               <s.icon size={15} />
             </span>
           </div>
           <div
-            className={`astat__value${
+            className={`font-mono text-[24px] font-extrabold${
               s.tone === 'pos'
-                ? ' is-pos'
+                ? ' text-green'
                 : s.tone === 'neg'
-                  ? ' is-neg'
+                  ? ' text-red'
                   : ''
             }`}
           >
             {s.value}
           </div>
-          <div className="astat__desc">{s.description}</div>
+          <div className="text-[11.5px] leading-[1.5] text-faint">
+            {s.description}
+          </div>
         </div>
       ))}
     </div>

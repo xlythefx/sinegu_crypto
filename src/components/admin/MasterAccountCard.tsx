@@ -1,12 +1,14 @@
 import { Shield } from 'lucide-react'
 import { fmtDateTime, fmtMoney } from '../../lib/format'
 import type { MasterStats } from '../../types/admin'
-import './MasterAccountCard.css'
 
 interface MasterAccountCardProps {
   master: MasterStats['master']
   stats: MasterStats['stats']
 }
+
+const badgeBase =
+  'inline-flex items-center whitespace-nowrap rounded-pill border border-border py-[3px] px-[9px] text-[11px] font-semibold text-muted'
 
 /** Master account summary: badges, masked credentials, last trade. */
 export default function MasterAccountCard({
@@ -16,51 +18,60 @@ export default function MasterAccountCard({
   const account = master.account
 
   return (
-    <section className="dcard amac" data-aos="fade-up">
-      <div className="dcard__title-row">
-        <span className="dchip">
+    <section
+      className="rounded-card border border-border bg-surface p-card max-w-[440px] max-[1100px]:max-w-none grow basis-[340px] self-start"
+      data-aos="fade-up"
+    >
+      <div className="flex items-center gap-2.5 mb-[14px]">
+        <span className="w-7 h-7 rounded-[9px] bg-accent-soft border border-accent-line grid place-items-center text-accent flex-none">
           <Shield size={16} />
         </span>
         <div>
-          <div className="dcard__title amac__title">Master Account</div>
-          <div className="dcard__sub">
+          <div className="font-display text-[15px] font-extrabold text-accent">
+            Master Account
+          </div>
+          <div className="text-[12px] text-muted mt-px">
             Primary live account feeding platform performance.
           </div>
         </div>
       </div>
 
-      <div className="amac__badges">
-        <span className="amac__badge">ID: {account?.id ?? '—'}</span>
-        <span className="amac__badge amac__badge--name">{master.name}</span>
-        <span className="amac__badge amac__badge--accent">
+      <div className="mb-[14px] flex flex-wrap gap-1.5">
+        <span className={badgeBase}>ID: {account?.id ?? '—'}</span>
+        <span className={`${badgeBase} bg-surface2 text-text`}>
+          {master.name}
+        </span>
+        <span className={`${badgeBase} border-accent-line bg-accent-soft text-accent`}>
           {account?.demo ? 'Demo' : 'Live'}
         </span>
-        <span className="amac__badge amac__badge--accent">
+        <span className={`${badgeBase} border-accent-line bg-accent-soft text-accent`}>
           {account?.enabled ? 'Enabled' : 'Disabled'}
         </span>
       </div>
 
-      <div className="amac__info">
+      <div className="flex flex-col gap-2 text-[13px]">
         <p>
-          <b>Email:</b> {master.email}
+          <b className="font-semibold">Email:</b> {master.email}
         </p>
         <p>
-          <b>API Key:</b>{' '}
-          <span className="amac__mono">
+          <b className="font-semibold">API Key:</b>{' '}
+          <span className="font-mono text-[12.5px]">
             {account?.api_key ?? 'Not connected'}
           </span>
         </p>
         <p>
-          <b>Balance:</b>{' '}
-          <span className="amac__mono">
+          <b className="font-semibold">Balance:</b>{' '}
+          <span className="font-mono text-[12.5px]">
             {fmtMoney(stats.balance)} {account?.currency_type ?? 'USDT'}
           </span>
         </p>
       </div>
 
-      <div className="amac__last">
-        <span className="amac__last-label">Last Trade</span>
-        <span className="amac__last-val">
+      <div className="mt-[14px] flex flex-col gap-1 rounded-field border border-hair bg-surface2 py-3 px-[14px] text-[12.5px]">
+        <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted">
+          Last Trade
+        </span>
+        <span className="font-mono">
           {stats.last_trade_at ? fmtDateTime(stats.last_trade_at) : 'No trades yet'}
         </span>
       </div>

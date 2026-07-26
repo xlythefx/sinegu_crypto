@@ -1,5 +1,4 @@
 import { Activity } from 'lucide-react'
-import './PerformanceBreakdown.css'
 
 const PERIODS = [
   {
@@ -29,41 +28,54 @@ const PERIODS = [
 export default function PerformanceBreakdown() {
   return (
     <section
-      className="dcard apbreak"
+      className="rounded-card border border-border bg-surface p-card max-w-[420px] max-[1100px]:max-w-none grow basis-[320px]"
       data-aos="fade-up"
       data-aos-delay="200"
     >
-      <div className="dcard__title-row">
-        <span className="dchip">
+      <div className="flex items-center gap-2.5 mb-[14px]">
+        <span className="w-7 h-7 rounded-[9px] bg-accent-soft border border-accent-line grid place-items-center text-accent flex-none">
           <Activity size={16} />
         </span>
         <div>
-          <div className="dcard__title">Performance Breakdown</div>
-          <div className="dcard__sub">
+          <div className="font-display text-[15px] font-extrabold">
+            Performance Breakdown
+          </div>
+          <div className="text-[12px] text-muted mt-px">
             Daily, weekly, and monthly snapshots for context.
           </div>
         </div>
       </div>
 
-      <div className="apbreak__list">
+      <div className="flex flex-col gap-3">
         {PERIODS.map((p) => (
-          <div className="apbreak__item" key={p.title}>
-            <div className="apbreak__item-head">
-              <span className="apbreak__item-title">{p.title}</span>
-              <span className="apbreak__range">{p.range}</span>
+          <div
+            className="rounded-row border border-hair bg-surface2 py-[14px] px-4 transition-[border-color] duration-150 hover:border-border"
+            key={p.title}
+          >
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <span className="text-[14px] font-bold">{p.title}</span>
+              <span className="inline-flex items-center whitespace-nowrap rounded-pill border border-border py-[3px] px-[9px] font-mono text-[11px] font-semibold text-muted">
+                {p.range}
+              </span>
             </div>
-            <div className="apbreak__stats">
-              <div className="apbreak__stat">
-                <span className="apbreak__stat-label">P&L</span>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-[3px]">
+                <span className="text-[10.5px] font-bold uppercase tracking-[0.05em] text-faint">
+                  P&L
+                </span>
                 <span
-                  className={`apbreak__stat-val ${p.negative ? 'is-neg' : 'is-pos'}`}
+                  className={`font-mono text-[16px] font-extrabold ${p.negative ? 'text-red' : 'text-green'}`}
                 >
                   {p.pnl}
                 </span>
               </div>
-              <div className="apbreak__stat">
-                <span className="apbreak__stat-label">Trades</span>
-                <span className="apbreak__stat-val">{p.trades}</span>
+              <div className="flex flex-col gap-[3px]">
+                <span className="text-[10.5px] font-bold uppercase tracking-[0.05em] text-faint">
+                  Trades
+                </span>
+                <span className="font-mono text-[16px] font-extrabold">
+                  {p.trades}
+                </span>
               </div>
             </div>
           </div>

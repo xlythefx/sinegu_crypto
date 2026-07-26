@@ -7,7 +7,6 @@ import PerformanceBreakdown from '../../components/admin/PerformanceBreakdown'
 import AdminPnlCalendar from '../../components/admin/AdminPnlCalendar'
 import { useApiData } from '../../hooks/useApiData'
 import { getMasterStats } from '../../services/admin'
-import './AdminDashboard.css'
 
 export default function AdminDashboard() {
   const { data, loading, error, reload } = useApiData(getMasterStats)
@@ -27,12 +26,12 @@ export default function AdminDashboard() {
 
   return (
     <AdminLayout title="Admin Dashboard" subtitle="Structure. Flow. Mastery.">
-      <div className="adash-row">
+      <div className="flex flex-wrap items-stretch gap-stack mb-stack">
         <MasterAccountCard master={data.master} stats={data.stats} />
         <AdminStatCards stats={data.stats} />
       </div>
 
-      <div className="adash-row">
+      <div className="flex flex-wrap items-stretch gap-stack mb-stack">
         <AdminPerformanceChart />
         <PerformanceBreakdown />
       </div>

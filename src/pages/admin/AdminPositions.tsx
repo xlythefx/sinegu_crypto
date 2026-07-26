@@ -28,10 +28,29 @@ import type {
   AdminOpenPosition,
   AdminPastTrade,
 } from '../../types/admin'
-import './AdminPositions.css'
 
 type Tab = 'active' | 'closed'
 const PAGE_SIZE = 10
+
+// shared table primitives (mirrors the user Positions tables)
+const TH_BASE =
+  'py-[11px] px-3.5 text-[10.5px] font-bold tracking-[0.3px] uppercase text-faint whitespace-nowrap'
+const TH = `${TH_BASE} text-left`
+const TH_R = `${TH_BASE} text-right`
+const TH_C = `${TH_BASE} text-center`
+const TD = 'py-[11px] px-3.5 align-middle'
+const TD_R = `${TD} text-right`
+const TD_C = `${TD} text-center`
+const ROW = 'border-t border-hair transition-colors hover:bg-surface2'
+
+const ICON_BTN =
+  'inline-grid place-items-center w-8 h-8 border border-border rounded-[9px] bg-surface text-muted cursor-pointer transition-colors disabled:opacity-45 disabled:cursor-not-allowed enabled:hover:bg-surface2 enabled:hover:text-text'
+const ICON_BTN_DANGER = `${ICON_BTN} enabled:hover:!border-[color-mix(in_srgb,var(--red)_40%,transparent)] enabled:hover:!bg-[color-mix(in_srgb,var(--red)_12%,transparent)] enabled:hover:!text-red`
+
+const FILTER_FIELD =
+  'flex items-center gap-2 h-10 px-3 border border-border rounded-nav bg-surface2 text-faint'
+const FILTER_SELECT =
+  'border-0 bg-transparent text-text text-[13px] font-semibold outline-none cursor-pointer min-w-[130px]'
 
 /** A group of same account + ticker open positions merged into one row. */
 interface PositionGroup {
@@ -147,7 +166,11 @@ function groupTrades(rows: AdminPastTrade[]): TradeGroup[] {
 
 /** Small ticker chip used in the ticker column. */
 function TickerChip({ symbol }: { symbol: string }) {
-  return <span className="apos-ticker">{displaySymbol(symbol)}</span>
+  return (
+    <span className="inline-block py-1 px-[11px] border border-border rounded-pill bg-surface2 font-mono text-xs font-bold tracking-[0.02em]">
+      {displaySymbol(symbol)}
+    </span>
+  )
 }
 
 /** P&L value + percentage of the account balance. */
@@ -155,10 +178,12 @@ function PnlCell({ pnl, balance }: { pnl: number; balance: number }) {
   const pos = pnl >= 0
   const pct = balance > 0 ? (pnl / balance) * 100 : null
   return (
-    <div className={`apos-pnl ${pos ? 'is-pos' : 'is-neg'}`}>
-      <span className="apos-pnl__value mono">{fmtSignedMoney(pnl)}</span>
+    <div
+      className={`inline-flex flex-col items-end gap-px ${pos ? 'text-green' : 'text-red'}`}
+    >
+      <span className="text-[13px] font-extrabold font-mono">{fmtSignedMoney(pnl)}</span>
       {pct !== null && (
-        <span className="apos-pnl__pct mono">
+        <span className="text-[11px] font-semibold font-mono opacity-85">
           {pos ? '+' : '−'}
           {Math.abs(pct).toFixed(2)}%
         </span>
@@ -170,7 +195,13 @@ function PnlCell({ pnl, balance }: { pnl: number; balance: number }) {
 /** Merged-count pill; only emphasized when it actually merges >1 row. */
 function CountPill({ count }: { count: number }) {
   return (
-    <span className={`apos-count${count > 1 ? ' apos-count--multi' : ''}`}>
+    <span
+      className={`inline-grid place-items-center min-w-[26px] h-6 px-2 rounded-pill border font-mono text-xs font-bold ${
+        count > 1
+          ? 'bg-accent-soft border-accent-line text-accent'
+          : 'bg-surface2 border-hair text-muted'
+      }`}
+    >
       {count}
     </span>
   )
@@ -341,17 +372,29 @@ export default function AdminPositions() {
       subtitle="Monitor active and historical positions across every account."
     >
       {/* stat cards */}
-      <div className="apos-stats" data-aos="fade-up">
+      <div
+        className="grid grid-cols-4 gap-3 mb-4 max-[1000px]:grid-cols-2"
+        data-aos="fade-up"
+      >
         {stats.map((s) => (
-          <div className="apos-stat" key={s.label}>
-            <div className="apos-stat__body">
-              <span className="apos-stat__label">{s.label}</span>
-              <span className={`apos-stat__value mono${s.tone ? ` is-${s.tone}` : ''}`}>
+          <div
+            className="flex items-start justify-between gap-2.5 py-4 px-[18px] border border-border rounded-card bg-surface transition-colors hover:border-accent-line"
+            key={s.label}
+          >
+            <div className="flex flex-col gap-[3px] min-w-0">
+              <span className="text-[10.5px] font-bold tracking-[0.4px] uppercase text-faint">
+                {s.label}
+              </span>
+              <span
+                className={`text-2xl font-extrabold tracking-[-0.5px] font-mono ${
+                  s.tone === 'pos' ? 'text-green' : s.tone === 'neg' ? 'text-red' : ''
+                }`}
+              >
                 {s.value}
               </span>
-              <span className="apos-stat__hint">{s.hint}</span>
+              <span className="text-[11.5px] text-muted">{s.hint}</span>
             </div>
-            <span className="apos-stat__icon">
+            <span className="grid place-items-center w-[38px] h-[38px] flex-none rounded-nav bg-accent-soft border border-accent-line text-accent">
               <s.icon size={18} />
             </span>
           </div>
@@ -359,282 +402,330 @@ export default function AdminPositions() {
       </div>
 
       {actionError && (
-        <p className="apos-error" role="alert">
+        <p
+          className="mb-3.5 py-[9px] px-3 border border-[color-mix(in_srgb,var(--red)_30%,transparent)] rounded-field bg-[color-mix(in_srgb,var(--red)_8%,transparent)] text-[12.5px] text-red"
+          role="alert"
+        >
           {actionError}
         </p>
       )}
 
-      <section className="apos-panel" data-aos="fade-up" data-aos-delay="100">
+      <section
+        className="border border-border rounded-card bg-surface overflow-hidden"
+        data-aos="fade-up"
+        data-aos-delay="100"
+      >
         {/* panel header */}
-        <div className="apos-panel__head">
-          <div className="apos-panel__title-row">
-            <span className="apos-panel__icon">
+        <div className="flex flex-wrap items-center justify-between gap-3 py-4 px-5 border-b border-hair bg-[linear-gradient(to_right,var(--accentSoft),transparent)]">
+          <div className="flex items-center gap-3">
+            <span className="grid place-items-center w-[38px] h-[38px] rounded-nav bg-accent-soft border border-accent-line text-accent">
               <BarChart3 size={18} />
             </span>
             <div>
-              <div className="apos-panel__title">Positions Overview</div>
-              <div className="apos-panel__sub">
+              <div className="font-display text-[15px] font-extrabold">
+                Positions Overview
+              </div>
+              <div className="mt-px text-xs text-muted">
                 Live positions and historical trades
               </div>
             </div>
           </div>
-          <button type="button" className="apos-refresh" onClick={reload}>
+          <button
+            type="button"
+            className="inline-flex items-center gap-[7px] py-2 px-3.5 border border-accent-line rounded-field bg-accent-soft text-accent text-[13px] font-bold cursor-pointer transition-colors hover:bg-accent hover:text-on-accent"
+            onClick={reload}
+          >
             <RefreshCw size={14} />
             Refresh
           </button>
         </div>
 
         {/* tabs */}
-        <div className="apos-tabs">
-          <button
-            type="button"
-            className={`apos-tab${tab === 'active' ? ' apos-tab--active' : ''}`}
-            onClick={() => setTab('active')}
-          >
-            Active Positions
-            <span className="apos-tab__count">{positions.length}</span>
-          </button>
-          <button
-            type="button"
-            className={`apos-tab${tab === 'closed' ? ' apos-tab--active' : ''}`}
-            onClick={() => setTab('closed')}
-          >
-            Past Positions
-            <span className="apos-tab__count">{trades.length}</span>
-          </button>
+        <div className="flex gap-1 mt-[18px] mx-5 p-1 border border-hair rounded-row bg-surface2 w-fit">
+          {(
+            [
+              ['active', 'Active Positions', positions.length],
+              ['closed', 'Past Positions', trades.length],
+            ] as const
+          ).map(([key, label, count]) => (
+            <button
+              key={key}
+              type="button"
+              className={`inline-flex items-center gap-2 py-2 px-4 border rounded-[9px] text-[13px] cursor-pointer transition-colors ${
+                tab === key
+                  ? 'bg-accent border-transparent text-on-accent font-bold'
+                  : 'border-transparent bg-transparent text-muted font-semibold'
+              }`}
+              onClick={() => setTab(key)}
+            >
+              {label}
+              <span
+                className={`inline-grid place-items-center min-w-5 h-5 px-1.5 rounded-pill text-[11px] font-bold ${
+                  tab === key
+                    ? 'bg-[color-mix(in_srgb,var(--onAccent)_25%,transparent)] text-on-accent'
+                    : 'bg-surface text-muted'
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          ))}
         </div>
 
-        {/* ACTIVE */}
-        {tab === 'active' && (
-          <>
-            <div className="apos-filters">
-              <label className="apos-select">
-                <Layers size={14} />
-                <select
-                  value={activeBroker}
-                  onChange={(e) => setActiveBroker(e.target.value)}
-                  aria-label="Filter by broker"
-                >
-                  <option value="all">All brokers</option>
-                  {brokers.map((b) => (
-                    <option key={b} value={b}>
-                      {b}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+        {/* key on the tab/filter signature re-mounts the region so it replays the
+            fade-slide reveal every time the category or filters change. */}
+        <div
+          key={`${tab}-${activeBroker}-${pastBroker}-${pastTicker}-${search}-${activeSafePage}-${closedSafePage}`}
+          className="animate-[fadeup_0.35s_ease-out]"
+        >
+          {/* ACTIVE */}
+          {tab === 'active' && (
+            <>
+              <div className="flex flex-wrap gap-2.5 py-[18px] px-5">
+                <label className={FILTER_FIELD}>
+                  <Layers size={14} />
+                  <select
+                    className={FILTER_SELECT}
+                    value={activeBroker}
+                    onChange={(e) => setActiveBroker(e.target.value)}
+                    aria-label="Filter by broker"
+                  >
+                    <option value="all">All brokers</option>
+                    {brokers.map((b) => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
 
-            <div className="apos-table-wrap">
-              <table className="apos-table">
-                <thead>
-                  <tr>
-                    <th>Account</th>
-                    <th>Ticker</th>
-                    <th>Broker</th>
-                    <th className="apos-th--right">Price</th>
-                    <th className="apos-th--right">Unrealized P&L</th>
-                    <th className="apos-th--center">Count</th>
-                    <th className="apos-th--right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activePaged.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="apos-empty">
-                        No active positions found.
-                      </td>
+              <div className="mx-5 border border-hair rounded-row overflow-x-auto">
+                <table className="w-full border-collapse text-[13px]">
+                  <thead>
+                    <tr className="bg-surface2">
+                      <th className={TH}>Account</th>
+                      <th className={TH}>Ticker</th>
+                      <th className={TH}>Broker</th>
+                      <th className={TH_R}>Price</th>
+                      <th className={TH_R}>Unrealized P&L</th>
+                      <th className={TH_C}>Count</th>
+                      <th className={TH_R}>Actions</th>
                     </tr>
-                  ) : (
-                    activePaged.map((g) => (
-                      <tr key={g.key}>
-                        <td>
-                          <div className="apos-account">
-                            <span className="apos-account__name">
-                              {g.accountName ?? 'Unknown account'}
-                            </span>
-                            <span className="apos-account__id">
-                              ID {g.accountId ?? '—'}
-                            </span>
-                          </div>
-                        </td>
-                        <td>
-                          <TickerChip symbol={g.symbol} />
-                        </td>
-                        <td>
-                          <span className="apos-broker">{g.broker}</span>
-                        </td>
-                        <td className="apos-td--right mono">{fmtMoney(g.price)}</td>
-                        <td className="apos-td--right">
-                          <PnlCell pnl={g.unrealizedPnl} balance={g.accountBalance} />
-                        </td>
-                        <td className="apos-td--center">
-                          <CountPill count={g.count} />
-                        </td>
-                        <td className="apos-td--right">
-                          <button
-                            type="button"
-                            className="apos-icon-btn apos-icon-btn--danger"
-                            title={`Delete ${g.count} position${g.count > 1 ? 's' : ''}`}
-                            onClick={() =>
-                              setDeleteTarget({
-                                ids: g.ids,
-                                label: `${g.count} ${displaySymbol(g.symbol)} position${g.count > 1 ? 's' : ''} for ${g.accountName ?? 'this account'}`,
-                                kind: 'position',
-                              })
-                            }
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                  </thead>
+                  <tbody>
+                    {activePaged.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="text-center text-muted py-[30px] px-3.5"
+                        >
+                          No active positions found.
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    ) : (
+                      activePaged.map((g) => (
+                        <tr key={g.key} className={ROW}>
+                          <td className={TD}>
+                            <div className="flex flex-col">
+                              <span className="font-bold">
+                                {g.accountName ?? 'Unknown account'}
+                              </span>
+                              <span className="text-[11px] text-faint">
+                                ID {g.accountId ?? '—'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className={TD}>
+                            <TickerChip symbol={g.symbol} />
+                          </td>
+                          <td className={TD}>
+                            <span className="inline-block py-[3px] px-[9px] border border-border rounded-btn bg-surface2 text-[11.5px] font-semibold text-muted">
+                              {g.broker}
+                            </span>
+                          </td>
+                          <td className={`${TD_R} font-mono`}>{fmtMoney(g.price)}</td>
+                          <td className={TD_R}>
+                            <PnlCell pnl={g.unrealizedPnl} balance={g.accountBalance} />
+                          </td>
+                          <td className={TD_C}>
+                            <CountPill count={g.count} />
+                          </td>
+                          <td className={TD_R}>
+                            <button
+                              type="button"
+                              className={ICON_BTN_DANGER}
+                              title={`Delete ${g.count} position${g.count > 1 ? 's' : ''}`}
+                              onClick={() =>
+                                setDeleteTarget({
+                                  ids: g.ids,
+                                  label: `${g.count} ${displaySymbol(g.symbol)} position${g.count > 1 ? 's' : ''} for ${g.accountName ?? 'this account'}`,
+                                  kind: 'position',
+                                })
+                              }
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
 
-            {activeGroups.length > 0 && activeTotalPages > 1 && (
-              <Pager
-                page={activeSafePage}
-                totalPages={activeTotalPages}
-                onPrev={() => setActivePage((p) => Math.max(1, p - 1))}
-                onNext={() => setActivePage((p) => Math.min(activeTotalPages, p + 1))}
-              />
-            )}
-          </>
-        )}
-
-        {/* CLOSED */}
-        {tab === 'closed' && (
-          <>
-            <div className="apos-filters">
-              <label className="apos-search">
-                <Search size={14} />
-                <input
-                  type="search"
-                  placeholder="Search by account or ID…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+              {activeGroups.length > 0 && activeTotalPages > 1 && (
+                <Pager
+                  page={activeSafePage}
+                  totalPages={activeTotalPages}
+                  onPrev={() => setActivePage((p) => Math.max(1, p - 1))}
+                  onNext={() => setActivePage((p) => Math.min(activeTotalPages, p + 1))}
                 />
-              </label>
-              <label className="apos-select">
-                <Layers size={14} />
-                <select
-                  value={pastTicker}
-                  onChange={(e) => setPastTicker(e.target.value)}
-                  aria-label="Filter by ticker"
-                >
-                  <option value="all">All tickers</option>
-                  {tickers.map((t) => (
-                    <option key={t} value={t}>
-                      {displaySymbol(t)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="apos-select">
-                <Layers size={14} />
-                <select
-                  value={pastBroker}
-                  onChange={(e) => setPastBroker(e.target.value)}
-                  aria-label="Filter by broker"
-                >
-                  <option value="all">All brokers</option>
-                  {brokers.map((b) => (
-                    <option key={b} value={b}>
-                      {b}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+              )}
+            </>
+          )}
 
-            <div className="apos-table-wrap">
-              <table className="apos-table">
-                <thead>
-                  <tr>
-                    <th>Account</th>
-                    <th>Ticker</th>
-                    <th>Broker</th>
-                    <th>Strategy</th>
-                    <th className="apos-th--right">Price</th>
-                    <th className="apos-th--right">P&L</th>
-                    <th className="apos-th--center">Count</th>
-                    <th className="apos-th--right">Closed At</th>
-                    <th className="apos-th--right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {closedPaged.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} className="apos-empty">
-                        No past positions found.
-                      </td>
+          {/* CLOSED */}
+          {tab === 'closed' && (
+            <>
+              <div className="flex flex-wrap gap-2.5 py-[18px] px-5">
+                <label
+                  className={`${FILTER_FIELD} flex-1 min-w-[220px] max-w-[320px] max-[560px]:max-w-none`}
+                >
+                  <Search size={14} />
+                  <input
+                    type="search"
+                    className="flex-1 border-0 bg-transparent text-text text-[13px] outline-none"
+                    placeholder="Search by account or ID…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </label>
+                <label className={FILTER_FIELD}>
+                  <Layers size={14} />
+                  <select
+                    className={FILTER_SELECT}
+                    value={pastTicker}
+                    onChange={(e) => setPastTicker(e.target.value)}
+                    aria-label="Filter by ticker"
+                  >
+                    <option value="all">All tickers</option>
+                    {tickers.map((t) => (
+                      <option key={t} value={t}>
+                        {displaySymbol(t)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={FILTER_FIELD}>
+                  <Layers size={14} />
+                  <select
+                    className={FILTER_SELECT}
+                    value={pastBroker}
+                    onChange={(e) => setPastBroker(e.target.value)}
+                    aria-label="Filter by broker"
+                  >
+                    <option value="all">All brokers</option>
+                    {brokers.map((b) => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="mx-5 border border-hair rounded-row overflow-x-auto">
+                <table className="w-full border-collapse text-[13px]">
+                  <thead>
+                    <tr className="bg-surface2">
+                      <th className={TH}>Account</th>
+                      <th className={TH}>Ticker</th>
+                      <th className={TH}>Broker</th>
+                      <th className={TH}>Strategy</th>
+                      <th className={TH_R}>Price</th>
+                      <th className={TH_R}>P&L</th>
+                      <th className={TH_C}>Count</th>
+                      <th className={TH_R}>Closed At</th>
+                      <th className={TH_R}>Actions</th>
                     </tr>
-                  ) : (
-                    closedPaged.map((g) => (
-                      <tr key={g.key}>
-                        <td>
-                          <div className="apos-account">
-                            <span className="apos-account__name">
-                              {g.accountName ?? 'Unknown account'}
-                            </span>
-                            <span className="apos-account__id">
-                              ID {g.accountId ?? '—'}
-                            </span>
-                          </div>
-                        </td>
-                        <td>
-                          <TickerChip symbol={g.symbol} />
-                        </td>
-                        <td>
-                          <span className="apos-broker">{g.broker}</span>
-                        </td>
-                        <td className="apos-td--muted">{g.strategy ?? '—'}</td>
-                        <td className="apos-td--right mono">{fmtMoney(g.price)}</td>
-                        <td className="apos-td--right">
-                          <PnlCell pnl={g.realizedPnl} balance={g.accountBalance} />
-                        </td>
-                        <td className="apos-td--center">
-                          <CountPill count={g.count} />
-                        </td>
-                        <td className="apos-td--right apos-td--muted mono">
-                          {fmtDateTime(g.closedAt)}
-                        </td>
-                        <td className="apos-td--right">
-                          <button
-                            type="button"
-                            className="apos-icon-btn apos-icon-btn--danger"
-                            title={`Delete ${g.count} trade${g.count > 1 ? 's' : ''}`}
-                            onClick={() =>
-                              setDeleteTarget({
-                                ids: g.ids,
-                                label: `${g.count} ${displaySymbol(g.symbol)} trade${g.count > 1 ? 's' : ''} for ${g.accountName ?? 'this account'}`,
-                                kind: 'trade',
-                              })
-                            }
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                  </thead>
+                  <tbody>
+                    {closedPaged.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={9}
+                          className="text-center text-muted py-[30px] px-3.5"
+                        >
+                          No past positions found.
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    ) : (
+                      closedPaged.map((g) => (
+                        <tr key={g.key} className={ROW}>
+                          <td className={TD}>
+                            <div className="flex flex-col">
+                              <span className="font-bold">
+                                {g.accountName ?? 'Unknown account'}
+                              </span>
+                              <span className="text-[11px] text-faint">
+                                ID {g.accountId ?? '—'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className={TD}>
+                            <TickerChip symbol={g.symbol} />
+                          </td>
+                          <td className={TD}>
+                            <span className="inline-block py-[3px] px-[9px] border border-border rounded-btn bg-surface2 text-[11.5px] font-semibold text-muted">
+                              {g.broker}
+                            </span>
+                          </td>
+                          <td className={`${TD} text-muted`}>{g.strategy ?? '—'}</td>
+                          <td className={`${TD_R} font-mono`}>{fmtMoney(g.price)}</td>
+                          <td className={TD_R}>
+                            <PnlCell pnl={g.realizedPnl} balance={g.accountBalance} />
+                          </td>
+                          <td className={TD_C}>
+                            <CountPill count={g.count} />
+                          </td>
+                          <td className={`${TD_R} text-muted font-mono`}>
+                            {fmtDateTime(g.closedAt)}
+                          </td>
+                          <td className={TD_R}>
+                            <button
+                              type="button"
+                              className={ICON_BTN_DANGER}
+                              title={`Delete ${g.count} trade${g.count > 1 ? 's' : ''}`}
+                              onClick={() =>
+                                setDeleteTarget({
+                                  ids: g.ids,
+                                  label: `${g.count} ${displaySymbol(g.symbol)} trade${g.count > 1 ? 's' : ''} for ${g.accountName ?? 'this account'}`,
+                                  kind: 'trade',
+                                })
+                              }
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
 
-            {closedGroups.length > 0 && closedTotalPages > 1 && (
-              <Pager
-                page={closedSafePage}
-                totalPages={closedTotalPages}
-                onPrev={() => setClosedPage((p) => Math.max(1, p - 1))}
-                onNext={() => setClosedPage((p) => Math.min(closedTotalPages, p + 1))}
-              />
-            )}
-          </>
-        )}
+              {closedGroups.length > 0 && closedTotalPages > 1 && (
+                <Pager
+                  page={closedSafePage}
+                  totalPages={closedTotalPages}
+                  onPrev={() => setClosedPage((p) => Math.max(1, p - 1))}
+                  onNext={() => setClosedPage((p) => Math.min(closedTotalPages, p + 1))}
+                />
+              )}
+            </>
+          )}
+        </div>
       </section>
 
       <ConfirmModal
@@ -664,14 +755,14 @@ interface PagerProps {
 
 function Pager({ page, totalPages, onPrev, onNext }: PagerProps) {
   return (
-    <div className="apos-pag">
-      <span className="apos-pag__info">
+    <div className="flex items-center justify-end gap-3.5 py-4 px-5">
+      <span className="text-[12.5px] text-muted">
         Page {page} of {totalPages}
       </span>
-      <div className="apos-pag__controls">
+      <div className="flex gap-1.5">
         <button
           type="button"
-          className="apos-icon-btn"
+          className={ICON_BTN}
           onClick={onPrev}
           disabled={page <= 1}
           aria-label="Previous page"
@@ -680,7 +771,7 @@ function Pager({ page, totalPages, onPrev, onNext }: PagerProps) {
         </button>
         <button
           type="button"
-          className="apos-icon-btn"
+          className={ICON_BTN}
           onClick={onNext}
           disabled={page >= totalPages}
           aria-label="Next page"

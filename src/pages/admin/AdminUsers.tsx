@@ -21,7 +21,6 @@ import { acceptUser, getAdminUsers, rejectUser } from '../../services/admin'
 import { ApiError, getApiErrorMessage } from '../../services/api'
 import { fmtMediumDate, fmtMoney } from '../../lib/format'
 import type { AdminUser, UserRole, UserStatus } from '../../types/admin'
-import './AdminUsers.css'
 
 type StatusFilter = 'all' | UserStatus
 type RoleFilter = 'all' | UserRole
@@ -42,11 +41,34 @@ const ROLE_FILTERS: { key: RoleFilter; label: string }[] = [
 
 const USERS_PER_PAGE = 10
 
+// Shared class-strings ------------------------------------------------------
+const BADGE =
+  'inline-flex items-center rounded-pill border py-[3px] px-2.5 text-[11px] font-bold whitespace-nowrap'
+/** rgba/color-mix tints preserved exactly from the original CSS. */
+const STATUS_BADGE: Record<UserStatus, string> = {
+  active:
+    'bg-[color-mix(in_srgb,var(--green)_12%,transparent)] border-[color-mix(in_srgb,var(--green)_35%,transparent)] text-green',
+  pending: 'bg-accent-soft border-accent-line text-accent',
+  suspended:
+    'bg-[color-mix(in_srgb,var(--red)_10%,transparent)] border-[color-mix(in_srgb,var(--red)_35%,transparent)] text-red',
+}
+
+const BTN =
+  'inline-flex items-center gap-[5px] rounded-pill border py-1.5 px-3 text-[12px] font-bold cursor-pointer transition disabled:opacity-[.55] disabled:cursor-not-allowed'
+const BTN_ACCEPT = `${BTN} bg-green border-green text-white enabled:hover:brightness-110`
+const BTN_REJECT = `${BTN} bg-transparent border-[color-mix(in_srgb,var(--red)_40%,transparent)] text-red enabled:hover:bg-[color-mix(in_srgb,var(--red)_10%,transparent)]`
+
+const TH =
+  'text-left border-b border-hair py-3 px-3.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.1em] text-faint whitespace-nowrap'
+const TD = 'border-b border-hair py-3 px-3.5 align-middle'
+const PAG_BTN =
+  'grid place-items-center w-[30px] h-[30px] rounded-[9px] border border-border bg-surface2 text-text cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed'
+
 /** Crown for master, shield for admin — plain users get no badge. */
 function RoleBadge({ role }: { role: UserRole }) {
   if (role === 'master') {
     return (
-      <span className="ausers-badge ausers-badge--master">
+      <span className={`${BADGE} gap-[5px] bg-accent-soft border-accent-line text-accent`}>
         <Crown size={11} />
         Master
       </span>
@@ -54,7 +76,9 @@ function RoleBadge({ role }: { role: UserRole }) {
   }
   if (role === 'admin') {
     return (
-      <span className="ausers-badge ausers-badge--admin">
+      <span
+        className={`${BADGE} gap-[5px] bg-[color-mix(in_srgb,#4f8ef7_12%,transparent)] border-[color-mix(in_srgb,#4f8ef7_35%,transparent)] text-[#4f8ef7]`}
+      >
         <Shield size={11} />
         Admin
       </span>
@@ -65,7 +89,7 @@ function RoleBadge({ role }: { role: UserRole }) {
 
 function StatusBadge({ status }: { status: UserStatus }) {
   return (
-    <span className={`ausers-badge ausers-badge--${status}`}>
+    <span className={`${BADGE} ${STATUS_BADGE[status]}`}>
       {status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
   )
@@ -183,37 +207,43 @@ export default function AdminUsers() {
     <AdminLayout title="User Management" subtitle="Approve sign-ups and manage accounts.">
       {/* Pending approvals — action queue so new sign-ups are never missed */}
       {pendingUsers.length > 0 && (
-        <section className="ausers-pending" data-aos="fade-up">
-          <div className="ausers-pending__head">
-            <span className="ausers-pending__icon">
+        <section
+          className="mb-[18px] overflow-hidden rounded-card border border-accent-line bg-gradient-to-br from-accent-soft to-surface"
+          data-aos="fade-up"
+        >
+          <div className="flex items-center gap-[13px] border-b border-accent-line px-5 py-4">
+            <span className="relative grid place-items-center w-[42px] h-[42px] flex-none rounded-[12px] bg-accent text-on-accent">
               <Clock size={18} />
-              <span className="ausers-pending__count">
+              <span className="absolute -right-1.5 -top-1.5 grid place-items-center h-[19px] min-w-[19px] px-[5px] rounded-full bg-red text-[11px] font-extrabold text-white">
                 {pendingUsers.length}
               </span>
             </span>
             <div>
-              <div className="ausers-pending__title">
+              <div className="font-display text-[15px] font-extrabold">
                 {pendingUsers.length} account
                 {pendingUsers.length > 1 ? 's' : ''} awaiting approval
               </div>
-              <div className="ausers-pending__sub">
+              <div className="mt-px text-[12px] text-muted">
                 New sign-ups need review before they can connect an exchange
               </div>
             </div>
           </div>
-          <div className="ausers-pending__list">
+          <div className="max-h-[340px] overflow-y-auto">
             {pendingUsers.slice(0, 6).map((u) => (
-              <div className="ausers-pending__row" key={u.uni_id}>
-                <div className="ausers-pending__id">
-                  <span className="ausers-pending__name">
+              <div
+                className="flex items-center justify-between gap-3 border-b border-hair px-5 py-[11px] last:border-b-0 max-[720px]:flex-col max-[720px]:items-start"
+                key={u.uni_id}
+              >
+                <div className="flex flex-col gap-px min-w-0">
+                  <span className="text-[13.5px] font-bold text-text">
                     {u.name || '—'}
                   </span>
-                  <span className="ausers-pending__email">{u.email}</span>
+                  <span className="truncate text-[12px] text-muted">{u.email}</span>
                 </div>
-                <div className="ausers-pending__actions">
+                <div className="flex flex-none gap-2">
                   <button
                     type="button"
-                    className="ausers-btn ausers-btn--accept"
+                    className={BTN_ACCEPT}
                     disabled={actionLoading}
                     onClick={() => setPendingAction({ user: u, action: 'accept' })}
                   >
@@ -222,7 +252,7 @@ export default function AdminUsers() {
                   </button>
                   <button
                     type="button"
-                    className="ausers-btn ausers-btn--reject"
+                    className={BTN_REJECT}
                     disabled={actionLoading}
                     onClick={() => setPendingAction({ user: u, action: 'reject' })}
                   >
@@ -236,7 +266,7 @@ export default function AdminUsers() {
           {pendingUsers.length > 6 && (
             <button
               type="button"
-              className="ausers-pending__more"
+              className="w-full border-t border-accent-line p-2.5 text-[12.5px] font-bold text-accent cursor-pointer hover:bg-accent-soft"
               onClick={() =>
                 setFilterAndResetPage(() => setStatusFilter('pending'))
               }
@@ -248,19 +278,22 @@ export default function AdminUsers() {
       )}
 
       {actionError && (
-        <p className="ausers-error" role="alert">
+        <p
+          className="mb-3.5 rounded-[10px] border border-[color-mix(in_srgb,var(--red)_30%,transparent)] bg-[color-mix(in_srgb,var(--red)_8%,transparent)] px-3 py-[9px] text-[12.5px] text-red"
+          role="alert"
+        >
           {actionError}
         </p>
       )}
 
       <section
-        className="ausers-panel"
+        className="overflow-hidden rounded-card border border-border bg-surface"
         data-aos="fade-up"
         data-aos-delay="100"
       >
         {/* Search + filters */}
-        <div className="ausers-filters">
-          <label className="ausers-search">
+        <div className="flex flex-col gap-3 border-b border-hair px-5 py-[18px]">
+          <label className="flex items-center gap-[9px] h-10 rounded-[11px] border border-border bg-surface2 px-[13px] text-muted">
             <Search size={14} />
             <input
               type="search"
@@ -269,11 +302,11 @@ export default function AdminUsers() {
               onChange={(e) =>
                 setFilterAndResetPage(() => setSearch(e.target.value))
               }
-              className="ausers-search__input"
+              className="flex-1 border-0 bg-transparent text-[13px] text-text outline-none placeholder:text-faint"
             />
           </label>
-          <div className="ausers-filter-row">
-            <div className="ausers-chips">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-1.5">
               {STATUS_FILTERS.map((s) => {
                 const active = statusFilter === s.key
                 const alert = s.key === 'pending' && statusCounts.pending > 0
@@ -281,8 +314,12 @@ export default function AdminUsers() {
                   <button
                     key={s.key}
                     type="button"
-                    className={`ausers-chip${
-                      active ? ' ausers-chip--active' : alert ? ' ausers-chip--alert' : ''
+                    className={`inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 text-[12.5px] font-semibold cursor-pointer ${
+                      active
+                        ? 'bg-accent border-accent text-on-accent font-bold'
+                        : alert
+                          ? 'border-accent-line bg-surface2 text-accent'
+                          : 'border-border bg-surface2 text-muted'
                     }`}
                     onClick={() =>
                       setFilterAndResetPage(() => setStatusFilter(s.key))
@@ -290,8 +327,10 @@ export default function AdminUsers() {
                   >
                     {s.label}
                     <span
-                      className={`ausers-chip__count${
-                        active ? ' ausers-chip__count--active' : ''
+                      className={`grid place-items-center h-[18px] min-w-[18px] px-[5px] rounded-full font-mono text-[11px] font-bold ${
+                        active
+                          ? 'bg-[rgba(0,0,0,0.18)] border border-transparent text-on-accent'
+                          : 'bg-surface border border-hair'
                       }`}
                     >
                       {statusCounts[s.key]}
@@ -300,7 +339,7 @@ export default function AdminUsers() {
                 )
               })}
             </div>
-            <label className="ausers-role">
+            <label className="ml-auto flex items-center gap-2 h-9 flex-none rounded-full border border-border bg-surface2 px-3 text-muted">
               <UserCog size={14} />
               <select
                 value={roleFilter}
@@ -310,10 +349,10 @@ export default function AdminUsers() {
                   )
                 }
                 aria-label="Filter by role"
-                className="ausers-role__select"
+                className="cursor-pointer border-0 bg-transparent text-[12.5px] font-semibold text-text outline-none"
               >
                 {ROLE_FILTERS.map((r) => (
-                  <option key={r.key} value={r.key}>
+                  <option key={r.key} value={r.key} className="bg-surface text-text">
                     {r.label}
                   </option>
                 ))}
@@ -322,25 +361,26 @@ export default function AdminUsers() {
           </div>
         </div>
 
-        {/* Users table */}
-        <div className="ausers-table-wrap">
-          <table className="ausers-table">
+        {/* Users table — re-mounts on filter/page switch to replay the reveal */}
+        <div
+          key={`${statusFilter}-${roleFilter}-${safePage}`}
+          className="overflow-x-auto animate-[fadeup_0.35s_ease-out]"
+        >
+          <table className="w-full border-collapse text-[13px]">
             <thead>
               <tr>
                 {['', 'Name', 'Email', 'Role', 'Status', 'Joined'].map((h, i) => (
-                  <th key={i} className="ausers-th">
+                  <th key={i} className={TH}>
                     {h}
                   </th>
                 ))}
-                <th className="ausers-th ausers-th--right">
-                  Actions
-                </th>
+                <th className={`${TH} text-right`}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {paginated.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="ausers-empty">
+                  <td colSpan={7} className="py-10 text-center text-muted">
                     {users.length === 0
                       ? 'No users yet.'
                       : 'No users match your filters.'}
@@ -367,28 +407,28 @@ export default function AdminUsers() {
 
         {/* Pagination */}
         {filtered.length > 0 && (
-          <div className="ausers-pag">
-            <span className="ausers-pag__info">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-[13px] max-[720px]:flex-col max-[720px]:items-start">
+            <span className="text-[12.5px] text-muted">
               Showing {(safePage - 1) * USERS_PER_PAGE + 1}–
               {Math.min(safePage * USERS_PER_PAGE, filtered.length)} of{' '}
               {filtered.length} users
             </span>
-            <div className="ausers-pag__controls">
+            <div className="flex items-center gap-2.5">
               <button
                 type="button"
-                className="ausers-pag__btn"
+                className={PAG_BTN}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={safePage <= 1}
                 aria-label="Previous page"
               >
                 <ChevronLeft size={15} />
               </button>
-              <span className="ausers-pag__page">
+              <span className="text-[12.5px] font-bold text-text whitespace-nowrap">
                 Page {safePage} of {totalPages}
               </span>
               <button
                 type="button"
-                className="ausers-pag__btn"
+                className={PAG_BTN}
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={safePage >= totalPages}
                 aria-label="Next page"
@@ -448,37 +488,43 @@ function UserRows({
 }: UserRowsProps) {
   return (
     <>
-      <tr className={user.status === 'pending' ? 'ausers-row--pending' : undefined}>
-        <td className="ausers-td">
+      <tr className={user.status === 'pending' ? 'bg-accent-soft' : undefined}>
+        <td className={TD}>
           <button
             type="button"
-            className={`ausers-expand${expanded ? ' ausers-expand--open' : ''}`}
+            className={`grid place-items-center w-[26px] h-[26px] rounded-[8px] border bg-surface2 cursor-pointer transition-transform ${
+              expanded
+                ? 'rotate-180 border-accent-line text-accent'
+                : 'border-border text-muted'
+            }`}
             onClick={onToggle}
             aria-label={expanded ? 'Collapse accounts' : 'Expand accounts'}
           >
             <ChevronDown size={14} />
           </button>
         </td>
-        <td className="ausers-td ausers-td--name">
+        <td className={`${TD} font-bold text-text whitespace-nowrap`}>
           {user.name}
         </td>
-        <td className="ausers-td ausers-td--muted">{user.email}</td>
-        <td className="ausers-td">
+        <td className={`${TD} text-muted`}>{user.email}</td>
+        <td className={TD}>
           <RoleBadge role={user.type} />
-          {user.type === 'user' && <span className="ausers-td__user">User</span>}
+          {user.type === 'user' && (
+            <span className="text-[12px] text-muted">User</span>
+          )}
         </td>
-        <td className="ausers-td">
+        <td className={TD}>
           <StatusBadge status={user.status} />
         </td>
-        <td className="ausers-td ausers-td--date">
+        <td className={`${TD} font-mono text-[12px] text-muted whitespace-nowrap`}>
           {user.created_at ? fmtMediumDate(user.created_at) : '—'}
         </td>
-        <td className="ausers-td ausers-td--right">
+        <td className={`${TD} text-right`}>
           {user.status === 'pending' ? (
-            <div className="ausers-row-actions">
+            <div className="flex justify-end gap-2">
               <button
                 type="button"
-                className="ausers-btn ausers-btn--accept"
+                className={BTN_ACCEPT}
                 disabled={actionLoading}
                 onClick={onAccept}
               >
@@ -487,7 +533,7 @@ function UserRows({
               </button>
               <button
                 type="button"
-                className="ausers-btn ausers-btn--reject"
+                className={BTN_REJECT}
                 disabled={actionLoading}
                 onClick={onReject}
               >
@@ -496,46 +542,48 @@ function UserRows({
               </button>
             </div>
           ) : (
-            <span className="ausers-dash">—</span>
+            <span className="text-faint">—</span>
           )}
         </td>
       </tr>
       {expanded && (
         <tr>
-          <td className="ausers-sub-spacer" />
-          <td className="ausers-sub-cell" colSpan={6}>
+          <td className="bg-surface2" />
+          <td className="bg-surface2 py-3 px-3.5" colSpan={6}>
             {user.accounts.length === 0 ? (
-              <p className="ausers-sub-empty">
+              <p className="py-1 text-[12.5px] text-muted">
                 No exchange accounts yet.
               </p>
             ) : (
-              <div className="ausers-accts">
+              <div className="flex flex-col gap-1.5">
                 {user.accounts.map((a) => (
                   <div
-                    className={`ausers-acct${a.deleted_at ? ' ausers-acct--gone' : ''}`}
+                    className={`flex flex-wrap items-center gap-4 rounded-[10px] border border-hair bg-surface px-2.5 py-[7px] text-[12.5px] ${
+                      a.deleted_at ? 'opacity-[.55]' : ''
+                    }`}
                     key={a.id}
                   >
-                    <span className="ausers-acct__name">
+                    <span className="flex items-center gap-[7px] min-w-[140px] font-bold text-text">
                       <Building2 size={12} />
                       {a.name}
                       {a.deleted_at && (
-                        <span className="ausers-acct__tag">
+                        <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.05em] text-muted">
                           Disconnected
                         </span>
                       )}
                     </span>
-                    <span className="ausers-acct__key">
+                    <span className="font-mono text-[12px] text-muted">
                       {a.api_key ?? '—'}
                     </span>
-                    <span className="ausers-acct__badges">
-                      <span className="ausers-badge ausers-badge--neutral">
+                    <span className="flex gap-1.5">
+                      <span className={`${BADGE} bg-surface2 border-border text-muted`}>
                         {a.demo ? 'Demo' : 'Live'}
                       </span>
-                      <span className="ausers-badge ausers-badge--neutral">
+                      <span className={`${BADGE} bg-surface2 border-border text-muted`}>
                         {a.enabled ? 'Enabled' : 'Disabled'}
                       </span>
                     </span>
-                    <span className="ausers-acct__bal">
+                    <span className="ml-auto font-mono font-bold text-text">
                       {fmtMoney(a.balance)} {a.currency_type ?? 'USDT'}
                     </span>
                   </div>
