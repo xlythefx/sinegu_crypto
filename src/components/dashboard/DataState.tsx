@@ -1,5 +1,4 @@
 import { getApiErrorMessage } from '../../services/api'
-import './DataState.css'
 
 interface DataStateProps {
   loading: boolean
@@ -16,20 +15,27 @@ export default function DataState({
   onRetry,
   label,
 }: DataStateProps) {
+  const shell =
+    'rounded-card p-card border border-border bg-surface flex flex-col items-center justify-center gap-[14px] min-h-[260px] text-muted text-[14px]'
+
   if (loading) {
     return (
-      <div className="dstate rounded-card p-card border border-border bg-surface">
-        <span className="dstate__spinner" />
+      <div className={shell}>
+        <span className="w-[26px] h-[26px] rounded-full border-[3px] border-border border-t-accent animate-[dstate-spin_0.8s_linear_infinite]" />
         Loading {label}…
       </div>
     )
   }
   return (
-    <div className="dstate rounded-card p-card border border-border bg-surface">
-      <p className="dstate__error">
+    <div className={shell}>
+      <p className="text-text max-w-[420px] text-center">
         {getApiErrorMessage(error, `Could not load the ${label}.`)}
       </p>
-      <button type="button" className="dstate__retry" onClick={onRetry}>
+      <button
+        type="button"
+        className="border border-border bg-surface2 text-text py-[9px] px-5 rounded-pill text-[13px] font-semibold cursor-pointer hover:border-accent"
+        onClick={onRetry}
+      >
         Try again
       </button>
     </div>

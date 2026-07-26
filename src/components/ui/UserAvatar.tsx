@@ -1,5 +1,4 @@
 import type { AuthUser } from '../../types/auth'
-import './UserAvatar.css'
 
 interface UserAvatarProps {
   user: Pick<AuthUser, 'name' | 'user_profile'> | null
@@ -19,14 +18,16 @@ export default function UserAvatar({
 
   return (
     <span
-      className={`uavatar ${className}`}
+      className={`inline-flex items-center justify-center rounded-full overflow-hidden flex-shrink-0 bg-accent text-on-accent border border-border select-none ${className}`}
       style={{ width: size, height: size, fontSize: size }}
       aria-label={name}
     >
       {image ? (
-        <img src={image} alt="" />
+        <img src={image} alt="" className="w-full h-full object-cover block" />
       ) : (
-        <span className="uavatar__initial">{initial}</span>
+        <span className="font-display font-extrabold text-[0.44em] leading-none">
+          {initial}
+        </span>
       )}
     </span>
   )

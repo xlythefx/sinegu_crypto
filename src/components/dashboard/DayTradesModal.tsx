@@ -4,7 +4,6 @@ import { X } from 'lucide-react'
 import { displaySymbol } from '../../lib/chart'
 import { fmtDateTime, fmtMediumDate, fmtNum, fmtSignedMoney } from '../../lib/format'
 import type { DayPnl } from '../../types/dashboard'
-import './DayTradesModal.css'
 
 interface DayTradesModalProps {
   /** ISO date (YYYY-MM-DD) of the selected day, or null when closed. */
@@ -32,27 +31,34 @@ export default function DayTradesModal({
 
   return createPortal(
     <div
-      className="dtm__overlay"
+      className="fixed inset-0 bg-[rgba(0,0,0,0.55)] flex items-center justify-center z-[100] p-5"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-label={`Trades for ${fmtMediumDate(date)}`}
     >
-      <div className="dtm" onClick={(e) => e.stopPropagation()}>
-        <div className="dtm__head">
+      <div
+        className="w-full max-w-[520px] max-h-[85vh] overflow-y-auto bg-surface border border-border rounded-[18px] py-[22px] px-6 animate-[dtm-in_0.2s_cubic-bezier(0.2,0.7,0.2,1)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 mb-4">
           <div>
-            <div className="dtm__title">{fmtMediumDate(date)}</div>
-            <div className="dtm__sub">
+            <div className="font-display text-[18px] font-extrabold">
+              {fmtMediumDate(date)}
+            </div>
+            <div className="text-[12.5px] text-muted mt-[3px]">
               {day.trades.length} trade{day.trades.length === 1 ? '' : 's'} ·{' '}
               {day.wins}W / {day.losses}L · net{' '}
-              <span className={`mono ${day.total < 0 ? 'is-neg' : 'is-pos'}`}>
+              <span
+                className={`font-mono ${day.total < 0 ? 'text-red' : 'text-green'}`}
+              >
                 {fmtSignedMoney(day.total)}
               </span>
             </div>
           </div>
           <button
             type="button"
-            className="dtm__close"
+            className="inline-flex items-center justify-center w-[30px] h-[30px] rounded-btn border border-border bg-surface2 text-muted cursor-pointer flex-shrink-0 hover:text-text hover:border-accent"
             onClick={onClose}
             aria-label="Close"
           >
@@ -60,31 +66,40 @@ export default function DayTradesModal({
           </button>
         </div>
 
-        <div className="dtm__trades">
+        <div className="flex flex-col gap-[9px]">
           {day.trades.map((t, i) => {
             const short = t.position_side === 'SHORT'
             return (
-              <div className="dtm__trade" key={`${t.symbol}-${i}`}>
-                <div className="dtm__trade-main">
-                  <span className="dtm__trade-sym">
+              <div
+                className="flex items-center justify-between gap-3 py-3 px-[14px] border border-hair rounded-row bg-surface2"
+                key={`${t.symbol}-${i}`}
+              >
+                <div className="flex items-center gap-[9px] flex-wrap">
+                  <span className="font-bold text-[14px]">
                     {displaySymbol(t.symbol)}
                   </span>
                   <span
-                    className={`dtm__trade-side ${short ? 'is-short' : 'is-long'}`}
+                    className={`font-mono text-[10px] font-semibold tracking-[0.06em] py-[2px] px-2 rounded-pill border ${
+                      short
+                        ? 'text-red border-[rgba(255,90,90,0.35)] bg-[rgba(255,90,90,0.08)]'
+                        : 'text-green border-[rgba(47,214,122,0.35)] bg-[rgba(47,214,122,0.08)]'
+                    }`}
                   >
                     {t.position_side}
                   </span>
                   {t.strategy && (
-                    <span className="dtm__trade-strat">{t.strategy}</span>
+                    <span className="text-[11.5px] text-faint">
+                      {t.strategy}
+                    </span>
                   )}
                 </div>
-                <div className="dtm__trade-meta">
-                  <span className="dtm__trade-qty mono">
+                <div className="flex flex-col items-end gap-[3px] flex-shrink-0">
+                  <span className="text-[11px] text-faint whitespace-nowrap font-mono">
                     {fmtNum(Math.abs(t.position_amt), 4)} @{' '}
                     {fmtDateTime(t.closed_at)}
                   </span>
                   <span
-                    className={`dtm__trade-pnl mono ${t.realized_pnl < 0 ? 'is-neg' : 'is-pos'}`}
+                    className={`text-[14px] font-extrabold font-mono ${t.realized_pnl < 0 ? 'text-red' : 'text-green'}`}
                   >
                     {fmtSignedMoney(t.realized_pnl)}
                   </span>

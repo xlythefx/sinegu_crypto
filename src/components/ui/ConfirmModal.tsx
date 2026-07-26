@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import './ConfirmModal.css'
 
 interface ConfirmModalProps {
   open: boolean
@@ -51,21 +50,37 @@ export default function ConfirmModal({
 
   return (
     <div
-      className="confirm-modal__overlay"
+      className="fixed inset-0 bg-[rgba(0,0,0,0.55)] backdrop-blur-[3px] grid place-items-center z-[1000] animate-[fadeup_0.2s_ease_both]"
       onClick={onCancel}
       role="dialog"
       aria-modal="true"
       aria-label={title}
     >
-      <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
-        <h3 className="confirm-modal__title">{title}</h3>
-        {message && <p className="confirm-modal__message">{message}</p>}
-        <div className="confirm-modal__actions">
-          <button className="confirm-modal__cancel" onClick={onCancel}>
+      <div
+        className="bg-surface border border-border rounded-[20px] p-7 max-w-[420px] w-[calc(100%-48px)] shadow-[0_30px_80px_rgba(0,0,0,0.35)] animate-[fadeup_0.25s_cubic-bezier(0.2,0.7,0.2,1)_both]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="font-display text-[20px] font-extrabold tracking-[-0.02em] mb-2 text-text">
+          {title}
+        </h3>
+        {message && (
+          <p className="text-[14px] leading-[1.6] text-muted mb-[22px]">
+            {message}
+          </p>
+        )}
+        <div className="flex gap-2.5 justify-end">
+          <button
+            className="text-[14px] font-semibold bg-surface2 text-text border border-border py-[11px] px-[22px] rounded-pill cursor-pointer"
+            onClick={onCancel}
+          >
             {cancelLabel}
           </button>
           <button
-            className={`confirm-modal__confirm${danger ? ' confirm-modal__confirm--danger' : ''}`}
+            className={`text-[14px] font-bold py-[11px] px-[22px] rounded-pill border-0 cursor-pointer ${
+              danger
+                ? 'bg-red text-white shadow-[0_10px_24px_rgba(255,90,90,0.25)]'
+                : 'bg-accent text-on-accent shadow-[0_10px_24px_var(--glow)]'
+            }`}
             onClick={onConfirm}
             autoFocus
           >

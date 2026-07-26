@@ -8,7 +8,6 @@ import {
   type ReactNode,
 } from 'react'
 import { useNavigate } from 'react-router-dom'
-import './PortalSwitchOverlay.css'
 
 interface SwitchState {
   /** Route to navigate to while the overlay covers the screen. */
@@ -59,16 +58,30 @@ export function PortalSwitchProvider({ children }: { children: ReactNode }) {
       {children}
       {sw && (
         <div
-          className={`pswitch${sw.leaving ? ' pswitch--leaving' : ''}`}
+          className={`fixed inset-0 z-[1200] flex items-center justify-center bg-bg ${
+            sw.leaving
+              ? 'animate-[pswitch-out_0.35s_ease-in_both]'
+              : 'animate-[pswitch-in_0.25s_ease-out_both]'
+          }`}
           role="status"
           aria-live="polite"
         >
-          <div className="pswitch__inner">
-            <img className="pswitch__logo" src="/assets/logo.png" alt="" />
-            <div className="pswitch__title">SineguAlerts</div>
-            <div className="pswitch__portal">{sw.portal}</div>
-            <span className="pswitch__spinner" />
-            <div className="pswitch__caption">Switching workspace…</div>
+          <div className="flex flex-col items-center gap-1.5 animate-[pswitch-rise_0.45s_ease-out_both]">
+            <img
+              className="w-[52px] h-[52px] object-contain mb-2.5 animate-[pswitch-pulse_1.4s_ease-in-out_infinite]"
+              src="/assets/logo.png"
+              alt=""
+            />
+            <div className="font-display text-[20px] font-bold text-text tracking-[0.2px]">
+              SineguAlerts
+            </div>
+            <div className="font-mono text-[12px] font-semibold uppercase tracking-[2.5px] text-accent">
+              {sw.portal}
+            </div>
+            <span className="w-[26px] h-[26px] mt-[22px] rounded-full border-[3px] border-border border-t-accent animate-[pswitch-spin_0.8s_linear_infinite]" />
+            <div className="mt-2 text-[13px] text-muted">
+              Switching workspace…
+            </div>
           </div>
         </div>
       )}
