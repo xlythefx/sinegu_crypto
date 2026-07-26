@@ -1,0 +1,392 @@
+/* One strategy card: header + toggle, exclude chips, metric tiles, equity curve.
+   Co-located with StrategyCard.tsx. */
+
+.astcard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  transition: opacity 0.15s ease;
+}
+
+.astcard--paused {
+  opacity: 0.65;
+}
+
+/* ---- header ---- */
+.astcard__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--hair);
+}
+
+.astcard__name {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.astcard__name--link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.astcard__name--link svg {
+  color: var(--faint);
+  transition:
+    color 0.15s,
+    transform 0.15s;
+}
+.astcard__name--link:hover {
+  color: var(--accent);
+}
+.astcard__name--link:hover svg {
+  color: var(--accent);
+  transform: translate(1px, -1px);
+}
+
+.astcard__meta {
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.astcard__toggle-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface2);
+}
+
+.astcard__toggle-status {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.astcard__toggle-state {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.astcard__toggle-state--on {
+  color: var(--green);
+}
+
+.astcard__toggle-sub {
+  font-size: 10px;
+  color: var(--faint);
+}
+
+.astcard__toggle {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: var(--surface);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.astcard__toggle--on {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.astcard__toggle:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.astcard__knob {
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: var(--muted);
+  transition:
+    transform 0.15s,
+    background 0.15s;
+}
+
+.astcard__knob--on {
+  transform: translateX(18px);
+  background: var(--onAccent);
+}
+
+/* ---- exclude tickers ---- */
+.astcard__exclude {
+  padding: 12px 14px;
+  border: 1px solid var(--hair);
+  border-radius: 13px;
+  background: var(--surface2);
+}
+
+.astcard__exclude-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+.astcard__exclude-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--faint);
+}
+
+.astcard__exclude-count {
+  margin-left: 8px;
+  font-style: normal;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+}
+
+.astcard__clear {
+  border: 0;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.astcard__clear:hover {
+  color: var(--text);
+}
+
+.astcard__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.astcard__chip {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: var(--surface);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.astcard__chip:hover {
+  border-color: var(--accentLine);
+  background: var(--accentSoft);
+}
+
+.astcard__chip--off {
+  border-color: color-mix(in srgb, var(--red) 40%, transparent);
+  background: color-mix(in srgb, var(--red) 8%, transparent);
+  color: var(--red);
+  text-decoration: line-through;
+}
+
+.astcard__chip--off:hover {
+  border-color: color-mix(in srgb, var(--red) 40%, transparent);
+  background: color-mix(in srgb, var(--red) 8%, transparent);
+}
+
+/* ---- body: metrics stacked over chart (fits a 1/3-width grid cell) ---- */
+.astcard__body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 18px;
+}
+
+.astcard__metrics {
+  width: 100%;
+}
+
+.astcard__section-label {
+  margin-bottom: 10px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--faint);
+}
+
+.astcard__metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 9px;
+}
+
+/* ---- metric tiles ---- */
+.astcard__tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--hair);
+  border-radius: 12px;
+  background: var(--surface2);
+}
+
+.astcard__tile--pos {
+  background: linear-gradient(
+    150deg,
+    color-mix(in srgb, var(--green) 8%, var(--surface2)),
+    var(--surface2)
+  );
+}
+
+.astcard__tile--neg {
+  background: linear-gradient(
+    150deg,
+    rgba(255, 90, 90, 0.08),
+    var(--surface2)
+  );
+}
+
+.astcard__tile-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+
+.astcard__tile-value {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.astcard__winrate-pct {
+  margin-left: auto;
+  font-style: normal;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.astcard__bar {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: var(--surface);
+}
+
+.astcard__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.6s ease-out;
+}
+
+.astcard__bar-fill--pos {
+  background: var(--green);
+}
+
+.astcard__bar-fill--neg {
+  background: var(--red);
+}
+
+.astcard__winrate-avg {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* ---- equity curve ---- */
+.astcard__chart-col {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.astcard__chart-box {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 10px 12px 8px;
+  border: 1px solid var(--hair);
+  border-radius: 13px;
+  background: var(--surface2);
+}
+
+.astcard__chart-svg {
+  width: 100%;
+  height: 160px;
+  flex: 1;
+}
+
+.astcard__chart-labels {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 6px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--faint);
+}
+
+/* ---- details button ---- */
+.astcard__details {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 11px;
+  border: 1px solid var(--accentLine);
+  border-radius: 12px;
+  background: var(--accentSoft);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.astcard__details:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--onAccent);
+}
+.astcard__details svg {
+  transition: transform 0.15s;
+}
+.astcard__details:hover svg {
+  transform: translate(1px, -1px);
+}

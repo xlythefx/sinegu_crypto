@@ -1,0 +1,7 @@
+.adash-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 16px;
+  margin-bottom: 16px;
+}

@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run dev:*)",
+      "Bash(npm run build)",
+      "Bash(npm run build:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vite:*)",
+      "PowerShell(npm run dev:*)",
+      "PowerShell(npm run build:*)",
+      "PowerShell(npm run lint:*)",
+      "PowerShell(npm install:*)",
+      "PowerShell(npx tsc:*)",
+      "Bash(php artisan:*)",
+      "PowerShell(php artisan:*)",
+      "Bash(composer:*)",
+      "PowerShell(composer:*)",
+      "Bash(python .claude/deploy_sinegualcrypto.py:*)",
+      "PowerShell(python .claude/deploy_sinegualcrypto.py:*)",
+      "Bash(py .claude/deploy_sinegualcrypto.py:*)",
+      "PowerShell(py .claude/deploy_sinegualcrypto.py:*)"
+    ],
+    "additionalDirectories": [
+      "C:\\wamp64\\www\\sinegutrade-api"
+    ]
+  }
+}

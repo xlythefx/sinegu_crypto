@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/aos@2.3.1/dist/aos.css">
+  <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Plus Jakarta Sans',sans-serif;-webkit-font-smoothing:antialiased;
+    --bg:#0a0c11;--surface:#0f1319;--surface2:#0b0e13;--border:#1f2732;--hair:#161d26;
+    --text:#e7ecf3;--muted:#8b94a3;--faint:#5b6472;
+    --accent:#d9ad55;--accentSoft:#17130a;--accentLine:#4a3c1c;
+    --green:#2fd67a;--red:#ff5a5a;--glow:rgba(217,173,85,.16);--onAccent:#0a0c11;
+    --bgScrim:rgba(10,12,17,.965);--bubble:rgba(217,173,85,.10);
+    background:var(--bg);
+  }
+  [data-theme="light"]{
+    --bg:#faf7f1;--surface:#ffffff;--surface2:#fbf8f2;--border:#ece2d2;--hair:#f0e8db;
+    --text:#1b1712;--muted:#6f6a60;--faint:#9a9284;
+    --accent:#b8862a;--accentSoft:#fdf5e4;--accentLine:#ecd9ab;
+    --green:#0fae76;--red:#e0492b;--glow:rgba(184,134,42,.12);--onAccent:#fff;
+    --bgScrim:rgba(250,247,241,.95);--bubble:rgba(184,134,42,.08);
+  }
+  a{color:var(--accent);text-decoration:none}
+  @keyframes tick{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  @keyframes travel{0%{offset-distance:0%}100%{offset-distance:100%}}
+  @keyframes drift{0%,100%{transform:translate(0,0)}50%{transform:translate(24px,-18px)}}
+  @keyframes fadeup{0%{opacity:0;transform:translateY(22px)}100%{opacity:1;transform:translateY(0)}}
+  @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+  @keyframes grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+  @keyframes bubble{0%{transform:translateY(0) scale(1);opacity:0}12%{opacity:1}100%{transform:translateY(-120px) scale(1.25);opacity:0}}
+  ::selection{background:var(--accent);color:#fff}
+</style>
+</helmet>
+<div data-theme="{{ theme }}" style="position:relative;background:linear-gradient(var(--bgScrim),var(--bgScrim)),url('assets/hero-wallst.png') center/cover fixed;color:var(--text);min-height:100vh;overflow:hidden;transition:background .4s ease,color .4s ease">
+
+  <!-- bubbly decor -->
+  <div style="position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:-1">
+    <div style="position:absolute;top:180px;left:6%;width:90px;height:90px;border-radius:50%;background:var(--bubble);filter:blur(2px);animation:bubble 9s ease-in infinite;z-index:0"></div>
+    <div style="position:absolute;top:340px;left:22%;width:44px;height:44px;border-radius:50%;background:var(--bubble);filter:blur(1px);animation:bubble 7s ease-in infinite 1.5s"></div>
+    <div style="position:absolute;top:260px;right:10%;width:120px;height:120px;border-radius:50%;background:var(--bubble);filter:blur(3px);animation:bubble 11s ease-in infinite .8s"></div>
+    <div style="position:absolute;top:520px;right:26%;width:60px;height:60px;border-radius:50%;background:var(--bubble);filter:blur(2px);animation:bubble 8.5s ease-in infinite 2.2s"></div>
+    <div style="position:absolute;top:80px;left:44%;width:34px;height:34px;border-radius:50%;background:var(--bubble);animation:bubble 6.5s ease-in infinite 3s"></div>
+  </div>
+
+  <!-- TICKER -->
+  <div style="border-bottom:1px solid var(--hair);background:var(--surface2);overflow:hidden;white-space:nowrap">
+    <div style="display:inline-flex;gap:36px;padding:9px 0;font-family:'IBM Plex Mono',monospace;font-size:12.5px;animation:tick 42s linear infinite;will-change:transform">
+      <span style="color:var(--faint)">BTC/USD <b style="color:var(--text);font-weight:500">68,412.50</b> <span style="color:var(--green)">+1.84%</span></span>
+      <span style="color:var(--faint)">ETH/USD <b style="color:var(--text);font-weight:500">3,571.20</b> <span style="color:var(--red)">-0.42%</span></span>
+      <span style="color:var(--faint)">SOL/USD <b style="color:var(--text);font-weight:500">184.06</b> <span style="color:var(--green)">+5.11%</span></span>
+      <span style="color:var(--faint)">SINEGU USERS <b style="color:var(--text);font-weight:500">48.2K</b> <span style="color:var(--green)">+2.3%</span></span>
+      <span style="color:var(--faint)">AVG ROI <b style="color:var(--text);font-weight:500">11.4%</b> <span style="color:var(--green)">30d</span></span>
+      <span style="color:var(--faint)">FUNDING <b style="color:var(--text);font-weight:500">0.0093%</b> <span style="color:var(--accent)">8h</span></span>
+      <span style="color:var(--faint)">BTC/USD <b style="color:var(--text);font-weight:500">68,412.50</b> <span style="color:var(--green)">+1.84%</span></span>
+      <span style="color:var(--faint)">ETH/USD <b style="color:var(--text);font-weight:500">3,571.20</b> <span style="color:var(--red)">-0.42%</span></span>
+      <span style="color:var(--faint)">SOL/USD <b style="color:var(--text);font-weight:500">184.06</b> <span style="color:var(--green)">+5.11%</span></span>
+      <span style="color:var(--faint)">SINEGU USERS <b style="color:var(--text);font-weight:500">48.2K</b> <span style="color:var(--green)">+2.3%</span></span>
+      <span style="color:var(--faint)">AVG ROI <b style="color:var(--text);font-weight:500">11.4%</b> <span style="color:var(--green)">30d</span></span>
+      <span style="color:var(--faint)">FUNDING <b style="color:var(--text);font-weight:500">0.0093%</b> <span style="color:var(--accent)">8h</span></span>
+    </div>
+  </div>
+
+  <!-- NAV -->
+  <nav style="max-width:1280px;margin:0 auto;padding:20px 40px;display:flex;align-items:center;justify-content:space-between;gap:32px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:44px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:24px;height:24px;background:var(--accent);border-radius:8px 8px 8px 2px;transform:rotate(-8deg);box-shadow:0 0 16px var(--glow)"></div>
+        <span style="font-family:'Bricolage Grotesque';font-weight:800;font-size:20px">SineguAlerts</span>
+      </div>
+      <div style="display:flex;gap:26px;font-size:14px;font-weight:500;color:var(--muted);white-space:nowrap">
+        <span style="cursor:pointer">Structure</span><span style="cursor:pointer">Exchanges</span><span style="cursor:pointer">Pricing</span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;flex-shrink:0">
+      <button onClick="{{ toggle }}" title="Toggle theme" style="display:flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:12px;background:var(--surface);color:var(--text);border:1px solid var(--border);padding:9px 14px;border-radius:100px;cursor:pointer">
+        <span style="font-size:14px">{{ themeIcon }}</span>{{ themeLabel }}
+      </button>
+      <span style="font-size:14px;font-weight:600;cursor:pointer;color:var(--muted)">Sign in</span>
+      <button style="font-family:'Plus Jakarta Sans';font-size:14px;background:var(--accent);color:#fff;border:none;padding:11px 20px;border-radius:100px;font-weight:700;cursor:pointer">Start free</button>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section style="position:relative;max-width:1280px;margin:0 auto;padding:64px 40px 56px;display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center">
+    <div style="position:absolute;top:-40px;left:6%;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,var(--glow),transparent 70%);filter:blur(20px);animation:drift 14s ease-in-out infinite;pointer-events:none"></div>
+    <div style="position:relative;animation:fadeup .8s cubic-bezier(.2,.7,.2,1) both">
+      <div style="display:inline-flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--accent);border:1px solid var(--accentLine);background:var(--accentSoft);padding:6px 12px;border-radius:100px;margin-bottom:24px">
+        <span style="width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 1.6s infinite"></span>
+        48,200+ traders copying live signals right now
+      </div>
+      <h1 style="font-family:'Bricolage Grotesque';font-size:60px;line-height:1.02;font-weight:800;letter-spacing:-.03em;margin-bottom:22px">
+        Pro-grade trading bots.<br><span style="color:var(--accent)">Keep 80% of the upside.</span>
+      </h1>
+      <p style="font-size:18px;line-height:1.6;color:var(--muted);max-width:480px;margin-bottom:32px">
+        SineguAlerts runs battle-tested strategies on <b style="color:var(--text)">your own</b> Binance, Bybit or MEXC account. Free to start — you only pay <b style="color:var(--accent)">20% of the profit</b> you actually make.
+      </p>
+      <div style="display:flex;gap:14px;align-items:center;margin-bottom:28px;flex-wrap:wrap">
+        <button style="font-size:16px;font-weight:700;background:var(--accent);color:#fff;border:none;padding:15px 28px;border-radius:100px;cursor:pointer;box-shadow:0 10px 26px var(--glow)">Start free →</button>
+        <button style="font-size:16px;font-weight:700;background:var(--surface);color:var(--text);border:1px solid var(--border);padding:15px 26px;border-radius:100px;cursor:pointer">See live results</button>
+      </div>
+      <div style="display:flex;gap:26px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--faint);flex-wrap:wrap">
+        <span>◆ Free to use</span><span>◆ Pay only 20% of profit</span><span>◆ Funds stay on your exchange</span>
+      </div>
+    </div>
+
+    <!-- SIGNATURE: order book -->
+    <div style="position:relative;background:var(--surface);border:1px solid var(--border);border-radius:20px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.18);animation:fadeup .8s cubic-bezier(.2,.7,.2,1) .15s both">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--hair);flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-weight:700;font-size:16px">BTC-PERP</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--green)">68,412.50</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--accent);border:1px solid var(--accentLine);background:var(--accentSoft);padding:2px 8px;border-radius:100px">Z-Score Reversion #2</span>
+        </div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--faint);display:flex;gap:14px"><span>24h Vol 1.2B</span><span style="color:var(--accent)">● matching</span></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;font-family:'IBM Plex Mono',monospace;font-size:12px">
+        <div style="padding:14px 20px;border-right:1px solid var(--hair)">
+          <div style="color:var(--faint);font-size:10px;display:flex;justify-content:space-between;margin-bottom:8px"><span>PRICE</span><span>SIZE</span></div>
+          <div style="display:flex;justify-content:space-between;padding:3px 0;position:relative"><span style="color:var(--green)">68,412.5</span><span style="color:var(--muted)">0.842</span><span style="position:absolute;right:0;top:0;bottom:0;width:62%;background:rgba(47,214,122,.1)"></span></div>
+          <div style="display:flex;justify-content:space-between;padding:3px 0;position:relative"><span style="color:var(--green)">68,410.0</span><span style="color:var(--muted)">1.204</span><span style="position:absolute;right:0;top:0;bottom:0;width:80%;background:rgba(47,214,122,.1)"></span></div>
+          <div style="display:flex;justify-content:space-between;padding:3px 0;position:relative"><span style="color:var(--green)">68,408.5</span><span style="color:var(--muted)">0.311</span><span style="position:absolute;right:0;top:0;bottom:0;width:28%;background:rgba(47,214,122,.1)"></span></div>
+          <div style="display:flex;justify-content:space-between;padding:3px 0;position:relative"><span style="color:var(--green)">68,406.0</span><span style="color:var(--muted)">2.087</span><span style="position:absolute;right:0;top:0;bottom:0;width:95%;background:rgba(47,214,122,.1)"></span></div>
+          <div style="display:flex;justify-content:space-between;padding:3px 0;position:relative"><span style="color:var(--green)">68,404.0</span><span style="color:var(--muted)">0.556</span><span style="position:absolute;right:0;top:0;bottom:0;width:44%;background:rgba(47,214,122,.1)"></span></div>
+        </div>
+        <div style="padding:14px 20px">
+          <div style="color:var(--faint);font-size:10px;display:flex;justify-content:space-between;margin-bottom:8px"><span>PRICE</span><span>SIZE</span></div>
+          <div style="display:flex;justify-content:space-between;padding:3px 0;position:relative"><span style="color:var(--red)">68,415.0</span><span style="color:var(--muted)">0.673</span><span style="position:absolute;left:0;top:0;bottom:0;width:50%;background:rgba(255,90,90,.1)"></span></div>
+          <div style="display:flex;justify-content:space-between;padding:3px 0;position:relative"><span style="color:var(--red)">68,417.5</span><span style="color:var(--muted)">1.548</span><span style="position:absolute;left:0;top:0;bottom:0;width:88%;background:rgba(255,90,90,.1)"></span></div>
+          <div style="display:flex;justify-content:space-between;padding:3px 0;position:relative"><span style="color:var(--red)">68,420.0</span><span style="color:var(--muted)">0.402</span><span style="position:absolute;left:0;top:0;bottom:0;width:36%;background:rgba(255,90,90,.1)"></span></div>
+          <div style="display:flex;justify-content:space-between;padding:3px 0;position:relative"><span style="color:var(--red)">68,422.5</span><span style="color:var(--muted)">1.910</span><span style="position:absolute;left:0;top:0;bottom:0;width:98%;background:rgba(255,90,90,.1)"></span></div>
+          <div style="display:flex;justify-content:space-between;padding:3px 0;position:relative"><span style="color:var(--red)">68,425.0</span><span style="color:var(--muted)">0.288</span><span style="position:absolute;left:0;top:0;bottom:0;width:24%;background:rgba(255,90,90,.1)"></span></div>
+        </div>
+      </div>
+      <div style="border-top:1px solid var(--hair);padding:16px 20px">
+        <div style="display:flex;align-items:flex-end;gap:4px;height:74px">
+          <div style="flex:1;height:32%;background:var(--green);opacity:.5;border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;height:48%;background:var(--green);opacity:.65;border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;height:64%;background:var(--green);opacity:.8;border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;height:88%;background:var(--green);border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;height:100%;background:var(--accent);border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;height:92%;background:var(--red);border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;height:70%;background:var(--red);opacity:.8;border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;height:52%;background:var(--red);opacity:.65;border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;height:38%;background:var(--red);opacity:.5;border-radius:4px 4px 0 0"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--faint);margin-top:8px"><span>−0.5% depth</span><span>MID 68,413.75</span><span>+0.5% depth</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PERFORMANCE ANALYTICS -->
+  <section data-aos="fade-up" style="max-width:1280px;margin:0 auto;padding:60px 40px 76px">
+    <div style="text-align:center;margin-bottom:36px">
+      <h2 style="font-family:'Bricolage Grotesque';font-size:38px;font-weight:800;letter-spacing:-.02em;margin-bottom:10px">See every trade, verified</h2>
+      <p style="font-size:17px;color:var(--muted);max-width:560px;margin:0 auto">Full, real-time performance analytics for every strategy — the same numbers we're paid on.</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:20px">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px"><div style="font-size:12px;color:var(--muted);font-weight:600;margin-bottom:12px">Total P&amp;L</div><div style="font-family:'Bricolage Grotesque';font-size:26px;font-weight:800;color:var(--green)">+42.9%</div><div style="font-size:11px;color:var(--faint);margin-top:4px">Total PNL %</div></div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px"><div style="font-size:12px;color:var(--muted);font-weight:600;margin-bottom:12px">Win Rate</div><div style="font-family:'Bricolage Grotesque';font-size:26px;font-weight:800;color:var(--accent)">71.3%</div><div style="font-size:11px;color:var(--faint);margin-top:4px">Winning days</div></div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px"><div style="font-size:12px;color:var(--muted);font-weight:600;margin-bottom:12px">Total Trades</div><div style="font-family:'Bricolage Grotesque';font-size:26px;font-weight:800">4,182</div><div style="font-size:11px;color:var(--faint);margin-top:4px">Executed trades</div></div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px"><div style="font-size:12px;color:var(--muted);font-weight:600;margin-bottom:12px">Avg Daily P&amp;L</div><div style="font-family:'Bricolage Grotesque';font-size:26px;font-weight:800;color:var(--green)">+0.34%</div><div style="font-size:11px;color:var(--faint);margin-top:4px">Per trading day</div></div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px"><div style="font-size:12px;color:var(--muted);font-weight:600;margin-bottom:12px">Avg Win PNL</div><div style="font-family:'Bricolage Grotesque';font-size:26px;font-weight:800;color:var(--green)">+3.50%</div><div style="font-size:11px;color:var(--faint);margin-top:4px">Per winning day</div></div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px"><div style="font-size:12px;color:var(--muted);font-weight:600;margin-bottom:12px">Avg Loss PNL</div><div style="font-family:'Bricolage Grotesque';font-size:26px;font-weight:800;color:var(--red)">−1.64%</div><div style="font-size:11px;color:var(--faint);margin-top:4px">Per losing day</div></div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:28px 30px 24px;box-shadow:0 30px 80px rgba(0,0,0,.14)">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:12px">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="width:42px;height:42px;border-radius:12px;background:var(--accentSoft);border:1px solid var(--accentLine);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:20px">↗</div>
+          <div>
+            <div style="font-family:'Bricolage Grotesque';font-size:22px;font-weight:800">Performance Analytics</div>
+            <div style="font-size:13px;color:var(--muted);margin-top:2px">Real-time profit and loss tracking with advanced charting tools</div>
+          </div>
+        </div>
+        <div style="width:34px;height:34px;border:1px solid var(--border);border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--muted);cursor:pointer">⋮</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--surface2);border:1px solid var(--hair);border-radius:12px;padding:5px;margin-bottom:24px">
+        <div style="text-align:center;padding:11px;border-radius:8px;background:var(--surface);border:1px solid var(--border);font-size:14px;font-weight:700">Cumulative P&amp;L</div>
+        <div style="text-align:center;padding:11px;border-radius:8px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer">Daily P&amp;L</div>
+        <div style="text-align:center;padding:11px;border-radius:8px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer">Date Range</div>
+      </div>
+      <div style="display:flex;gap:14px">
+        <div style="display:flex;flex-direction:column;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--faint);text-align:right;padding:4px 0 22px;width:64px;flex-shrink:0">
+          <span>$3,050.00</span><span>$2,483.33</span><span>$1,916.67</span><span>$1,350.00</span>
+        </div>
+        <div style="flex:1;min-width:0">
+          <svg viewBox="0 0 1200 360" preserveAspectRatio="none" style="width:100%;height:340px;display:block">
+            <defs>
+              <linearGradient id="paFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#d9ad55" stop-opacity=".38"/>
+                <stop offset="100%" stop-color="#d9ad55" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <g stroke="var(--hair)" stroke-width="1">
+              <line x1="48" y1="40" x2="1152" y2="40"/><line x1="48" y1="133" x2="1152" y2="133"/><line x1="48" y1="227" x2="1152" y2="227"/><line x1="48" y1="320" x2="1152" y2="320"/>
+            </g>
+            <line x1="48" y1="212.9" x2="1152" y2="212.9" stroke="var(--muted)" stroke-width="1" stroke-dasharray="4 4" opacity=".7"/>
+            <path d="M48,211.3 L73.7,215.4 L99.3,206.4 L125,217.1 L150.7,207.2 L176.4,219.5 L202,199.8 L227.7,209.6 L253.4,194.8 L279.1,203.1 L304.7,188.2 L330.4,197.3 L356.1,183.3 L381.8,191.5 L407.4,170.1 L433.1,180 L458.8,160.2 L484.5,171.8 L510.1,145.4 L535.8,156.9 L561.5,127.3 L587.2,138.8 L612.8,105.9 L638.5,120.7 L664.2,87.8 L689.9,99.3 L715.5,68 L741.2,82.8 L766.9,46.6 L792.6,59.8 L818.2,40 L843.9,56.5 L869.6,71.3 L895.3,87.8 L920.9,97.6 L946.6,77.9 L972.3,87.8 L998,64.7 L1023.6,76.2 L1049.3,54.8 L1075,65.5 L1100.7,47.4 L1126.3,58.1 L1152,49.9 L1152,340 L48,340 Z" fill="url(#paFill)"/>
+            <path d="M48,211.3 L73.7,215.4 L99.3,206.4 L125,217.1 L150.7,207.2 L176.4,219.5 L202,199.8 L227.7,209.6 L253.4,194.8 L279.1,203.1 L304.7,188.2 L330.4,197.3 L356.1,183.3 L381.8,191.5 L407.4,170.1 L433.1,180 L458.8,160.2 L484.5,171.8 L510.1,145.4 L535.8,156.9 L561.5,127.3 L587.2,138.8 L612.8,105.9 L638.5,120.7 L664.2,87.8 L689.9,99.3 L715.5,68 L741.2,82.8 L766.9,46.6 L792.6,59.8 L818.2,40 L843.9,56.5 L869.6,71.3 L895.3,87.8 L920.9,97.6 L946.6,77.9 L972.3,87.8 L998,64.7 L1023.6,76.2 L1049.3,54.8 L1075,65.5 L1100.7,47.4 L1126.3,58.1 L1152,49.9" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" pathLength="1000" stroke-dasharray="1000" stroke-dashoffset="1000" style="animation:draw 2.6s ease .2s forwards"/>
+            <circle cx="1152" cy="49.9" r="5" fill="var(--accent)" opacity="0" style="animation:fadeup .4s ease 2.6s forwards"/>
+            <text x="56" y="204.9" font-family="'IBM Plex Mono',monospace" font-size="12" fill="var(--muted)">Deposit Amount</text>
+          </svg>
+          <div style="display:flex;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--faint);margin-top:6px"><span style="flex:1;text-align:center">Oct 13</span><span style="flex:1;text-align:center">Oct 29</span><span style="flex:1;text-align:center">Nov 12</span><span style="flex:1;text-align:center">Nov 28</span><span style="flex:1;text-align:center">Dec 12</span><span style="flex:1;text-align:center">Dec 29</span><span style="flex:1;text-align:center">Jan 15</span><span style="flex:1;text-align:center">Feb 2</span><span style="flex:1;text-align:center">Feb 20</span><span style="flex:1;text-align:center">Mar 9</span><span style="flex:1;text-align:center">Mar 27</span><span style="flex:1;text-align:center">Apr 14</span><span style="flex:1;text-align:center">May 2</span><span style="flex:1;text-align:center">May 20</span><span style="flex:1;text-align:center">Jun 7</span><span style="flex:1;text-align:center">Jun 24</span><span style="flex:1;text-align:center">Jul 12</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section data-aos="fade-up" style="max-width:1280px;margin:0 auto;padding:52px 40px 76px">
+    <h2 style="font-family:'Bricolage Grotesque';font-size:38px;font-weight:800;letter-spacing:-.02em;text-align:center;margin-bottom:10px">Built to trade for you</h2>
+    <p style="font-size:17px;color:var(--muted);text-align:center;max-width:520px;margin:0 auto 40px">Institutional-grade execution, wrapped in something you'll actually enjoy using.</p>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:18px">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:26px">
+        <div style="width:48px;height:48px;border-radius:14px;background:var(--accentSoft);border:1px solid var(--accentLine);display:flex;align-items:center;justify-content:center;color:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:20px;margin-bottom:18px">⊞</div>
+        <h3 style="font-family:'Bricolage Grotesque';font-size:18px;font-weight:700;margin-bottom:8px">Proven strategies</h3>
+        <p style="font-size:13.5px;line-height:1.6;color:var(--muted)">Battle-tested bots with transparent, verifiable track records — not black boxes.</p>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:26px">
+        <div style="width:48px;height:48px;border-radius:14px;background:var(--accentSoft);border:1px solid var(--accentLine);display:flex;align-items:center;justify-content:center;color:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:20px;margin-bottom:18px">↻</div>
+        <h3 style="font-family:'Bricolage Grotesque';font-size:18px;font-weight:700;margin-bottom:8px">Trades 24/7</h3>
+        <p style="font-size:13.5px;line-height:1.6;color:var(--muted)">Signals execute automatically on your account around the clock — no screen time needed.</p>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:26px">
+        <div style="width:48px;height:48px;border-radius:14px;background:var(--accentSoft);border:1px solid var(--accentLine);display:flex;align-items:center;justify-content:center;color:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:20px;margin-bottom:18px">⛨</div>
+        <h3 style="font-family:'Bricolage Grotesque';font-size:18px;font-weight:700;margin-bottom:8px">Your funds, your keys</h3>
+        <p style="font-size:13.5px;line-height:1.6;color:var(--muted)">Trade-only API keys, withdrawals disabled. Money never leaves your exchange.</p>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:26px">
+        <div style="width:48px;height:48px;border-radius:14px;background:var(--accentSoft);border:1px solid var(--accentLine);display:flex;align-items:center;justify-content:center;color:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:20px;margin-bottom:18px">%</div>
+        <h3 style="font-family:'Bricolage Grotesque';font-size:18px;font-weight:700;margin-bottom:8px">Aligned pricing</h3>
+        <p style="font-size:13.5px;line-height:1.6;color:var(--muted)">We take 20% of profit and nothing else. No profit, no fee — ever.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMPARISON / RESULTS -->
+  <section data-aos="fade-up" style="max-width:1280px;margin:0 auto;padding:52px 40px 76px">
+    <div style="max-width:660px;margin:0 auto;text-align:center">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;color:var(--accent)">[ THE RECEIPTS ]</span>
+      <h2 style="font-family:'Bricolage Grotesque';font-size:40px;font-weight:800;letter-spacing:-.02em;line-height:1.05;margin:14px 0 12px">We don't talk. We deliver results.</h2>
+      <p style="font-size:17px;color:var(--muted);line-height:1.55">Average monthly ROI for each of our automated strategies over the last 90 days — and the blended return across all of them.</p>
+    </div>
+    <div style="position:relative;max-width:900px;margin:52px auto 0;display:flex;align-items:stretch;justify-content:center;gap:16px;height:440px">
+
+      <div data-aos="fade-up" data-aos-delay="0" style="display:flex;flex-direction:column;align-items:center;gap:14px;flex:1;height:100%">
+        <div style="position:relative;flex:1;width:100%;border-radius:28px;overflow:hidden;background-color:var(--surface2);background-image:linear-gradient(135deg,var(--hair) 25%,transparent 25.5%,transparent 50%,var(--hair) 50.5%,var(--hair) 75%,transparent 75.5%,transparent);background-size:12px 12px;border:1px solid var(--border);display:flex;align-items:flex-end">
+          <div style="width:100%;height:74%;transform-origin:bottom;animation:grow .9s cubic-bezier(.2,.8,.2,1) 0.2s both;border-radius:24px;padding:12px;background:var(--muted);display:flex;align-items:flex-start;justify-content:center">
+            <div style="width:100%;padding:12px 0;border-radius:100px;background:rgba(255,255,255,.16);text-align:center;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:17px;color:#fff">+11.4%</div>
+          </div>
+          
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;text-align:center">
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:block;flex-shrink:0"></span>
+          <span style="font-size:13.5px;font-weight:600;color:var(--muted)">Z-Score Reversion #2</span>
+        </div>
+      </div>
+
+      <div data-aos="fade-up" data-aos-delay="0" style="display:flex;flex-direction:column;align-items:center;gap:14px;flex:1;height:100%">
+        <div style="position:relative;flex:1;width:100%;border-radius:28px;overflow:hidden;background-color:var(--surface2);background-image:linear-gradient(135deg,var(--hair) 25%,transparent 25.5%,transparent 50%,var(--hair) 50.5%,var(--hair) 75%,transparent 75.5%,transparent);background-size:12px 12px;border:1px solid var(--border);display:flex;align-items:flex-end">
+          <div style="width:100%;height:62%;transform-origin:bottom;animation:grow .9s cubic-bezier(.2,.8,.2,1) 0.2s both;border-radius:24px;padding:12px;background:var(--muted);display:flex;align-items:flex-start;justify-content:center">
+            <div style="width:100%;padding:12px 0;border-radius:100px;background:rgba(255,255,255,.16);text-align:center;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:17px;color:#fff">+9.8%</div>
+          </div>
+          
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;text-align:center">
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:block;flex-shrink:0"></span>
+          <span style="font-size:13.5px;font-weight:600;color:var(--muted)">ATR Reversion #1</span>
+        </div>
+      </div>
+
+      <div data-aos="fade-up" data-aos-delay="0" style="display:flex;flex-direction:column;align-items:center;gap:14px;flex:1;height:100%">
+        <div style="position:relative;flex:1;width:100%;border-radius:28px;overflow:hidden;background-color:var(--surface2);background-image:linear-gradient(135deg,var(--hair) 25%,transparent 25.5%,transparent 50%,var(--hair) 50.5%,var(--hair) 75%,transparent 75.5%,transparent);background-size:12px 12px;border:1px solid var(--border);display:flex;align-items:flex-end">
+          <div style="width:100%;height:55%;transform-origin:bottom;animation:grow .9s cubic-bezier(.2,.8,.2,1) 0.2s both;border-radius:24px;padding:12px;background:var(--muted);display:flex;align-items:flex-start;justify-content:center">
+            <div style="width:100%;padding:12px 0;border-radius:100px;background:rgba(255,255,255,.16);text-align:center;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:17px;color:#fff">+8.6%</div>
+          </div>
+          
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;text-align:center">
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:block;flex-shrink:0"></span>
+          <span style="font-size:13.5px;font-weight:600;color:var(--muted)">Momentum Strategy</span>
+        </div>
+      </div>
+
+      <div data-aos="fade-up" data-aos-delay="300" style="display:flex;flex-direction:column;align-items:center;gap:14px;flex:1;height:100%">
+        <div style="position:relative;flex:1;width:100%;border-radius:28px;overflow:hidden;background-color:var(--surface2);background-image:linear-gradient(135deg,var(--hair) 25%,transparent 25.5%,transparent 50%,var(--hair) 50.5%,var(--hair) 75%,transparent 75.5%,transparent);background-size:12px 12px;border:1px solid var(--border);display:flex;align-items:flex-end">
+          <div style="width:100%;height:96%;transform-origin:bottom;animation:grow .9s cubic-bezier(.2,.8,.2,1) 0.5s both;border-radius:24px;padding:12px;background:var(--accent);display:flex;align-items:flex-start;justify-content:center">
+            <div style="width:100%;padding:12px 0;border-radius:100px;background:rgba(255,255,255,.16);text-align:center;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:17px;color:var(--onAccent)">+12.9%</div>
+          </div>
+          <div style="position:absolute;top:14px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);font-family:'IBM Plex Mono',monospace;font-size:11px;padding:5px 10px;border-radius:8px;white-space:nowrap">blended, 90d</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;text-align:center">
+          <span style="width:18px;height:18px;background:var(--accent);border-radius:6px 6px 6px 2px;transform:rotate(-8deg);display:block;flex-shrink:0"></span>
+          <span style="font-size:13.5px;font-weight:600;color:var(--text)">SineguAlerts blended</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section data-aos="fade-up" style="max-width:1280px;margin:0 auto;padding:52px 40px 76px">
+    <h2 style="font-family:'Bricolage Grotesque';font-size:38px;font-weight:800;letter-spacing:-.02em;text-align:center;margin-bottom:40px">Profitable in four steps</h2>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:32px;color:var(--accent);font-weight:600;margin-bottom:16px">01</div>
+        <h3 style="font-family:'Bricolage Grotesque';font-size:17px;font-weight:700;margin-bottom:8px">Connect your exchange</h3>
+        <p style="font-size:13.5px;line-height:1.6;color:var(--muted)">Link Binance, Bybit or MEXC with trade-only API keys. Withdrawals stay disabled.</p>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:32px;color:var(--accent);font-weight:600;margin-bottom:16px">02</div>
+        <h3 style="font-family:'Bricolage Grotesque';font-size:17px;font-weight:700;margin-bottom:8px">Pick a strategy</h3>
+        <p style="font-size:13.5px;line-height:1.6;color:var(--muted)">Choose a strategy, set your risk level, and press go.</p>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:32px;color:var(--accent);font-weight:600;margin-bottom:16px">03</div>
+        <h3 style="font-family:'Bricolage Grotesque';font-size:17px;font-weight:700;margin-bottom:8px">Bots trade for you</h3>
+        <p style="font-size:13.5px;line-height:1.6;color:var(--muted)">Signals execute automatically on your account, 24/7 — no screen time required.</p>
+      </div>
+      <div style="background:linear-gradient(135deg,var(--accentSoft),var(--surface));border:1px solid var(--accentLine);border-radius:20px;padding:28px 24px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:32px;color:var(--accent);font-weight:600;margin-bottom:16px">04</div>
+        <h3 style="font-family:'Bricolage Grotesque';font-size:17px;font-weight:700;margin-bottom:8px">Keep 80%</h3>
+        <p style="font-size:13.5px;line-height:1.6;color:var(--muted)">Withdraw anytime. We deduct 20% only from profit — never your capital.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- EXCHANGES -->
+  <section data-aos="fade-up" style="max-width:1280px;margin:0 auto;padding:52px 40px 76px">
+    <p style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--faint);text-align:center;margin-bottom:28px">WORKS DIRECTLY WITH YOUR EXCHANGE — YOUR FUNDS NEVER LEAVE IT</p>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+      <div style="border:1px solid var(--accentLine);border-radius:18px;padding:30px 22px;text-align:center;background:var(--surface)"><div style="font-family:'Bricolage Grotesque';font-weight:800;font-size:22px">Binance</div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--faint);margin-top:6px">Spot & Futures API</div></div>
+      <div style="border:1px solid var(--accentLine);border-radius:18px;padding:30px 22px;text-align:center;background:var(--surface)"><div style="font-family:'Bricolage Grotesque';font-weight:800;font-size:22px">Bybit</div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--faint);margin-top:6px">Spot & Futures API</div></div>
+      <div style="border:1px solid var(--accentLine);border-radius:18px;padding:30px 22px;text-align:center;background:var(--surface)"><div style="font-family:'Bricolage Grotesque';font-weight:800;font-size:22px">MEXC</div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--faint);margin-top:6px">Spot & Futures API</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:28px">
+        <div style="color:var(--accent);font-size:15px;margin-bottom:12px">★★★★★</div>
+        <p style="font-size:16px;line-height:1.6;font-weight:500;margin-bottom:18px">"Turned on Z-Score Reversion on my Bybit account and did nothing else. Up +38% in three months and I only paid on the days I won."</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted)">— Marcus T., <span style="color:var(--accent)">6 months in</span></div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:28px">
+        <div style="color:var(--accent);font-size:15px;margin-bottom:12px">★★★★★</div>
+        <p style="font-size:16px;line-height:1.6;font-weight:500;margin-bottom:18px">"The 20%-of-profit model sold me — zero risk to try. My funds never left Binance and the bots just kept compounding."</p>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted)">— Elena R., <span style="color:var(--accent)">was a total beginner</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINAL CTA (bull parallax) -->
+  <section data-aos="fade-up" style="position:relative;overflow:hidden;margin-top:40px">
+    <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,8,11,.94) 0%,rgba(7,8,11,.6) 45%,rgba(7,8,11,.9) 100%),linear-gradient(90deg,rgba(7,8,11,.85),rgba(7,8,11,.35) 60%,rgba(7,8,11,.85)),url('assets/bull.png') center 40%/cover;background-attachment:fixed,fixed,fixed;filter:grayscale(.2) contrast(1);pointer-events:none"></div>
+    <div style="position:relative;max-width:1280px;margin:0 auto;padding:120px 40px;text-align:center">
+      <div style="display:inline-flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#d9ad55;border:1px solid #4a3c1c;background:rgba(23,19,10,.7);padding:6px 14px;border-radius:100px;margin-bottom:24px">NO CARD · NO MINIMUM · CANCEL ANYTIME</div>
+      <h2 style="font-family:'Bricolage Grotesque';font-size:56px;font-weight:800;letter-spacing:-.03em;line-height:1.02;margin-bottom:18px;color:#fff;text-shadow:0 2px 30px rgba(0,0,0,.6)">Take the other side<br>of the market.</h2>
+      <p style="font-size:18px;color:#c3cad6;max-width:560px;margin:0 auto 34px;text-shadow:0 1px 12px rgba(0,0,0,.6)">Connect your exchange and switch on your first bot in minutes. Keep 80% of every win — we take 20% of profit and nothing else.</p>
+      <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:34px">
+        <button style="font-size:16px;font-weight:700;background:#d9ad55;color:#0a0c11;border:none;padding:16px 32px;border-radius:100px;cursor:pointer;box-shadow:0 12px 30px rgba(217,173,85,.28)">Start free with SineguAlerts →</button>
+        <button style="font-size:16px;font-weight:700;background:rgba(10,12,17,.6);color:#e7ecf3;border:1px solid #3a4450;padding:16px 30px;border-radius:100px;cursor:pointer;backdrop-filter:blur(4px)">See live results</button>
+      </div>
+      <div style="display:flex;gap:34px;justify-content:center;flex-wrap:wrap;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#9aa4b2">
+        <span>◆ 48,200+ active traders</span><span>◆ $128M profit generated</span><span>◆ Funds stay on your exchange</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer style="border-top:1px solid var(--hair)">
+    <div style="max-width:1280px;margin:0 auto;padding:44px 40px;display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:32px">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <div style="width:20px;height:20px;background:var(--accent);border-radius:7px 7px 7px 2px;transform:rotate(-8deg)"></div>
+          <span style="font-family:'Bricolage Grotesque';font-weight:800;font-size:17px">SineguAlerts</span>
+        </div>
+        <p style="font-size:13px;color:var(--faint);line-height:1.6;max-width:280px">Automated trading bots that run on your own exchange. Free to use — you only pay 20% of the profit you make.</p>
+      </div>
+      <div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--faint);margin-bottom:14px">PRODUCT</div><div style="display:flex;flex-direction:column;gap:10px;font-size:13.5px;color:var(--muted)"><span>Flow Master</span><span>Structure</span><span>Exchanges</span><span>Pricing</span></div></div>
+      <div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--faint);margin-bottom:14px">RESOURCES</div><div style="display:flex;flex-direction:column;gap:10px;font-size:13.5px;color:var(--muted)"><span>Docs</span><span>Live results</span><span>Security</span><span>Status</span></div></div>
+      <div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--faint);margin-bottom:14px">COMPANY</div><div style="display:flex;flex-direction:column;gap:10px;font-size:13.5px;color:var(--muted)"><span>About</span><span>Careers</span><span>Blog</span><span>Terms</span></div></div>
+    </div>
+    <div style="max-width:1280px;margin:0 auto;padding:18px 40px;border-top:1px solid var(--hair);display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--faint);flex-wrap:wrap;gap:8px">
+      <span>© 2026 SINEGUALERTS · ALL SYSTEMS OPERATIONAL <span style="color:var(--green)">●</span></span>
+      <span>Responsive: grids collapse ≤900px · theme persists</span>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  state = { theme: 'dark' };
+  componentDidMount(){
+    try { const t = localStorage.getItem('sinegu-theme'); if (t) this.setState({ theme: t }); } catch(e){}
+    const initAOS = () => { if (window.AOS) { window.AOS.init({ duration: 700, once: true, offset: 80, easing: 'ease-out-cubic' }); } else { setTimeout(initAOS, 120); } };
+    setTimeout(initAOS, 60);
+  }
+  componentDidUpdate(){ if (window.AOS) window.AOS.refresh(); }
+  renderVals(){
+    const theme = this.state.theme;
+    return {
+      theme,
+      themeIcon: theme === 'dark' ? '☀' : '☾',
+      themeLabel: theme === 'dark' ? 'Light' : 'Dark',
+      toggle: () => {
+        const next = this.state.theme === 'dark' ? 'light' : 'dark';
+        try { localStorage.setItem('sinegu-theme', next); } catch(e){}
+        this.setState({ theme: next });
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

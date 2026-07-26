@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Plus Jakarta Sans',sans-serif;-webkit-font-smoothing:antialiased;
+    --bg:#0a0c11;--surface:#0f1319;--surface2:#0b0e13;--border:#1f2732;--hair:#161d26;
+    --text:#e7ecf3;--muted:#8b94a3;--faint:#5b6472;
+    --accent:#d9ad55;--accentSoft:#17130a;--accentLine:#4a3c1c;
+    --green:#2fd67a;--glow:rgba(217,173,85,.22);--onAccent:#0a0c11;
+    background:var(--bg);
+  }
+  [data-theme="light"]{
+    --bg:#faf7f1;--surface:#ffffff;--surface2:#fbf8f2;--border:#ece2d2;--hair:#f0e8db;
+    --text:#1b1712;--muted:#6f6a60;--faint:#9a9284;
+    --accent:#b8862a;--accentSoft:#fdf5e4;--accentLine:#ecd9ab;
+    --green:#0fae76;--glow:rgba(184,134,42,.18);--onAccent:#fff;
+  }
+  a{color:var(--accent);text-decoration:none}
+  @keyframes bubble{0%{transform:translateY(0) scale(1);opacity:0}12%{opacity:1}100%{transform:translateY(-120px) scale(1.25);opacity:0}}
+  @keyframes fadeup{0%{opacity:0;transform:translateY(16px)}100%{opacity:1;transform:translateY(0)}}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  ::selection{background:var(--accent);color:var(--onAccent)}
+</style>
+</helmet>
+<div data-theme="{{ theme }}" style="min-height:100vh;background:var(--bg);color:var(--text);display:flex;align-items:center;justify-content:center;padding:24px;position:relative;transition:background .4s ease,color .4s ease;font-family:'Plus Jakarta Sans',sans-serif">
+
+  <a href="Concept 4 - Hybrid (Light + Dark).dc.html" title="Back to home" style="position:absolute;top:22px;left:24px;display:flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:12px;background:var(--surface);color:var(--text);border:1px solid var(--border);padding:9px 16px 9px 12px;border-radius:100px;cursor:pointer;z-index:5">← Home</a>
+
+  <button onClick="{{ toggleTheme }}" title="Toggle theme" style="position:absolute;top:22px;right:24px;display:flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:12px;background:var(--surface);color:var(--text);border:1px solid var(--border);padding:9px 14px;border-radius:100px;cursor:pointer;z-index:5">
+    <span style="font-size:14px">{{ themeIcon }}</span>{{ themeLabel }}
+  </button>
+
+  <div style="width:100%;max-width:960px;display:grid;grid-template-columns:1fr 1fr;background:var(--surface);border:1px solid var(--border);border-radius:24px;overflow:hidden;box-shadow:0 40px 100px rgba(0,0,0,.35);min-height:600px;animation:fadeup .6s cubic-bezier(.2,.7,.2,1) both">
+
+    <!-- LEFT: form -->
+    <div onMouseMove="{{ onMove }}" onMouseEnter="{{ onEnter }}" onMouseLeave="{{ onLeave }}" style="position:relative;overflow:hidden;padding:48px 52px;display:flex;flex-direction:column;justify-content:center">
+      <div style="position:absolute;width:420px;height:420px;top:0;left:0;border-radius:50%;background:radial-gradient(circle,var(--glow),transparent 70%);filter:blur(30px);pointer-events:none;opacity:{{ glowOn }};transform:translate({{ gx }}px,{{ gy }}px);transition:opacity .25s ease"></div>
+
+      <div style="position:relative;z-index:1">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:26px">
+          <div style="width:26px;height:26px;background:var(--accent);border-radius:8px 8px 8px 2px;transform:rotate(-8deg)"></div>
+          <span style="font-family:'Bricolage Grotesque';font-weight:800;font-size:19px">SineguAlerts</span>
+        </div>
+
+        <h1 style="font-family:'Bricolage Grotesque';font-size:34px;font-weight:800;letter-spacing:-.02em;margin-bottom:6px">{{ title }}</h1>
+        <p style="font-size:14px;color:var(--muted);margin-bottom:24px">{{ subtitle }}</p>
+
+        <div style="display:flex;gap:12px;margin-bottom:22px">
+          <a href="#" style="width:46px;height:46px;border:1px solid var(--border);border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--text);background:var(--surface2);transition:all .25s ease" style-hover="background:var(--accent);color:var(--onAccent);border-color:var(--accent);transform:translateY(-2px)">
+            <svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M21.35 11.1H12v3.8h5.35c-.25 1.4-1.02 2.6-2.18 3.4v2.8h3.52c2.06-1.9 3.24-4.7 3.24-8 0-.66-.06-1.3-.18-1.9z"/><path fill="currentColor" d="M12 22c2.7 0 4.96-.9 6.62-2.4l-3.52-2.8c-.98.66-2.23 1.05-3.1 1.05-2.4 0-4.43-1.62-5.16-3.8H3.2v2.9C4.85 19.9 8.16 22 12 22z"/><path fill="currentColor" d="M6.84 14.05a5.9 5.9 0 0 1 0-3.8v-2.9H3.2a10 10 0 0 0 0 9.6z"/><path fill="currentColor" d="M12 6.4c1.47 0 2.78.5 3.82 1.5l2.85-2.85C16.95 3.4 14.7 2.5 12 2.5 8.16 2.5 4.85 4.6 3.2 7.85l3.64 2.9C7.57 8.02 9.6 6.4 12 6.4z"/></svg>
+          </a>
+          <a href="#" style="width:46px;height:46px;border:1px solid var(--border);border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--text);background:var(--surface2);transition:all .25s ease" style-hover="background:var(--accent);color:var(--onAccent);border-color:var(--accent);transform:translateY(-2px)">
+            <svg width="19" height="19" viewBox="0 0 24 24"><path fill="currentColor" d="M18.9 1.9h3.6l-7.9 9 9.2 12.2h-7.2l-5.6-7.4-6.5 7.4H1.3l8.4-9.6L.9 1.9h7.4l5.1 6.8zm-1.3 19.3h2L6.5 3.9H4.4z"/></svg>
+          </a>
+          <a href="#" style="width:46px;height:46px;border:1px solid var(--border);border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--text);background:var(--surface2);transition:all .25s ease" style-hover="background:var(--accent);color:var(--onAccent);border-color:var(--accent);transform:translateY(-2px)">
+            <svg width="21" height="21" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.22.66-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.1-1.47-1.1-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.1.39-1.99 1.03-2.69-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.6 9.6 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.69 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.16.57.67.48A10 10 0 0 0 22 12 10 10 0 0 0 12 2"/></svg>
+          </a>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px">
+          <div style="flex:1;height:1px;background:var(--hair)"></div>
+          <span style="font-size:12px;color:var(--faint)">{{ dividerText }}</span>
+          <div style="flex:1;height:1px;background:var(--hair)"></div>
+        </div>
+
+        <form onSubmit="{{ onSubmit }}" style="display:flex;flex-direction:column;gap:14px">
+          <sc-if value="{{ isRegister }}" hint-placeholder-val="{{ true }}">
+            <input type="text" placeholder="Full name" style="height:48px;width:100%;border:1px solid var(--border);border-radius:12px;background:var(--surface2);padding:0 16px;font-size:14px;color:var(--text);outline:none;font-family:'Plus Jakarta Sans',sans-serif;transition:border-color .2s,box-shadow .2s" style-focus="border-color:var(--accent);box-shadow:0 0 0 3px var(--glow)">
+          </sc-if>
+          <input type="email" placeholder="Email" style="height:48px;width:100%;border:1px solid var(--border);border-radius:12px;background:var(--surface2);padding:0 16px;font-size:14px;color:var(--text);outline:none;font-family:'Plus Jakarta Sans',sans-serif;transition:border-color .2s,box-shadow .2s" style-focus="border-color:var(--accent);box-shadow:0 0 0 3px var(--glow)">
+          <input type="password" placeholder="Password" style="height:48px;width:100%;border:1px solid var(--border);border-radius:12px;background:var(--surface2);padding:0 16px;font-size:14px;color:var(--text);outline:none;font-family:'Plus Jakarta Sans',sans-serif;transition:border-color .2s,box-shadow .2s" style-focus="border-color:var(--accent);box-shadow:0 0 0 3px var(--glow)">
+          <sc-if value="{{ isRegister }}" hint-placeholder-val="{{ true }}">
+            <input type="password" placeholder="Confirm password" style="height:48px;width:100%;border:1px solid var(--border);border-radius:12px;background:var(--surface2);padding:0 16px;font-size:14px;color:var(--text);outline:none;font-family:'Plus Jakarta Sans',sans-serif;transition:border-color .2s,box-shadow .2s" style-focus="border-color:var(--accent);box-shadow:0 0 0 3px var(--glow)">
+          </sc-if>
+
+          <sc-if value="{{ isSignin }}" hint-placeholder-val="{{ true }}">
+            <a href="#" style="font-size:13px;color:var(--muted);align-self:flex-start">Forgot your password?</a>
+          </sc-if>
+
+          <button type="submit" style="position:relative;overflow:hidden;height:48px;border:none;border-radius:12px;background:var(--accent);color:var(--onAccent);font-family:'Plus Jakarta Sans',sans-serif;font-size:15px;font-weight:700;cursor:pointer;margin-top:4px;box-shadow:0 10px 24px var(--glow);transition:transform .2s" style-hover="transform:translateY(-2px)">{{ cta }}</button>
+        </form>
+
+        <p style="font-size:13.5px;color:var(--muted);margin-top:22px;text-align:center">
+          {{ switchPrompt }} <a href="#" onClick="{{ toggleMode }}" style="font-weight:700">{{ switchAction }}</a>
+        </p>
+      </div>
+    </div>
+
+    <!-- RIGHT: brand panel -->
+    <div style="position:relative;overflow:hidden;background:linear-gradient(155deg,var(--accentSoft),var(--surface2));border-left:1px solid var(--border);display:flex;flex-direction:column;justify-content:center;padding:52px 48px">
+      <div style="position:absolute;inset:0;overflow:hidden;pointer-events:none">
+        <div style="position:absolute;top:60%;left:18%;width:70px;height:70px;border-radius:50%;background:var(--glow);filter:blur(2px);animation:bubble 8s ease-in infinite"></div>
+        <div style="position:absolute;top:80%;left:60%;width:44px;height:44px;border-radius:50%;background:var(--glow);animation:bubble 6.5s ease-in infinite 1.4s"></div>
+        <div style="position:absolute;top:70%;left:38%;width:100px;height:100px;border-radius:50%;background:var(--glow);filter:blur(4px);animation:bubble 10s ease-in infinite .7s"></div>
+      </div>
+      <div style="position:relative;z-index:1">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;color:var(--accent)">[ {{ panelKicker }} ]</span>
+        <h2 style="font-family:'Bricolage Grotesque';font-size:34px;font-weight:800;letter-spacing:-.02em;line-height:1.08;margin:14px 0 14px">{{ panelTitle }}</h2>
+        <p style="font-size:15px;line-height:1.6;color:var(--muted);max-width:320px;margin-bottom:28px">{{ panelBody }}</p>
+        <div style="display:flex;gap:24px;margin-top:8px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--faint)">
+          <div><div style="font-family:'Bricolage Grotesque';font-size:22px;font-weight:800;color:var(--text)">48.2K</div>traders</div>
+          <div><div style="font-family:'Bricolage Grotesque';font-size:22px;font-weight:800;color:var(--text)">$128M</div>profit</div>
+          <div><div style="font-family:'Bricolage Grotesque';font-size:22px;font-weight:800;color:var(--text)">20%</div>our cut</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1000,&quot;height&quot;:680}}">
+class Component extends DCLogic {
+  state = { theme: 'dark', mode: 'signin', gx: -120, gy: -120, hover: false };
+  componentDidMount(){
+    try { const t = localStorage.getItem('sinegu-theme'); if (t) this.setState({ theme: t }); } catch(e){}
+  }
+  renderVals(){
+    const { theme, mode, gx, gy, hover } = this.state;
+    const isRegister = mode === 'register';
+    return {
+      theme, gx, gy,
+      glowOn: hover ? 1 : 0,
+      themeIcon: theme === 'dark' ? '\u2600' : '\u263e',
+      themeLabel: theme === 'dark' ? 'Light' : 'Dark',
+      isRegister,
+      isSignin: !isRegister,
+      title: isRegister ? 'Create account' : 'Sign in',
+      subtitle: isRegister ? 'Start free \u2014 connect your exchange in minutes.' : 'Welcome back. Let your bots get to work.',
+      dividerText: isRegister ? 'or sign up with email' : 'or use your account',
+      cta: isRegister ? 'Create free account' : 'Sign In',
+      switchPrompt: isRegister ? 'Already trading with us?' : "Don't have an account?",
+      switchAction: isRegister ? 'Sign in' : 'Create one free',
+      panelKicker: isRegister ? 'JOIN SINEGUALERTS' : 'WELCOME BACK',
+      panelTitle: isRegister ? 'Keep 80% of the upside.' : 'Your edge, on autopilot.',
+      panelBody: isRegister
+        ? 'Battle-tested bots trade on your own Binance, Bybit or MEXC account. Free to start \u2014 you only pay 20% of the profit you make.'
+        : 'Pick up right where your strategies left off. Funds never leave your exchange, and you keep 80% of every win.',
+      toggleTheme: () => {
+        const next = this.state.theme === 'dark' ? 'light' : 'dark';
+        try { localStorage.setItem('sinegu-theme', next); } catch(e){}
+        this.setState({ theme: next });
+      },
+      toggleMode: (e) => { if(e&&e.preventDefault)e.preventDefault(); this.setState(s => ({ mode: s.mode === 'signin' ? 'register' : 'signin' })); },
+      onSubmit: (e) => { if(e&&e.preventDefault)e.preventDefault(); },
+      onMove: (e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        this.setState({ gx: e.clientX - r.left - 210, gy: e.clientY - r.top - 210 });
+      },
+      onEnter: () => this.setState({ hover: true }),
+      onLeave: () => this.setState({ hover: false })
+    };
+  }
+}
+</script>
+</body>
+</html>

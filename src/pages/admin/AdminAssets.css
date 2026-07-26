@@ -1,0 +1,302 @@
+/* AdminAssets — tradable instruments: broker/type stat tiles, filter bar,
+   assets table with enable toggle + edit/delete, pagination.
+   Co-located with AdminAssets.tsx. */
+
+/* ============ shared form primitives ============ */
+.aassets-input {
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  padding: 0 12px;
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+}
+.aassets-input:focus {
+  border-color: var(--accent);
+}
+.aassets-input--search {
+  min-width: 190px;
+}
+.aassets-input option {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.aassets-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.aassets-icon-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.aassets-icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.aassets-icon-btn--danger:hover {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+/* ============ side badge ============ */
+.aassets-side {
+  border-radius: 9999px;
+  border: 1px solid;
+  padding: 3px 10px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+.aassets-side--long {
+  color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 35%, transparent);
+  background: color-mix(in srgb, var(--green) 8%, transparent);
+}
+.aassets-side--short {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 35%, transparent);
+  background: color-mix(in srgb, var(--red) 8%, transparent);
+}
+.aassets-side--all {
+  color: var(--muted);
+  border-color: var(--border);
+}
+
+/* ============ main card ============ */
+.aassets-card {
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 20px;
+}
+.aassets-head {
+  margin-bottom: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.aassets-head__title {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+}
+.aassets-head__sub {
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.aassets-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.aassets-new-btn {
+  display: inline-flex;
+  height: 38px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px;
+  background: var(--accent);
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--onAccent);
+  cursor: pointer;
+}
+
+.aassets-error {
+  margin-bottom: 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, #ef4444 35%, transparent);
+  background: color-mix(in srgb, #ef4444 8%, transparent);
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #ef4444;
+}
+
+/* ============ assets table ============ */
+.aassets-table-wrap {
+  overflow-x: auto;
+}
+.aassets-table {
+  width: 100%;
+  min-width: 880px;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+.aassets-th {
+  border-bottom: 1px solid var(--border);
+  padding: 10px 12px;
+  text-align: left;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  white-space: nowrap;
+}
+.aassets-th--right {
+  text-align: right;
+}
+.aassets-tbody tr:hover {
+  background: var(--surface2);
+}
+.aassets-tbody tr:last-child td {
+  border-bottom: 0;
+}
+.aassets-empty {
+  padding: 36px 12px;
+  text-align: center;
+  color: var(--muted);
+}
+.aassets-td {
+  border-bottom: 1px solid var(--hair);
+  padding: 11px 12px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.aassets-td--num {
+  text-align: right;
+  font-family: 'IBM Plex Mono', monospace;
+}
+.aassets-td--meta {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.aassets-td--actions {
+  text-align: right;
+}
+
+.aassets-ticker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.aassets-ticker__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background: var(--accentSoft);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.aassets-ticker__img {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+}
+.aassets-ticker__sym {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 700;
+}
+
+/* enable/disable toggle */
+.aassets-toggle {
+  position: relative;
+  margin-right: 8px;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  vertical-align: middle;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.aassets-toggle--on {
+  border-color: var(--accent);
+  background: var(--accentSoft);
+}
+.aassets-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.aassets-toggle__knob {
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: var(--muted);
+  transition: transform 0.15s, background 0.15s;
+}
+.aassets-toggle__knob--on {
+  transform: translateX(16px);
+  background: var(--accent);
+}
+.aassets-status-text {
+  font-size: 12px;
+  color: var(--muted);
+}
+.aassets-status-text--on {
+  color: var(--green);
+}
+
+.aassets-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+/* ============ pagination ============ */
+.aassets-pag {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--hair);
+  padding-top: 12px;
+}
+.aassets-pag__info {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.aassets-pag__controls {
+  display: flex;
+  gap: 8px;
+}
+.aassets-pag__btn {
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  padding: 7px 15px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+.aassets-pag__btn:hover {
+  border-color: var(--accent);
+}
+.aassets-pag__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

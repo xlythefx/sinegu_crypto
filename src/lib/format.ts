@@ -1,0 +1,93 @@
+/** Pure formatting helpers — no React. */
+
+/** "2025-03-14T09:21:00Z" → "March 14, 2025" (falls back to the raw string). */
+export function formatDate(dateString?: string | null): string {
+  if (!dateString) return '—'
+  const date = new Date(dateString)
+  if (Number.isNaN(date.getTime())) return dateString
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+}
+
+/** "12,822.73" */
+export function fmtNum(n: number, dp = 2): string {
+  return n.toLocaleString('en-US', {
+    minimumFractionDigits: dp,
+    maximumFractionDigits: dp,
+  })
+}
+
+/**
+ * Thousands-grouped quantity, "1,000.000" style — comma thousands, dot decimal.
+ * Trailing zeros beyond `minDp` are trimmed up to `maxDp` (so 0.000001 keeps its
+ * precision while 1000 reads as "1,000.000"). Defaults to a fixed 3 decimals.
+ */
+export function fmtQty(n: number, minDp = 3, maxDp = 6): string {
+  return n.toLocaleString('en-US', {
+    minimumFractionDigits: minDp,
+    maximumFractionDigits: Math.max(minDp, maxDp),
+  })
+}
+
+/** "$12,822.73" (absolute value). */
+export function fmtMoney(n: number, dp = 2): string {
+  return `$${fmtNum(Math.abs(n), dp)}`
+}
+
+/** "+1,842.10" / "−112.40" (typographic minus, matching the design). */
+export function fmtSigned(n: number, dp = 2): string {
+  const sign = n < 0 ? '−' : '+'
+  return `${sign}${fmtNum(Math.abs(n), dp)}`
+}
+
+/** "+$1,842.10" / "−$112.40" */
+export function fmtSignedMoney(n: number, dp = 2): string {
+  const sign = n < 0 ? '−' : '+'
+  return `${sign}$${fmtNum(Math.abs(n), dp)}`
+}
+
+/** "+15.9%" of the given base ("—" when the base is not positive). */
+export function fmtPctOf(n: number, base: number, dp = 1): string {
+  if (base <= 0) return '—'
+  const pct = (n / base) * 100
+  const sign = pct < 0 ? '−' : '+'
+  return `${sign}${Math.abs(pct).toFixed(dp)}%`
+}
+
+/** "+17.7%" / "−6.4%" from an already-computed percentage. */
+export function fmtSignedPct(pct: number, dp = 1): string {
+  const sign = pct < 0 ? '−' : '+'
+  return `${sign}${Math.abs(pct).toFixed(dp)}%`
+}
+
+/** "Jul 12, 2026" from an ISO date or datetime (falls back to the raw string). */
+export function fmtMediumDate(iso: string): string {
+  const date = new Date(`${iso.slice(0, 10)}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return iso
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+/** "Jul 21" from "2026-07-21". */
+export function fmtShortDate(iso: string): string {
+  return new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+/** "Jul 21, 02:30 PM" from a MySQL datetime. */
+export function fmtDateTime(dt: string): string {
+  return new Date(dt.replace(' ', 'T')).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}

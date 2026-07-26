@@ -1,0 +1,87 @@
+/* Master account summary card. Co-located with MasterAccountCard.tsx. */
+.amac {
+  max-width: 440px;
+  flex: 1 1 340px;
+  align-self: flex-start;
+}
+
+.amac__title {
+  color: var(--accent);
+}
+
+/* small pill badge (token-based) */
+.amac__badge {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.amac__badge--name {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+.amac__badge--accent {
+  border-color: var(--accentLine);
+  background: var(--accentSoft);
+  color: var(--accent);
+}
+
+.amac__badges {
+  margin-bottom: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.amac__info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.amac__info b {
+  font-weight: 600;
+}
+
+.amac__mono {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12.5px;
+}
+
+.amac__last {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--hair);
+  background: var(--surface2);
+  padding: 12px 14px;
+  font-size: 12.5px;
+}
+
+.amac__last-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.amac__last-val {
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+@media (max-width: 1100px) {
+  .amac {
+    max-width: none;
+  }
+}

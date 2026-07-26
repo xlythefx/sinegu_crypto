@@ -1,0 +1,168 @@
+/* Connected exchange account card (Exchange Accounts page). */
+
+.xcard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---- header ---- */
+.xcard__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.xcard__id {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.xcard__logo {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px solid;
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+}
+.xcard__id-text {
+  min-width: 0;
+}
+.xcard__name {
+  font-weight: 700;
+  font-size: 14.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.xcard__exchange {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+.xcard__head-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+/* ---- badges ---- */
+.xcard__badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 100px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.xcard__badge--on {
+  background: rgba(61, 220, 151, 0.12);
+  border-color: rgba(61, 220, 151, 0.35);
+  color: var(--green);
+}
+.xcard__badge--off {
+  background: var(--surface2);
+  border-color: var(--border);
+  color: var(--muted);
+}
+.xcard__badge--live {
+  background: var(--accentSoft);
+  border-color: var(--accentLine);
+  color: var(--accent);
+}
+.xcard__badge--demo {
+  background: var(--surface2);
+  border-color: var(--border);
+  color: var(--muted);
+}
+
+/* ---- icon buttons ---- */
+.xcard__icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  flex: none;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.xcard__icon-btn:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+.xcard__disconnect:hover {
+  background: rgba(255, 90, 90, 0.1);
+  color: var(--red);
+}
+
+/* ---- balance ---- */
+.xcard__balance-value {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-top: 3px;
+}
+
+/* ---- credential fields ---- */
+.xcard__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-top: 1px solid var(--hair);
+  padding-top: 14px;
+}
+.xcard__field-label {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--faint);
+  font-weight: 600;
+}
+.xcard__field-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+.xcard__code {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.xcard__secret-note {
+  display: block;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* ---- footer ---- */
+.xcard__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 12px;
+  font-size: 11px;
+  color: var(--faint);
+}
