@@ -8,9 +8,11 @@ import { useApiData } from '../hooks/useApiData'
 import { getAssetPerformance } from '../services/dashboard'
 import { ApiError } from '../services/api'
 import { displaySymbol } from '../lib/chart'
-import './AssetPerformance.css'
 
 const PAGE_SIZE = 9
+
+const PAG_BTN =
+  'inline-flex items-center gap-[5px] border border-border bg-surface2 text-text rounded-pill py-2 px-4 text-[12.5px] font-semibold cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed enabled:hover:border-accent'
 
 export default function AssetPerformance() {
   const { data, loading, error, reload } = useApiData(getAssetPerformance)
@@ -70,11 +72,15 @@ export default function AssetPerformance() {
 
   return (
     <DashboardLayout title="Asset Performance">
-      <div className="aperf-head" data-aos="fade-up">
+      <div className="mb-[22px]" data-aos="fade-up">
         <div>
-          <p className="aperf-head__kicker mono">PER-ASSET ANALYTICS</p>
-          <h1 className="aperf-head__title">Asset Performance</h1>
-          <p className="aperf-head__sub">
+          <p className="font-mono text-[11px] tracking-[0.16em] text-accent mb-1.5">
+            PER-ASSET ANALYTICS
+          </p>
+          <h1 className="font-display text-[30px] font-extrabold tracking-[-0.02em] mb-1.5">
+            Asset Performance
+          </h1>
+          <p className="text-[14px] text-muted max-w-[520px]">
             Every asset you've traded, ranked by total P&L — with win rates,
             drawdowns and equity curves.
           </p>
@@ -82,33 +88,43 @@ export default function AssetPerformance() {
       </div>
 
       {assets.length === 0 ? (
-        <div className="dcard aperf-empty" data-aos="fade-up">
+        <div
+          className="rounded-card border border-dashed border-border bg-surface py-12 px-6 text-center text-muted text-[14px]"
+          data-aos="fade-up"
+        >
           No closed trades by asset yet. Trade on your connected brokers to see
           performance here.
         </div>
       ) : (
         <>
-          <div className="dcard aperf-filter" data-aos="fade-up">
-            <label className="aperf-filter__search">
+          <div
+            className="rounded-card border border-border bg-surface flex flex-wrap gap-3 items-center justify-between py-3.5 px-[18px] mb-[22px]"
+            data-aos="fade-up"
+          >
+            <label className="flex items-center gap-[9px] flex-1 min-w-[220px] max-w-[420px] border border-border rounded-row bg-surface2 px-3.5 text-muted">
               <Search size={15} />
               <input
                 type="search"
+                className="flex-1 h-[42px] border-0 outline-none bg-transparent text-text text-[13.5px] font-body"
                 placeholder="Search by ticker or name…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 aria-label="Search assets"
               />
             </label>
-            <label className="aperf-filter__select">
+            <label className="flex items-center gap-2 border border-border rounded-row bg-surface2 px-3 text-muted">
               <Tags size={14} />
               <select
+                className="h-[42px] border-0 outline-none bg-transparent text-text text-[13.5px] font-body cursor-pointer min-w-[170px]"
                 value={assetFilter}
                 onChange={(e) => setAssetFilter(e.target.value)}
                 aria-label="Filter by asset"
               >
-                <option value="all">All assets</option>
+                <option className="bg-surface text-text" value="all">
+                  All assets
+                </option>
                 {assets.map((a) => (
-                  <option key={a.ticker} value={a.ticker}>
+                  <option key={a.ticker} className="bg-surface text-text" value={a.ticker}>
                     {displaySymbol(a.ticker)}
                   </option>
                 ))}
@@ -117,11 +133,16 @@ export default function AssetPerformance() {
           </div>
 
           {filtered.length === 0 ? (
-            <p className="aperf-nomatch">
+            <p className="text-center text-muted text-[14px] py-10">
               No assets match your search or filter.
             </p>
           ) : (
-            <div className="aperf-grid">
+            /* key on the filter/search/page signature re-mounts the grid so it
+               replays the fade-slide reveal every time the results change. */
+            <div
+              key={`${assetFilter}-${search}-${safePage}`}
+              className="grid grid-cols-3 gap-[18px] max-[1200px]:grid-cols-2 max-[760px]:grid-cols-1 animate-[fadeup_0.35s_ease-out]"
+            >
               {pageRows.map((asset) => (
                 <AssetPerformanceCard
                   key={asset.ticker}
@@ -134,30 +155,30 @@ export default function AssetPerformance() {
           )}
 
           {filtered.length > 0 && (
-            <div className="aperf-pag">
-              <span className="aperf-pag__info">
+            <div className="flex flex-col items-center gap-2.5 mt-6 pt-4 border-t border-hair">
+              <span className="text-[12px] text-faint">
                 Showing {start + 1}–{Math.min(start + PAGE_SIZE, filtered.length)}{' '}
                 of {filtered.length}
                 {filtered.length !== assets.length &&
                   ` (filtered from ${assets.length})`}
               </span>
               {totalPages > 1 && (
-                <div className="aperf-pag__controls">
+                <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    className="aperf-pag__btn"
+                    className={PAG_BTN}
                     disabled={safePage === 1}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                   >
                     <ChevronLeft size={14} />
                     Previous
                   </button>
-                  <span className="aperf-pag__page">
+                  <span className="text-[12.5px] text-muted">
                     Page {safePage} of {totalPages}
                   </span>
                   <button
                     type="button"
-                    className="aperf-pag__btn"
+                    className={PAG_BTN}
                     disabled={safePage === totalPages}
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   >

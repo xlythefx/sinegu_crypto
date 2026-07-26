@@ -2,6 +2,26 @@ import { useState } from 'react'
 import { Check, Copy, Pencil, Save, Trash2, Wallet } from 'lucide-react'
 import ConfirmModal from '../ui/ConfirmModal'
 import { USDT_TRC20_NETWORK, isValidTRC20Address } from '../../lib/validators'
+import {
+  BTN_GHOST_SM,
+  BTN_PRIMARY_SM,
+  CARD,
+  CARD_HEAD,
+  CARD_SUB,
+  CARD_TITLE,
+  CARD_TITLES,
+  CHIP,
+  FIELD,
+  FORM,
+  FORM_ACTIONS,
+  HINT,
+  ICON_BTN,
+  ICON_BTN_DANGER,
+  INPUT,
+  INPUT_MONO,
+  LABEL,
+  SELECT,
+} from './formClasses'
 import { PAYOUT_WALLETS, type PayoutWallet } from './mockData'
 
 function truncateAddress(address: string): string {
@@ -73,37 +93,44 @@ export default function CryptoWalletCard() {
   }
 
   return (
-    <section className="dcard set-card" data-aos="fade-up" data-aos-delay="200">
-      <div className="dcard__title-row set-card__head">
-        <span className="dchip">
+    <section className={`${CARD} flex flex-col`} data-aos="fade-up" data-aos-delay="200">
+      <div className={CARD_HEAD}>
+        <span className={CHIP}>
           <Wallet size={15} />
         </span>
-        <div className="set-card__titles">
-          <h3 className="dcard__title">USDT (TRC20) Wallet</h3>
-          <p className="dcard__sub">
+        <div className={CARD_TITLES}>
+          <h3 className={CARD_TITLE}>USDT (TRC20) Wallet</h3>
+          <p className={CARD_SUB}>
             Payout address for profits and referrals (Tron network only)
           </p>
         </div>
       </div>
 
       {!showForm ? (
-        <div className="scw__list">
+        <div className="flex flex-col gap-2.5">
           {wallets.map((wallet) => (
-            <div className="scw__item" key={wallet.id}>
-              <div className="scw__item-head">
-                <div className="scw__item-id">
-                  <span className="dchip">
+            <div
+              className="flex flex-col gap-2.5 p-3 border border-border rounded-row bg-surface2 transition-[border-color] duration-150 hover:border-accent-line"
+              key={wallet.id}
+            >
+              <div className="flex items-start justify-between gap-2.5">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className={CHIP}>
                     <Wallet size={14} />
                   </span>
-                  <div className="scw__item-meta">
-                    <p className="scw__item-name">{wallet.name}</p>
-                    <p className="scw__item-net mono">{wallet.network}</p>
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-bold overflow-hidden text-ellipsis whitespace-nowrap">
+                      {wallet.name}
+                    </p>
+                    <p className="font-mono text-[10.5px] tracking-[0.08em] uppercase text-accent mt-0.5">
+                      {wallet.network}
+                    </p>
                   </div>
                 </div>
-                <div className="scw__item-actions">
+                <div className="flex gap-0.5 flex-none">
                   <button
                     type="button"
-                    className="sicon-btn"
+                    className={ICON_BTN}
                     onClick={() => handleEdit(wallet)}
                     title="Edit wallet"
                     aria-label="Edit wallet"
@@ -112,7 +139,7 @@ export default function CryptoWalletCard() {
                   </button>
                   <button
                     type="button"
-                    className="sicon-btn sicon-btn--danger"
+                    className={ICON_BTN_DANGER}
                     onClick={() => setToDelete(wallet)}
                     title="Delete wallet"
                     aria-label="Delete wallet"
@@ -121,19 +148,19 @@ export default function CryptoWalletCard() {
                   </button>
                 </div>
               </div>
-              <div className="scw__addr">
-                <span className="scw__addr-text mono">
+              <div className="flex items-center gap-2 py-1.5 px-2 border border-hair rounded-btn bg-surface">
+                <span className="flex-1 min-w-0 font-mono text-[12px] text-muted [overflow-wrap:anywhere]">
                   {truncateAddress(wallet.address)}
                 </span>
                 <button
                   type="button"
-                  className="sicon-btn"
+                  className={ICON_BTN}
                   onClick={() => handleCopy(wallet)}
                   title="Copy address"
                   aria-label="Copy address"
                 >
                   {copiedId === wallet.id ? (
-                    <Check size={14} className="scw__copied" />
+                    <Check size={14} className="text-green" />
                   ) : (
                     <Copy size={14} />
                   )}
@@ -143,52 +170,52 @@ export default function CryptoWalletCard() {
           ))}
         </div>
       ) : (
-        <form className="set-form" onSubmit={handleSubmit}>
-          <div className="sfield">
-            <label className="sfield__label" htmlFor="wallet-name">
+        <form className={FORM} onSubmit={handleSubmit}>
+          <div className={FIELD}>
+            <label className={LABEL} htmlFor="wallet-name">
               Wallet Name *
             </label>
             <input
               id="wallet-name"
-              className="sinput"
+              className={INPUT}
               type="text"
               placeholder="e.g. Main USDT wallet"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </div>
-          <div className="sfield">
-            <label className="sfield__label" htmlFor="wallet-network">
+          <div className={FIELD}>
+            <label className={LABEL} htmlFor="wallet-network">
               Network
             </label>
-            <select id="wallet-network" className="sinput" value={USDT_TRC20_NETWORK} disabled>
+            <select id="wallet-network" className={SELECT} value={USDT_TRC20_NETWORK} disabled>
               <option value={USDT_TRC20_NETWORK}>{USDT_TRC20_NETWORK}</option>
             </select>
-            <p className="sfield__hint">
+            <p className={HINT}>
               Only USDT TRC20 (Tron) is supported for payouts.
             </p>
           </div>
-          <div className="sfield">
-            <label className="sfield__label" htmlFor="wallet-address">
+          <div className={FIELD}>
+            <label className={LABEL} htmlFor="wallet-address">
               USDT TRC20 Address *
             </label>
             <input
               id="wallet-address"
-              className="sinput sinput--mono"
+              className={INPUT_MONO}
               type="text"
               placeholder="T… (Tron TRC20 address, 34 characters)"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
             />
-            <p className="sfield__hint">
+            <p className={HINT}>
               Address starts with T and is 34 characters long.
             </p>
           </div>
-          <div className="set-form__actions">
+          <div className={FORM_ACTIONS}>
             {editingId && (
               <button
                 type="button"
-                className="sbtn sbtn--ghost sbtn--sm"
+                className={BTN_GHOST_SM}
                 onClick={resetForm}
               >
                 Cancel
@@ -196,7 +223,7 @@ export default function CryptoWalletCard() {
             )}
             <button
               type="submit"
-              className="sbtn sbtn--primary sbtn--sm"
+              className={BTN_PRIMARY_SM}
               disabled={!canSubmit}
             >
               {editingId ? <Save size={13} /> : <Wallet size={13} />}

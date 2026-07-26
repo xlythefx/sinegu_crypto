@@ -14,6 +14,27 @@ import { getApiErrorMessage } from '../../services/api'
 import { updateProfile } from '../../services/user'
 import { saveUser } from '../../lib/session'
 import { formatDate } from '../../lib/format'
+import {
+  BTN_GHOST_SM,
+  BTN_PRIMARY_SM,
+  CARD,
+  CARD_HEAD,
+  CARD_SUB,
+  CARD_TITLE,
+  CARD_TITLES,
+  CHIP,
+  FIELD,
+  FIELDS,
+  FORM,
+  FORM_ACTIONS,
+  LABEL,
+  LOADING,
+  VALUE,
+  VALUE_LG,
+  INPUT,
+  badge,
+  notice as noticeCls,
+} from './formClasses'
 import type { AuthUser } from '../../types/auth'
 
 interface AccountInfoCardProps {
@@ -46,7 +67,7 @@ export default function AccountInfoCard({
 
   const status = user?.status ?? ''
   const statusBadge = (
-    <span className={`sbadge sbadge--${status || 'unknown'}`}>
+    <span className={badge(status)}>
       {STATUS_LABELS[status] ?? (status || '—')}
     </span>
   )
@@ -99,17 +120,17 @@ export default function AccountInfoCard({
   }
 
   return (
-    <section className="dcard set-card" data-aos="fade-up">
-      <div className="dcard__title-row set-card__head">
-        <span className="dchip">
+    <section className={`${CARD} flex flex-col`} data-aos="fade-up">
+      <div className={CARD_HEAD}>
+        <span className={CHIP}>
           <User size={15} />
         </span>
-        <div className="set-card__titles">
-          <h3 className="dcard__title">Account Information</h3>
-          <p className="dcard__sub">Your personal account details</p>
+        <div className={CARD_TITLES}>
+          <h3 className={CARD_TITLE}>Account Information</h3>
+          <p className={CARD_SUB}>Your personal account details</p>
         </div>
         {!loading && !editMode && (
-          <button type="button" className="sbtn sbtn--ghost sbtn--sm" onClick={startEdit}>
+          <button type="button" className={BTN_GHOST_SM} onClick={startEdit}>
             <Pencil size={13} />
             Edit
           </button>
@@ -117,7 +138,7 @@ export default function AccountInfoCard({
       </div>
 
       {notice && (
-        <div className={`snotice snotice--${notice.kind}`} role="status">
+        <div className={noticeCls(notice.kind)} role="status">
           {notice.kind === 'success' ? (
             <CheckCircle2 size={15} />
           ) : (
@@ -128,17 +149,17 @@ export default function AccountInfoCard({
       )}
 
       {loading && !user ? (
-        <p className="set-loading">Loading account…</p>
+        <p className={LOADING}>Loading account…</p>
       ) : editMode ? (
-        <form className="set-form" onSubmit={handleSubmit}>
-          <div className="sfield">
-            <label className="sfield__label" htmlFor="acc-name">
+        <form className={FORM} onSubmit={handleSubmit}>
+          <div className={FIELD}>
+            <label className={LABEL} htmlFor="acc-name">
               <User size={13} />
               Full Name
             </label>
             <input
               id="acc-name"
-              className="sinput"
+              className={INPUT}
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -146,14 +167,14 @@ export default function AccountInfoCard({
               required
             />
           </div>
-          <div className="sfield">
-            <label className="sfield__label" htmlFor="acc-email">
+          <div className={FIELD}>
+            <label className={LABEL} htmlFor="acc-email">
               <Mail size={13} />
               Email Address
             </label>
             <input
               id="acc-email"
-              className="sinput"
+              className={INPUT}
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -161,31 +182,31 @@ export default function AccountInfoCard({
               required
             />
           </div>
-          <div className="sfield">
-            <span className="sfield__label">
+          <div className={FIELD}>
+            <span className={LABEL}>
               <Shield size={13} />
               Account Status
             </span>
             <div>{statusBadge}</div>
           </div>
-          <div className="sfield">
-            <span className="sfield__label">
+          <div className={FIELD}>
+            <span className={LABEL}>
               <Calendar size={13} />
               Member Since
             </span>
-            <p className="set-value">{formatDate(user?.created_at)}</p>
+            <p className={VALUE}>{formatDate(user?.created_at)}</p>
           </div>
-          <div className="set-form__actions">
+          <div className={FORM_ACTIONS}>
             <button
               type="button"
-              className="sbtn sbtn--ghost sbtn--sm"
+              className={BTN_GHOST_SM}
               onClick={cancelEdit}
               disabled={saving}
             >
               <X size={13} />
               Cancel
             </button>
-            <button type="submit" className="sbtn sbtn--primary sbtn--sm" disabled={saving}>
+            <button type="submit" className={BTN_PRIMARY_SM} disabled={saving}>
               <Save size={13} />
               {saving ? 'Saving…' : 'Save'}
             </button>
@@ -193,38 +214,38 @@ export default function AccountInfoCard({
         </form>
       ) : (
         <>
-          <div className="set-fields">
-            <div className="sfield">
-              <span className="sfield__label">
+          <div className={FIELDS}>
+            <div className={FIELD}>
+              <span className={LABEL}>
                 <User size={13} />
                 Full Name
               </span>
-              <p className="set-value set-value--lg">{user?.name || '—'}</p>
+              <p className={VALUE_LG}>{user?.name || '—'}</p>
             </div>
-            <div className="sfield">
-              <span className="sfield__label">
+            <div className={FIELD}>
+              <span className={LABEL}>
                 <Mail size={13} />
                 Email Address
               </span>
-              <p className="set-value set-value--lg">{user?.email || '—'}</p>
+              <p className={VALUE_LG}>{user?.email || '—'}</p>
             </div>
-            <div className="sfield">
-              <span className="sfield__label">
+            <div className={FIELD}>
+              <span className={LABEL}>
                 <Shield size={13} />
                 Account Status
               </span>
               <div>{statusBadge}</div>
             </div>
-            <div className="sfield">
-              <span className="sfield__label">
+            <div className={FIELD}>
+              <span className={LABEL}>
                 <Calendar size={13} />
                 Member Since
               </span>
-              <p className="set-value set-value--lg">{formatDate(user?.created_at)}</p>
+              <p className={VALUE_LG}>{formatDate(user?.created_at)}</p>
             </div>
           </div>
           {status === 'pending' && (
-            <div className="snotice snotice--warn">
+            <div className={noticeCls('warn')}>
               <AlertCircle size={15} />
               <span>
                 Your account is pending approval. All features unlock once your

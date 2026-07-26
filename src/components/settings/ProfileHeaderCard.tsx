@@ -5,6 +5,7 @@ import { updateStoredUser } from '../../lib/session'
 import { useSessionUser } from '../../hooks/useSessionUser'
 import { uploadProfileImage } from '../../services/user'
 import { getApiErrorMessage } from '../../services/api'
+import { BTN_GHOST } from './formClasses'
 import type { AuthUser } from '../../types/auth'
 
 interface ProfileHeaderCardProps {
@@ -52,13 +53,22 @@ export default function ProfileHeaderCard({ user }: ProfileHeaderCardProps) {
   }
 
   return (
-    <section className="dcard sph" data-aos="fade-up">
-      <div className="sph__banner">
-        {bannerUrl && <img src={bannerUrl} alt="Profile banner" />}
-        <div className="sph__banner-edit">
+    <section
+      className="group/banner rounded-card border border-border bg-surface overflow-hidden mb-4"
+      data-aos="fade-up"
+    >
+      <div className="relative h-[170px] border-b border-hair bg-[radial-gradient(circle_at_28%_20%,var(--glow),transparent_55%),radial-gradient(circle_at_74%_82%,var(--bubble),transparent_50%),linear-gradient(135deg,var(--accentSoft),var(--surface2))]">
+        {bannerUrl && (
+          <img
+            src={bannerUrl}
+            alt="Profile banner"
+            className="w-full h-full object-cover"
+          />
+        )}
+        <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-[background,opacity] duration-[250ms] group-hover/banner:bg-black/35 group-hover/banner:opacity-100 group-focus-within/banner:bg-black/35 group-focus-within/banner:opacity-100">
           <button
             type="button"
-            className="sbtn sbtn--ghost"
+            className={BTN_GHOST}
             onClick={() => openEditor('banner')}
           >
             <Pencil size={14} />
@@ -67,20 +77,26 @@ export default function ProfileHeaderCard({ user }: ProfileHeaderCardProps) {
         </div>
       </div>
 
-      <div className="sph__body">
-        <div className="sph__row">
-          <div className="sph__avatar-wrap">
-            <div className="sph__avatar">
+      <div className="px-6 pb-5 max-[900px]:px-4 max-[900px]:pb-4">
+        <div className="flex items-end gap-4 mt-[-44px]">
+          <div className="relative w-24 h-24 flex-none">
+            <div className="w-24 h-24 rounded-full border-4 border-surface flex items-center justify-center overflow-hidden shadow-[0_14px_30px_rgba(0,0,0,0.25)] bg-[radial-gradient(circle_at_32%_28%,var(--glow),transparent_60%),linear-gradient(135deg,var(--accentSoft),var(--surface2))]">
               {avatarUrl ? (
-                <img src={avatarUrl} alt={`${name} avatar`} />
+                <img
+                  src={avatarUrl}
+                  alt={`${name} avatar`}
+                  className="w-full h-full object-cover"
+                />
               ) : (
-                <span className="sph__initial display">{initial}</span>
+                <span className="font-display text-[30px] font-extrabold text-accent">
+                  {initial}
+                </span>
               )}
             </div>
-            <div className="sph__avatar-edit">
+            <div className="absolute right-0 bottom-1">
               <button
                 type="button"
-                className="sph__avatar-btn"
+                className="flex items-center justify-center w-7 h-7 rounded-full border border-accent-line bg-surface text-accent cursor-pointer shadow-[0_6px_16px_rgba(0,0,0,0.25)] transition-[background] duration-150 hover:bg-accent-soft"
                 onClick={() => openEditor('profile')}
                 aria-label="Edit profile image"
               >
@@ -88,9 +104,13 @@ export default function ProfileHeaderCard({ user }: ProfileHeaderCardProps) {
               </button>
             </div>
           </div>
-          <div className="sph__id">
-            <h2 className="sph__name display">{name}</h2>
-            <p className="sph__email">{user?.email || '—'}</p>
+          <div className="pb-1 min-w-0">
+            <h2 className="font-display text-[22px] font-extrabold tracking-[-0.02em]">
+              {name}
+            </h2>
+            <p className="text-[13px] text-muted mt-0.5 [overflow-wrap:anywhere]">
+              {user?.email || '—'}
+            </p>
           </div>
         </div>
       </div>

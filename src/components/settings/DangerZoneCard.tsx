@@ -3,6 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { LogOut } from 'lucide-react'
 import ConfirmModal from '../ui/ConfirmModal'
 import { logout } from '../../services/auth'
+import {
+  BTN_DANGER,
+  CARD,
+  CARD_SUB,
+  CARD_TITLE,
+  CARD_TITLES,
+} from './formClasses'
 
 /** Sign out of the trader portal — confirmed via ConfirmModal, wired to /auth/logout. */
 export default function DangerZoneCard() {
@@ -23,21 +30,26 @@ export default function DangerZoneCard() {
   }
 
   return (
-    <section className="dcard set-card sdz" data-aos="fade-up">
-      <div className="set-card__head">
-        <div className="set-card__titles">
-          <h3 className="dcard__title sdz__title">Danger Zone</h3>
-          <p className="dcard__sub">Irreversible actions</p>
+    <section
+      className={`${CARD} flex flex-col mb-4 border-l-[3px] border-l-red`}
+      data-aos="fade-up"
+    >
+      <div>
+        <div className={CARD_TITLES}>
+          <h3 className={`${CARD_TITLE} text-red`}>Danger Zone</h3>
+          <p className={CARD_SUB}>Irreversible actions</p>
         </div>
       </div>
-      <div className="sdz__row">
+      <div className="flex items-center justify-between gap-3 flex-wrap mt-1">
         <div>
-          <p className="sdz__action">Sign out of Trader Portal</p>
-          <p className="sdz__hint">End your current session on this device</p>
+          <p className="text-[13.5px] font-bold">Sign out of Trader Portal</p>
+          <p className="text-[12px] text-muted mt-0.5">
+            End your current session on this device
+          </p>
         </div>
         <button
           type="button"
-          className="sbtn sbtn--danger"
+          className={BTN_DANGER}
           onClick={() => setConfirmOpen(true)}
           disabled={signingOut}
         >

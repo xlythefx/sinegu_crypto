@@ -1,6 +1,16 @@
 import { useState } from 'react'
 import { Calendar, CreditCard, Trash2 } from 'lucide-react'
 import ConfirmModal from '../ui/ConfirmModal'
+import {
+  CARD_HWM,
+  CARD_HEAD,
+  CARD_SUB,
+  CARD_TITLE,
+  CARD_TITLES,
+  CHIP,
+  ICON_BTN_DANGER,
+  LABEL,
+} from './formClasses'
 import { SAVED_CARDS, type SavedCard } from './mockData'
 
 /**
@@ -14,19 +24,23 @@ export default function PaymentMethodCard() {
   const card = cards[0]
 
   return (
-    <section className="dcard dcard--hwm set-card spm" data-aos="fade-up" data-aos-delay="100">
-      <div className="dcard__title-row set-card__head">
-        <span className="dchip">
+    <section
+      className={`${CARD_HWM} flex flex-col`}
+      data-aos="fade-up"
+      data-aos-delay="100"
+    >
+      <div className={CARD_HEAD}>
+        <span className={CHIP}>
           <CreditCard size={15} />
         </span>
-        <div className="set-card__titles">
-          <h3 className="dcard__title">Payment Method</h3>
-          <p className="dcard__sub">Card used for automatic billing</p>
+        <div className={CARD_TITLES}>
+          <h3 className={CARD_TITLE}>Payment Method</h3>
+          <p className={CARD_SUB}>Card used for automatic billing</p>
         </div>
         {card && (
           <button
             type="button"
-            className="sicon-btn sicon-btn--danger"
+            className={ICON_BTN_DANGER}
             onClick={() => setToDelete(card)}
             title="Delete payment method"
             aria-label="Delete payment method"
@@ -37,40 +51,44 @@ export default function PaymentMethodCard() {
       </div>
 
       {card ? (
-        <div className="spm__body">
+        <div className="flex-1 flex flex-col justify-between gap-[22px]">
           <div>
-            <p className="sfield__label spm__label">
+            <p className={`${LABEL} mb-2`}>
               <CreditCard size={13} />
               Card Number
             </p>
-            <p className="spm__number mono">•••• •••• •••• {card.last4}</p>
+            <p className="font-mono text-[20px] font-bold tracking-[0.08em]">
+              •••• •••• •••• {card.last4}
+            </p>
           </div>
-          <div className="spm__meta">
+          <div className="grid grid-cols-2 gap-4 pt-3.5 border-t border-accent-line">
             <div>
-              <p className="sfield__label spm__label">
+              <p className={`${LABEL} mb-2`}>
                 <Calendar size={13} />
                 Expires
               </p>
-              <p className="spm__meta-value">{card.expiry}</p>
+              <p className="text-[16px] font-extrabold">{card.expiry}</p>
             </div>
             <div>
-              <p className="sfield__label spm__label">
+              <p className={`${LABEL} mb-2`}>
                 <CreditCard size={13} />
                 Brand
               </p>
-              <p className="spm__meta-value">{card.brand}</p>
+              <p className="text-[16px] font-extrabold">{card.brand}</p>
             </div>
           </div>
         </div>
       ) : (
-        <div className="spm__empty">
-          <div className="spm__placeholder">
+        <div className="flex-1 flex flex-col items-center justify-center text-center gap-2 py-[18px]">
+          <div className="flex flex-col items-center justify-center gap-[7px] w-[210px] h-32 mb-2.5 border-[3px] border-dashed border-accent-line rounded-[14px] bg-accent-soft text-accent">
             <CreditCard size={38} />
-            <span className="spm__ph-bar spm__ph-bar--wide" />
-            <span className="spm__ph-bar" />
+            <span className="w-16 h-1 rounded-[2px] bg-accent-line" />
+            <span className="w-11 h-1 rounded-[2px] bg-accent-line" />
           </div>
-          <h4 className="spm__empty-title">No Payment Method</h4>
-          <p className="spm__empty-sub">
+          <h4 className="font-display text-[15px] font-extrabold">
+            No Payment Method
+          </h4>
+          <p className="text-[12.5px] text-muted leading-[1.5] max-w-[280px]">
             Pay your first invoice to connect your card and enable automatic
             payments for future billing.
           </p>

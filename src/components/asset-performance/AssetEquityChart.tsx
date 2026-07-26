@@ -2,7 +2,6 @@ import { useMemo, useState, type MouseEvent } from 'react'
 import { linePath } from '../../lib/chart'
 import { fmtMediumDate, fmtShortDate, fmtSignedMoney } from '../../lib/format'
 import type { AssetEquityPoint } from '../../types/dashboard'
-import './AssetEquityChart.css'
 
 const W = 600
 const H = 220
@@ -58,14 +57,18 @@ export default function AssetEquityChart({
   const hoveredCoord = hover !== null ? coords[hover] : null
 
   return (
-    <div className="aeq">
-      <div className="aeq__frame">
-        <span className="aeq__y aeq__y--max mono">{fmtSignedMoney(yMax, 0)}</span>
-        <span className="aeq__y aeq__y--min mono">{fmtSignedMoney(yMin, 0)}</span>
+    <div>
+      <div className="relative border border-border rounded-row bg-surface2 p-1.5">
+        <span className="absolute left-2.5 top-2 text-[10px] text-faint pointer-events-none z-[1] font-mono">
+          {fmtSignedMoney(yMax, 0)}
+        </span>
+        <span className="absolute left-2.5 bottom-2 text-[10px] text-faint pointer-events-none z-[1] font-mono">
+          {fmtSignedMoney(yMin, 0)}
+        </span>
         <svg
           viewBox={`0 0 ${W} ${H}`}
           preserveAspectRatio="none"
-          className="aeq__svg"
+          className="block w-full h-[200px] cursor-crosshair"
           onMouseMove={onMove}
           onMouseLeave={() => setHover(null)}
         >
@@ -110,17 +113,17 @@ export default function AssetEquityChart({
         </svg>
         {hovered && hoveredCoord && (
           <div
-            className="aeq__tooltip"
+            className="absolute [transform:translate(-50%,calc(-100%_-_12px))] bg-surface border border-border rounded-field py-[7px] px-[11px] flex flex-col gap-0.5 pointer-events-none whitespace-nowrap shadow-[0_8px_24px_rgba(0,0,0,0.25)] z-[2]"
             style={{
               left: `${(hoveredCoord.x / W) * 100}%`,
               top: `${(hoveredCoord.y / H) * 100}%`,
             }}
           >
-            <span className="aeq__tooltip-date">
+            <span className="text-[11px] text-muted">
               {fmtMediumDate(hovered.date)}
             </span>
             <span
-              className={`aeq__tooltip-value mono ${hovered.cumulative < 0 ? 'is-neg' : 'is-pos'}`}
+              className={`text-[13px] font-bold font-mono ${hovered.cumulative < 0 ? 'text-red' : 'text-green'}`}
             >
               {fmtSignedMoney(hovered.cumulative)}
             </span>
@@ -128,7 +131,7 @@ export default function AssetEquityChart({
         )}
       </div>
       {points.length > 0 && (
-        <div className="aeq__axis mono">
+        <div className="flex justify-between mt-2 px-1 text-[10.5px] text-faint font-mono">
           <span>{fmtShortDate(points[0].date)}</span>
           {points.length > 2 && (
             <span>{fmtShortDate(points[Math.floor((points.length - 1) / 2)].date)}</span>

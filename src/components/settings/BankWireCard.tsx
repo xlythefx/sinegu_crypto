@@ -2,6 +2,26 @@ import { useState } from 'react'
 import { AlertCircle, Building2, Plus, Save, Trash2 } from 'lucide-react'
 import ConfirmModal from '../ui/ConfirmModal'
 import {
+  BTN_GHOST_SM,
+  BTN_PRIMARY_SM,
+  CARD,
+  CARD_HEAD,
+  CARD_SUB,
+  CARD_TITLE,
+  CARD_TITLES,
+  CHIP,
+  EMPTY,
+  FIELD,
+  FORM,
+  FORM_ACTIONS_ACCENT,
+  ICON_BTN_DANGER,
+  INPUT,
+  INPUT_MONO,
+  LABEL,
+  SELECT,
+  notice,
+} from './formClasses'
+import {
   BANK_ACCOUNTS,
   type BankAccount,
   type BankCurrency,
@@ -95,17 +115,17 @@ export default function BankWireCard() {
   }
 
   return (
-    <section className="dcard set-card sbw" data-aos="fade-up">
-      <div className="dcard__title-row set-card__head">
-        <span className="dchip">
+    <section className={`${CARD} flex flex-col mb-4`} data-aos="fade-up">
+      <div className={CARD_HEAD}>
+        <span className={CHIP}>
           <Building2 size={15} />
         </span>
-        <div className="set-card__titles">
-          <h3 className="dcard__title">Bank Wire Accounts</h3>
-          <p className="dcard__sub">Bank details for wire transfer payouts</p>
+        <div className={CARD_TITLES}>
+          <h3 className={CARD_TITLE}>Bank Wire Accounts</h3>
+          <p className={CARD_SUB}>Bank details for wire transfer payouts</p>
         </div>
         {!showForm && (
-          <button type="button" className="sbtn sbtn--primary sbtn--sm" onClick={openForm}>
+          <button type="button" className={BTN_PRIMARY_SM} onClick={openForm}>
             <Plus size={13} />
             Add Account
           </button>
@@ -113,24 +133,29 @@ export default function BankWireCard() {
       </div>
 
       {accounts.length > 0 && (
-        <div className="sbw__list">
+        <div className="flex flex-col gap-2.5">
           {accounts.map((acct) => (
-            <div className="sbw__item" key={acct.id}>
-              <div className="sbw__item-head">
-                <div className="sbw__item-id">
-                  <span className="dchip">
+            <div
+              className="p-3 border border-border rounded-row bg-surface2 transition-[border-color] duration-150 hover:border-accent-line"
+              key={acct.id}
+            >
+              <div className="flex items-start justify-between gap-2.5">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className={CHIP}>
                     <Building2 size={14} />
                   </span>
                   <div>
-                    <p className="sbw__item-name">{acct.label || acct.holderName}</p>
-                    <p className="sbw__item-net mono">
+                    <p className="text-[13px] font-bold">
+                      {acct.label || acct.holderName}
+                    </p>
+                    <p className="font-mono text-[10.5px] tracking-[0.08em] uppercase text-accent mt-0.5">
                       {acct.currency} · {acct.bankName}
                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
-                  className="sicon-btn sicon-btn--danger"
+                  className={ICON_BTN_DANGER}
                   onClick={() => setToDelete(acct)}
                   title="Delete account"
                   aria-label="Delete account"
@@ -138,37 +163,49 @@ export default function BankWireCard() {
                   <Trash2 size={14} />
                 </button>
               </div>
-              <div className="sbw__details">
-                <span className="sbw__dt">Account holder</span>
-                <span className="sbw__dd">{acct.holderName}</span>
+              <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 mt-2.5 text-[12px]">
+                <span className="text-faint">Account holder</span>
+                <span className="font-semibold [overflow-wrap:anywhere]">
+                  {acct.holderName}
+                </span>
                 {acct.currency === 'EUR' && acct.iban && (
                   <>
-                    <span className="sbw__dt">IBAN</span>
-                    <span className="sbw__dd mono">{acct.iban}</span>
+                    <span className="text-faint">IBAN</span>
+                    <span className="font-mono font-semibold [overflow-wrap:anywhere]">
+                      {acct.iban}
+                    </span>
                   </>
                 )}
                 {acct.currency === 'USD' && acct.accountNumber && (
                   <>
-                    <span className="sbw__dt">Account #</span>
-                    <span className="sbw__dd mono">{acct.accountNumber}</span>
+                    <span className="text-faint">Account #</span>
+                    <span className="font-mono font-semibold [overflow-wrap:anywhere]">
+                      {acct.accountNumber}
+                    </span>
                   </>
                 )}
                 {acct.currency === 'USD' && acct.routingNumber && (
                   <>
-                    <span className="sbw__dt">Routing #</span>
-                    <span className="sbw__dd mono">{acct.routingNumber}</span>
+                    <span className="text-faint">Routing #</span>
+                    <span className="font-mono font-semibold [overflow-wrap:anywhere]">
+                      {acct.routingNumber}
+                    </span>
                   </>
                 )}
                 {acct.swiftBic && (
                   <>
-                    <span className="sbw__dt">SWIFT/BIC</span>
-                    <span className="sbw__dd mono">{acct.swiftBic}</span>
+                    <span className="text-faint">SWIFT/BIC</span>
+                    <span className="font-mono font-semibold [overflow-wrap:anywhere]">
+                      {acct.swiftBic}
+                    </span>
                   </>
                 )}
                 {acct.bankAddress && (
                   <>
-                    <span className="sbw__dt">Bank address</span>
-                    <span className="sbw__dd">{acct.bankAddress}</span>
+                    <span className="text-faint">Bank address</span>
+                    <span className="font-semibold [overflow-wrap:anywhere]">
+                      {acct.bankAddress}
+                    </span>
                   </>
                 )}
               </div>
@@ -178,21 +215,24 @@ export default function BankWireCard() {
       )}
 
       {showForm && (
-        <form className="set-form sbw__form" onSubmit={handleSubmit}>
+        <form
+          className={`${FORM} mt-3.5 p-3.5 border border-accent-line rounded-row bg-accent-soft`}
+          onSubmit={handleSubmit}
+        >
           {error && (
-            <div className="snotice snotice--error" role="alert">
+            <div className={notice('error')} role="alert">
               <AlertCircle size={15} />
               <span>{error}</span>
             </div>
           )}
-          <div className="sbw__form-grid">
-            <div className="sfield">
-              <label className="sfield__label" htmlFor="bw-currency">
+          <div className="grid grid-cols-2 gap-3.5 max-[900px]:grid-cols-1">
+            <div className={FIELD}>
+              <label className={LABEL} htmlFor="bw-currency">
                 Currency *
               </label>
               <select
                 id="bw-currency"
-                className="sinput"
+                className={SELECT}
                 value={form.currency}
                 onChange={setField('currency')}
               >
@@ -200,39 +240,39 @@ export default function BankWireCard() {
                 <option value="EUR">EUR — Euro</option>
               </select>
             </div>
-            <div className="sfield">
-              <label className="sfield__label" htmlFor="bw-label">
+            <div className={FIELD}>
+              <label className={LABEL} htmlFor="bw-label">
                 Label (optional)
               </label>
               <input
                 id="bw-label"
-                className="sinput"
+                className={INPUT}
                 type="text"
                 placeholder="e.g. My USD Business Account"
                 value={form.label}
                 onChange={setField('label')}
               />
             </div>
-            <div className="sfield">
-              <label className="sfield__label" htmlFor="bw-holder">
+            <div className={FIELD}>
+              <label className={LABEL} htmlFor="bw-holder">
                 Account Holder Name *
               </label>
               <input
                 id="bw-holder"
-                className="sinput"
+                className={INPUT}
                 type="text"
                 placeholder="Full legal name"
                 value={form.holderName}
                 onChange={setField('holderName')}
               />
             </div>
-            <div className="sfield">
-              <label className="sfield__label" htmlFor="bw-bank">
+            <div className={FIELD}>
+              <label className={LABEL} htmlFor="bw-bank">
                 Bank Name *
               </label>
               <input
                 id="bw-bank"
-                className="sinput"
+                className={INPUT}
                 type="text"
                 placeholder="e.g. Chase Bank"
                 value={form.bankName}
@@ -241,26 +281,26 @@ export default function BankWireCard() {
             </div>
             {form.currency === 'EUR' ? (
               <>
-                <div className="sfield">
-                  <label className="sfield__label" htmlFor="bw-iban">
+                <div className={FIELD}>
+                  <label className={LABEL} htmlFor="bw-iban">
                     IBAN *
                   </label>
                   <input
                     id="bw-iban"
-                    className="sinput sinput--mono"
+                    className={INPUT_MONO}
                     type="text"
                     placeholder="e.g. DE89370400440532013000"
                     value={form.iban}
                     onChange={setField('iban')}
                   />
                 </div>
-                <div className="sfield">
-                  <label className="sfield__label" htmlFor="bw-swift">
+                <div className={FIELD}>
+                  <label className={LABEL} htmlFor="bw-swift">
                     SWIFT / BIC
                   </label>
                   <input
                     id="bw-swift"
-                    className="sinput sinput--mono"
+                    className={INPUT_MONO}
                     type="text"
                     placeholder="e.g. COBADEFFXXX"
                     value={form.swiftBic}
@@ -270,13 +310,13 @@ export default function BankWireCard() {
               </>
             ) : (
               <>
-                <div className="sfield">
-                  <label className="sfield__label" htmlFor="bw-type">
+                <div className={FIELD}>
+                  <label className={LABEL} htmlFor="bw-type">
                     Account Type
                   </label>
                   <select
                     id="bw-type"
-                    className="sinput"
+                    className={SELECT}
                     value={form.accountType}
                     onChange={setField('accountType')}
                   >
@@ -285,39 +325,39 @@ export default function BankWireCard() {
                     <option value="Savings">Savings</option>
                   </select>
                 </div>
-                <div className="sfield">
-                  <label className="sfield__label" htmlFor="bw-routing">
+                <div className={FIELD}>
+                  <label className={LABEL} htmlFor="bw-routing">
                     Routing Number
                   </label>
                   <input
                     id="bw-routing"
-                    className="sinput sinput--mono"
+                    className={INPUT_MONO}
                     type="text"
                     placeholder="9-digit ABA routing number"
                     value={form.routingNumber}
                     onChange={setField('routingNumber')}
                   />
                 </div>
-                <div className="sfield">
-                  <label className="sfield__label" htmlFor="bw-number">
+                <div className={FIELD}>
+                  <label className={LABEL} htmlFor="bw-number">
                     Account Number *
                   </label>
                   <input
                     id="bw-number"
-                    className="sinput sinput--mono"
+                    className={INPUT_MONO}
                     type="text"
                     placeholder="Bank account number"
                     value={form.accountNumber}
                     onChange={setField('accountNumber')}
                   />
                 </div>
-                <div className="sfield">
-                  <label className="sfield__label" htmlFor="bw-swift-usd">
+                <div className={FIELD}>
+                  <label className={LABEL} htmlFor="bw-swift-usd">
                     SWIFT / BIC
                   </label>
                   <input
                     id="bw-swift-usd"
-                    className="sinput sinput--mono"
+                    className={INPUT_MONO}
                     type="text"
                     placeholder="e.g. CHASUS33"
                     value={form.swiftBic}
@@ -326,13 +366,13 @@ export default function BankWireCard() {
                 </div>
               </>
             )}
-            <div className="sfield sbw__form-wide">
-              <label className="sfield__label" htmlFor="bw-address">
+            <div className={`${FIELD} col-span-full`}>
+              <label className={LABEL} htmlFor="bw-address">
                 Bank Address
               </label>
               <input
                 id="bw-address"
-                className="sinput"
+                className={INPUT}
                 type="text"
                 placeholder="Optional full bank address"
                 value={form.bankAddress}
@@ -340,11 +380,11 @@ export default function BankWireCard() {
               />
             </div>
           </div>
-          <div className="set-form__actions">
-            <button type="button" className="sbtn sbtn--ghost sbtn--sm" onClick={closeForm}>
+          <div className={FORM_ACTIONS_ACCENT}>
+            <button type="button" className={BTN_GHOST_SM} onClick={closeForm}>
               Cancel
             </button>
-            <button type="submit" className="sbtn sbtn--primary sbtn--sm">
+            <button type="submit" className={BTN_PRIMARY_SM}>
               <Save size={13} />
               Save Account
             </button>
@@ -353,7 +393,7 @@ export default function BankWireCard() {
       )}
 
       {accounts.length === 0 && !showForm && (
-        <p className="set-empty">
+        <p className={EMPTY}>
           No bank wire accounts yet. Click "Add Account" to add one.
         </p>
       )}

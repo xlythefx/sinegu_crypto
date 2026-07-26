@@ -252,3 +252,85 @@ button {
     opacity: 0;
   }
 }
+/* Invoice detail — hero pop-in + amount count-up */
+@keyframes idtPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes idtCount {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+    letter-spacing: 0.08em;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    letter-spacing: 0;
+  }
+}
+/* DataState spinner + PortalSwitch spinner */
+@keyframes dstate-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes pswitch-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* DayTradesModal entrance */
+@keyframes dtm-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
+/* PortalSwitchOverlay — fade in/out, logo rise + pulse */
+@keyframes pswitch-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes pswitch-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes pswitch-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes pswitch-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(0.94);
+  }
+}

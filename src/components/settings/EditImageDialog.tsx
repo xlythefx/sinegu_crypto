@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Image as ImageIcon, Upload } from 'lucide-react'
+import { BTN_GHOST, BTN_PRIMARY } from './formClasses'
 
 export type EditImageType = 'banner' | 'profile'
 
@@ -55,26 +56,29 @@ export default function EditImageDialog({
   // card's AOS transform becomes the containing block and traps position:fixed.
   return createPortal(
     <div
-      className="sid__overlay"
+      className="fixed inset-0 bg-[rgba(0,0,0,0.55)] backdrop-blur-[3px] flex items-center justify-center z-[1000] animate-[fadeup_0.2s_ease_both]"
       onClick={onCancel}
       role="dialog"
       aria-modal="true"
       aria-label={`Edit ${label} image`}
     >
-      <div className="sid" onClick={(e) => e.stopPropagation()}>
-        <h3 className="sid__title">
+      <div
+        className="w-[calc(100%-48px)] max-w-[480px] p-[26px] border border-border rounded-[20px] bg-surface shadow-[0_30px_80px_rgba(0,0,0,0.35)] animate-[fadeup_0.25s_cubic-bezier(0.2,0.7,0.2,1)_both]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="font-display text-[19px] font-extrabold tracking-[-0.02em]">
           Edit {type === 'banner' ? 'Banner' : 'Profile'} Image
         </h3>
-        <p className="sid__sub">
+        <p className="text-[13px] text-muted mt-1 mb-[18px]">
           Upload a new {label} image. It is previewed locally for now.
         </p>
 
-        <div className="sid__drop">
+        <div className="flex flex-col items-center gap-3 py-[26px] px-[18px] border-2 border-dashed border-border rounded-[14px] text-center">
           <input
             ref={fileInputRef}
             type="file"
             accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-            className="sid__file"
+            className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0]
               if (file) handleFile(file)
@@ -85,11 +89,15 @@ export default function EditImageDialog({
               <img
                 src={preview}
                 alt="Preview"
-                className={`sid__preview sid__preview--${type}`}
+                className={
+                  type === 'banner'
+                    ? 'rounded-field w-full h-[120px] object-cover'
+                    : 'rounded-full w-[120px] h-[120px] object-cover'
+                }
               />
               <button
                 type="button"
-                className="sbtn sbtn--ghost"
+                className={BTN_GHOST}
                 onClick={() => fileInputRef.current?.click()}
               >
                 <ImageIcon size={14} />
@@ -98,15 +106,15 @@ export default function EditImageDialog({
             </>
           ) : (
             <>
-              <ImageIcon size={40} className="sid__drop-icon" />
-              <p className="sid__drop-hint">
+              <ImageIcon size={40} className="text-faint" />
+              <p className="text-[12.5px] text-muted">
                 {type === 'banner'
                   ? 'Recommended: 1920x1080px or larger'
                   : 'Recommended: 400x400px or larger'}
               </p>
               <button
                 type="button"
-                className="sbtn sbtn--ghost"
+                className={BTN_GHOST}
                 onClick={() => fileInputRef.current?.click()}
               >
                 <Upload size={14} />
@@ -117,15 +125,18 @@ export default function EditImageDialog({
         </div>
 
         {error && (
-          <p className="sid__error" role="alert">
+          <p
+            className="mt-3.5 py-2.5 px-3.5 border border-[rgba(239,68,68,0.35)] rounded-field bg-[rgba(239,68,68,0.08)] text-[#ef4444] text-[13px]"
+            role="alert"
+          >
             {error}
           </p>
         )}
 
-        <div className="sid__actions">
+        <div className="flex justify-end gap-2.5 mt-[18px]">
           <button
             type="button"
-            className="sbtn sbtn--ghost"
+            className={BTN_GHOST}
             onClick={onCancel}
             disabled={busy}
           >
@@ -133,7 +144,7 @@ export default function EditImageDialog({
           </button>
           <button
             type="button"
-            className="sbtn sbtn--primary"
+            className={BTN_PRIMARY}
             disabled={!file || busy}
             onClick={() => file && onApply(file)}
           >

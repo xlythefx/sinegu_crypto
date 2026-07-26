@@ -22,7 +22,6 @@ import { getInvoice } from '../services/billing'
 import { ApiError } from '../services/api'
 import { hasFee, type Invoice } from '../lib/billing'
 import { fmtMoney, fmtSignedMoney, fmtSignedPct, formatDate } from '../lib/format'
-import './InvoiceDetail.css'
 
 function Tile({
   icon,
@@ -38,11 +37,21 @@ function Tile({
   delay: number
 }) {
   return (
-    <div className="dcard idt-tile" data-aos="fade-up" data-aos-delay={delay}>
-      <p className="idt-tile__label">
+    <div
+      className="rounded-card border border-border bg-surface p-4"
+      data-aos="fade-up"
+      data-aos-delay={delay}
+    >
+      <p className="inline-flex items-center gap-[5px] text-[10.5px] uppercase tracking-[0.06em] text-faint mb-2">
         {icon} {label}
       </p>
-      <p className={`idt-tile__value mono${tone ? ` is-${tone}` : ''}`}>{value}</p>
+      <p
+        className={`text-[20px] font-bold leading-[1.1] font-mono ${
+          tone === 'pos' ? 'text-green' : tone === 'neg' ? 'text-red' : 'text-text'
+        }`}
+      >
+        {value}
+      </p>
     </div>
   )
 }
@@ -83,13 +92,19 @@ export default function InvoiceDetail() {
   if (error instanceof ApiError && error.status === 404) {
     return (
       <DashboardLayout title="Invoice">
-        <div className="dcard idt-missing" data-aos="fade-up">
-          <FileText size={44} className="idt-missing__icon" />
-          <h2 className="idt-missing__title">Invoice not found</h2>
-          <p className="idt-missing__sub">
+        <div
+          className="rounded-card border border-dashed border-border bg-surface flex flex-col items-center text-center py-14 px-6"
+          data-aos="fade-up"
+        >
+          <FileText size={44} className="text-faint mb-3.5" />
+          <h2 className="text-[19px] font-bold mb-1.5">Invoice not found</h2>
+          <p className="text-[13px] text-muted mb-5">
             This invoice doesn't exist or is no longer available.
           </p>
-          <Link to="/dashboard/invoices" className="idt-back-btn">
+          <Link
+            to="/dashboard/invoices"
+            className="inline-flex items-center gap-[7px] rounded-pill py-2.5 px-5 text-[13px] font-semibold text-on-accent bg-accent"
+          >
             <ArrowLeft size={16} /> Back to invoices
           </Link>
         </div>
@@ -109,33 +124,51 @@ export default function InvoiceDetail() {
   const fee = hasFee(invoice)
   const brand = EXCHANGE_META[invoice.exchange].color
 
+  const statusClass = paid
+    ? 'bg-[color-mix(in_srgb,var(--green)_16%,transparent)] text-green'
+    : invoice.isOverdue && fee
+      ? 'bg-[color-mix(in_srgb,var(--red)_16%,transparent)] text-red'
+      : 'bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-accent'
+
   return (
     <DashboardLayout title={`Invoice ${invoice.formattedId}`}>
       {/* header */}
-      <div className="idt-head" data-aos="fade-up">
-        <Link to="/dashboard/invoices" className="idt-back" aria-label="Back to invoices">
+      <div className="flex items-start gap-[14px] mb-[22px]" data-aos="fade-up">
+        <Link
+          to="/dashboard/invoices"
+          className="grid place-items-center w-10 h-10 flex-shrink-0 rounded-[12px] border border-border bg-surface2 text-text transition-[border-color,transform] duration-150 hover:border-accent hover:-translate-x-0.5"
+          aria-label="Back to invoices"
+        >
           <ArrowLeft size={18} />
         </Link>
-        <div className="idt-head__text">
-          <p className="idt-head__kicker mono">{invoice.formattedId}</p>
-          <h1 className="idt-head__title">{invoice.accountName}</h1>
-          <div className="idt-head__meta">
+        <div>
+          <p className="font-mono text-[11px] tracking-[0.14em] text-accent mb-[5px]">
+            {invoice.formattedId}
+          </p>
+          <h1 className="font-display text-[27px] font-extrabold tracking-[-0.02em] mb-2">
+            {invoice.accountName}
+          </h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
             <ExchangeBadge exchange={invoice.exchange} />
-            <span className="idt-head__month">{invoice.monthLabel} billing period</span>
+            <span className="text-[13px] text-muted">
+              {invoice.monthLabel} billing period
+            </span>
           </div>
         </div>
       </div>
 
-      <div className="idt-layout">
-        <div className="idt-main">
+      <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-7 items-start max-[1080px]:grid-cols-1">
+        <div className="min-w-0 flex flex-col gap-[18px]">
           {/* hero */}
           <section
-            className="dcard idt-hero"
+            className="relative overflow-hidden rounded-card border border-border p-card flex items-center justify-between gap-6 flex-wrap bg-[linear-gradient(150deg,var(--surface),var(--surface2))] animate-[idtPop_0.5s_cubic-bezier(0.22,1,0.36,1)_both] motion-reduce:animate-none before:content-[''] before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[4px] before:bg-[var(--brand,var(--accent))]"
             data-aos="zoom-in"
             style={{ ['--brand' as string]: brand }}
           >
-            <div className="idt-hero__left">
-              <span className={`idt-hero__status ${paid ? 'is-paid' : invoice.isOverdue && fee ? 'is-overdue' : 'is-due'}`}>
+            <div className="min-w-0">
+              <span
+                className={`inline-flex items-center gap-1 text-[10.5px] font-bold uppercase tracking-[0.06em] py-[3px] px-2.5 rounded-pill mb-3 ${statusClass}`}
+              >
                 {paid ? (
                   <>
                     <CheckCircle2 size={13} /> Paid
@@ -146,9 +179,13 @@ export default function InvoiceDetail() {
                   'Outstanding'
                 )}
               </span>
-              <p className="idt-hero__label">{paid ? 'Amount Paid' : 'Amount Due'}</p>
-              <p className="idt-hero__amount mono">{fmtMoney(fee ? invoice.totalFee : 0)}</p>
-              <p className="idt-hero__date">
+              <p className="text-[11px] uppercase tracking-[0.08em] text-faint mb-1">
+                {paid ? 'Amount Paid' : 'Amount Due'}
+              </p>
+              <p className="font-mono text-[42px] font-extrabold leading-none text-text animate-[idtCount_0.5s_cubic-bezier(0.22,1,0.36,1)_both] [animation-delay:120ms] motion-reduce:animate-none">
+                {fmtMoney(fee ? invoice.totalFee : 0)}
+              </p>
+              <p className="inline-flex items-center gap-1.5 text-[12.5px] text-muted mt-3">
                 {paid ? (
                   <>
                     <CheckCircle2 size={14} /> Paid on {formatDate(invoice.paidDate)}
@@ -161,18 +198,26 @@ export default function InvoiceDetail() {
               </p>
             </div>
 
-            <div className="idt-hero__right">
+            <div className="flex-shrink-0">
               {!paid && fee ? (
-                <button type="button" className="idt-pay" onClick={() => setPayOpen(true)}>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-[9px] rounded-[14px] py-[15px] px-7 text-[14.5px] font-bold cursor-pointer text-on-accent bg-accent shadow-[0_12px_28px_-12px_var(--glow)] transition-[filter,transform] duration-150 hover:brightness-[1.07] active:translate-y-px"
+                  onClick={() => setPayOpen(true)}
+                >
                   <CreditCard size={18} /> Pay Invoice
                 </button>
               ) : !paid && !fee ? (
-                <div className="idt-nofee">
-                  <p className="idt-nofee__title">No profit fees this month</p>
-                  <p className="idt-nofee__sub">Nothing due for this billing period.</p>
+                <div className="text-center py-3.5 px-5 rounded-[12px] border border-dashed border-border bg-surface2">
+                  <p className="text-[13px] font-semibold text-muted">
+                    No profit fees this month
+                  </p>
+                  <p className="text-[11.5px] text-faint mt-[3px]">
+                    Nothing due for this billing period.
+                  </p>
                 </div>
               ) : (
-                <div className="idt-paid-seal">
+                <div className="flex flex-col items-center gap-1 text-green text-[12px] font-bold uppercase tracking-[0.06em]">
                   <CheckCircle2 size={30} />
                   <span>Settled</span>
                 </div>
@@ -181,7 +226,7 @@ export default function InvoiceDetail() {
           </section>
 
           {/* performance summary tiles */}
-          <div className="idt-tiles">
+          <div className="grid grid-cols-4 gap-3.5 max-[720px]:grid-cols-2">
             <Tile
               icon={<TrendingUp size={13} />}
               label="Performance Gain"
@@ -212,107 +257,143 @@ export default function InvoiceDetail() {
           </div>
 
           {/* HWM progression */}
-          <section className="dcard idt-hwm" data-aos="fade-up">
-            <p className="idt-section-label">HIGH-WATER MARK</p>
-            <div className="idt-hwm__flow">
-              <div className="idt-hwm__node">
-                <span className="idt-hwm__node-label">Previous HWM</span>
-                <span className="idt-hwm__node-value mono">
+          <section
+            className="rounded-card border border-border bg-surface p-card"
+            data-aos="fade-up"
+          >
+            <p className="inline-flex items-center gap-1.5 text-[10.5px] tracking-[0.14em] text-faint mb-3.5">
+              HIGH-WATER MARK
+            </p>
+            <div className="flex items-stretch gap-3.5 max-[480px]:flex-col">
+              <div className="flex-1 border border-border bg-surface2 rounded-[14px] py-4 px-[18px]">
+                <span className="block text-[10.5px] uppercase tracking-[0.07em] text-faint mb-1.5">
+                  Previous HWM
+                </span>
+                <span className="text-[22px] font-extrabold text-text font-mono">
                   {invoice.hwmBefore != null ? fmtMoney(invoice.hwmBefore) : '—'}
                 </span>
               </div>
-              <span className="idt-hwm__arrow">
+              <span className="grid place-items-center text-accent flex-shrink-0 max-[480px]:rotate-90">
                 <ArrowRight size={20} />
               </span>
-              <div className="idt-hwm__node idt-hwm__node--new">
-                <span className="idt-hwm__node-label">{paid ? 'HWM Set' : 'New HWM'}</span>
-                <span className="idt-hwm__node-value mono is-accent">
+              <div className="flex-1 rounded-[14px] py-4 px-[18px] border border-accent-line bg-[linear-gradient(150deg,var(--accentSoft),var(--surface2))]">
+                <span className="block text-[10.5px] uppercase tracking-[0.07em] text-faint mb-1.5">
+                  {paid ? 'HWM Set' : 'New HWM'}
+                </span>
+                <span className="text-[22px] font-extrabold text-accent font-mono">
                   {invoice.hwmAfter != null ? fmtMoney(invoice.hwmAfter) : '—'}
                 </span>
               </div>
             </div>
-            <p className="idt-hwm__note">
+            <p className="text-[12px] text-muted mt-3.5 leading-[1.5]">
               Future fees are charged only on gains above the new high-water mark —
               you never pay twice on the same profit.
             </p>
           </section>
 
           {/* fee breakdown */}
-          <section className="dcard idt-breakdown" data-aos="fade-up">
-            <p className="idt-section-label">
-              <Receipt size={13} /> FEE BREAKDOWN
+          <section
+            className="rounded-card border border-border bg-surface p-card"
+            data-aos="fade-up"
+          >
+            <p className="inline-flex items-center gap-1.5 text-[10.5px] tracking-[0.14em] text-faint mb-3.5">
+              <Receipt size={13} className="text-accent" /> FEE BREAKDOWN
             </p>
-            <div className="idt-lines">
-              <div className="idt-line">
-                <div className="idt-line__desc">
-                  <span className="idt-line__title">Realized profit share</span>
-                  <span className="idt-line__sub mono">
+            <div className="flex flex-col">
+              <div className="flex items-center justify-between gap-4 py-3.5 border-b border-hair first:pt-0">
+                <div className="flex flex-col gap-[3px]">
+                  <span className="text-[13.5px] font-semibold text-text">
+                    Realized profit share
+                  </span>
+                  <span className="text-[11.5px] text-faint font-mono">
                     {invoice.realizedPercent}% of {fmtSignedMoney(invoice.realizedPnl)}
                   </span>
                 </div>
-                <span className="idt-line__amt mono">{fmtMoney(invoice.feeRealized)}</span>
+                <span className="text-[15px] font-bold text-text font-mono">
+                  {fmtMoney(invoice.feeRealized)}
+                </span>
               </div>
               {invoice.unrealizedPnl !== 0 && (
-                <div className="idt-line">
-                  <div className="idt-line__desc">
-                    <span className="idt-line__title">Unrealized profit share</span>
-                    <span className="idt-line__sub mono">
+                <div className="flex items-center justify-between gap-4 py-3.5 border-b border-hair first:pt-0">
+                  <div className="flex flex-col gap-[3px]">
+                    <span className="text-[13.5px] font-semibold text-text">
+                      Unrealized profit share
+                    </span>
+                    <span className="text-[11.5px] text-faint font-mono">
                       {invoice.unrealizedPercent}% of {fmtSignedMoney(invoice.unrealizedPnl)}
                     </span>
                   </div>
-                  <span className="idt-line__amt mono">{fmtMoney(invoice.feeUnrealized)}</span>
+                  <span className="text-[15px] font-bold text-text font-mono">
+                    {fmtMoney(invoice.feeUnrealized)}
+                  </span>
                 </div>
               )}
-              <div className="idt-line idt-line--total">
-                <span className="idt-line__title">{paid ? 'Total paid' : 'Total due'}</span>
-                <span className="idt-line__amt mono">{fmtMoney(invoice.totalFee)}</span>
+              <div className="flex items-center justify-between gap-4 pt-3.5 mt-1">
+                <span className="text-[14px] font-bold text-text">
+                  {paid ? 'Total paid' : 'Total due'}
+                </span>
+                <span className="text-[22px] font-extrabold text-accent font-mono">
+                  {fmtMoney(invoice.totalFee)}
+                </span>
               </div>
             </div>
             {!fee && (
-              <p className="idt-breakdown__nofee">
+              <p className="text-[12px] text-muted mt-3.5 pt-3.5 border-t border-hair">
                 No profit was made this period, so no performance fee is charged.
               </p>
             )}
           </section>
 
           {/* timeline / reference */}
-          <section className="dcard idt-timeline" data-aos="fade-up">
-            <p className="idt-section-label">BILLING PERIOD</p>
-            <div className="idt-facts">
-              <div className="idt-fact">
-                <span className="idt-fact__label">
-                  <Calendar size={13} /> Invoice Date
+          <section
+            className="rounded-card border border-border bg-surface p-card"
+            data-aos="fade-up"
+          >
+            <p className="inline-flex items-center gap-1.5 text-[10.5px] tracking-[0.14em] text-faint mb-3.5">
+              BILLING PERIOD
+            </p>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4 max-[520px]:grid-cols-1">
+              <div className="flex items-center justify-between gap-3 pb-3.5 border-b border-hair">
+                <span className="inline-flex items-center gap-1.5 text-[12px] text-muted">
+                  <Calendar size={13} className="text-faint flex-shrink-0" /> Invoice Date
                 </span>
-                <span className="idt-fact__value mono">{formatDate(invoice.invoiceDate)}</span>
+                <span className="text-[13px] font-bold text-text font-mono">
+                  {formatDate(invoice.invoiceDate)}
+                </span>
               </div>
-              <div className="idt-fact">
-                <span className="idt-fact__label">
-                  <Clock size={13} /> Due Date
+              <div className="flex items-center justify-between gap-3 pb-3.5 border-b border-hair">
+                <span className="inline-flex items-center gap-1.5 text-[12px] text-muted">
+                  <Clock size={13} className="text-faint flex-shrink-0" /> Due Date
                 </span>
-                <span className="idt-fact__value mono">{formatDate(invoice.dueDate)}</span>
+                <span className="text-[13px] font-bold text-text font-mono">
+                  {formatDate(invoice.dueDate)}
+                </span>
               </div>
               {paid && (
-                <div className="idt-fact">
-                  <span className="idt-fact__label">
-                    <CheckCircle2 size={13} /> Paid Date
+                <div className="flex items-center justify-between gap-3 pb-3.5 border-b border-hair">
+                  <span className="inline-flex items-center gap-1.5 text-[12px] text-muted">
+                    <CheckCircle2 size={13} className="text-faint flex-shrink-0" /> Paid Date
                   </span>
-                  <span className="idt-fact__value mono is-pos">
+                  <span className="text-[13px] font-bold text-green font-mono">
                     {formatDate(invoice.paidDate)}
                   </span>
                 </div>
               )}
-              <div className="idt-fact">
-                <span className="idt-fact__label">
-                  <Landmark size={13} /> {invoice.referenceLabel}
+              <div className="flex items-center justify-between gap-3 pb-3.5 border-b border-hair">
+                <span className="inline-flex items-center gap-1.5 text-[12px] text-muted">
+                  <Landmark size={13} className="text-faint flex-shrink-0" />{' '}
+                  {invoice.referenceLabel}
                 </span>
-                <span className="idt-fact__value mono">{fmtMoney(invoice.referenceValue)}</span>
+                <span className="text-[13px] font-bold text-text font-mono">
+                  {fmtMoney(invoice.referenceValue)}
+                </span>
               </div>
               {invoice.isFirstInvoice && (invoice.depositAmount ?? 0) > 0 && (
-                <div className="idt-fact">
-                  <span className="idt-fact__label">
-                    <Landmark size={13} /> Initial Deposit
+                <div className="flex items-center justify-between gap-3 pb-3.5 border-b border-hair">
+                  <span className="inline-flex items-center gap-1.5 text-[12px] text-muted">
+                    <Landmark size={13} className="text-faint flex-shrink-0" /> Initial Deposit
                   </span>
-                  <span className="idt-fact__value mono">
+                  <span className="text-[13px] font-bold text-text font-mono">
                     {fmtMoney(invoice.depositAmount!)}
                   </span>
                 </div>

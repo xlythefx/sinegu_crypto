@@ -3,6 +3,20 @@ import { AlertCircle, CheckCircle2, KeyRound } from 'lucide-react'
 import ConfirmModal from '../ui/ConfirmModal'
 import { ApiError, getApiErrorMessage } from '../../services/api'
 import { updatePassword } from '../../services/user'
+import {
+  BTN_PRIMARY,
+  CARD,
+  CARD_HEAD,
+  CARD_SUB,
+  CARD_TITLE,
+  CARD_TITLES,
+  CHIP,
+  FIELD,
+  FORM,
+  INPUT,
+  LABEL,
+  notice as noticeCls,
+} from './formClasses'
 
 interface PasswordChangeCardProps {
   email: string
@@ -74,19 +88,19 @@ export default function PasswordChangeCard({ email }: PasswordChangeCardProps) {
   }
 
   return (
-    <section className="dcard set-card spw" data-aos="fade-up">
-      <div className="dcard__title-row set-card__head">
-        <span className="dchip">
+    <section className={`${CARD} flex flex-col mb-4`} data-aos="fade-up">
+      <div className={CARD_HEAD}>
+        <span className={CHIP}>
           <KeyRound size={15} />
         </span>
-        <div className="set-card__titles">
-          <h3 className="dcard__title">Change Password</h3>
-          <p className="dcard__sub">Update your account password for better security</p>
+        <div className={CARD_TITLES}>
+          <h3 className={CARD_TITLE}>Change Password</h3>
+          <p className={CARD_SUB}>Update your account password for better security</p>
         </div>
       </div>
 
       {notice && (
-        <div className={`snotice snotice--${notice.kind}`} role="status">
+        <div className={noticeCls(notice.kind)} role="status">
           {notice.kind === 'success' ? (
             <CheckCircle2 size={15} />
           ) : (
@@ -96,15 +110,15 @@ export default function PasswordChangeCard({ email }: PasswordChangeCardProps) {
         </div>
       )}
 
-      <form className="set-form" onSubmit={handleSubmit}>
-        <div className="spw__grid">
-          <div className="sfield">
-            <label className="sfield__label" htmlFor="pw-current">
+      <form className={FORM} onSubmit={handleSubmit}>
+        <div className="grid grid-cols-3 gap-3.5 max-[900px]:grid-cols-1">
+          <div className={FIELD}>
+            <label className={LABEL} htmlFor="pw-current">
               Current Password
             </label>
             <input
               id="pw-current"
-              className="sinput"
+              className={INPUT}
               type="password"
               autoComplete="current-password"
               placeholder="Enter current password"
@@ -112,13 +126,13 @@ export default function PasswordChangeCard({ email }: PasswordChangeCardProps) {
               onChange={(e) => setCurrentPassword(e.target.value)}
             />
           </div>
-          <div className="sfield">
-            <label className="sfield__label" htmlFor="pw-new">
+          <div className={FIELD}>
+            <label className={LABEL} htmlFor="pw-new">
               New Password
             </label>
             <input
               id="pw-new"
-              className="sinput"
+              className={INPUT}
               type="password"
               autoComplete="new-password"
               placeholder="Enter new password (min. 8)"
@@ -126,13 +140,13 @@ export default function PasswordChangeCard({ email }: PasswordChangeCardProps) {
               onChange={(e) => setNewPassword(e.target.value)}
             />
           </div>
-          <div className="sfield">
-            <label className="sfield__label" htmlFor="pw-confirm">
+          <div className={FIELD}>
+            <label className={LABEL} htmlFor="pw-confirm">
               Confirm Password
             </label>
             <input
               id="pw-confirm"
-              className="sinput"
+              className={INPUT}
               type="password"
               autoComplete="new-password"
               placeholder="Re-enter new password"
@@ -141,12 +155,12 @@ export default function PasswordChangeCard({ email }: PasswordChangeCardProps) {
             />
           </div>
         </div>
-        <div className="spw__footer">
-          <p className="spw__signed">
+        <div className="flex items-center justify-between gap-3 flex-wrap pt-3.5 border-t border-hair">
+          <p className="text-[12.5px] text-muted">
             Signed in as{' '}
-            <span className="spw__signed-email">{email || 'session not found'}</span>
+            <span className="text-text font-bold">{email || 'session not found'}</span>
           </p>
-          <button type="submit" className="sbtn sbtn--primary" disabled={saving}>
+          <button type="submit" className={BTN_PRIMARY} disabled={saving}>
             {saving ? 'Updating…' : 'Change Password'}
           </button>
         </div>
