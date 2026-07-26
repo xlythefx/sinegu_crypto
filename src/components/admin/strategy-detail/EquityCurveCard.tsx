@@ -8,6 +8,13 @@ const H = 260
 const PAD_TOP = 16
 const PAD_BOTTOM = 16
 
+const CARD = 'rounded-card border border-border bg-surface p-card'
+const TITLE_ROW = 'flex items-center gap-2.5 mb-3.5'
+const CHIP =
+  'w-7 h-7 rounded-[9px] bg-accent-soft border border-accent-line grid place-items-center text-accent flex-none'
+const CARD_TITLE = 'font-display text-[15px] font-extrabold'
+const CARD_SUB = 'text-[12px] text-muted mt-px'
+
 /** Cumulative-P&L area chart for the strategy (SVG, our design tokens). */
 export default function EquityCurveCard({
   equitySeries,
@@ -43,21 +50,21 @@ export default function EquityCurveCard({
   }, [equitySeries])
 
   return (
-    <section className="dcard asd-equity" data-aos="fade-up">
-      <div className="dcard__title-row">
-        <span className="dchip">
+    <section className={CARD} data-aos="fade-up">
+      <div className={TITLE_ROW}>
+        <span className={CHIP}>
           <TrendingUp size={16} />
         </span>
         <div>
-          <div className="dcard__title">Equity Curve</div>
-          <div className="dcard__sub">Cumulative P&L over time</div>
+          <div className={CARD_TITLE}>Equity Curve</div>
+          <div className={CARD_SUB}>Cumulative P&L over time</div>
         </div>
       </div>
 
       <svg
         viewBox={`0 0 ${W} ${H}`}
         preserveAspectRatio="none"
-        className="asd-equity__svg"
+        className="w-full h-[260px] block"
       >
         <defs>
           <linearGradient id="asdEquityGrad" x1="0" y1="0" x2="0" y2="1">
@@ -91,9 +98,11 @@ export default function EquityCurveCard({
           />
         )}
       </svg>
-      <div className="asd-equity__axis mono">
+      <div className="flex text-[10.5px] text-faint mt-1.5 font-mono">
         {curve.labels.map((l, i) => (
-          <span key={`${l}-${i}`}>{l}</span>
+          <span key={`${l}-${i}`} className="flex-1 text-center">
+            {l}
+          </span>
         ))}
       </div>
     </section>

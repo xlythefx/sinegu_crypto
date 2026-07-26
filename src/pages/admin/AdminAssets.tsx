@@ -16,13 +16,41 @@ import { getApiErrorMessage } from '../../services/api'
 import { displaySymbol } from '../../lib/chart'
 import { fmtMediumDate, fmtQty } from '../../lib/format'
 import type { AdminAsset, AssetInput } from '../../types/admin'
-import './AdminAssets.css'
 
 const PAGE_SIZE = 10
 
+/* ---- shared class strings (were the .aassets-* rules in AdminAssets.css) ---- */
+const INPUT =
+  'h-[38px] rounded-field border border-border bg-surface2 px-3 text-[13px] text-text outline-none focus:border-accent [&>option]:bg-surface [&>option]:text-text'
+const ICON_BTN_BASE =
+  'inline-flex items-center justify-center w-[30px] h-[30px] rounded-btn border border-border bg-surface2 text-muted transition-[border-color,color] duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
+const ICON_BTN = `${ICON_BTN_BASE} hover:border-accent hover:text-text`
+const ICON_BTN_DANGER = `${ICON_BTN_BASE} hover:border-red hover:text-red`
+const TH =
+  'border-b border-border py-2.5 px-3 text-left font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em] text-faint whitespace-nowrap'
+const TH_RIGHT = `${TH} text-right`
+const TD = 'border-b border-hair py-[11px] px-3 align-middle whitespace-nowrap'
+const TD_NUM = `${TD} text-right font-mono`
+const TD_META = `${TD} text-[12.5px] text-muted`
+const PAG_BTN =
+  'rounded-pill border border-border bg-surface2 py-[7px] px-[15px] text-[12.5px] font-semibold text-text hover:border-accent disabled:opacity-45 disabled:cursor-not-allowed'
+const TOGGLE_BASE =
+  'relative mr-2 inline-block w-9 h-5 rounded-pill border align-middle transition-[background,border-color] duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
+const KNOB_BASE =
+  'absolute left-0.5 top-0.5 w-[14px] h-[14px] rounded-full transition-[transform,background] duration-150'
+
+const SIDE_TONE: Record<AdminAsset['side'], string> = {
+  LONG: 'text-green border-[color-mix(in_srgb,var(--green)_35%,transparent)] bg-[color-mix(in_srgb,var(--green)_8%,transparent)]',
+  SHORT:
+    'text-red border-[color-mix(in_srgb,var(--red)_35%,transparent)] bg-[color-mix(in_srgb,var(--red)_8%,transparent)]',
+  ALL: 'text-muted border-border',
+}
+
 function SideBadge({ side }: { side: AdminAsset['side'] }) {
   return (
-    <span className={`aassets-side aassets-side--${side.toLowerCase()}`}>
+    <span
+      className={`rounded-pill border px-2.5 py-[3px] font-mono text-[10.5px] font-semibold tracking-[0.06em] ${SIDE_TONE[side]}`}
+    >
       {side}
     </span>
   )
@@ -181,20 +209,25 @@ export default function AdminAssets() {
 
   return (
     <AdminLayout title="Trading Assets" subtitle="Manage tradable instruments">
-      <div className="aassets-card" data-aos="fade-up">
-        <div className="aassets-head">
+      <div
+        className="rounded-card border border-border bg-surface p-card"
+        data-aos="fade-up"
+      >
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3.5">
           <div>
-            <div className="aassets-head__title">All Assets</div>
-            <div className="aassets-head__sub">
+            <div className="font-display text-[15px] font-extrabold">
+              All Assets
+            </div>
+            <div className="mt-px text-[12px] text-muted">
               Showing {filtered.length === 0 ? 0 : start + 1}–
               {Math.min(start + PAGE_SIZE, filtered.length)} of{' '}
               {filtered.length} assets
             </div>
           </div>
-          <div className="aassets-controls">
+          <div className="flex flex-wrap items-center gap-2">
             <input
               type="search"
-              className="aassets-input aassets-input--search"
+              className={`${INPUT} min-w-[190px]`}
               placeholder="Search by ticker, type…"
               value={search}
               onChange={(e) => {
@@ -204,7 +237,7 @@ export default function AdminAssets() {
               aria-label="Search assets"
             />
             <select
-              className="aassets-input"
+              className={INPUT}
               value={typeFilter}
               onChange={(e) => {
                 setTypeFilter(e.target.value)
@@ -220,7 +253,7 @@ export default function AdminAssets() {
               ))}
             </select>
             <select
-              className="aassets-input"
+              className={INPUT}
               value={tickerFilter}
               onChange={(e) => {
                 setTickerFilter(e.target.value)
@@ -237,7 +270,7 @@ export default function AdminAssets() {
             </select>
             <button
               type="button"
-              className="aassets-new-btn"
+              className="inline-flex h-[38px] items-center gap-1.5 rounded-pill bg-accent px-4 text-[13px] font-bold text-on-accent"
               onClick={openCreate}
             >
               <Plus size={15} />
@@ -247,102 +280,100 @@ export default function AdminAssets() {
         </div>
 
         {actionError && (
-          <p className="aassets-error" role="alert">
+          <p
+            className="mb-3 rounded-field border border-[color-mix(in_srgb,#ef4444_35%,transparent)] bg-[color-mix(in_srgb,#ef4444_8%,transparent)] py-2.5 px-3.5 text-[13px] text-[#ef4444]"
+            role="alert"
+          >
             {actionError}
           </p>
         )}
 
-        <div className="aassets-table-wrap">
-          <table className="aassets-table">
+        <div
+          key={`${typeFilter}-${tickerFilter}-${safePage}`}
+          className="overflow-x-auto animate-[fadeup_0.35s_ease-out]"
+        >
+          <table className="w-full min-w-[880px] border-collapse text-[13.5px]">
             <thead>
               <tr>
                 {['Ticker', 'Broker', 'Side'].map((h) => (
-                  <th key={h} className="aassets-th">
+                  <th key={h} className={TH}>
                     {h}
                   </th>
                 ))}
-                <th className="aassets-th aassets-th--right">
-                  Max Position Size
-                </th>
-                <th className="aassets-th aassets-th--right">
-                  Base Size
-                </th>
+                <th className={TH_RIGHT}>Max Position Size</th>
+                <th className={TH_RIGHT}>Base Size</th>
                 {['Status', 'Created', 'Updated'].map((h) => (
-                  <th key={h} className="aassets-th">
+                  <th key={h} className={TH}>
                     {h}
                   </th>
                 ))}
-                <th className="aassets-th aassets-th--right">
-                  Actions
-                </th>
+                <th className={TH_RIGHT}>Actions</th>
               </tr>
             </thead>
-            <tbody className="aassets-tbody">
+            <tbody className="[&_tr:last-child_td]:border-0">
               {pageRows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="aassets-empty">
+                  <td colSpan={9} className="py-9 px-3 text-center text-muted">
                     No assets match your search. Adjust the filters or create a
                     new asset.
                   </td>
                 </tr>
               )}
               {pageRows.map((asset) => (
-                <tr key={asset.asset_id}>
-                  <td className="aassets-td">
-                    <div className="aassets-ticker">
+                <tr key={asset.asset_id} className="hover:bg-surface2">
+                  <td className={TD}>
+                    <div className="flex items-center gap-2.5">
                       {asset.asset_image ? (
                         <img
-                          className="aassets-ticker__img"
+                          className="w-[26px] h-[26px] flex-none rounded-full object-cover border border-border bg-surface2"
                           src={asset.asset_image}
                           alt=""
                         />
                       ) : (
-                        <span className="aassets-ticker__icon">
+                        <span className="inline-flex items-center justify-center w-[26px] h-[26px] flex-none rounded-full bg-accent-soft font-mono text-[12px] font-bold text-accent">
                           {asset.ticker[0]}
                         </span>
                       )}
-                      <span className="aassets-ticker__sym">
+                      <span className="font-mono font-bold">
                         {displaySymbol(asset.ticker)}
                       </span>
                     </div>
                   </td>
-                  <td className="aassets-td">{asset.broker ?? '—'}</td>
-                  <td className="aassets-td">
+                  <td className={TD}>{asset.broker ?? '—'}</td>
+                  <td className={TD}>
                     <SideBadge side={asset.side} />
                   </td>
-                  <td className="aassets-td aassets-td--num">
-                    {fmtQty(asset.max_increments)}
-                  </td>
-                  <td className="aassets-td aassets-td--num">
-                    {fmtQty(asset.base_size)}
-                  </td>
-                  <td className="aassets-td">
+                  <td className={TD_NUM}>{fmtQty(asset.max_increments)}</td>
+                  <td className={TD_NUM}>{fmtQty(asset.base_size)}</td>
+                  <td className={TD}>
                     <button
                       type="button"
-                      className={`aassets-toggle${asset.enabled ? ' aassets-toggle--on' : ''}`}
+                      className={`${TOGGLE_BASE} ${asset.enabled ? 'border-accent bg-accent-soft' : 'border-border bg-surface2'}`}
                       onClick={() => setToggling(asset)}
                       disabled={actionBusy}
                       aria-label={`${asset.enabled ? 'Disable' : 'Enable'} ${asset.ticker}`}
                     >
                       <span
-                        className={`aassets-toggle__knob${asset.enabled ? ' aassets-toggle__knob--on' : ''}`}
+                        className={`${KNOB_BASE} ${asset.enabled ? 'translate-x-4 bg-accent' : 'bg-muted'}`}
                       />
                     </button>
-                    <span className={`aassets-status-text${asset.enabled ? ' aassets-status-text--on' : ''}`}>
+                    <span
+                      className={`text-[12px] ${asset.enabled ? 'text-green' : 'text-muted'}`}
+                    >
                       {asset.enabled ? 'Enabled' : 'Disabled'}
                     </span>
                   </td>
-                  <td className="aassets-td aassets-td--meta">
+                  <td className={TD_META}>
                     {asset.created_at ? fmtMediumDate(asset.created_at) : '—'}
                   </td>
-                  <td className="aassets-td aassets-td--meta">
+                  <td className={TD_META}>
                     {asset.updated_at ? fmtMediumDate(asset.updated_at) : '—'}
                   </td>
-                  <td className="aassets-td aassets-td--actions">
-                    <div className="aassets-actions">
+                  <td className={`${TD} text-right`}>
+                    <div className="inline-flex gap-1.5">
                       <button
                         type="button"
-                        className="aassets-icon-btn"
+                        className={ICON_BTN}
                         onClick={() => openEdit(asset)}
                         disabled={actionBusy}
                         aria-label={`Edit ${asset.ticker}`}
@@ -351,7 +382,7 @@ export default function AdminAssets() {
                       </button>
                       <button
                         type="button"
-                        className="aassets-icon-btn aassets-icon-btn--danger"
+                        className={ICON_BTN_DANGER}
                         onClick={() => setDeleting(asset)}
                         disabled={actionBusy}
                         aria-label={`Delete ${asset.ticker}`}
@@ -367,14 +398,14 @@ export default function AdminAssets() {
         </div>
 
         {filtered.length > 0 && totalPages > 1 && (
-          <div className="aassets-pag">
-            <span className="aassets-pag__info">
+          <div className="mt-3.5 flex items-center justify-between border-t border-hair pt-3">
+            <span className="text-[12.5px] text-muted">
               Page {safePage} of {totalPages}
             </span>
-            <div className="aassets-pag__controls">
+            <div className="flex gap-2">
               <button
                 type="button"
-                className="aassets-pag__btn"
+                className={PAG_BTN}
                 disabled={safePage === 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
@@ -382,7 +413,7 @@ export default function AdminAssets() {
               </button>
               <button
                 type="button"
-                className="aassets-pag__btn"
+                className={PAG_BTN}
                 disabled={safePage === totalPages}
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               >

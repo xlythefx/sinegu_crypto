@@ -7,6 +7,18 @@ import { fmtMoney } from '../../lib/format'
 import type { Invoice } from '../../lib/billing'
 import type { AdminUser } from '../../types/admin'
 
+/* ---- token-mapped class strings (mirrors AdminSandbox / billing/InvoiceCard) ---- */
+const CHIP =
+  'w-7 h-7 flex-none grid place-items-center rounded-[9px] bg-accent-soft border border-accent-line text-accent'
+const MSG_ERR =
+  'flex items-start gap-2 rounded-[10px] border py-2.5 px-[13px] text-[12.5px] leading-[1.5] border-[color-mix(in_srgb,var(--red)_35%,transparent)] bg-[color-mix(in_srgb,var(--red)_8%,transparent)] text-red'
+const INV_INPUT =
+  'h-10 rounded-[10px] border border-border bg-surface2 text-text px-3 text-[13px] font-body'
+const BTN =
+  'inline-flex items-center gap-[7px] h-10 rounded-pill border border-transparent px-[18px] text-[13px] font-bold cursor-pointer transition-[filter,border-color,background,opacity] duration-150 disabled:opacity-[0.55] disabled:cursor-not-allowed'
+const BTN_PRIMARY = 'bg-accent border-transparent text-on-accent enabled:hover:brightness-[1.06]'
+const BTN_SM = 'h-8 px-3 text-[12px]'
+
 /** Previous calendar month as YYYY-MM (the period invoices bill for). */
 function prevMonth(): string {
   const d = new Date()
@@ -66,34 +78,45 @@ export default function SandboxInvoiceCard({ users }: { users: AdminUser[] }) {
   }
 
   return (
-    <section className="dcard asbx-inv" data-aos="fade-up" data-aos-delay="100">
-      <div className="asbx-card__head">
-        <span className="dchip">
+    <section
+      className="rounded-card border border-border bg-surface p-card"
+      data-aos="fade-up"
+      data-aos-delay="100"
+    >
+      <div className="flex items-start gap-3 mb-[18px]">
+        <span className={CHIP}>
           <FileText size={16} />
         </span>
-        <div className="asbx-card__head-text">
-          <div className="dcard__title">Invoice Testing</div>
-          <div className="dcard__sub">
+        <div className="min-w-0">
+          <div className="font-display text-[15px] font-extrabold">Invoice Testing</div>
+          <div className="text-[12px] text-muted mt-px">
             Generate an invoice from a user's closed P&L, then settle it manually.
           </div>
         </div>
-        <Link to="/admin/invoices" className="asbx-inv__link">
+        <Link
+          to="/admin/invoices"
+          className="inline-flex items-center gap-1 ml-auto text-[12px] font-semibold text-accent"
+        >
           Invoice History
           <ArrowRight size={13} />
         </Link>
       </div>
 
       {err && (
-        <div className="asbx-msg asbx-msg--err asbx-inv__err" role="alert">
-          <AlertCircle size={15} />
+        <div className={`${MSG_ERR} mt-3.5`} role="alert">
+          <AlertCircle size={15} className="flex-none mt-px" />
           <span>{err}</span>
         </div>
       )}
 
-      <div className="asbx-inv__form">
-        <label className="asbx-inv__field">
-          <span>User</span>
-          <select value={uniId} onChange={(e) => setUniId(e.target.value)}>
+      <div className="flex flex-wrap items-end gap-3 mt-4">
+        <label className="flex flex-col gap-1.5 flex-[1_1_200px]">
+          <span className="text-[11px] uppercase tracking-[0.06em] text-faint">User</span>
+          <select
+            className={`${INV_INPUT} cursor-pointer [&>option]:bg-surface [&>option]:text-text`}
+            value={uniId}
+            onChange={(e) => setUniId(e.target.value)}
+          >
             <option value="">Select a user…</option>
             {users.map((u) => (
               <option key={u.uni_id} value={u.uni_id}>
@@ -102,13 +125,20 @@ export default function SandboxInvoiceCard({ users }: { users: AdminUser[] }) {
             ))}
           </select>
         </label>
-        <label className="asbx-inv__field">
-          <span>Billing month</span>
-          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
+        <label className="flex flex-col gap-1.5 flex-[1_1_200px]">
+          <span className="text-[11px] uppercase tracking-[0.06em] text-faint">
+            Billing month
+          </span>
+          <input
+            className={INV_INPUT}
+            type="month"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+          />
         </label>
         <button
           type="button"
-          className="asbx-btn asbx-btn--primary"
+          className={`${BTN} ${BTN_PRIMARY}`}
           disabled={busy}
           onClick={generate}
         >
@@ -123,39 +153,42 @@ export default function SandboxInvoiceCard({ users }: { users: AdminUser[] }) {
       </div>
 
       {preview && preview.length > 0 && (
-        <div className="asbx-inv__preview">
+        <div className="mt-[18px] flex flex-col gap-2.5">
           {preview.map((inv) => (
-            <div className="asbx-inv__row" key={inv.id}>
-              <div className="asbx-inv__row-id">
-                <span className="mono">{inv.formattedId}</span>
-                <span className="asbx-inv__row-acct">
+            <div
+              className="flex items-center flex-wrap gap-x-[18px] gap-y-2.5 py-3.5 px-4 border border-border rounded-[12px] bg-surface2"
+              key={inv.id}
+            >
+              <div className="flex flex-col gap-0.5 min-w-[150px]">
+                <span className="font-mono">{inv.formattedId}</span>
+                <span className="text-[11.5px] text-muted">
                   {inv.accountName} · {inv.monthLabel}
                 </span>
               </div>
-              <div className="asbx-inv__row-nums mono">
+              <div className="flex flex-wrap gap-x-3.5 gap-y-1 text-[12px] text-muted font-mono">
                 <span>Realized {fmtMoney(inv.feeRealized)}</span>
                 <span>Unrealized {fmtMoney(inv.feeUnrealized)}</span>
-                <span className="asbx-inv__row-total">Total {fmtMoney(inv.totalFee)}</span>
+                <span className="text-text font-bold">Total {fmtMoney(inv.totalFee)}</span>
               </div>
-              <div className="asbx-inv__row-hwm mono">
+              <div className="text-[11.5px] text-faint font-mono">
                 HWM {fmtMoney(inv.hwmBefore ?? 0)} → {fmtMoney(inv.hwmAfter ?? 0)}
               </div>
-              <div className="asbx-inv__row-action">
+              <div className="ml-auto">
                 {inv.status === 'paid' ? (
-                  <span className="asbx-inv__paid">
+                  <span className="inline-flex items-center gap-[5px] text-[12px] font-bold text-green">
                     <CheckCircle2 size={13} /> Paid
                   </span>
                 ) : inv.totalFee > 0 ? (
                   <button
                     type="button"
-                    className="asbx-btn asbx-btn--primary asbx-btn--sm"
+                    className={`${BTN} ${BTN_PRIMARY} ${BTN_SM}`}
                     disabled={payingId === inv.id}
                     onClick={() => markPaid(inv.id)}
                   >
                     {payingId === inv.id ? 'Settling…' : 'Mark paid'}
                   </button>
                 ) : (
-                  <span className="asbx-inv__nofee">No fee</span>
+                  <span className="text-[12px] text-faint">No fee</span>
                 )}
               </div>
             </div>

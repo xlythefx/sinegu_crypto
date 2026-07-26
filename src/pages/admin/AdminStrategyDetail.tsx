@@ -19,7 +19,14 @@ import {
   groupTradesByStrategy,
 } from '../../lib/strategyStats'
 import { fmtSignedMoney } from '../../lib/format'
-import './AdminStrategyDetail.css'
+
+const BACK_BTN =
+  'inline-flex items-center gap-[7px] mb-3.5 py-2 px-[13px] border border-border rounded-field bg-surface text-muted text-[13px] font-semibold cursor-pointer transition-colors hover:bg-accent-soft hover:border-accent-line hover:text-accent'
+const BADGE =
+  'inline-flex items-center gap-1.5 py-[7px] px-3 rounded-pill text-[13px] font-bold font-mono'
+const BADGE_OUTLINE = 'border border-border bg-surface2 text-text'
+const EMPTY_PAGE =
+  'mt-2 py-[30px] px-4 border border-dashed border-border rounded-row bg-surface2 text-center text-[13px] text-muted'
 
 export default function AdminStrategyDetail() {
   const { key = '' } = useParams<{ key: string }>()
@@ -58,10 +65,10 @@ export default function AdminStrategyDetail() {
   if (!stats) {
     return (
       <AdminLayout title={decodedKey} subtitle="In-depth strategy performance.">
-        <button type="button" className="asd-back" onClick={back}>
+        <button type="button" className={BACK_BTN} onClick={back}>
           <ArrowLeft size={16} /> Back to Strategies
         </button>
-        <div className="asd-empty asd-empty--page">
+        <div className={EMPTY_PAGE}>
           No trades found for strategy “{decodedKey}”.
         </div>
       </AdminLayout>
@@ -72,30 +79,35 @@ export default function AdminStrategyDetail() {
 
   return (
     <AdminLayout title={decodedKey} subtitle="In-depth strategy performance.">
-      <button type="button" className="asd-back" onClick={back}>
+      <button type="button" className={BACK_BTN} onClick={back}>
         <ArrowLeft size={16} /> Back to Strategies
       </button>
 
       {/* header */}
-      <div className="asd-head" data-aos="fade-up">
+      <div
+        className="flex flex-wrap items-center justify-between gap-3.5 mb-4 p-5 border border-accent-line rounded-card bg-[linear-gradient(to_bottom_right,var(--accentSoft),var(--surface))]"
+        data-aos="fade-up"
+      >
         <div>
-          <h1 className="asd-head__title">{decodedKey}</h1>
-          <p className="asd-head__sub">
+          <h1 className="font-display text-[24px] font-extrabold tracking-[-0.4px] max-[560px]:text-[20px]">
+            {decodedKey}
+          </h1>
+          <p className="mt-[3px] text-[13px] text-muted">
             {stats.totalTrades.toLocaleString()} closed trades · Binance · PF {pf}
           </p>
         </div>
-        <div className="asd-head__badges">
+        <div className="flex flex-wrap gap-2">
           <span
-            className={`asd-badge ${stats.totalPnl >= 0 ? 'asd-badge--pos' : 'asd-badge--neg'}`}
+            className={`${BADGE} ${stats.totalPnl >= 0 ? 'bg-green text-[#052e16]' : 'bg-red text-[#450a0a]'}`}
           >
             <TrendingUp size={14} />
             {fmtSignedMoney(stats.totalPnl)}
           </span>
-          <span className="asd-badge asd-badge--outline">
+          <span className={`${BADGE} ${BADGE_OUTLINE}`}>
             <Percent size={14} />
             {stats.winrate.toFixed(1)}% WR
           </span>
-          <span className="asd-badge asd-badge--outline">
+          <span className={`${BADGE} ${BADGE_OUTLINE}`}>
             <Zap size={14} />
             Sharpe {stats.sharpe.toFixed(2)}
           </span>
@@ -104,12 +116,12 @@ export default function AdminStrategyDetail() {
 
       <MetricCards stats={stats} />
 
-      <div className="asd-row asd-row--2-1">
+      <div className="grid gap-4 mb-4 grid-cols-[2fr_1fr] max-[1000px]:grid-cols-1">
         <EquityCurveCard equitySeries={stats.equitySeries} />
         <WinLossCard stats={stats} />
       </div>
 
-      <div className="asd-row asd-row--1-1">
+      <div className="grid gap-4 mb-4 grid-cols-2 max-[1000px]:grid-cols-1">
         <RollingCard rolling={stats.rolling} />
         <ConcentrationCard stats={stats} />
       </div>

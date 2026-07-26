@@ -7,6 +7,15 @@ const W = 600
 const H = 240
 const PAD = 18
 
+const CARD = 'rounded-card border border-border bg-surface p-card'
+const TITLE_ROW = 'flex items-center gap-2.5 mb-3.5'
+const CHIP =
+  'w-7 h-7 rounded-[9px] bg-accent-soft border border-accent-line grid place-items-center text-accent flex-none'
+const CARD_TITLE = 'font-display text-[15px] font-extrabold'
+const CARD_SUB = 'text-[12px] text-muted mt-px'
+const EMPTY =
+  'py-[30px] px-4 border border-dashed border-border rounded-row bg-surface2 text-center text-[13px] text-muted'
+
 /** 20-trade rolling win-rate (%) + Sharpe — surfaces edge decay over time. */
 export default function RollingCard({ rolling }: { rolling: RollingPoint[] }) {
   const chart = useMemo(() => {
@@ -42,27 +51,33 @@ export default function RollingCard({ rolling }: { rolling: RollingPoint[] }) {
   }, [rolling])
 
   return (
-    <section className="dcard asd-rolling" data-aos="fade-up">
-      <div className="asd-section-head">
-        <div className="dcard__title-row">
-          <span className="dchip">
+    <section className={CARD} data-aos="fade-up">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className={TITLE_ROW}>
+          <span className={CHIP}>
             <Activity size={16} />
           </span>
           <div>
-            <div className="dcard__title">Rolling Performance</div>
-            <div className="dcard__sub">
+            <div className={CARD_TITLE}>Rolling Performance</div>
+            <div className={CARD_SUB}>
               20-trade rolling win rate &amp; Sharpe
             </div>
           </div>
         </div>
         {chart && (
-          <div className="asd-legend">
-            <span>
-              <i className="asd-legend__dot" style={{ background: 'var(--green)' }} />
+          <div className="flex gap-3.5 text-[11.5px] font-semibold text-muted">
+            <span className="inline-flex items-center gap-1.5">
+              <i
+                className="w-[9px] h-[9px] rounded-full"
+                style={{ background: 'var(--green)' }}
+              />
               Win rate
             </span>
-            <span>
-              <i className="asd-legend__dot" style={{ background: '#6366f1' }} />
+            <span className="inline-flex items-center gap-1.5">
+              <i
+                className="w-[9px] h-[9px] rounded-full"
+                style={{ background: '#6366f1' }}
+              />
               Sharpe
             </span>
           </div>
@@ -70,7 +85,7 @@ export default function RollingCard({ rolling }: { rolling: RollingPoint[] }) {
       </div>
 
       {!chart ? (
-        <div className="asd-empty">
+        <div className={EMPTY}>
           Need at least 20 closed trades to chart rolling metrics.
         </div>
       ) : (
@@ -78,7 +93,7 @@ export default function RollingCard({ rolling }: { rolling: RollingPoint[] }) {
           <svg
             viewBox={`0 0 ${W} ${H}`}
             preserveAspectRatio="none"
-            className="asd-rolling__svg"
+            className="w-full h-[240px] block"
           >
             <line
               x1="0"
@@ -106,9 +121,11 @@ export default function RollingCard({ rolling }: { rolling: RollingPoint[] }) {
               strokeLinecap="round"
             />
           </svg>
-          <div className="asd-rolling__axis mono">
+          <div className="flex text-[10.5px] text-faint mt-1.5 font-mono">
             {chart.labels.map((l, i) => (
-              <span key={`${l}-${i}`}>{l}</span>
+              <span key={`${l}-${i}`} className="flex-1 text-center">
+                {l}
+              </span>
             ))}
           </div>
         </>

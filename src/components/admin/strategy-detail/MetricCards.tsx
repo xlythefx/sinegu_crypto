@@ -78,20 +78,41 @@ export default function MetricCards({ stats }: { stats: StrategyDetailStats }) {
     },
   ]
 
+  const toneClass = (t: Tone) =>
+    t === 'pos'
+      ? 'text-green'
+      : t === 'neg'
+        ? 'text-red'
+        : t === 'accent'
+          ? 'text-accent'
+          : ''
+
   return (
-    <div className="asd-metrics" data-aos="fade-up">
+    <div
+      className="grid grid-cols-4 gap-3 mb-4 max-[1000px]:grid-cols-2"
+      data-aos="fade-up"
+    >
       {cards.map((c) => (
-        <div className="asd-metric" key={c.label}>
-          <div className="asd-metric__head">
-            <span className="asd-metric__icon">
+        <div
+          className="py-[14px] px-[15px] border border-border rounded-rail bg-surface"
+          key={c.label}
+        >
+          <div className="flex items-center gap-2 mb-2 text-muted">
+            <span className="flex text-accent">
               <c.icon size={15} />
             </span>
-            <span className="asd-metric__label">{c.label}</span>
+            <span className="text-[10.5px] font-bold tracking-[0.4px] uppercase">
+              {c.label}
+            </span>
           </div>
-          <div className={`asd-metric__value mono${c.tone ? ` is-${c.tone}` : ''}`}>
+          <div
+            className={`text-[20px] font-extrabold tracking-[-0.4px] font-mono ${toneClass(c.tone)}`}
+          >
             {c.value}
           </div>
-          <div className="asd-metric__sub">{c.sub}</div>
+          <div className="mt-[3px] text-[10.5px] text-faint whitespace-nowrap overflow-hidden text-ellipsis">
+            {c.sub}
+          </div>
         </div>
       ))}
     </div>

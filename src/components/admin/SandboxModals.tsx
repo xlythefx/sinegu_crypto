@@ -14,7 +14,6 @@ import type {
   UserRole,
   UserStatus,
 } from '../../types/admin'
-import './SandboxModals.css'
 
 /* ---- static option sets used by the forms + randomizer ---- */
 const STATUS_OPTS: UserStatus[] = ['pending', 'active', 'suspended']
@@ -24,6 +23,19 @@ const STRATEGIES = ['Momentum', 'Mean Reversion', 'Breakout', 'Scalp', 'Trend Fo
 
 const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)]
 const todayIso = () => new Date().toISOString().slice(0, 10)
+
+/* ---- token-mapped class strings (was SandboxModals.css) ---- */
+const CHIP =
+  'w-7 h-7 flex-none grid place-items-center rounded-[9px] bg-accent-soft border border-accent-line text-accent'
+const INPUT =
+  'h-10 w-full rounded-[10px] border border-border bg-surface2 px-[13px] text-[13px] text-text outline-none font-body transition-[border-color] duration-150 focus:border-accent placeholder:text-faint'
+const SELECT = `${INPUT} cursor-pointer [&>option]:bg-surface [&>option]:text-text`
+const MSG_ERR =
+  'flex items-start gap-2 rounded-[10px] border py-2.5 px-[13px] text-[12.5px] leading-[1.5] border-[color-mix(in_srgb,var(--red)_35%,transparent)] bg-[color-mix(in_srgb,var(--red)_8%,transparent)] text-red'
+const BTN =
+  'inline-flex items-center gap-[7px] h-10 rounded-pill border border-transparent px-[18px] text-[13px] font-bold cursor-pointer font-body transition-[filter,border-color,background,opacity] duration-150 disabled:opacity-[0.55] disabled:cursor-not-allowed'
+const BTN_PRIMARY = 'bg-accent text-on-accent enabled:hover:brightness-[1.08]'
+const BTN_GHOST = 'bg-surface2 border-border text-text enabled:hover:border-accent'
 
 /** Label + control wrapper, keeps the modal fields tidy and evenly spaced. */
 function Field({
@@ -36,8 +48,10 @@ function Field({
   children: ReactNode
 }) {
   return (
-    <label className={`asbxm__field${full ? ' asbxm__field--full' : ''}`}>
-      <span className="asbxm__label">{label}</span>
+    <label className={`flex flex-col gap-1.5 min-w-0${full ? ' col-span-full' : ''}`}>
+      <span className="inline-flex items-center gap-1.5 font-mono text-[10.5px] tracking-[0.08em] uppercase text-faint">
+        {label}
+      </span>
       {children}
     </label>
   )
@@ -45,7 +59,7 @@ function Field({
 
 /**
  * Shared dialog chrome: fixed overlay (click to close) + Escape handler.
- * Each modal supplies its own `<form className="asbxm">` box as children.
+ * Each modal supplies its own `<form>` panel box as children.
  */
 function ModalShell({
   onClose,
@@ -66,7 +80,7 @@ function ModalShell({
 
   return (
     <div
-      className="asbxm__overlay"
+      className="fixed inset-0 z-[100] grid place-items-center p-5 bg-[rgba(0,0,0,0.55)]"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -127,27 +141,29 @@ export function SandboxUserModal({ open, onClose, onSuccess }: UserModalProps) {
   return (
     <ModalShell onClose={onClose} ariaLabel="Create test user">
       <form
-        className="asbxm"
+        className="w-full max-w-[480px] max-h-[90vh] overflow-y-auto bg-surface border border-border rounded-[18px] p-[26px] flex flex-col gap-4"
         onClick={(e) => e.stopPropagation()}
         onSubmit={submit}
       >
-        <div className="asbxm__head">
-          <span className="dchip">
+        <div className="flex items-start gap-3">
+          <span className={CHIP}>
             <UserPlus size={16} />
           </span>
-          <div className="asbxm__head-text">
-            <div className="asbxm__title">Create Test User</div>
-            <div className="asbxm__sub">
+          <div className="min-w-0">
+            <div className="font-display text-[19px] font-extrabold">
+              Create Test User
+            </div>
+            <div className="text-[12.5px] text-muted mt-0.5 leading-[1.5]">
               Spin up a throwaway account to test the sign-up flow. Pending users
               land in User Management for approve / reject.
             </div>
           </div>
         </div>
 
-        <div className="asbxm__fields">
+        <div className="grid grid-cols-2 max-[560px]:grid-cols-1 gap-x-4 gap-y-3.5">
           <Field label="Name" full>
             <input
-              className="asbxm__input"
+              className={INPUT}
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Test User"
@@ -155,7 +171,7 @@ export function SandboxUserModal({ open, onClose, onSuccess }: UserModalProps) {
           </Field>
           <Field label="Email" full>
             <input
-              className="asbxm__input"
+              className={INPUT}
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -164,7 +180,7 @@ export function SandboxUserModal({ open, onClose, onSuccess }: UserModalProps) {
           </Field>
           <Field label="Password" full>
             <input
-              className="asbxm__input"
+              className={INPUT}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="password123"
@@ -172,7 +188,7 @@ export function SandboxUserModal({ open, onClose, onSuccess }: UserModalProps) {
           </Field>
           <Field label="Status">
             <select
-              className="asbxm__input"
+              className={SELECT}
               value={status}
               onChange={(e) => setStatus(e.target.value as UserStatus)}
             >
@@ -185,7 +201,7 @@ export function SandboxUserModal({ open, onClose, onSuccess }: UserModalProps) {
           </Field>
           <Field label="Role">
             <select
-              className="asbxm__input"
+              className={SELECT}
               value={role}
               onChange={(e) => setRole(e.target.value as UserRole)}
             >
@@ -199,16 +215,16 @@ export function SandboxUserModal({ open, onClose, onSuccess }: UserModalProps) {
         </div>
 
         {error && (
-          <div className="asbxm__msg asbxm__msg--err" role="alert">
-            <AlertCircle size={15} />
+          <div className={MSG_ERR} role="alert">
+            <AlertCircle size={15} className="flex-none mt-px" />
             <span>{error}</span>
           </div>
         )}
 
-        <div className="asbxm__actions">
+        <div className="flex flex-wrap items-center justify-end gap-2.5 mt-0.5">
           <button
             type="button"
-            className="asbxm__btn asbxm__btn--ghost"
+            className={`${BTN} ${BTN_GHOST}`}
             onClick={onClose}
             disabled={saving}
           >
@@ -216,7 +232,7 @@ export function SandboxUserModal({ open, onClose, onSuccess }: UserModalProps) {
           </button>
           <button
             type="submit"
-            className="asbxm__btn asbxm__btn--primary"
+            className={`${BTN} ${BTN_PRIMARY}`}
             disabled={saving}
           >
             <UserPlus size={15} />
@@ -321,27 +337,29 @@ export function SandboxPositionModal({
   return (
     <ModalShell onClose={onClose} ariaLabel="Insert past position">
       <form
-        className="asbxm asbxm--wide"
+        className="w-full max-w-[620px] max-h-[90vh] overflow-y-auto bg-surface border border-border rounded-[18px] p-[26px] flex flex-col gap-4"
         onClick={(e) => e.stopPropagation()}
         onSubmit={submit}
       >
-        <div className="asbxm__head">
-          <span className="dchip">
+        <div className="flex items-start gap-3">
+          <span className={CHIP}>
             <FlaskConical size={16} />
           </span>
-          <div className="asbxm__head-text">
-            <div className="asbxm__title">Insert Past Position</div>
-            <div className="asbxm__sub">
+          <div className="min-w-0">
+            <div className="font-display text-[19px] font-extrabold">
+              Insert Past Position
+            </div>
+            <div className="text-[12.5px] text-muted mt-0.5 leading-[1.5]">
               Add fabricated closed trades to a user's history. Stats on the
               Dashboard / Strategies / Analytics pages update from these rows.
             </div>
           </div>
         </div>
 
-        <div className="asbxm__fields">
+        <div className="grid grid-cols-2 max-[560px]:grid-cols-1 gap-x-4 gap-y-3.5">
           <Field label="Target user" full>
             <select
-              className="asbxm__input"
+              className={SELECT}
               value={targetUni}
               onChange={(e) => setTargetUni(e.target.value)}
             >
@@ -356,7 +374,7 @@ export function SandboxPositionModal({
 
           <Field label="Symbol">
             <input
-              className="asbxm__input"
+              className={INPUT}
               value={symbol}
               onChange={(e) => setSymbol(e.target.value)}
               placeholder="BTCUSDT"
@@ -364,7 +382,7 @@ export function SandboxPositionModal({
           </Field>
           <Field label="Side">
             <select
-              className="asbxm__input"
+              className={SELECT}
               value={side}
               onChange={(e) => setSide(e.target.value as 'LONG' | 'SHORT')}
             >
@@ -375,7 +393,7 @@ export function SandboxPositionModal({
 
           <Field label="Quantity">
             <input
-              className="asbxm__input"
+              className={INPUT}
               type="number"
               step="any"
               value={qty}
@@ -384,7 +402,7 @@ export function SandboxPositionModal({
           </Field>
           <Field label="Realized P&L">
             <input
-              className="asbxm__input"
+              className={INPUT}
               type="number"
               step="any"
               value={pnl}
@@ -394,7 +412,7 @@ export function SandboxPositionModal({
 
           <Field label="Entry price">
             <input
-              className="asbxm__input"
+              className={INPUT}
               type="number"
               step="any"
               value={entry}
@@ -403,7 +421,7 @@ export function SandboxPositionModal({
           </Field>
           <Field label="Exit price">
             <input
-              className="asbxm__input"
+              className={INPUT}
               type="number"
               step="any"
               value={exit}
@@ -413,7 +431,7 @@ export function SandboxPositionModal({
 
           <Field label="Strategy">
             <input
-              className="asbxm__input"
+              className={INPUT}
               value={strategy}
               onChange={(e) => setStrategy(e.target.value)}
               placeholder="Momentum"
@@ -421,7 +439,7 @@ export function SandboxPositionModal({
           </Field>
           <Field label="Closed at">
             <input
-              className="asbxm__input"
+              className={INPUT}
               type="date"
               value={closedAt}
               onChange={(e) => setClosedAt(e.target.value)}
@@ -430,7 +448,7 @@ export function SandboxPositionModal({
 
           <Field label="Count (1–200)">
             <input
-              className="asbxm__input"
+              className={INPUT}
               type="number"
               min={1}
               max={200}
@@ -439,10 +457,13 @@ export function SandboxPositionModal({
             />
           </Field>
           <label
-            className={`asbxm__check${countNum > 1 ? '' : ' asbxm__check--off'}`}
+            className={`inline-flex items-center gap-2 h-10 text-[12.5px] text-muted select-none ${
+              countNum > 1 ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'
+            }`}
           >
             <input
               type="checkbox"
+              className="w-[15px] h-[15px] accent-[var(--accent)] cursor-pointer"
               checked={randomizeEach}
               disabled={countNum <= 1}
               onChange={(e) => setRandomizeEach(e.target.checked)}
@@ -452,16 +473,16 @@ export function SandboxPositionModal({
         </div>
 
         {error && (
-          <div className="asbxm__msg asbxm__msg--err" role="alert">
-            <AlertCircle size={15} />
+          <div className={MSG_ERR} role="alert">
+            <AlertCircle size={15} className="flex-none mt-px" />
             <span>{error}</span>
           </div>
         )}
 
-        <div className="asbxm__actions">
+        <div className="flex flex-wrap items-center justify-end gap-2.5 mt-0.5">
           <button
             type="button"
-            className="asbxm__btn asbxm__btn--ghost asbxm__actions-left"
+            className={`${BTN} ${BTN_GHOST} mr-auto`}
             onClick={randomizeFields}
             disabled={saving}
           >
@@ -470,7 +491,7 @@ export function SandboxPositionModal({
           </button>
           <button
             type="button"
-            className="asbxm__btn asbxm__btn--ghost"
+            className={`${BTN} ${BTN_GHOST}`}
             onClick={onClose}
             disabled={saving}
           >
@@ -478,7 +499,7 @@ export function SandboxPositionModal({
           </button>
           <button
             type="submit"
-            className="asbxm__btn asbxm__btn--primary"
+            className={`${BTN} ${BTN_PRIMARY}`}
             disabled={saving || users.length === 0}
           >
             <FlaskConical size={15} />

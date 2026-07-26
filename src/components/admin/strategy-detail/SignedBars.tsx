@@ -29,7 +29,7 @@ export default function SignedBars({
   const barW = Math.min(barMax, slot * 0.62)
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="asd-bars">
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[210px] block">
       <line
         x1="0"
         y1={zeroY}
@@ -60,7 +60,7 @@ export default function SignedBars({
                 x={x + barW / 2}
                 y={pos ? y - 6 : y + h + 12}
                 textAnchor="middle"
-                className={`asd-bars__val ${pos ? 'asd-bars__val--pos' : 'asd-bars__val--neg'}`}
+                className={`font-mono text-[10px] font-bold ${pos ? 'fill-green' : 'fill-red'}`}
               >
                 {fmtSignedMoney(d.pnl, 0)}
               </text>
@@ -69,7 +69,7 @@ export default function SignedBars({
               x={x + barW / 2}
               y={H - 8}
               textAnchor="middle"
-              className="asd-bars__label"
+              className="font-mono text-[10.5px] font-semibold fill-faint"
             >
               {d.label}
             </text>

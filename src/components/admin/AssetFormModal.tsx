@@ -2,11 +2,22 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ImagePlus, X } from 'lucide-react'
 import type { AdminAsset, AssetInput, AssetSide } from '../../types/admin'
 import type { AssetImageChange } from '../../services/admin'
-import './AssetFormModal.css'
 
 const ASSET_TYPES = ['Cryptocurrency', 'Stocks', 'Forex', 'CFD']
 const BROKERS = ['Binance', 'Bybit', 'MEXC']
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024 // 2 MB — matches the API rule
+
+/* ---- shared class strings (were the .afm__* rules in AssetFormModal.css) ---- */
+const FIELD = 'flex flex-col gap-1.5'
+const FIELD_LABEL = 'text-[12px] font-semibold text-muted'
+const FIELD_HINT = 'text-[11px] text-faint'
+const CONTROL =
+  'h-[42px] border border-border rounded-field bg-surface2 px-3 text-[13.5px] text-text outline-none font-body focus:border-accent'
+const SELECT = `${CONTROL} [&>option]:bg-surface [&>option]:text-text`
+const IMG_BTN =
+  'inline-flex items-center gap-[5px] h-8 px-3 border border-border rounded-pill bg-surface2 text-text text-[12px] font-semibold font-body hover:border-accent'
+const BTN_BASE =
+  'h-10 px-[18px] rounded-pill text-[13px] font-bold font-body disabled:opacity-60 disabled:cursor-not-allowed'
 
 interface AssetFormModalProps {
   open: boolean
@@ -141,40 +152,47 @@ export default function AssetFormModal({
 
   return (
     <div
-      className="afm__overlay"
+      className="fixed inset-0 z-[100] grid place-items-center p-5 bg-black/55"
       onClick={onCancel}
       role="dialog"
       aria-modal="true"
       aria-label={asset ? 'Edit asset' : 'Create asset'}
     >
       <form
-        className="afm"
+        className="w-full max-w-[480px] max-h-[90vh] overflow-y-auto bg-surface border border-border rounded-[18px] p-[26px] flex flex-col gap-3.5"
         onClick={(e) => e.stopPropagation()}
         onSubmit={submit}
       >
-        <h3 className="afm__title">
+        <h3 className="font-display text-[20px] font-extrabold">
           {asset ? `Edit ${asset.ticker}` : 'Create New Asset'}
         </h3>
-        <p className="afm__sub">
+        <p className="text-[13px] text-muted -mt-2">
           {asset
             ? 'Update the configuration for this asset.'
             : 'Add a new trading asset to the system.'}
         </p>
 
-        <div className="afm__image-row">
-          <div className="afm__image-preview" aria-hidden="true">
+        <div className="flex items-center gap-3.5">
+          <div
+            className="w-14 h-14 flex-none rounded-full overflow-hidden border border-border bg-accent-soft grid place-items-center"
+            aria-hidden="true"
+          >
             {shownImage ? (
-              <img src={shownImage} alt="" />
+              <img src={shownImage} alt="" className="w-full h-full object-cover" />
             ) : (
-              <span className="afm__image-fallback">{fallbackLetter}</span>
+              <span className="font-mono text-[22px] font-bold text-accent">
+                {fallbackLetter}
+              </span>
             )}
           </div>
-          <div className="afm__image-controls">
-            <span className="afm__image-label">Ticker image</span>
-            <div className="afm__image-btns">
+          <div className="flex flex-col gap-1.5 min-w-0">
+            <span className="text-[12px] font-semibold text-muted">
+              Ticker image
+            </span>
+            <div className="flex gap-2">
               <button
                 type="button"
-                className="afm__image-btn"
+                className={IMG_BTN}
                 onClick={() => fileInputRef.current?.click()}
               >
                 <ImagePlus size={14} />
@@ -183,7 +201,7 @@ export default function AssetFormModal({
               {shownImage && (
                 <button
                   type="button"
-                  className="afm__image-btn afm__image-btn--remove"
+                  className={`${IMG_BTN} text-[#ef4444] hover:border-[rgba(239,68,68,0.5)]`}
                   onClick={clearImage}
                 >
                   <X size={14} />
@@ -191,9 +209,11 @@ export default function AssetFormModal({
                 </button>
               )}
             </div>
-            <small>PNG, JPG, GIF, WEBP or SVG · up to 2 MB. Falls back to a lettered circle.</small>
+            <small className="text-[11px] text-faint">
+              PNG, JPG, GIF, WEBP or SVG · up to 2 MB. Falls back to a lettered circle.
+            </small>
             {imageError && (
-              <small className="afm__image-error" role="alert">
+              <small className="text-[11px] text-[#ef4444]" role="alert">
                 {imageError}
               </small>
             )}
@@ -202,15 +222,16 @@ export default function AssetFormModal({
             ref={fileInputRef}
             type="file"
             accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
-            className="afm__image-input"
+            className="hidden"
             onChange={(e) => onPickFile(e.target.files?.[0])}
           />
         </div>
 
-        <label className="afm__field">
-          <span>Ticker symbol *</span>
+        <label className={FIELD}>
+          <span className={FIELD_LABEL}>Ticker symbol *</span>
           <input
             type="text"
+            className={CONTROL}
             value={form.ticker}
             onChange={(e) =>
               setForm({ ...form, ticker: e.target.value.toUpperCase() })
@@ -221,10 +242,11 @@ export default function AssetFormModal({
           />
         </label>
 
-        <div className="afm__row">
-          <label className="afm__field">
-            <span>Type</span>
+        <div className="grid grid-cols-2 gap-3">
+          <label className={FIELD}>
+            <span className={FIELD_LABEL}>Type</span>
             <select
+              className={SELECT}
               value={form.type ?? ''}
               onChange={(e) =>
                 setForm({ ...form, type: e.target.value || null })
@@ -238,9 +260,10 @@ export default function AssetFormModal({
               ))}
             </select>
           </label>
-          <label className="afm__field">
-            <span>Broker</span>
+          <label className={FIELD}>
+            <span className={FIELD_LABEL}>Broker</span>
             <select
+              className={SELECT}
               value={form.broker ?? ''}
               onChange={(e) =>
                 setForm({ ...form, broker: e.target.value || null })
@@ -256,9 +279,10 @@ export default function AssetFormModal({
           </label>
         </div>
 
-        <label className="afm__field">
-          <span>Side</span>
+        <label className={FIELD}>
+          <span className={FIELD_LABEL}>Side</span>
           <select
+            className={SELECT}
             value={form.side}
             onChange={(e) =>
               setForm({ ...form, side: e.target.value as AssetSide })
@@ -268,14 +292,17 @@ export default function AssetFormModal({
             <option value="LONG">Long only</option>
             <option value="SHORT">Short only</option>
           </select>
-          <small>Which trade directions this asset is allowed to take</small>
+          <small className={FIELD_HINT}>
+            Which trade directions this asset is allowed to take
+          </small>
         </label>
 
-        <div className="afm__row">
-          <label className="afm__field">
-            <span>Max position size *</span>
+        <div className="grid grid-cols-2 gap-3">
+          <label className={FIELD}>
+            <span className={FIELD_LABEL}>Max position size *</span>
             <input
               type="number"
+              className={CONTROL}
               value={maxIncrements}
               onChange={(e) => setMaxIncrements(e.target.value)}
               min="0.001"
@@ -283,10 +310,11 @@ export default function AssetFormModal({
               required
             />
           </label>
-          <label className="afm__field">
-            <span>Base size *</span>
+          <label className={FIELD}>
+            <span className={FIELD_LABEL}>Base size *</span>
             <input
               type="number"
+              className={CONTROL}
               value={baseSize}
               onChange={(e) => setBaseSize(e.target.value)}
               min="0.000001"
@@ -296,34 +324,44 @@ export default function AssetFormModal({
           </label>
         </div>
 
-        <label className="afm__toggle">
+        <label className="flex items-center gap-3 border border-border rounded-[12px] py-3 px-3.5 cursor-pointer">
           <input
             type="checkbox"
+            className="w-[18px] h-[18px] accent-[var(--accent)] cursor-pointer"
             checked={form.enabled}
             onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
           />
           <div>
-            <span>Enabled</span>
-            <small>Allow this asset to be used for trading</small>
+            <span className="text-[13.5px] font-semibold block">Enabled</span>
+            <small className="text-[11.5px] text-faint">
+              Allow this asset to be used for trading
+            </small>
           </div>
         </label>
 
         {error && (
-          <p className="afm__error" role="alert">
+          <p
+            className="py-2.5 px-3.5 border border-[rgba(239,68,68,0.35)] rounded-field bg-[rgba(239,68,68,0.08)] text-[#ef4444] text-[13px]"
+            role="alert"
+          >
             {error}
           </p>
         )}
 
-        <div className="afm__actions">
+        <div className="flex justify-end gap-2.5 mt-1">
           <button
             type="button"
-            className="afm__cancel"
+            className={`${BTN_BASE} border border-border bg-surface2 text-text`}
             onClick={onCancel}
             disabled={saving}
           >
             Cancel
           </button>
-          <button type="submit" className="afm__save" disabled={saving}>
+          <button
+            type="submit"
+            className={`${BTN_BASE} border-0 bg-accent text-on-accent`}
+            disabled={saving}
+          >
             {saving ? 'Saving…' : asset ? 'Save Changes' : 'Create Asset'}
           </button>
         </div>
