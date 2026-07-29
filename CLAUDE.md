@@ -73,21 +73,48 @@ cosmetic — real enforcement must be added as admin middleware in `sinegutrade-
 
 ## Related projects (context only — do not modify unless asked)
 
-**NEVER add or touch code in `sinegu-api`, `sinequal-dash-fusion-main`, or
-`C:\Users\Xlythe\trading-flask`.** They are read-only reference material,
-consulted only when explicitly prompted.
+**NEVER add or touch code in `sinegu-api`, `sinequal-dash-fusion-main`,
+`C:\Users\Xlythe\trading-flask`, or `C:\Users\Xlythe\binance-flask`.** They are
+read-only reference material, consulted only when explicitly prompted.
 
 | Path | Role |
 |---|---|
 | `C:\Users\Xlythe\sinequal-dash-fusion-main` | **Mother project.** Use only as context/reference when prompted. |
 | `C:\wamp64\www\sinegu-api` | **Mother API.** Consult ONLY when explicitly prompted — it is legacy spaghetti code. Never use it as the sole reference or copy its architecture; at most a lookup for domain facts (field names, business rules). |
-| `C:\wamp64\www\sinegutrade-api` | **This project's API** (Laravel + Sanctum, DB `sinegu_crypto`). Live: auth, profile/password, dashboard summary, binance positions/past-positions. `mexc_*`/`bybit_*` tables coming soon. |
-| `C:\Users\Xlythe\trading-flask` | **The bot engine — READ-ONLY, NEVER WRITE.** Flask webhook receiver per exchange (TradingView posts signals to it) plus the pollers that push positions, balances, past positions and transactions **into the same `sinegu_crypto` data this frontend reads** — so when a dashboard number looks wrong, the answer is usually here or in `sinegutrade-api`. Read it for context; never edit it, not even its `.env`. |
+| `C:\wamp64\www\sinegutrade-api` | **This project's API** (Laravel + Sanctum, DB `sinegu_crypto`). Live: auth, profile/password, dashboard summary, binance positions/past-positions, invoices, referrals, and the engine's `/api/engine/*` surface. `mexc_*`/`bybit_*` tables coming soon. |
+| `C:\Users\Xlythe\trading-flask` | **Original multi-exchange bot — READ-ONLY.** Reference for env-driven config, tests, and the per-exchange service split. Never edit it, not even its `.env`. |
+| `C:\Users\Xlythe\binance-flask` | **Mature bot reference — READ-ONLY.** The runtime pattern the in-repo engine was modeled on (fast-ACK dispatch + account pools, retry queue, billing gate via `enabled=0`). Consult only; never edit. |
 
-**`trading-flask/` is no longer vendored into this repo.** It was copied in for a
-while and has been removed again — the snapshot lives in git history at commit
-`2e6e884` (`git checkout 2e6e884 -- trading-flask` brings it back). Until then this
-repo is the React frontend only, and `src/` unambiguously means the React app.
+## `trading-flask/` — the BINANCE_ABCD engine (in this repo)
+
+**This repo holds two codebases**: the React frontend at the root and the Python
+trading engine in `trading-flask/` (package `binance_abcd/` — freshly written for
+this product; NOT a copy of the read-only reference projects above, and not the
+old vendored snapshot either, which remains recoverable at commit `2e6e884`).
+
+- **What it does:** TradingView posts to `POST /binance_abcd_webhook` (port 5010);
+  the webhook fast-ACKs (~2 ms) and a bounded worker pool fans the signal out to
+  every tradeable account. Pollers push balances/positions/past-positions/
+  transfers back into `sinegu_crypto`. Full docs in `trading-flask/README.md`.
+- **Backend surface:** `sinegutrade-api`'s `/api/engine/{exchange}/*` routes
+  (`EngineController`, `EngineSyncController`, `VerifyEngineSecret` middleware,
+  `X-Engine-Secret` header). Who may trade is decided THERE: accounts endpoint
+  filters enabled + non-sandbox + non-suspended owners; `php artisan
+  engine:mark-overdue` (scheduled daily) disables accounts with past-due
+  invoices; `InvoiceService::settle` re-enables on payment.
+- **Live orders:** accounts with `demo=1` route to the Binance futures testnet;
+  everything else is REAL. Entries fail closed on unconfigured assets.
+- **Config:** env-driven, prefix `BINANCE_ABCD_*` — committed `.env.example`,
+  gitignored `.env` (webhook secret + engine secret; engine secret must match
+  `ENGINE_SECRET` in `sinegutrade-api/.env`).
+- **Commands:** `python -m binance_abcd.main` (waitress), `python -m pytest
+  tests/ -q` (42 tests, no network), `python webhook_tester.py` (Tkinter GUI
+  trade sender — local or prod target, red banner on prod).
+- **Naming trap:** root `src/` is the React app; the engine package is
+  `binance_abcd/`, deliberately not named `src`. Python and TypeScript
+  conventions never bleed across the boundary.
+- **Not deployed yet:** prod needs an nginx location + systemd unit and an
+  IP-restriction on `/api/engine/*` (see README's deploy TODO).
 
 ## Design reference
 
