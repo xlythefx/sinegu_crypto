@@ -9,7 +9,10 @@ Frontend for SineguAlerts — an automated crypto-trading-bot product (users con
   Exchange data lives in `binance_*` tables (accounts, positions, pastpositions, transactions, invoices);
   **`mexc_*` and `bybit_*` tables will be added soon** — keep exchange-specific reads behind API
   endpoints so the new exchanges can be merged in without frontend changes.
-- **Deployment:** Ubuntu VPS will be provided soon.
+- **Deployment (live):** **http://2.24.139.176** — Ubuntu 24.04 Contabo VPS, provisioned
+  2026-07-28. nginx serves the React build at `/` and `sinegutrade-api` at `/api` from the
+  same origin (`/var/www/sinegualerts/{dashboard,api}`). Deploy with `/deploy` (see
+  `.claude/skills/deploy/SKILL.md`). No domain/TLS yet — it answers on the bare IP.
 
 **Supported exchanges (the only brokers) — Binance, Bybit, MEXC.** These three are the
 entire universe of exchanges the product supports; there are no others (no Capital.com, no
@@ -70,14 +73,65 @@ cosmetic — real enforcement must be added as admin middleware in `sinegutrade-
 
 ## Related projects (context only — do not modify unless asked)
 
-**NEVER add or touch code in `sinegu-api` or `sinequal-dash-fusion-main`.**
-They are read-only reference material, consulted only when explicitly prompted.
+**NEVER add or touch code in `sinegu-api`, `sinequal-dash-fusion-main`, or
+`C:\Users\Xlythe\trading-flask`.** They are read-only reference material,
+consulted only when explicitly prompted.
 
 | Path | Role |
 |---|---|
 | `C:\Users\Xlythe\sinequal-dash-fusion-main` | **Mother project.** Use only as context/reference when prompted. |
 | `C:\wamp64\www\sinegu-api` | **Mother API.** Consult ONLY when explicitly prompted — it is legacy spaghetti code. Never use it as the sole reference or copy its architecture; at most a lookup for domain facts (field names, business rules). |
 | `C:\wamp64\www\sinegutrade-api` | **This project's API** (Laravel + Sanctum, DB `sinegu_crypto`). Live: auth, profile/password, dashboard summary, binance positions/past-positions. `mexc_*`/`bybit_*` tables coming soon. |
+| `C:\Users\Xlythe\trading-flask` | **Original bot engine — READ-ONLY, NEVER WRITE.** Copied into this repo as `trading-flask/` (see below). All edits go to the in-repo copy; this folder is never modified, not even its `.env`. |
+
+## `trading-flask/` — the bot engine (in this repo)
+
+**This repo holds two codebases.** The React frontend at the root, and the Python
+trading engine in `trading-flask/` — copied in from `C:\Users\Xlythe\trading-flask`
+so both live in one repo and can be read together.
+
+> **`trading-flask/` in THIS repo is the only copy you may edit.**
+> `C:\Users\Xlythe\trading-flask` is read-only — never write to it, never
+> `sed`/edit/create files there, and that includes its `.env`. If a change needs
+> to reach the original (secrets, deploy config), make it here and tell the user
+> to copy it across themselves. When in doubt, check the path you are writing to
+> starts with `c:\Users\Xlythe\sinegual-crypto\`.
+
+`trading-flask/` is the thing that actually places trades: a Flask webhook receiver
+per exchange (TradingView posts signals to it), plus pollers that push positions,
+balances, past positions and transactions **into the same `sinegu_crypto` data this
+frontend reads**. That makes it the upstream of the whole product — when a number
+looks wrong on a dashboard page, the answer is usually here or in `sinegutrade-api`.
+
+```
+trading-flask/
+├── src/                  # Binance (normal, balance >= 500 USDT)
+├── binance_lite_src/     # Binance Lite (100 <= balance < 500 USDT)
+├── bybit_src/            # Bybit
+├── mexc_src/             # MEXC
+├── *_tradingbot.py       # Tkinter launchers (one per exchange)
+├── plan/                 # architecture notes (01-overview … 06-run-instructions)
+├── api-docs/, binance-docs/   # exchange API reference
+├── tests/                # pytest
+└── .env.example          # every config key; real .env is gitignored
+```
+
+| Service | Port | Webhook |
+|---|---|---|
+| Binance | 5000 | `/binance_webhook` |
+| MEXC | 5001 | `/mexc_webhook` |
+| Bybit | 5002 | `/bybit_webhook` |
+| Binance Lite | 5003 | `/binance_lite_webhook` |
+
+**Naming trap — `src/` is ambiguous in this repo.** Root `src/` is the React app;
+`trading-flask/src/` is the *Binance Flask service*. Always say which one you mean,
+and never let Python and TypeScript conventions bleed across the boundary.
+
+**Not copied over** (deliberately, they hold credentials or bulk): the real `.env`
+(kept gitignored — the values still live in the original folder), `out/`
+(SSH/deploy probe scripts), `deploy_position_upsert.py` (embedded host credentials),
+and ~50 MB of `headless/*.log`. Frontend tooling ignores this folder —
+`tsconfig.app.json` only includes root `src`, and oxlint is JS/TS only.
 
 ## Design reference
 
@@ -151,7 +205,7 @@ When it grows into a full dashboard, migrate to `features/<domain>/` folders
 - **Two agents live in `.claude/agents/`** — one for frontend, one for backend:
   - `.claude/agents/frontend.md` — frontend specialist for this repo (React conventions above).
   - `.claude/agents/backend.md` — backend specialist pointing at `C:\wamp64\www\sinegutrade-api` (Laravel), using `sinegu-api` as read-only reference.
-- `.claude/skills/deploy/SKILL.md` — deployment procedure (`/deploy`). **VPS not provided yet** — the skill holds the flow (backup → build → upload → verify) modeled on the mother project's deploy script, adapted for Ubuntu. Credentials will live in gitignored `.claude/deploy.creds.json` only; never in committed files, and never use the mother project's servers from this repo.
+- `.claude/skills/deploy/SKILL.md` — deployment procedure (`/deploy`), driving `.claude/deploy_sinegualcrypto.py`. **Live at http://2.24.139.176** (Ubuntu 24.04); the skill holds the flow (backup → build → upload → verify). Credentials live in gitignored `.claude/deploy.creds.json` only; never in committed files, and never use the mother project's servers from this repo.
 
 ## Notes
 
