@@ -2,12 +2,14 @@ import { useState, type ReactNode } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import {
   AlertCircle,
+  ArrowRight,
   CheckCircle2,
   FlaskConical,
   Plus,
   Trash2,
   UserPlus,
   X,
+  Zap,
 } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
@@ -136,7 +138,7 @@ export default function AdminSandbox() {
     <AdminLayout title="Sandbox" subtitle="Create test data to exercise the platform.">
       {/* ============ launchers ============ */}
       <section
-        className="grid grid-cols-2 max-[720px]:grid-cols-1 gap-4 mb-4"
+        className="grid grid-cols-3 max-[980px]:grid-cols-2 max-[720px]:grid-cols-1 gap-4 mb-4"
         data-aos="fade-up"
       >
         {[
@@ -152,25 +154,49 @@ export default function AdminSandbox() {
             sub: 'Add fabricated closed trades to exercise statistics.',
             onClick: () => setPosModal(true),
           },
-        ].map((tile) => (
-          <button
-            key={tile.title}
-            type="button"
-            className="flex items-center gap-3.5 min-w-0 text-left rounded-card border border-border bg-surface p-[18px] cursor-pointer transition-[border-color,background,transform] duration-150 hover:border-accent-line hover:bg-[linear-gradient(160deg,var(--accentSoft),var(--surface))] hover:-translate-y-px"
-            onClick={tile.onClick}
-          >
-            <span className={CHIP}>{tile.icon}</span>
-            <span className="flex flex-col gap-[3px] min-w-0">
-              <span className="font-display text-[15px] font-extrabold text-text">
-                {tile.title}
+          {
+            icon: <Zap size={17} />,
+            title: 'Manual Trade',
+            sub: 'Fire a real signal at the trading engine and watch it fan out.',
+            to: '/admin/sandbox/manual-trade',
+          },
+        ].map((tile) => {
+          const inner = (
+            <>
+              <span className={CHIP}>{tile.icon}</span>
+              <span className="flex flex-col gap-[3px] min-w-0">
+                <span className="font-display text-[15px] font-extrabold text-text">
+                  {tile.title}
+                </span>
+                <span className="text-[12px] text-muted leading-[1.45]">
+                  {tile.sub}
+                </span>
               </span>
-              <span className="text-[12px] text-muted leading-[1.45]">
-                {tile.sub}
-              </span>
-            </span>
-            <Plus size={16} className="ml-auto flex-none text-accent" />
-          </button>
-        ))}
+              {tile.to ? (
+                <ArrowRight size={16} className="ml-auto flex-none text-accent" />
+              ) : (
+                <Plus size={16} className="ml-auto flex-none text-accent" />
+              )}
+            </>
+          )
+          const tileClass =
+            'flex items-center gap-3.5 min-w-0 text-left rounded-card border border-border bg-surface p-[18px] cursor-pointer transition-[border-color,background,transform] duration-150 hover:border-accent-line hover:bg-[linear-gradient(160deg,var(--accentSoft),var(--surface))] hover:-translate-y-px'
+
+          return tile.to ? (
+            <Link key={tile.title} to={tile.to} className={tileClass}>
+              {inner}
+            </Link>
+          ) : (
+            <button
+              key={tile.title}
+              type="button"
+              className={tileClass}
+              onClick={tile.onClick}
+            >
+              {inner}
+            </button>
+          )
+        })}
       </section>
 
       {/* ============ success banner ============ */}

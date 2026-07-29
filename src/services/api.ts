@@ -39,18 +39,22 @@ export class ApiError extends Error {
   errorCode?: string
   /** Laravel validation errors keyed by field. */
   errors?: Record<string, string[]>
+  /** Raw response body — for endpoints whose failures still carry detail. */
+  payload?: unknown
 
   constructor(
     status: number,
     message: string,
     errorCode?: string,
     errors?: Record<string, string[]>,
+    payload?: unknown,
   ) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.errorCode = errorCode
     this.errors = errors
+    this.payload = payload
   }
 }
 
@@ -105,6 +109,7 @@ export async function apiFetch<T>(
       data.message ?? `Request failed (${res.status})`,
       data.error_code,
       data.errors,
+      data,
     )
   }
 

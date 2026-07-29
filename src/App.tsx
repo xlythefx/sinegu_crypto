@@ -17,8 +17,10 @@ import Referrals from './pages/Referrals'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminAssets from './pages/admin/AdminAssets'
 import AdminUsers from './pages/admin/AdminUsers'
+import AdminUserDetail from './pages/admin/AdminUserDetail'
 import AdminStrategies from './pages/admin/AdminStrategies'
 import AdminSandbox from './pages/admin/AdminSandbox'
+import AdminManualTrade from './pages/admin/AdminManualTrade'
 import AdminStrategyDetail from './pages/admin/AdminStrategyDetail'
 import AdminPositions from './pages/admin/AdminPositions'
 import AdminInvoiceHistory from './pages/admin/AdminInvoiceHistory'
@@ -45,6 +47,7 @@ function App() {
             <Route path="/dashboard/referrals" element={<Referrals />} />
             <Route path="/dashboard/settings" element={<Settings />} />
             <Route path="/dashboard/*" element={<Dashboard />} />
+            <Route path="/admin/users/:uniId" element={<AdminUserDetail />} />
             <Route path="/admin/users" element={<AdminUsers />} />
             <Route path="/admin/strategies/:key" element={<AdminStrategyDetail />} />
             <Route path="/admin/strategies" element={<AdminStrategies />} />
@@ -53,6 +56,7 @@ function App() {
             <Route path="/admin/invoices" element={<AdminInvoiceHistory />} />
             <Route path="/admin/referrals/release/:referrerUniId" element={<AdminReleasePayment />} />
             <Route path="/admin/referrals" element={<AdminReferrals />} />
+            <Route path="/admin/sandbox/manual-trade" element={<AdminManualTrade />} />
             <Route path="/admin/sandbox" element={<AdminSandbox />} />
             <Route path="/admin/resources" element={<AdminResources />} />
             <Route path="/admin/*" element={<AdminDashboard />} />
