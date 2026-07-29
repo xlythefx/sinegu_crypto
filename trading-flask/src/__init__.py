@@ -1,1 +1,0 @@
-"""Binance Flask trading bot."""
