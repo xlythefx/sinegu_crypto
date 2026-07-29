@@ -1,0 +1,6 @@
+# Dev / ops dependencies (not needed by the running Flask services).
+# Install with: pip install -r requirements-dev.txt
+-r requirements.txt
+
+pytest>=7.0.0      # tests/
+paramiko>=3.0.0    # deploy/probe SSH scripts (deploy_position_upsert.py, out/_deploy*.py)
