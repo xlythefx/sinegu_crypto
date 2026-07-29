@@ -7,26 +7,22 @@ const QUOTES = [
   { label: 'FUNDING', value: '0.0093%', delta: '8h', dir: 'accent' },
 ] as const
 
+const DELTA_TONE: Record<string, string> = {
+  up: 'text-green',
+  down: 'text-red',
+  accent: 'text-accent',
+}
+
 export default function Ticker() {
   // Row duplicated once and translated -50% for a seamless infinite loop
   const row = [...QUOTES, ...QUOTES]
   return (
-    <div className="ticker">
-      <div className="ticker__track">
+    <div className="border-b border-hair bg-surface2 overflow-hidden whitespace-nowrap">
+      <div className="inline-flex gap-9 py-[9px] font-mono text-[12.5px] animate-[tick_42s_linear_infinite] will-change-transform">
         {row.map((q, i) => (
-          <span className="ticker__item" key={i}>
-            {q.label} <b>{q.value}</b>{' '}
-            <span
-              className={
-                q.dir === 'up'
-                  ? 'ticker__up'
-                  : q.dir === 'down'
-                    ? 'ticker__down'
-                    : 'ticker__accent'
-              }
-            >
-              {q.delta}
-            </span>
+          <span className="text-faint" key={i}>
+            {q.label} <b className="text-text font-medium">{q.value}</b>{' '}
+            <span className={DELTA_TONE[q.dir]}>{q.delta}</span>
           </span>
         ))}
       </div>

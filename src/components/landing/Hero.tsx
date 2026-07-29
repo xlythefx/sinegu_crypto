@@ -1,4 +1,7 @@
 import { useNavigate } from 'react-router-dom'
+import { useSessionUser } from '../../hooks/useSessionUser'
+
+const CONTAINER = 'max-w-[1280px] mx-auto px-10 max-[560px]:px-5'
 
 const BIDS = [
   { price: '68,412.5', size: '0.842', depth: 62 },
@@ -28,59 +31,64 @@ const HISTOGRAM = [
   { height: 38, color: 'var(--red)', opacity: 0.5 },
 ]
 
+const ROW = 'flex justify-between py-[3px] relative'
+const SIZE = 'text-muted'
+
 function OrderBook() {
   return (
-    <div className="orderbook">
-      <div className="orderbook__header">
-        <div className="orderbook__title">
-          <span className="orderbook__pair">BTC-PERP</span>
-          <span className="orderbook__price">68,412.50</span>
-          <span className="orderbook__strategy">Z-Score Reversion #2</span>
+    <div className="relative bg-surface border border-border rounded-[20px] overflow-hidden shadow-[0_30px_80px_rgba(0,0,0,0.18)] animate-[fadeup_0.8s_cubic-bezier(0.2,0.7,0.2,1)_0.15s_both]">
+      <div className="flex items-center justify-between py-4 px-5 border-b border-hair flex-wrap gap-2">
+        <div className="flex items-center gap-2.5">
+          <span className="font-bold text-base">BTC-PERP</span>
+          <span className="font-mono text-[13px] text-green">68,412.50</span>
+          <span className="font-mono text-[10px] text-accent border border-accent-line bg-accent-soft py-0.5 px-2 rounded-pill">
+            Z-Score Reversion #2
+          </span>
         </div>
-        <div className="orderbook__meta">
+        <div className="font-mono text-[11px] text-faint flex gap-3.5">
           <span>24h Vol 1.2B</span>
-          <span className="accent">● matching</span>
+          <span className="text-accent">● matching</span>
         </div>
       </div>
-      <div className="orderbook__ladder">
-        <div className="orderbook__col orderbook__col--bids">
-          <div className="orderbook__col-head">
+      <div className="grid grid-cols-2 font-mono text-xs">
+        <div className="py-3.5 px-5 border-r border-hair">
+          <div className="text-faint text-[10px] flex justify-between mb-2">
             <span>PRICE</span>
             <span>SIZE</span>
           </div>
           {BIDS.map((row) => (
-            <div className="orderbook__row" key={row.price}>
-              <span className="orderbook__row-price--bid">{row.price}</span>
-              <span className="orderbook__row-size">{row.size}</span>
+            <div className={ROW} key={row.price}>
+              <span className="text-green">{row.price}</span>
+              <span className={SIZE}>{row.size}</span>
               <span
-                className="orderbook__depth orderbook__depth--bid"
+                className="absolute top-0 bottom-0 right-0 bg-[rgba(47,214,122,0.1)]"
                 style={{ width: `${row.depth}%` }}
               />
             </div>
           ))}
         </div>
-        <div className="orderbook__col">
-          <div className="orderbook__col-head">
+        <div className="py-3.5 px-5">
+          <div className="text-faint text-[10px] flex justify-between mb-2">
             <span>PRICE</span>
             <span>SIZE</span>
           </div>
           {ASKS.map((row) => (
-            <div className="orderbook__row" key={row.price}>
-              <span className="orderbook__row-price--ask">{row.price}</span>
-              <span className="orderbook__row-size">{row.size}</span>
+            <div className={ROW} key={row.price}>
+              <span className="text-red">{row.price}</span>
+              <span className={SIZE}>{row.size}</span>
               <span
-                className="orderbook__depth orderbook__depth--ask"
+                className="absolute top-0 bottom-0 left-0 bg-[rgba(255,90,90,0.1)]"
                 style={{ width: `${row.depth}%` }}
               />
             </div>
           ))}
         </div>
       </div>
-      <div className="orderbook__footer">
-        <div className="orderbook__histogram">
+      <div className="border-t border-hair py-4 px-5">
+        <div className="flex items-end gap-1 h-[74px]">
           {HISTOGRAM.map((bar, i) => (
             <div
-              className="orderbook__bar"
+              className="flex-1 rounded-t-[4px]"
               key={i}
               style={{
                 height: `${bar.height}%`,
@@ -90,7 +98,7 @@ function OrderBook() {
             />
           ))}
         </div>
-        <div className="orderbook__depth-labels">
+        <div className="flex justify-between font-mono text-[10px] text-faint mt-2">
           <span>−0.5% depth</span>
           <span>MID 68,413.75</span>
           <span>+0.5% depth</span>
@@ -102,34 +110,40 @@ function OrderBook() {
 
 export default function Hero() {
   const navigate = useNavigate()
+  const user = useSessionUser()
   return (
-    <section className="hero container">
-      <div className="hero__glow" />
-      <div className="hero__copy">
-        <div className="hero__badge">
-          <span className="hero__badge-dot" />
+    <section
+      className={`${CONTAINER} relative pt-16 pb-14 grid grid-cols-[1.05fr_0.95fr] gap-14 items-center max-[900px]:grid-cols-1 max-[900px]:gap-10`}
+    >
+      <div className="absolute top-[-40px] left-[6%] w-[420px] h-[420px] rounded-full bg-[radial-gradient(circle,var(--glow),transparent_70%)] blur-[20px] animate-[drift_14s_ease-in-out_infinite] pointer-events-none" />
+      <div className="relative animate-[fadeup_0.8s_cubic-bezier(0.2,0.7,0.2,1)_both]">
+        <div className="inline-flex items-center gap-2 font-mono text-xs text-accent border border-accent-line bg-accent-soft py-1.5 px-3 rounded-pill mb-6">
+          <span className="w-1.5 h-1.5 rounded-full bg-green animate-[pulse_1.6s_infinite]" />
           48,200+ traders copying live signals right now
         </div>
-        <h1 className="hero__title">
+        <h1 className="font-display text-[60px] leading-[1.02] font-extrabold tracking-[-0.03em] mb-[22px] max-[900px]:text-[44px] max-[560px]:text-[36px]">
           Pro-grade trading bots.
           <br />
-          <span className="hero__title-accent">Keep 80% of the upside.</span>
+          <span className="text-accent">Keep 80% of the upside.</span>
         </h1>
-        <p className="hero__sub">
-          SineguAlerts runs battle-tested strategies on <b>your own</b>{' '}
-          Binance, Bybit or MEXC account. Free to start — you only pay{' '}
-          <b className="accent">20% of the profit</b> you actually make.
+        <p className="text-lg leading-[1.6] text-muted max-w-[480px] mb-8">
+          SineguAlerts runs battle-tested strategies on{' '}
+          <b className="text-text">your own</b> Binance, Bybit or MEXC account.
+          Free to start — you only pay{' '}
+          <b className="text-accent">20% of the profit</b> you actually make.
         </p>
-        <div className="hero__actions">
+        <div className="flex gap-3.5 items-center mb-7 flex-wrap">
           <button
-            className="btn-hero-primary"
-            onClick={() => navigate('/auth')}
+            className="text-base font-bold bg-accent text-white border-none py-[15px] px-7 rounded-pill cursor-pointer shadow-[0_10px_26px_var(--glow)]"
+            onClick={() => navigate(user ? '/dashboard' : '/auth')}
           >
-            Start free →
+            {user ? 'Go to your account →' : 'Start free →'}
           </button>
-          <button className="btn-hero-outline">See live results</button>
+          <button className="text-base font-bold bg-surface text-text border border-border py-[15px] px-[26px] rounded-pill cursor-pointer">
+            See live results
+          </button>
         </div>
-        <div className="hero__trust">
+        <div className="flex gap-[26px] font-mono text-xs text-faint flex-wrap">
           <span>◆ Free to use</span>
           <span>◆ Pay only 20% of profit</span>
           <span>◆ Funds stay on your exchange</span>

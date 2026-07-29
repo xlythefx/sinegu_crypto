@@ -12,8 +12,26 @@ import {
   FlaskConical,
   Home,
   LogOut,
+  Share2,
 } from 'lucide-react'
 import { usePortalSwitch } from '../ui/PortalSwitchOverlay'
+import {
+  RAIL,
+  BRAND,
+  BRAND_LOGO,
+  BRAND_TEXT,
+  BRAND_TITLE,
+  BRAND_SUB,
+  NAV,
+  ITEM_BASE,
+  ITEM_OFF,
+  ITEM_ON,
+  ITEM_ICON,
+  FOOTER,
+  ADMIN_SWITCH,
+  LOGOUT,
+  REVEAL,
+} from '../dashboard/shellClasses'
 
 export interface AdminNavItem {
   label: string
@@ -29,6 +47,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { label: 'Sandbox', url: '/admin/sandbox', icon: FlaskConical },
   { label: 'Trading Positions', url: '/admin/positions', icon: Bell },
   { label: 'Invoice History', url: '/admin/invoices', icon: FileText },
+  { label: 'Affiliate', url: '/admin/referrals', icon: Share2 },
   { label: 'System Resources', url: '/admin/resources', icon: Activity },
   { label: 'Settings', url: '/admin/settings', icon: Settings },
 ]
@@ -42,49 +61,49 @@ export default function AdminSidebar({ onLogout }: AdminSidebarProps) {
   const switchPortal = usePortalSwitch()
 
   return (
-    <aside className="dsb">
-      <Link to="/" className="dsb__brand" aria-label="SineguAlerts home">
-        <img className="dsb__logo" src="/assets/logo.png" alt="" />
-        <span className="dsb__brand-text">
-          <span className="dsb__brand-title">SineguAlerts</span>
-          <span className="dsb__brand-sub">Admin Portal</span>
+    <aside className={RAIL}>
+      <Link to="/" className={BRAND} aria-label="SineguAlerts home">
+        <img className={BRAND_LOGO} src="/assets/logo.png" alt="" />
+        <span className={BRAND_TEXT}>
+          <span className={BRAND_TITLE}>SineguAlerts</span>
+          <span className={BRAND_SUB}>Admin Portal</span>
         </span>
       </Link>
 
-      <nav className="dsb__nav">
+      <nav className={NAV}>
         {ADMIN_NAV_ITEMS.map((item) => (
           <NavLink
             key={item.url}
             to={item.url}
             end={item.url === '/admin'}
             className={({ isActive }) =>
-              `dsb__item${isActive ? ' dsb__item--active' : ''}`
+              `${ITEM_BASE} ${isActive ? ITEM_ON : ITEM_OFF}`
             }
           >
-            <span className="dsb__item-icon">
+            <span className={ITEM_ICON}>
               <item.icon size={20} strokeWidth={2} />
             </span>
-            <span className="dsb__label">{item.label}</span>
+            <span className={REVEAL}>{item.label}</span>
           </NavLink>
         ))}
       </nav>
 
-      <div className="dsb__footer">
+      <div className={FOOTER}>
         <button
           type="button"
-          className="dsb__admin-switch"
+          className={ADMIN_SWITCH}
           onClick={() => switchPortal('/dashboard', 'Trader Portal')}
         >
-          <span className="dsb__item-icon">
+          <span className={ITEM_ICON}>
             <Home size={20} strokeWidth={2} />
           </span>
-          <span className="dsb__label">My Dashboard</span>
+          <span className={REVEAL}>My Dashboard</span>
         </button>
-        <button type="button" className="dsb__logout" onClick={onLogout}>
-          <span className="dsb__item-icon">
+        <button type="button" className={LOGOUT} onClick={onLogout}>
+          <span className={ITEM_ICON}>
             <LogOut size={20} strokeWidth={2} />
           </span>
-          <span className="dsb__label">Log out</span>
+          <span className={REVEAL}>Log out</span>
         </button>
       </div>
     </aside>

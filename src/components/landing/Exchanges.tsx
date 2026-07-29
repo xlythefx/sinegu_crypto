@@ -1,3 +1,5 @@
+const CONTAINER = 'max-w-[1280px] mx-auto px-10 max-[560px]:px-5'
+
 const EXCHANGES = ['Binance', 'Bybit', 'MEXC']
 
 const TESTIMONIALS = [
@@ -17,30 +19,45 @@ const TESTIMONIALS = [
 
 export default function Exchanges() {
   return (
-    <section data-aos="fade-up" className="section container">
-        <p className="exchanges__caption">
-          WORKS DIRECTLY WITH YOUR EXCHANGE — YOUR FUNDS NEVER LEAVE IT
-        </p>
-        <div className="exchanges-grid">
-          {EXCHANGES.map((name) => (
-            <div className="exchange-card" key={name}>
-              <div className="exchange-card__name">{name}</div>
-              <div className="exchange-card__sub">Spot &amp; Futures API</div>
+    <section
+      data-aos="fade-up"
+      className={`${CONTAINER} pt-[52px] pb-[76px]`}
+    >
+      <p className="font-mono text-xs text-faint text-center mb-7">
+        WORKS DIRECTLY WITH YOUR EXCHANGE — YOUR FUNDS NEVER LEAVE IT
+      </p>
+      <div className="grid grid-cols-3 gap-4 max-[900px]:grid-cols-1">
+        {EXCHANGES.map((name) => (
+          <div
+            className="border border-accent-line rounded-[18px] py-[30px] px-[22px] text-center bg-surface"
+            key={name}
+          >
+            <div className="font-display font-extrabold text-[22px]">
+              {name}
             </div>
-          ))}
-        </div>
-        <div className="testimonials-grid">
-          {TESTIMONIALS.map((t) => (
-            <div className="testimonial-card" key={t.tag}>
-              <div className="testimonial-card__stars">★★★★★</div>
-              <p className="testimonial-card__quote">{t.quote}</p>
-              <div className="testimonial-card__author">
-                {t.author}
-                <span className="accent">{t.tag}</span>
-              </div>
+            <div className="font-mono text-[11px] text-faint mt-1.5">
+              Spot &amp; Futures API
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-4 mt-4 max-[900px]:grid-cols-1">
+        {TESTIMONIALS.map((t) => (
+          <div
+            className="bg-surface border border-border rounded-[18px] p-7"
+            key={t.tag}
+          >
+            <div className="text-accent text-[15px] mb-3">★★★★★</div>
+            <p className="text-base leading-[1.6] font-medium mb-[18px]">
+              {t.quote}
+            </p>
+            <div className="font-mono text-xs text-muted">
+              {t.author}
+              <span className="text-accent">{t.tag}</span>
+            </div>
+          </div>
+        ))}
+      </div>
     </section>
   )
 }

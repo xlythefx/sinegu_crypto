@@ -1,3 +1,5 @@
+const CONTAINER = 'max-w-[1280px] mx-auto px-10 max-[560px]:px-5'
+
 const STEPS = [
   {
     num: '01',
@@ -24,20 +26,33 @@ const STEPS = [
 
 export default function HowItWorks() {
   return (
-    <section data-aos="fade-up" className="section container">
-        <h2 className="steps-title">Profitable in four steps</h2>
-        <div className="steps-grid">
-          {STEPS.map((s) => (
-            <div
-              className={`step-card${s.highlight ? ' step-card--highlight' : ''}`}
-              key={s.num}
-            >
-              <div className="step-card__num">{s.num}</div>
-              <h3 className="step-card__title">{s.title}</h3>
-              <p className="step-card__body">{s.body}</p>
+    <section
+      data-aos="fade-up"
+      className={`${CONTAINER} pt-[52px] pb-[76px]`}
+    >
+      <h2 className="font-display text-[38px] font-extrabold tracking-[-0.02em] text-center mb-10">
+        Profitable in four steps
+      </h2>
+      <div className="grid grid-cols-4 gap-4 max-[1100px]:grid-cols-2 max-[560px]:grid-cols-1">
+        {STEPS.map((s) => (
+          <div
+            className={`rounded-[20px] py-7 px-6 ${
+              s.highlight
+                ? 'bg-[linear-gradient(135deg,var(--accentSoft),var(--surface))] border border-accent-line'
+                : 'bg-surface border border-border'
+            }`}
+            key={s.num}
+          >
+            <div className="font-mono text-[32px] text-accent font-semibold mb-4">
+              {s.num}
             </div>
-          ))}
-        </div>
+            <h3 className="font-display text-[17px] font-bold mb-2">
+              {s.title}
+            </h3>
+            <p className="text-[13.5px] leading-[1.6] text-muted">{s.body}</p>
+          </div>
+        ))}
+      </div>
     </section>
   )
 }

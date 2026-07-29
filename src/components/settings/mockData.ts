@@ -1,7 +1,8 @@
 /**
- * Static prototype data for the not-yet-wired Settings sections
- * (payment method, payout wallets, bank wire) — replaced by the
- * services/ layer once the corresponding sinegutrade-api endpoints exist.
+ * Static prototype data for the Stripe card-on-file, which is currently hidden
+ * from Settings (see PaymentMethodCard). Everything else on the page is live:
+ * payout wallets + bank wire accounts via services/payoutMethods.ts, account
+ * info and password via services/user.ts.
  */
 
 export interface SavedCard {
@@ -13,52 +14,4 @@ export interface SavedCard {
 
 export const SAVED_CARDS: SavedCard[] = [
   { id: 'pm_01', brand: 'Visa', last4: '4242', expiry: '08/27' },
-]
-
-export interface PayoutWallet {
-  id: string
-  name: string
-  network: 'TRC20'
-  address: string
-}
-
-export const PAYOUT_WALLETS: PayoutWallet[] = [
-  {
-    id: 'w_01',
-    name: 'Main USDT wallet',
-    network: 'TRC20',
-    address: 'TQ5kkPMHdRhpYDFuU5eVe5nkTUcuXBCLCM',
-  },
-]
-
-export type BankCurrency = 'USD' | 'EUR'
-
-export interface BankAccount {
-  id: string
-  label: string
-  currency: BankCurrency
-  holderName: string
-  bankName: string
-  bankAddress: string
-  accountType: string
-  routingNumber: string
-  accountNumber: string
-  swiftBic: string
-  iban: string
-}
-
-export const BANK_ACCOUNTS: BankAccount[] = [
-  {
-    id: 'bw_01',
-    label: 'Primary USD account',
-    currency: 'USD',
-    holderName: 'Alex Trader',
-    bankName: 'Chase Bank',
-    bankAddress: '270 Park Ave, New York, NY',
-    accountType: 'Checking',
-    routingNumber: '021000021',
-    accountNumber: '483920175',
-    swiftBic: 'CHASUS33',
-    iban: '',
-  },
 ]

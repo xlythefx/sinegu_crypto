@@ -3,11 +3,13 @@ import { getToken } from '../lib/session'
 import { mapApiInvoice, type ApiInvoice, type Invoice } from '../lib/billing'
 import type {
   AdminAsset,
+  AdminPerformance,
   AdminPositionsData,
   AdminUser,
   AssetInput,
   DailyPnlMap,
   MasterStats,
+  PerformanceFilters,
   SandboxPositionInput,
   SandboxUser,
   StrategiesData,
@@ -37,6 +39,33 @@ export async function getAdminDailyPnl(): Promise<DailyPnlMap> {
   )
   // PHP serializes an empty map as [] — normalize to an object
   return Array.isArray(res.days) ? {} : res.days
+}
+
+/**
+ * Cumulative master P&L + the fixed daily/weekly/monthly snapshots.
+ * `filters` narrow the series only — `breakdown` and `tickers` always come
+ * back unfiltered so excluded symbols can still be re-enabled.
+ */
+export async function getAdminPerformance(
+  filters: PerformanceFilters = {},
+): Promise<AdminPerformance> {
+  const params = new URLSearchParams()
+  if (filters.period) params.set('period', filters.period)
+  if (filters.from) params.set('from', filters.from)
+  if (filters.to) params.set('to', filters.to)
+  if (filters.exclude?.length) params.set('exclude', filters.exclude.join(','))
+
+  const qs = params.toString()
+  const res = await apiFetch<{ success: boolean } & AdminPerformance>(
+    `/admin/performance${qs ? `?${qs}` : ''}`,
+    { auth: true },
+  )
+  return {
+    period: res.period,
+    series: res.series ?? [],
+    breakdown: res.breakdown,
+    tickers: res.tickers ?? [],
+  }
 }
 
 export async function getAdminAssets(): Promise<AdminAsset[]> {

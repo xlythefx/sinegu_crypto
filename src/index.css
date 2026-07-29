@@ -158,13 +158,19 @@ body {
   color: var(--text);
 }
 
-a {
-  color: var(--accent);
-  text-decoration: none;
-}
+/* In @layer base so Tailwind's text-color and font-family utilities (higher
+   layer) win on elements that opt into them — an unlayered `a { color }` beats
+   every text-* utility, which silently renders accent-on-accent buttons blank.
+   Unlayered plain CSS on the not-yet-migrated pages still overrides this. */
+@layer base {
+  a {
+    color: var(--accent);
+    text-decoration: none;
+  }
 
-button {
-  font-family: inherit;
+  button {
+    font-family: inherit;
+  }
 }
 
 ::selection {
@@ -178,6 +184,34 @@ button {
 
 .display {
   font-family: 'Bricolage Grotesque', sans-serif;
+}
+
+/* ---------- Final CTA bull parallax (W3Schools background-attachment:fixed) ----------
+   The bull stays pinned to the viewport while the CTA section scrolls over it.
+   Four layers (two scrim gradients, a gray desaturation layer blended in
+   "saturation" mode, and the bull image) each need their own attachment/blend
+   value — a list Tailwind utilities can't express, so it lives here.
+   Do NOT add filter/transform/will-change to this element or any ancestor:
+   each creates a containing block that silently downgrades `fixed` to `scroll`
+   and kills the parallax. */
+.cta-parallax {
+  background:
+    linear-gradient(180deg, rgba(7, 8, 11, 0.94) 0%, rgba(7, 8, 11, 0.6) 45%, rgba(7, 8, 11, 0.9) 100%),
+    linear-gradient(90deg, rgba(7, 8, 11, 0.85), rgba(7, 8, 11, 0.35) 60%, rgba(7, 8, 11, 0.85)),
+    linear-gradient(#7d7d7d, #7d7d7d),
+    url('/assets/bull.png') center 40% / cover;
+  background-attachment: fixed, fixed, fixed, fixed;
+  background-blend-mode: normal, normal, saturation, normal;
+}
+
+/* Mobile browsers (iOS Safari / Chrome Android) drop background-attachment:fixed
+   and over-zoom a cover image. Fall back to a normally-scrolling background so
+   the bull still looks right on phones/tablets. */
+@media (max-width: 900px), (hover: none) and (pointer: coarse) {
+  .cta-parallax {
+    background-attachment: scroll, scroll, scroll, scroll;
+    background-position: center, center, center, center 35%;
+  }
 }
 
 /* ---------- keyframes ---------- */

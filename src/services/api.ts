@@ -1,7 +1,37 @@
 import { getToken } from '../lib/session'
 
-export const API_URL =
-  import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000/api'
+/** Local Laravel dev server (`php artisan serve`). */
+const DEV_API_URL = 'http://127.0.0.1:8000/api'
+
+/**
+ * API base URL resolution — decided at RUNTIME from the host, never baked into
+ * the build. One `npm run build` works on localhost, on the bare VPS IP, and on
+ * any domain pointed at it later, so no manual switching per deployment.
+ *
+ *   localhost / 127.0.0.1 / *.local  -> http://127.0.0.1:8000/api (or VITE_API_URL)
+ *   any deployed host                -> <same origin>/api
+ *
+ * Same-origin works because the nginx vhost serves both from one host:
+ * `/` -> the React dist, `/api` -> sinegutrade-api/public. That also means TLS
+ * comes for free — once certbot runs, the origin is https and so is the API.
+ *
+ * `VITE_API_URL` is a DEV-ONLY override (point `npm run dev` at a live API). It
+ * is deliberately ignored on deployed hosts: a stale value in `.env` at build
+ * time must never be able to make production talk to a different environment.
+ */
+const resolveApiUrl = (): string => {
+  if (typeof window === 'undefined') return DEV_API_URL
+
+  const host = window.location.hostname
+  const isDevHost =
+    host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local')
+
+  if (isDevHost) return import.meta.env.VITE_API_URL ?? DEV_API_URL
+
+  return `${window.location.origin}/api`
+}
+
+export const API_URL = resolveApiUrl()
 
 /** Error thrown for non-2xx API responses, carrying the backend payload. */
 export class ApiError extends Error {

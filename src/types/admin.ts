@@ -190,3 +190,40 @@ export interface MasterStats {
     last_trade_at: string | null
   }
 }
+
+/** One bucket of the admin cumulative P&L series. */
+export interface PerformancePoint {
+  /** `YYYY-MM-DD` (daily), `YYYY-Www` (weekly) or `YYYY-MM` (monthly / all). */
+  bucket: string
+  pnl: number
+  cumulative: number
+}
+
+/** One fixed window of the Performance Breakdown card. */
+export interface PerformanceWindow {
+  from: string
+  to: string
+  pnl: number
+  trades: number
+}
+
+/** GET /admin/performance — cumulative series + fixed period snapshots. */
+export interface AdminPerformance {
+  period: string
+  series: PerformancePoint[]
+  breakdown: {
+    daily: PerformanceWindow
+    weekly: PerformanceWindow
+    monthly: PerformanceWindow
+  }
+  /** Every symbol the master account has traded — powers the ticker filter. */
+  tickers: string[]
+}
+
+/** Filters accepted by GET /admin/performance (they apply to `series` only). */
+export interface PerformanceFilters {
+  period?: 'daily' | 'weekly' | 'monthly' | 'all'
+  from?: string
+  to?: string
+  exclude?: string[]
+}

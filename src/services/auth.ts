@@ -19,6 +19,7 @@ export async function register(
   email: string,
   password: string,
   passwordConfirmation: string,
+  referralCode?: string,
 ): Promise<AuthResponse> {
   const res = await apiFetch<AuthResponse>('/auth/register', {
     method: 'POST',
@@ -27,6 +28,8 @@ export async function register(
       email,
       password,
       password_confirmation: passwordConfirmation,
+      // Invalid codes are silently ignored server-side; registration proceeds.
+      ...(referralCode ? { referral_code: referralCode } : {}),
     },
   })
   saveSession(res.token, res.user)

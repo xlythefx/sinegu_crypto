@@ -11,7 +11,6 @@ import HowItWorks from '../components/landing/HowItWorks'
 import Exchanges from '../components/landing/Exchanges'
 import FinalCta from '../components/landing/FinalCta'
 import Footer from '../components/landing/Footer'
-import './Landing.css'
 
 interface Bubble {
   top: number
@@ -37,11 +36,11 @@ export default function Landing() {
   }, [])
 
   return (
-    <div className="landing">
-      <div className="landing__bubbles">
+    <div className="relative min-h-screen overflow-hidden text-text transition-[background,color] duration-[400ms] ease-[ease] bg-[linear-gradient(var(--bgScrim),var(--bgScrim)),url('/assets/hero-wallst.png')] bg-cover bg-center bg-fixed">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
         {BUBBLES.map((b, i) => (
           <div
-            className="landing__bubble"
+            className="absolute rounded-full bg-[var(--bubble)] animate-[bubble_ease-in_infinite]"
             key={i}
             style={{
               top: b.top,
@@ -56,7 +55,7 @@ export default function Landing() {
           />
         ))}
       </div>
-      <div className="landing__content">
+      <div className="relative z-[1]">
         <Ticker />
         <Nav />
         <Hero />

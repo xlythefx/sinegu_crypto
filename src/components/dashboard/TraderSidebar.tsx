@@ -15,6 +15,23 @@ import {
 } from 'lucide-react'
 import { getUser } from '../../lib/session'
 import { usePortalSwitch } from '../ui/PortalSwitchOverlay'
+import {
+  RAIL,
+  BRAND,
+  BRAND_LOGO,
+  BRAND_TEXT,
+  BRAND_TITLE,
+  BRAND_SUB,
+  NAV,
+  ITEM_BASE,
+  ITEM_OFF,
+  ITEM_ON,
+  ITEM_ICON,
+  FOOTER,
+  ADMIN_SWITCH,
+  LOGOUT,
+  REVEAL,
+} from './shellClasses'
 
 export interface TraderNavItem {
   label: string
@@ -32,7 +49,7 @@ export const NAV_ITEMS: TraderNavItem[] = [
   { label: 'Billing & Invoices', url: '/dashboard/invoices', icon: DollarSign },
   { label: 'Trading Assets', url: '/dashboard/assets', icon: Coins, hidden: true },
   { label: 'Asset Performance', url: '/dashboard/asset-performance', icon: LineChart },
-  { label: 'Referrals', url: '/dashboard/referrals', icon: Users, hidden: true },
+  { label: 'Referrals', url: '/dashboard/referrals', icon: Users },
   { label: 'Settings', url: '/dashboard/settings', icon: Settings },
 ]
 
@@ -52,51 +69,51 @@ export default function TraderSidebar({ onLogout }: TraderSidebarProps) {
   const canSeeAdmin = role === 'master' || role === 'admin'
 
   return (
-    <aside className="dsb">
-      <Link to="/" className="dsb__brand" aria-label="SineguAlerts home">
-        <img className="dsb__logo" src="/assets/logo.png" alt="" />
-        <span className="dsb__brand-text">
-          <span className="dsb__brand-title">SineguAlerts</span>
-          <span className="dsb__brand-sub">Trader Portal</span>
+    <aside className={RAIL}>
+      <Link to="/" className={BRAND} aria-label="SineguAlerts home">
+        <img className={BRAND_LOGO} src="/assets/logo.png" alt="" />
+        <span className={BRAND_TEXT}>
+          <span className={BRAND_TITLE}>SineguAlerts</span>
+          <span className={BRAND_SUB}>Trader Portal</span>
         </span>
       </Link>
 
-      <nav className="dsb__nav">
+      <nav className={NAV}>
         {NAV_ITEMS.filter((item) => !item.hidden).map((item) => (
           <NavLink
             key={item.url}
             to={item.url}
             end={item.url === '/dashboard'}
             className={({ isActive }) =>
-              `dsb__item${isActive ? ' dsb__item--active' : ''}`
+              `${ITEM_BASE} ${isActive ? ITEM_ON : ITEM_OFF}`
             }
           >
-            <span className="dsb__item-icon">
+            <span className={ITEM_ICON}>
               <item.icon size={20} strokeWidth={2} />
             </span>
-            <span className="dsb__label">{item.label}</span>
+            <span className={REVEAL}>{item.label}</span>
           </NavLink>
         ))}
       </nav>
 
-      <div className="dsb__footer">
+      <div className={FOOTER}>
         {canSeeAdmin && (
           <button
             type="button"
-            className="dsb__admin-switch"
+            className={ADMIN_SWITCH}
             onClick={() => switchPortal('/admin', 'Admin Portal')}
           >
-            <span className="dsb__item-icon">
+            <span className={ITEM_ICON}>
               <Shield size={20} strokeWidth={2} />
             </span>
-            <span className="dsb__label">Admin Dashboard</span>
+            <span className={REVEAL}>Admin Dashboard</span>
           </button>
         )}
-        <button type="button" className="dsb__logout" onClick={onLogout}>
-          <span className="dsb__item-icon">
+        <button type="button" className={LOGOUT} onClick={onLogout}>
+          <span className={ITEM_ICON}>
             <LogOut size={20} strokeWidth={2} />
           </span>
-          <span className="dsb__label">Log out</span>
+          <span className={REVEAL}>Log out</span>
         </button>
       </div>
     </aside>

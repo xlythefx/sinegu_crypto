@@ -7,7 +7,6 @@ import TraderSidebar from './TraderSidebar'
 import TopBar from './TopBar'
 import ConfirmModal from '../ui/ConfirmModal'
 import { logout } from '../../services/auth'
-import './DashboardLayout.css'
 
 interface DashboardLayoutProps {
   title: string

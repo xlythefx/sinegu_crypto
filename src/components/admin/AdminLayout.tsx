@@ -10,7 +10,13 @@ import UserAvatar from '../ui/UserAvatar'
 import { useTheme } from '../../theme'
 import { useSessionUser } from '../../hooks/useSessionUser'
 import { logout } from '../../services/auth'
-import '../dashboard/DashboardLayout.css'
+import {
+  TOPBAR,
+  BURGER,
+  TOPBAR_RIGHT,
+  THEME_TOGGLE,
+  THEME_TOGGLE_ICON,
+} from '../dashboard/shellClasses'
 
 interface AdminLayoutProps {
   title: string
@@ -25,26 +31,28 @@ function AdminTopBar({ title, subtitle }: { title: string; subtitle?: string }) 
   const user = useSessionUser()
 
   return (
-    <div className="dtb">
+    <div className={TOPBAR}>
       <button
         type="button"
-        className="dtb__burger"
+        className={BURGER}
         onClick={openDrawer}
         aria-label="Open menu"
       >
         <Menu size={20} strokeWidth={2.2} />
       </button>
       <div>
-        <div className="dtb__title">{title}</div>
-        {subtitle && <div className="dcard__sub">{subtitle}</div>}
+        <div className="font-display text-[18px] font-bold">{title}</div>
+        {subtitle && (
+          <div className="text-[12px] text-muted mt-px">{subtitle}</div>
+        )}
       </div>
-      <div className="dtb__right">
+      <div className={TOPBAR_RIGHT}>
         <button
-          className="theme-toggle"
+          className={THEME_TOGGLE}
           title="Toggle theme"
           onClick={toggleTheme}
         >
-          <span className="theme-toggle__icon">
+          <span className={THEME_TOGGLE_ICON}>
             {theme === 'dark' ? '☀' : '☾'}
           </span>
           {theme === 'dark' ? 'Light' : 'Dark'}

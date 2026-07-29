@@ -1,4 +1,5 @@
 import { createContext, useState, type ReactNode } from 'react'
+import { SHELL, SHELL_MAIN, SHELL_BACKDROP } from './shellClasses'
 
 /** Lets descendants (the TopBar burger) open the mobile sidebar drawer. */
 // eslint-disable-next-line react-refresh/only-export-components
@@ -23,17 +24,17 @@ export default function DashboardShell({
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   return (
-    <div className={`dsh${drawerOpen ? ' dsh--drawer-open' : ''}`}>
+    <div className={`${SHELL}${drawerOpen ? ' drawer-open' : ''}`}>
       <ShellContext.Provider value={{ openDrawer: () => setDrawerOpen(true) }}>
         {sidebar}
         {drawerOpen && (
           <div
-            className="dsh__backdrop"
+            className={SHELL_BACKDROP}
             onClick={() => setDrawerOpen(false)}
             aria-hidden="true"
           />
         )}
-        <main className="dsh__main">{children}</main>
+        <main className={SHELL_MAIN}>{children}</main>
       </ShellContext.Provider>
     </div>
   )

@@ -1,7 +1,25 @@
 import { useState } from 'react'
-import { Check, Copy, Pencil, Save, Trash2, Wallet } from 'lucide-react'
+import {
+  AlertCircle,
+  Check,
+  Copy,
+  Pencil,
+  Plus,
+  Save,
+  Star,
+  Trash2,
+  Wallet,
+} from 'lucide-react'
 import ConfirmModal from '../ui/ConfirmModal'
 import { USDT_TRC20_NETWORK, isValidTRC20Address } from '../../lib/validators'
+import {
+  addWallet,
+  deleteWallet,
+  setMainPayoutMethod,
+  updateWallet,
+} from '../../services/payoutMethods'
+import { getApiErrorMessage } from '../../services/api'
+import { truncateAddress } from '../../lib/referrals'
 import {
   BTN_GHOST_SM,
   BTN_PRIMARY_SM,
@@ -20,80 +38,130 @@ import {
   INPUT,
   INPUT_MONO,
   LABEL,
+  LOADING,
   SELECT,
+  notice,
 } from './formClasses'
-import { PAYOUT_WALLETS, type PayoutWallet } from './mockData'
+import type { CryptoWallet } from '../../types/referrals'
 
-function truncateAddress(address: string): string {
-  return address.length > 28
-    ? `${address.slice(0, 14)}…${address.slice(-12)}`
-    : address
+interface CryptoWalletCardProps {
+  /** null while payout methods are loading (or failed — see loadError). */
+  wallets: CryptoWallet[] | null
+  loadError: string | null
+  /** Refetch payout methods after any mutation. */
+  onChanged: () => void
 }
 
+const MAIN_PILL =
+  'inline-block text-[9px] font-bold uppercase tracking-[0.06em] py-[2px] px-[7px] rounded-pill bg-accent-soft border border-accent-line text-accent flex-none'
+
 /**
- * USDT TRC20 payout wallets — add/edit/delete/copy in local state.
- * Static prototype data — wired to the API once payout endpoints exist.
+ * USDT TRC20 payout wallets — live against /payout-methods
+ * (add / edit / delete / copy / set-main).
  */
-export default function CryptoWalletCard() {
-  const [wallets, setWallets] = useState<PayoutWallet[]>(PAYOUT_WALLETS)
-  const [editingId, setEditingId] = useState<string | null>(null)
+export default function CryptoWalletCard({
+  wallets,
+  loadError,
+  onChanged,
+}: CryptoWalletCardProps) {
+  const [adding, setAdding] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
-  const [toDelete, setToDelete] = useState<PayoutWallet | null>(null)
-  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [toDelete, setToDelete] = useState<CryptoWallet | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [copiedId, setCopiedId] = useState<number | null>(null)
+  const [mainBusyId, setMainBusyId] = useState<number | null>(null)
 
-  const showForm = wallets.length === 0 || editingId !== null
+  const loaded = wallets !== null
+  const showForm =
+    loaded && (adding || editingId !== null || wallets.length === 0)
   const trimmedAddress = address.trim()
   const canSubmit =
-    name.trim() !== '' && trimmedAddress !== '' && isValidTRC20Address(trimmedAddress)
+    !busy &&
+    name.trim() !== '' &&
+    trimmedAddress !== '' &&
+    isValidTRC20Address(trimmedAddress)
 
   const resetForm = () => {
+    setAdding(false)
     setEditingId(null)
     setName('')
     setAddress('')
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!canSubmit) return
-    if (editingId) {
-      setWallets((prev) =>
-        prev.map((w) =>
-          w.id === editingId
-            ? { ...w, name: name.trim(), address: trimmedAddress }
-            : w,
-        ),
-      )
-    } else {
-      setWallets((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          name: name.trim(),
-          network: USDT_TRC20_NETWORK,
-          address: trimmedAddress,
-        },
-      ])
+    setBusy(true)
+    setError(null)
+    const input = {
+      network: USDT_TRC20_NETWORK,
+      address: trimmedAddress,
+      name: name.trim(),
     }
-    resetForm()
+    try {
+      if (editingId !== null) await updateWallet(editingId, input)
+      else await addWallet(input)
+      resetForm()
+      onChanged()
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not save the wallet.'))
+    } finally {
+      setBusy(false)
+    }
   }
 
-  const handleEdit = (wallet: PayoutWallet) => {
+  const handleEdit = (wallet: CryptoWallet) => {
     setEditingId(wallet.id)
+    setAdding(false)
     setName(wallet.name)
     setAddress(wallet.address)
+    setError(null)
   }
 
-  const handleCopy = (wallet: PayoutWallet) => {
-    navigator.clipboard.writeText(wallet.address)
+  const handleCopy = (wallet: CryptoWallet) => {
+    void navigator.clipboard.writeText(wallet.address)
     setCopiedId(wallet.id)
     window.setTimeout(() => {
       setCopiedId((current) => (current === wallet.id ? null : current))
     }, 1600)
   }
 
+  const handleSetMain = async (wallet: CryptoWallet) => {
+    if (wallet.isMain || mainBusyId !== null) return
+    setMainBusyId(wallet.id)
+    setError(null)
+    try {
+      await setMainPayoutMethod('wallet', wallet.id)
+      onChanged()
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not update the main wallet.'))
+    } finally {
+      setMainBusyId(null)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!toDelete || deleteBusy) return
+    setDeleteBusy(true)
+    setError(null)
+    try {
+      await deleteWallet(toDelete.id)
+      setToDelete(null)
+      onChanged()
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not delete the wallet.'))
+      setToDelete(null)
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
+
   return (
-    <section className={`${CARD} flex flex-col`} data-aos="fade-up" data-aos-delay="200">
+    <section className={`${CARD} flex flex-col`} data-aos="fade-up" data-aos-delay="100">
       <div className={CARD_HEAD}>
         <span className={CHIP}>
           <Wallet size={15} />
@@ -104,9 +172,37 @@ export default function CryptoWalletCard() {
             Payout address for profits and referrals (Tron network only)
           </p>
         </div>
+        {loaded && wallets.length > 0 && !showForm && (
+          <button
+            type="button"
+            className={ICON_BTN}
+            onClick={() => {
+              setAdding(true)
+              setError(null)
+            }}
+            title="Add wallet"
+            aria-label="Add wallet"
+          >
+            <Plus size={15} />
+          </button>
+        )}
       </div>
 
-      {!showForm ? (
+      {error && (
+        <div className={notice('error')} role="alert">
+          <AlertCircle size={15} />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {loadError ? (
+        <div className={notice('error')} role="alert">
+          <AlertCircle size={15} />
+          <span>{loadError}</span>
+        </div>
+      ) : !loaded ? (
+        <p className={LOADING}>Loading wallets…</p>
+      ) : !showForm ? (
         <div className="flex flex-col gap-2.5">
           {wallets.map((wallet) => (
             <div
@@ -119,8 +215,11 @@ export default function CryptoWalletCard() {
                     <Wallet size={14} />
                   </span>
                   <div className="min-w-0">
-                    <p className="text-[13px] font-bold overflow-hidden text-ellipsis whitespace-nowrap">
-                      {wallet.name}
+                    <p className="flex items-center gap-1.5 text-[13px] font-bold min-w-0">
+                      <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                        {wallet.name}
+                      </span>
+                      {wallet.isMain && <span className={MAIN_PILL}>Main</span>}
                     </p>
                     <p className="font-mono text-[10.5px] tracking-[0.08em] uppercase text-accent mt-0.5">
                       {wallet.network}
@@ -128,6 +227,22 @@ export default function CryptoWalletCard() {
                   </div>
                 </div>
                 <div className="flex gap-0.5 flex-none">
+                  <button
+                    type="button"
+                    className={ICON_BTN}
+                    onClick={() => void handleSetMain(wallet)}
+                    disabled={mainBusyId !== null}
+                    title={wallet.isMain ? 'Main payout method' : 'Set as main'}
+                    aria-label={
+                      wallet.isMain ? 'Main payout method' : 'Set as main wallet'
+                    }
+                  >
+                    <Star
+                      size={14}
+                      className={wallet.isMain ? 'text-accent' : undefined}
+                      fill={wallet.isMain ? 'currentColor' : 'none'}
+                    />
+                  </button>
                   <button
                     type="button"
                     className={ICON_BTN}
@@ -150,7 +265,7 @@ export default function CryptoWalletCard() {
               </div>
               <div className="flex items-center gap-2 py-1.5 px-2 border border-hair rounded-btn bg-surface">
                 <span className="flex-1 min-w-0 font-mono text-[12px] text-muted [overflow-wrap:anywhere]">
-                  {truncateAddress(wallet.address)}
+                  {truncateAddress(wallet.address, 14, 12)}
                 </span>
                 <button
                   type="button"
@@ -170,7 +285,7 @@ export default function CryptoWalletCard() {
           ))}
         </div>
       ) : (
-        <form className={FORM} onSubmit={handleSubmit}>
+        <form className={FORM} onSubmit={(e) => void handleSubmit(e)}>
           <div className={FIELD}>
             <label className={LABEL} htmlFor="wallet-name">
               Wallet Name *
@@ -182,6 +297,7 @@ export default function CryptoWalletCard() {
               placeholder="e.g. Main USDT wallet"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              disabled={busy}
             />
           </div>
           <div className={FIELD}>
@@ -206,13 +322,14 @@ export default function CryptoWalletCard() {
               placeholder="T… (Tron TRC20 address, 34 characters)"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
+              disabled={busy}
             />
             <p className={HINT}>
               Address starts with T and is 34 characters long.
             </p>
           </div>
           <div className={FORM_ACTIONS}>
-            {editingId && (
+            {(editingId !== null || adding) && (
               <button
                 type="button"
                 className={BTN_GHOST_SM}
@@ -226,8 +343,12 @@ export default function CryptoWalletCard() {
               className={BTN_PRIMARY_SM}
               disabled={!canSubmit}
             >
-              {editingId ? <Save size={13} /> : <Wallet size={13} />}
-              {editingId ? 'Update Wallet' : 'Add Wallet'}
+              {editingId !== null ? <Save size={13} /> : <Wallet size={13} />}
+              {busy
+                ? 'Saving…'
+                : editingId !== null
+                  ? 'Update Wallet'
+                  : 'Add Wallet'}
             </button>
           </div>
         </form>
@@ -238,16 +359,13 @@ export default function CryptoWalletCard() {
         title="Delete payout wallet?"
         message={
           toDelete
-            ? `"${toDelete.name}" (${truncateAddress(toDelete.address)}) will be removed from your payout options.`
+            ? `"${toDelete.name}" (${truncateAddress(toDelete.address, 14, 12)}) will be removed from your payout options.`
             : undefined
         }
-        confirmLabel="Yes, delete"
+        confirmLabel={deleteBusy ? 'Deleting…' : 'Yes, delete'}
         cancelLabel="No"
         danger
-        onConfirm={() => {
-          setWallets((prev) => prev.filter((w) => w.id !== toDelete?.id))
-          setToDelete(null)
-        }}
+        onConfirm={() => void handleDelete()}
         onCancel={() => setToDelete(null)}
       />
     </section>

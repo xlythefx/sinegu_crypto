@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom'
 import {
   Activity,
   BarChart3,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   DollarSign,
@@ -14,6 +15,8 @@ import {
 } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
+import PnlOverview from '../../components/positions/PnlOverview'
+import AdminPositionsAnalytics from '../../components/admin/positions/AdminPositionsAnalytics'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import { useApiData } from '../../hooks/useApiData'
 import {
@@ -23,6 +26,7 @@ import {
 } from '../../services/admin'
 import { ApiError, getApiErrorMessage } from '../../services/api'
 import { displaySymbol } from '../../lib/chart'
+import { computeAdminPositionMetrics } from '../../lib/adminPositionsStats'
 import { fmtDateTime, fmtMoney, fmtSignedMoney } from '../../lib/format'
 import type {
   AdminOpenPosition,
@@ -164,12 +168,17 @@ function groupTrades(rows: AdminPastTrade[]): TradeGroup[] {
     .sort((a, b) => (a.closedAt < b.closedAt ? 1 : -1))
 }
 
-/** Small ticker chip used in the ticker column. */
-function TickerChip({ symbol }: { symbol: string }) {
+/** Coin-initials avatar + display symbol (mirrors the user Positions tables). */
+function TickerCell({ symbol }: { symbol: string }) {
+  const display = displaySymbol(symbol)
+  const initials = display.split('/')[0].slice(0, 3)
   return (
-    <span className="inline-block py-1 px-[11px] border border-border rounded-pill bg-surface2 font-mono text-xs font-bold tracking-[0.02em]">
-      {displaySymbol(symbol)}
-    </span>
+    <div className="flex items-center gap-[9px] font-bold whitespace-nowrap">
+      <span className="inline-flex items-center justify-center w-[30px] h-[30px] rounded-[9px] bg-accent-soft border border-accent-line text-accent text-[9.5px] font-semibold flex-none font-mono">
+        {initials}
+      </span>
+      {display}
+    </div>
   )
 }
 
@@ -217,6 +226,7 @@ export default function AdminPositions() {
   const { data, loading, error, reload } = useApiData(getAdminPositions)
 
   const [tab, setTab] = useState<Tab>('active')
+  const [showAnalytics, setShowAnalytics] = useState(false)
   const [activeBroker, setActiveBroker] = useState('all')
   const [pastBroker, setPastBroker] = useState('all')
   const [pastTicker, setPastTicker] = useState('all')
@@ -239,14 +249,10 @@ export default function AdminPositions() {
     [trades],
   )
 
-  // --- stat cards ---
-  const totalPnl = useMemo(
-    () => trades.reduce((s, t) => s + t.realized_pnl, 0),
-    [trades],
-  )
-  const activeAccounts = useMemo(
-    () => new Set(positions.map((p) => p.account_id)).size,
-    [positions],
+  // --- portfolio-wide analytics (across every account) ---
+  const metrics = useMemo(
+    () => computeAdminPositionMetrics(positions, trades),
+    [positions, trades],
   )
 
   // --- grouped + filtered rows ---
@@ -336,17 +342,17 @@ export default function AdminPositions() {
     },
     {
       label: 'Active Accounts',
-      value: activeAccounts.toLocaleString(),
+      value: metrics.activeAccounts.toLocaleString(),
       hint: 'With positions',
       icon: Users,
       tone: '',
     },
     {
       label: 'Total P&L',
-      value: fmtSignedMoney(totalPnl),
-      hint: totalPnl >= 0 ? 'Profit' : 'Loss',
+      value: fmtSignedMoney(metrics.totalPnl),
+      hint: 'Realized + unrealized',
       icon: DollarSign,
-      tone: totalPnl >= 0 ? 'pos' : 'neg',
+      tone: metrics.totalPnl >= 0 ? 'pos' : 'neg',
     },
   ]
 
@@ -401,6 +407,16 @@ export default function AdminPositions() {
         ))}
       </div>
 
+      {/* realized / unrealized / total P&L tiles, across every account */}
+      <PnlOverview
+        realized={metrics.realized}
+        unrealized={metrics.unrealized}
+        total={metrics.totalPnl}
+        pctBase={metrics.equityBase}
+      />
+
+      {showAnalytics && <AdminPositionsAnalytics m={metrics} />}
+
       {actionError && (
         <p
           className="mb-3.5 py-[9px] px-3 border border-[color-mix(in_srgb,var(--red)_30%,transparent)] rounded-field bg-[color-mix(in_srgb,var(--red)_8%,transparent)] text-[12.5px] text-red"
@@ -430,14 +446,29 @@ export default function AdminPositions() {
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            className="inline-flex items-center gap-[7px] py-2 px-3.5 border border-accent-line rounded-field bg-accent-soft text-accent text-[13px] font-bold cursor-pointer transition-colors hover:bg-accent hover:text-on-accent"
-            onClick={reload}
-          >
-            <RefreshCw size={14} />
-            Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="inline-flex items-center gap-[7px] py-2 px-3.5 border border-border rounded-field bg-surface text-text text-[13px] font-bold cursor-pointer transition-colors hover:border-accent-line hover:bg-accent-soft"
+              onClick={() => setShowAnalytics((v) => !v)}
+              aria-expanded={showAnalytics}
+            >
+              <BarChart3 size={14} />
+              {showAnalytics ? 'Hide Analytics' : 'Show Analytics'}
+              <ChevronDown
+                size={14}
+                className={`transition-transform duration-300${showAnalytics ? ' rotate-180' : ''}`}
+              />
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-[7px] py-2 px-3.5 border border-accent-line rounded-field bg-accent-soft text-accent text-[13px] font-bold cursor-pointer transition-colors hover:bg-accent hover:text-on-accent"
+              onClick={reload}
+            >
+              <RefreshCw size={14} />
+              Refresh
+            </button>
+          </div>
         </div>
 
         {/* tabs */}
@@ -537,7 +568,7 @@ export default function AdminPositions() {
                             </div>
                           </td>
                           <td className={TD}>
-                            <TickerChip symbol={g.symbol} />
+                            <TickerCell symbol={g.symbol} />
                           </td>
                           <td className={TD}>
                             <span className="inline-block py-[3px] px-[9px] border border-border rounded-btn bg-surface2 text-[11.5px] font-semibold text-muted">
@@ -674,7 +705,7 @@ export default function AdminPositions() {
                             </div>
                           </td>
                           <td className={TD}>
-                            <TickerChip symbol={g.symbol} />
+                            <TickerCell symbol={g.symbol} />
                           </td>
                           <td className={TD}>
                             <span className="inline-block py-[3px] px-[9px] border border-border rounded-btn bg-surface2 text-[11.5px] font-semibold text-muted">

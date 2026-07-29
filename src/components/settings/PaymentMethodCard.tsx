@@ -15,7 +15,12 @@ import { SAVED_CARDS, type SavedCard } from './mockData'
 
 /**
  * Card on file used for automatic invoice payments.
- * Static prototype data — wired to Stripe via the API later.
+ *
+ * NOT RENDERED — hidden from Settings until the Stripe phase lands (there is no
+ * saved-card table or endpoint on sinegutrade-api yet, so the data below is
+ * static prototype data). Kept so the UI can be dropped back into Settings.tsx
+ * once real cards exist; delete both this file and mockData.ts if the design
+ * changes instead.
  */
 export default function PaymentMethodCard() {
   const [cards, setCards] = useState<SavedCard[]>(SAVED_CARDS)
