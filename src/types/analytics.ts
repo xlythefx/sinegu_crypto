@@ -71,6 +71,31 @@ export interface RiskStats {
   risk_score: number | null
 }
 
+/**
+ * Realized P&L measured against the money actually paid in — the flip side of
+ * Total Return. Withdrawals are ignored (the denominator is gross deposits),
+ * and it stays all-time no matter the date range, though it does honor the
+ * symbol / strategy chips.
+ */
+export interface ReturnOnDeposit {
+  /** null when nothing has been deposited yet. */
+  pct: number | null
+  realized: number
+  deposits: number
+  trades: number
+}
+
+export type ChipMode = 'include' | 'exclude'
+
+export interface AnalyticsFilterMeta {
+  /** True once any symbol / strategy chip is picked. */
+  filtered: boolean
+  /** Every symbol in the current exchange + date scope, chips included. */
+  available_symbols: string[]
+  /** Same, by strategy tag; untagged trades bucket into 'Untagged'. */
+  available_strategies: string[]
+}
+
 export interface Analytics {
   baseline: number
   current_capital: number
@@ -78,6 +103,8 @@ export interface Analytics {
   total_realized: number
   total_return_abs: number
   total_return_pct: number | null
+  return_on_deposit: ReturnOnDeposit
+  filters: AnalyticsFilterMeta
   trading_days: number
   avg_daily_pnl: number | null
   best_day: DayExtreme | null

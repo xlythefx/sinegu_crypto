@@ -73,6 +73,43 @@ export function getApiErrorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
 }
 
+/** Everything an error carries, unflattened — for developer surfaces only. */
+export interface ApiErrorDebug {
+  /** 0 when the request never reached the server. */
+  status: number
+  errorCode?: string
+  /** The raw backend message, before any friendlier fallback replaced it. */
+  message: string
+  /** What to check first, when the API had an opinion. */
+  hint?: string
+  /** The API's `debug` block (developer accounts), else the raw body. */
+  detail?: unknown
+}
+
+/**
+ * The full story behind a failure, for `developer` accounts only — the API
+ * attaches its `debug` block to the same role, so a normal trader's response
+ * simply has nothing here to read. Everyone else keeps
+ * {@link getApiErrorMessage}'s single sentence.
+ */
+export function getApiErrorDebug(err: unknown): ApiErrorDebug {
+  if (err instanceof ApiError) {
+    const payload = err.payload as { debug?: Record<string, unknown> } | undefined
+    const debug = payload?.debug
+    return {
+      status: err.status,
+      errorCode: err.errorCode,
+      message: err.message,
+      hint: typeof debug?.hint === 'string' ? debug.hint : undefined,
+      detail: debug ?? err.payload,
+    }
+  }
+  return {
+    status: 0,
+    message: err instanceof Error ? err.message : String(err),
+  }
+}
+
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown

@@ -10,11 +10,13 @@ import DailyPnlCalendar from '../components/dashboard/DailyPnlCalendar'
 import PnlBreakdownCard from '../components/dashboard/PnlBreakdownCard'
 import AssetStrip from '../components/dashboard/AssetStrip'
 import { useApiData } from '../hooks/useApiData'
+import { useSessionUser } from '../hooks/useSessionUser'
 import { getDashboardSummary } from '../services/dashboard'
 import { ApiError } from '../services/api'
 
 export default function Dashboard() {
   const { data, loading, error, reload } = useApiData(getDashboardSummary)
+  const sessionUser = useSessionUser()
 
   if (error instanceof ApiError && error.status === 401) {
     return <Navigate to="/auth" replace />
@@ -31,6 +33,9 @@ export default function Dashboard() {
             totalPnl={data.total_pnl}
             pctBase={data.pct_base}
             curve={data.equity_curve}
+            // Only an explicit false shows the empty state — undefined means a
+            // stale stored session and must render the normal connected card.
+            connected={sessionUser?.has_exchange_account !== false}
           />
           <MetricsRail metrics={data.metrics} />
 

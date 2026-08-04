@@ -1,5 +1,5 @@
 import { Shield } from 'lucide-react'
-import { fmtDateTime, fmtMoney } from '../../lib/format'
+import { fmtDateTime, fmtMoney, fmtSignedMoney } from '../../lib/format'
 import type { MasterStats } from '../../types/admin'
 
 interface MasterAccountCardProps {
@@ -62,7 +62,21 @@ export default function MasterAccountCard({
         <p>
           <b className="font-semibold">Balance:</b>{' '}
           <span className="font-mono text-[12.5px]">
-            {fmtMoney(stats.balance)} {account?.currency_type ?? 'USDT'}
+            {stats.balance === null ? (
+              <span className="text-faint">Awaiting sync</span>
+            ) : (
+              `${fmtMoney(stats.balance)} ${account?.currency_type ?? 'USDT'}`
+            )}
+          </span>
+        </p>
+        <p>
+          <b className="font-semibold">Unrealized P&L:</b>{' '}
+          <span
+            className={`font-mono text-[12.5px] ${
+              stats.unrealized_pnl < 0 ? 'text-red' : 'text-green'
+            }`}
+          >
+            {fmtSignedMoney(stats.unrealized_pnl)}
           </span>
         </p>
       </div>

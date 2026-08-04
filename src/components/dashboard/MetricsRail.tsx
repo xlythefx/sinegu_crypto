@@ -5,8 +5,8 @@ interface MetricsRailProps {
   metrics: DashboardMetrics
 }
 
-/** The 7-cell metrics rail: Net P&L · Win Rate · Profit Factor · Expectancy ·
- *  Avg R:R · Max Drawdown · Sharpe, with hairline dividers. */
+/** The 6-cell metrics rail: Net P&L · Win Rate · Profit Factor · Expectancy ·
+ *  Max Drawdown · Sharpe, with hairline dividers. */
 export default function MetricsRail({ metrics }: MetricsRailProps) {
   const cells = [
     {
@@ -28,11 +28,6 @@ export default function MetricsRail({ metrics }: MetricsRailProps) {
       label: 'Expectancy',
       value: metrics.expectancy !== null ? fmtSignedMoney(metrics.expectancy) : '—',
       tone: metrics.expectancy !== null && metrics.expectancy >= 0 ? 'pos' : 'neg',
-    },
-    {
-      label: 'Avg R:R',
-      value: metrics.avg_rr !== null ? `1 : ${metrics.avg_rr.toFixed(1)}` : '—',
-      tone: '',
     },
     {
       label: 'Max Drawdown',

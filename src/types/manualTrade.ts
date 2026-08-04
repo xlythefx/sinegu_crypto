@@ -26,7 +26,6 @@ export interface ManualTradeInput {
   target: EngineTarget
   action: TradeAction
   symbol: string
-  price?: number | null
   leverage?: number | null
   strategy?: string | null
   increments?: number
@@ -48,6 +47,11 @@ export interface EngineStatus {
   reachable: boolean
   url: string
   error?: string
+  /**
+   * Middle-masked BINANCE_ENGINE_WEBHOOK_SECRET — preview only. The full token
+   * never leaves the API; copy it from CLAUDE.md for TradingView alerts.
+   */
+  webhook_secret_masked?: string | null
   health?: {
     status?: string
     service?: string

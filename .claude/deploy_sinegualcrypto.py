@@ -26,7 +26,10 @@ Subcommands:
   backup        - tar dashboard/ + api/ into _backups/<timestamp>/
   deploy-dash   - local dist/ -> remote dashboard/   (run `npm run build` first)
   deploy-api    - local sinegutrade-api -> remote api/ (preserves .env/storage/vendor)
+  deploy-engine - local trading-flask/ (binance_abcd) -> remote engine/ + venv +
+                  server-side .env + systemd unit + nginx webhook route (preserves .env/.venv)
   verify        - index.html chunk refs exist, .env intact, HTTP probe
+  verify-engine - systemd state, /health, public webhook gate, engine->API auth
   full          - backup -> deploy-dash -> deploy-api -> verify  (one connection)
 
 Credentials are NOT stored in this file. They load from .claude/deploy.creds.json
@@ -57,6 +60,7 @@ REPO_ROOT = os.path.dirname(HERE)
 
 LOCAL_DIST = os.path.join(REPO_ROOT, "dist")
 LOCAL_API = r"C:\wamp64\www\sinegutrade-api"
+LOCAL_ENGINE = os.path.join(REPO_ROOT, "trading-flask")
 
 # --- API push excludes: never overwrite production secrets / data / deps ---
 API_EXCLUDE_DIRS = {
@@ -68,6 +72,13 @@ API_EXCLUDE_FILES = {
     "package-lock.json", "composer.lock.bak",
 }
 API_EXCLUDE_EXT = {".log", ".sqlite", ".zip", ".rar", ".7z"}
+
+# --- Engine push excludes: dev tooling and server-owned state stay out ---
+ENGINE_EXCLUDE_DIRS = {".git", ".venv", "__pycache__", ".pytest_cache", "out", "tests"}
+ENGINE_EXCLUDE_FILES = {
+    ".env", "engine_launcher.py", "webhook_tester.py", "requirements-dev.txt",
+}
+ENGINE_EXCLUDE_EXT = {".pyc", ".log"}
 
 
 def log(msg: str) -> None:
@@ -118,8 +129,10 @@ if not PASSWORD and not KEYFILE:
 REMOTE_PARENT = _T["parent"]
 REMOTE_DASH = REMOTE_PARENT + "/dashboard"
 REMOTE_API = REMOTE_PARENT + "/api"
+REMOTE_ENGINE = REMOTE_PARENT + "/engine"
 REMOTE_BACKUPS = REMOTE_PARENT + "/_backups"
 REMOTE_TMP = "/tmp/sinegu_deploy"
+ENGINE_SERVICE = "sinegualerts-engine"
 
 
 # ---------------------------------------------------------------- connection
@@ -206,26 +219,35 @@ def sh(ssh, cmd: str, check: bool = True, timeout: int = 300):
 
 # ------------------------------------------------------------------- helpers
 
+_MODE_EXCLUDES = {
+    "api": (API_EXCLUDE_DIRS, API_EXCLUDE_FILES, API_EXCLUDE_EXT),
+    "engine": (ENGINE_EXCLUDE_DIRS, ENGINE_EXCLUDE_FILES, ENGINE_EXCLUDE_EXT),
+}
+
+
 def _collect(local_root: str, mode: str) -> list[tuple[str, str]]:
     """Walk local_root -> [(abs_path, posix_rel)], applying per-mode excludes."""
+    excludes = _MODE_EXCLUDES.get(mode)
     out: list[tuple[str, str]] = []
     for dirpath, dirnames, filenames in os.walk(local_root):
         rel_dir = os.path.relpath(dirpath, local_root).replace("\\", "/")
         if rel_dir == ".":
             rel_dir = ""
-        if mode == "api":
+        if excludes:
+            ex_dirs, _, _ = excludes
             dirnames[:] = [
                 d for d in dirnames
-                if d.lower() not in API_EXCLUDE_DIRS
-                and f"{rel_dir}/{d}".lstrip("/").lower() not in API_EXCLUDE_DIRS
+                if d.lower() not in ex_dirs
+                and f"{rel_dir}/{d}".lstrip("/").lower() not in ex_dirs
             ]
         for fn in filenames:
             rel = f"{rel_dir}/{fn}".lstrip("/")
-            if mode == "api":
+            if excludes:
+                _, ex_files, ex_ext = excludes
                 rel_l = rel.lower()
-                if rel_l in API_EXCLUDE_FILES or os.path.basename(rel_l) in API_EXCLUDE_FILES:
+                if rel_l in ex_files or os.path.basename(rel_l) in ex_files:
                     continue
-                if os.path.splitext(rel_l)[1] in API_EXCLUDE_EXT:
+                if os.path.splitext(rel_l)[1] in ex_ext:
                     continue
             out.append((os.path.join(dirpath, fn), rel))
     out.sort(key=lambda x: x[1])
@@ -366,6 +388,17 @@ NGINX_VHOST = """server {
 
     client_max_body_size 32M;
 
+    # ---- engine machine-to-machine API: localhost ONLY ----
+    # /api/engine/* hands out account api/secret keys (X-Engine-Secret header);
+    # the engine calls it via 127.0.0.1, so the internet never needs it.
+    location ^~ /api/engine/ {
+        allow 127.0.0.1;
+        allow ::1;
+        deny all;
+        root /var/www/sinegualerts/api/public;
+        try_files $uri @laravel;
+    }
+
     # ---- Laravel API under /api -> sinegutrade-api/public ----
     # `root` (not `alias`) + a named-location fallback, so $request_uri reaches
     # PHP untouched. Laravel's routes are registered WITH the /api prefix, so it
@@ -386,15 +419,38 @@ NGINX_VHOST = """server {
         fastcgi_read_timeout 120;
     }
 
-    # React SPA fallback
+    # ---- trading engine webhook (waitress on 127.0.0.1:5010) ----
+    # ONLY the webhook path is public; /health and /admin/* stay local-only.
+    location = /binance_abcd_webhook {
+        proxy_pass http://127.0.0.1:5010;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 30;
+    }
+
+    # React SPA fallback.
+    #
+    # index.html MUST NOT be cached. With no Cache-Control header browsers
+    # apply heuristic freshness (a fraction of Last-Modified age) and keep
+    # serving an old index.html, which points at the previous build's hashed
+    # bundle — the deploy looks like it never happened until you hard-refresh
+    # or open incognito. `no-cache` still allows a cheap 304 via ETag.
     location / {
+        add_header Cache-Control "no-cache, must-revalidate" always;
         try_files $uri $uri/ /index.html;
     }
 
-    # hashed assets are immutable
+    # try_files re-runs location matching, so the fallback lands here.
+    location = /index.html {
+        add_header Cache-Control "no-cache, must-revalidate" always;
+        try_files $uri =404;
+    }
+
+    # hashed assets are immutable — the filename changes every build.
+    # One explicit header rather than `expires` + add_header, which emits two
+    # separate Cache-Control lines that a CDN in front could read ambiguously.
     location /assets/ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
         try_files $uri =404;
     }
 
@@ -591,17 +647,19 @@ def do_backup(ssh) -> str:
     dest = f"{REMOTE_BACKUPS}/{ts}"
     log(f"=== BACKUP -> {dest} ===")
     sh(ssh, f"mkdir -p {dest}")
-    for name, src in [("dashboard", REMOTE_DASH), ("api", REMOTE_API)]:
+    for name, src in [("dashboard", REMOTE_DASH), ("api", REMOTE_API), ("engine", REMOTE_ENGINE)]:
         _, out, _ = sh(ssh, f"[ -d {src} ] && echo YES || echo NO", check=False)
         if out.strip() != "YES":
             log(f"  {name}: nothing to back up (missing)")
             continue
         log(f"  tar {name} ...")
         sh(ssh, f"tar -czf {dest}/{name}.tar.gz -C {src} "
-                f"--exclude=vendor --exclude=node_modules --exclude=storage/logs .",
+                f"--exclude=vendor --exclude=node_modules --exclude=storage/logs "
+                f"--exclude=.venv --exclude=__pycache__ .",
            timeout=900)
-    # keep the api .env separately so a restore is trivial
+    # keep the .env files separately so a restore is trivial
     sh(ssh, f"[ -f {REMOTE_API}/.env ] && cp {REMOTE_API}/.env {dest}/api.env || true", check=False)
+    sh(ssh, f"[ -f {REMOTE_ENGINE}/.env ] && cp {REMOTE_ENGINE}/.env {dest}/engine.env || true", check=False)
     _, out, _ = sh(ssh, f"ls -lh {dest}", check=False)
     log("  " + out.strip().replace("\n", "\n  "))
     # prune to the newest 10 backups
@@ -667,11 +725,194 @@ def do_deploy_api(ssh):
     log("  php artisan config:cache / route:cache ...")
     sh(ssh, f"cd {REMOTE_API} && php artisan config:cache && php artisan route:cache && "
             f"php artisan storage:link", check=False)
+    # artisan ran as root, so the cache files are root-owned; hand them back or
+    # the admin "Clear caches" button (running as www-data) cannot rewrite them.
+    sh(ssh, f"chown -R www-data:www-data {REMOTE_API}/bootstrap/cache", check=False)
     sh(ssh, "systemctl reload php8.3-fpm nginx", check=False)
 
     log("  post-deploy .env -> PRESENT")
     log("=== DEPLOY api DONE ===\n")
     return ssh
+
+
+ENGINE_SYSTEMD_UNIT = f"""[Unit]
+Description=SineguAlerts BINANCE_ABCD trading engine (waitress :5010)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory={REMOTE_ENGINE}
+EnvironmentFile=-{REMOTE_ENGINE}/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart={REMOTE_ENGINE}/.venv/bin/python -m binance_abcd.main
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+
+def _local_env_value(path: str, key: str) -> str:
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith(f"{key}="):
+                    return line.split("=", 1)[1].strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return ""
+
+
+def _remote_env_value(ssh, path: str, key: str) -> str:
+    _, out, _ = sh(ssh, f"grep -E '^{key}=' {path} 2>/dev/null | tail -1", check=False)
+    line = out.strip()
+    return line.split("=", 1)[1].strip().strip('"').strip("'") if "=" in line else ""
+
+
+def _ensure_engine_secrets(ssh) -> None:
+    """Make api/.env ENGINE_SECRET and engine/.env agree; create engine/.env if absent.
+
+    The webhook secret is copied from the LOCAL trading-flask/.env so URLs the
+    user already pasted into TradingView keep working. The engine<->API secret
+    prefers whatever prod api/.env already has, else generates a fresh one.
+    Existing server files are edited line-wise, never rewritten.
+    """
+    import secrets as pysecrets
+
+    webhook_secret = _local_env_value(os.path.join(LOCAL_ENGINE, ".env"), "BINANCE_ABCD_WEBHOOK_SECRET")
+    if not webhook_secret:
+        sys.exit("[abort] BINANCE_ABCD_WEBHOOK_SECRET missing in local trading-flask/.env")
+
+    api_secret = _remote_env_value(ssh, f"{REMOTE_API}/.env", "ENGINE_SECRET")
+    engine_env_secret = _remote_env_value(ssh, f"{REMOTE_ENGINE}/.env", "BINANCE_ABCD_ENGINE_SECRET")
+    engine_secret = api_secret or engine_env_secret or pysecrets.token_urlsafe(32)
+
+    if not api_secret:
+        log("  api/.env: appending ENGINE_SECRET ...")
+        sh(ssh, f"printf '\\nENGINE_SECRET={engine_secret}\\n' >> {REMOTE_API}/.env", timeout=120)
+
+    # The API also needs the engine's WEBHOOK secret: the manual-trade console
+    # signs proxied webhooks with it, and the admin cache flush uses it as
+    # X-Admin-Secret to refresh the engine's account/asset caches.
+    api_hook = _remote_env_value(ssh, f"{REMOTE_API}/.env", "BINANCE_ENGINE_WEBHOOK_SECRET")
+    if api_hook != webhook_secret:
+        log("  api/.env: syncing BINANCE_ENGINE_WEBHOOK_SECRET with the engine ...")
+        sh(ssh, f"grep -q '^BINANCE_ENGINE_WEBHOOK_SECRET=' {REMOTE_API}/.env && "
+                f"sed -i 's|^BINANCE_ENGINE_WEBHOOK_SECRET=.*|BINANCE_ENGINE_WEBHOOK_SECRET={webhook_secret}|' "
+                f"{REMOTE_API}/.env || "
+                f"printf 'BINANCE_ENGINE_WEBHOOK_SECRET={webhook_secret}\\n' >> {REMOTE_API}/.env")
+
+    log("  api/.env: config:cache ...")
+    sh(ssh, f"cd {REMOTE_API} && php artisan config:cache && "
+            f"chown -R www-data:www-data {REMOTE_API}/bootstrap/cache", timeout=120)
+
+    rc, out, _ = sh(ssh, f"[ -f {REMOTE_ENGINE}/.env ] && echo PRESENT || echo MISSING", check=False)
+    if out.strip() != "PRESENT":
+        log("  engine/.env: creating (prod defaults; pollers ON, startup sync OFF) ...")
+        env_body = (
+            "# SineguAlerts BINANCE_ABCD engine — PROD\n"
+            "# Generated by deploy-engine; lives only on the server, never overwritten by deploys.\n"
+            f"BINANCE_ABCD_WEBHOOK_SECRET={webhook_secret}\n"
+            f"BINANCE_ABCD_ENGINE_SECRET={engine_secret}\n"
+            "BINANCE_ABCD_ENGINE_API_BASE=http://127.0.0.1/api\n"
+            "BINANCE_ABCD_FLASK_PORT=5010\n"
+            "BINANCE_ABCD_RUN_POLLERS=true\n"
+            "BINANCE_ABCD_SYNC_POSITION_MODE_ON_STARTUP=false\n"
+        )
+        with _current(ssh).open_sftp() as sftp:
+            with sftp.open(f"{REMOTE_ENGINE}/.env", "w") as f:
+                f.write(env_body)
+        sh(ssh, f"chmod 600 {REMOTE_ENGINE}/.env", check=False)
+    elif engine_env_secret != engine_secret:
+        log("  engine/.env: aligning BINANCE_ABCD_ENGINE_SECRET with api/.env ...")
+        sh(ssh, f"grep -q '^BINANCE_ABCD_ENGINE_SECRET=' {REMOTE_ENGINE}/.env && "
+                f"sed -i 's|^BINANCE_ABCD_ENGINE_SECRET=.*|BINANCE_ABCD_ENGINE_SECRET={engine_secret}|' "
+                f"{REMOTE_ENGINE}/.env || "
+                f"printf 'BINANCE_ABCD_ENGINE_SECRET={engine_secret}\\n' >> {REMOTE_ENGINE}/.env")
+
+
+def do_deploy_engine(ssh):
+    if not os.path.isfile(os.path.join(LOCAL_ENGINE, "binance_abcd", "main.py")):
+        sys.exit(f"[abort] engine source not found: {LOCAL_ENGINE}\\binance_abcd\\main.py")
+
+    log("  running engine tests locally (gate) ...")
+    import subprocess
+    r = subprocess.run([sys.executable, "-m", "pytest", "tests", "-q"],
+                       cwd=LOCAL_ENGINE, capture_output=True, text=True)
+    if r.returncode != 0:
+        tail = (r.stdout or r.stderr or "").strip().splitlines()[-15:]
+        sys.exit("[abort] engine tests FAILED — not deploying:\n  " + "\n  ".join(tail))
+    log("  tests green: " + (r.stdout.strip().splitlines()[-1] if r.stdout.strip() else "ok"))
+
+    log(f"=== DEPLOY engine -> {REMOTE_ENGINE} (.env/.venv preserved) ===")
+    ssh = _deploy_via_tgz(
+        ssh, LOCAL_ENGINE, REMOTE_ENGINE, mode="engine", name="sinegu_engine.tar.gz",
+        rsync_extra=[".env", ".venv", "out"],
+    )
+
+    log("  python venv + deps ...")
+    sh(ssh, "dpkg -s python3-venv >/dev/null 2>&1 || "
+            "DEBIAN_FRONTEND=noninteractive apt-get install -y python3-venv", timeout=600)
+    sh(ssh, f"cd {REMOTE_ENGINE} && [ -d .venv ] || python3 -m venv .venv", timeout=300)
+    sh(ssh, f"cd {REMOTE_ENGINE} && .venv/bin/pip install -q --disable-pip-version-check "
+            f"-r requirements.txt", timeout=900)
+    sh(ssh, f"mkdir -p {REMOTE_ENGINE}/out", check=False)
+
+    _ensure_engine_secrets(ssh)
+
+    log("  systemd unit + nginx route ...")
+    with _current(ssh).open_sftp() as sftp:
+        with sftp.open(f"/etc/systemd/system/{ENGINE_SERVICE}.service", "w") as f:
+            f.write(ENGINE_SYSTEMD_UNIT)
+    sh(ssh, f"systemctl daemon-reload && systemctl enable {ENGINE_SERVICE}")
+
+    # Admin "Bot Engine" page: php-fpm (www-data) may restart THIS unit only,
+    # and may read the journal. Both idempotent; visudo -c validates the rule.
+    log("  www-data ops privileges (sudoers restart rule + journal group) ...")
+    sh(ssh, f"printf 'www-data ALL=(root) NOPASSWD: /usr/bin/systemctl restart {ENGINE_SERVICE}\\n' "
+            f"> /etc/sudoers.d/{ENGINE_SERVICE} && chmod 440 /etc/sudoers.d/{ENGINE_SERVICE} && visudo -c -q")
+    sh(ssh, "id -nG www-data | grep -qw systemd-journal || "
+            "(usermod -aG systemd-journal www-data && systemctl restart php8.3-fpm)")
+    do_deploy_nginx(ssh)
+    sh(ssh, f"systemctl restart {ENGINE_SERVICE}")
+
+    do_verify_engine(ssh)
+    log("=== DEPLOY engine DONE ===\n")
+    return ssh
+
+
+def do_verify_engine(ssh) -> None:
+    log("=== VERIFY engine ===")
+    _, out, _ = sh(ssh, f"systemctl is-active {ENGINE_SERVICE}", check=False)
+    state = out.strip()
+    log(f"  systemd: {state}")
+    if state != "active":
+        _, jout, _ = sh(ssh, f"journalctl -u {ENGINE_SERVICE} -n 25 --no-pager", check=False)
+        log("  --- journal tail ---\n  " + jout.strip().replace("\n", "\n  "))
+        return
+
+    _, out, _ = sh(ssh, "sleep 3; curl -s -m 8 http://127.0.0.1:5010/health | head -c 300", check=False)
+    log(f"  /health: {out.strip()[:300] or '(no response yet)'}")
+
+    log("  public webhook gate (empty POST should be rejected, not 404) ...")
+    _, out, _ = sh(ssh, "curl -s -m 8 -o /dev/null -w '%{http_code}' -X POST "
+                        "-H 'Content-Type: application/json' -d '{}' "
+                        "http://127.0.0.1/binance_abcd_webhook", check=False)
+    code = out.strip()
+    log(f"    -> {code} {'OK (secret gate)' if code == '403' else '<-- expected 403'}")
+
+    log("  engine -> Laravel auth (accounts endpoint with engine secret) ...")
+    _, out, _ = sh(ssh, f"S=$(grep -E '^BINANCE_ABCD_ENGINE_SECRET=' {REMOTE_ENGINE}/.env | cut -d= -f2-); "
+                        f"curl -s -m 8 -o /dev/null -w '%{{http_code}}' "
+                        f"-H \"X-Engine-Secret: $S\" -H 'Accept: application/json' "
+                        f"http://127.0.0.1/api/engine/binance/accounts", check=False)
+    code = out.strip()
+    log(f"    -> {code} {'OK' if code == '200' else '<-- expected 200'}")
+
+    _, out, _ = sh(ssh, f"journalctl -u {ENGINE_SERVICE} -n 8 --no-pager -o cat", check=False)
+    log("  --- recent log ---\n  " + out.strip().replace("\n", "\n  ") + "\n")
 
 
 def do_verify_dash(ssh) -> bool:
@@ -750,8 +991,10 @@ def main() -> int:
             "backup": do_backup,
             "deploy-dash": do_deploy_dash,
             "deploy-api": do_deploy_api,
+            "deploy-engine": do_deploy_engine,
             "verify": do_verify,
             "verify-dash": do_verify_dash,
+            "verify-engine": do_verify_engine,
             "full": do_full,
         }
         fn = dispatch.get(cmd)

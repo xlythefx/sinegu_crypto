@@ -22,7 +22,7 @@ from typing import Any, Optional
 
 from flask import Blueprint, jsonify, request
 
-from binance_abcd import engine_client, symbol_locks
+from binance_abcd import engine_client, notify, symbol_locks
 from binance_abcd.accounts_api import account_futures_base_url, fetch_accounts
 from binance_abcd.assets_api import get_asset
 from binance_abcd.binance_api import BinanceAPI
@@ -31,6 +31,7 @@ from binance_abcd.hooks import (
     DISPATCH_WORKERS,
     FANOUT_WORKERS,
     LEVERAGE_CACHE_TTL,
+    MIN_DEPOSIT,
     OUT_DIR,
     REFERENCE_BALANCE,
     WEBHOOK_PATH,
@@ -101,6 +102,37 @@ def _scale_qty(ticker: str, base_size: float, balance: float) -> float:
     step = base / 10.0
     scaled = base * (bal / REFERENCE_BALANCE)
     return round(math.floor(scaled / step) * step, 10)
+
+
+def _total_deposit(account: dict) -> Optional[float]:
+    """Capital the account has been funded with, net of withdrawals.
+
+    Falls back to initial_deposit when the backend predates `total_deposit`;
+    None means unknown, which the deposit gate treats as ineligible.
+    """
+    for key in ("total_deposit", "initial_deposit"):
+        raw = account.get(key)
+        if raw in (None, ""):
+            continue
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _deposit_gate(account: dict) -> tuple[bool, Optional[float]]:
+    """(may_enter, total_deposit) for MIN_DEPOSIT.
+
+    FAILS CLOSED: an unknown deposit blocks entries, same as an unconfigured
+    asset does. A never-polled or underfunded account must not open positions.
+    """
+    deposit = _total_deposit(account)
+    if MIN_DEPOSIT <= 0:
+        return True, deposit
+    if deposit is None:
+        return False, None
+    return deposit + 1e-9 >= MIN_DEPOSIT, deposit
 
 
 def _parse_leverage(raw: Any) -> Optional[int]:
@@ -222,14 +254,20 @@ def _deferred_close_bookkeeping(
     entry_price: Optional[float],
     strategy: Optional[str],
     order_result: Any,
+    exit_batch_id: Optional[str] = None,
 ) -> None:
     """After a close: fill summary from userTrades -> past-position row + strategy consume.
-    Runs on the account pool, off the close path; the poller safety-net catches misses."""
+    Runs on the account pool, off the close path; the poller safety-net catches misses.
+
+    Also reports this account's realized PnL into the signal's Telegram exit
+    batch — in a `finally` so a bookkeeping failure still releases the message
+    instead of stalling it until the watchdog fires.
+    """
+    realized_pnl, exit_price = (None, None)
     try:
         order_id = None
         if isinstance(order_result, dict):
             order_id = order_result.get("orderId")
-        realized_pnl, exit_price = (None, None)
         if order_id is not None:
             realized_pnl, exit_price = get_order_fill_summary(api, symbol, order_id)
 
@@ -257,6 +295,14 @@ def _deferred_close_bookkeeping(
         _consume_strategy(account, symbol, position_side)
     except Exception:  # noqa: BLE001 - bookkeeping must never bubble into the pool
         log.exception("deferred close bookkeeping failed for %s %s", account.get("name"), symbol)
+    finally:
+        notify.report_exit_fill(
+            exit_batch_id,
+            realized_pnl=realized_pnl,
+            exit_price=exit_price,
+            quantity=closed_qty,
+            balance=account.get("balance"),
+        )
 
 
 # --- Local JSONL log ----------------------------------------------------------
@@ -277,6 +323,18 @@ def _post_trade_log(summary: dict) -> None:
 
 # --- Per-account execution ----------------------------------------------------
 
+def _avg_fill_price(order_result: Any) -> Optional[float]:
+    """The order's real executed price. Binance can answer avgPrice '0.00' on a
+    filled market order, so a non-positive value is reported as unknown."""
+    if not isinstance(order_result, dict):
+        return None
+    try:
+        avg = float(order_result.get("avgPrice"))
+    except (TypeError, ValueError):
+        return None
+    return avg if avg > 0 else None
+
+
 def _run_account(
     account: dict,
     action: str,
@@ -286,6 +344,7 @@ def _run_account(
     strategy: Optional[str],
     asset: Optional[dict],
     open_amounts: Optional[dict[str, float]],
+    exit_batch_id: Optional[str] = None,
 ) -> dict:
     """Execute one signal on one account. Returns a result dict with
     status: filled | skipped | failed (+ retryable flag on failures)."""
@@ -299,24 +358,60 @@ def _run_account(
     lock = symbol_locks.lock_for(account["api_key"], symbol)
     with lock:
         if is_entry:
+            # Minimum-deposit gate, before any sizing work. Gated on deposited
+            # capital, not balance, so a funded account keeps trading through a
+            # drawdown. Exits never reach here — closing is always allowed.
+            may_enter, total_deposit = _deposit_gate(account)
+            if not may_enter:
+                _bump("accounts_skipped")
+                return base | {
+                    "status": "skipped",
+                    "reason": "deposit below minimum"
+                    if total_deposit is not None
+                    else "deposit unknown",
+                    "sizing": {
+                        "total_deposit": total_deposit,
+                        "min_deposit": MIN_DEPOSIT,
+                        "balance": float(account.get("balance") or 0),
+                    },
+                }
+
             # asset presence/base_size already validated job-level (fail closed).
-            quantity = _scale_qty(symbol, asset["base_size"], float(account.get("balance") or 0))
+            balance = float(account.get("balance") or 0)
+            base_size = float(asset["base_size"])
+            quantity = _scale_qty(symbol, base_size, balance)
+            # Audit trail for the balance-proportional sizing: the INPUTS, not just
+            # the answer, so any size (or skip) can be explained from the trade_logs
+            # row alone without replaying the account's balance at signal time.
+            sizing = {
+                "balance": balance,
+                "total_deposit": total_deposit,
+                "min_deposit": MIN_DEPOSIT,
+                "base_size": base_size,
+                "reference_balance": REFERENCE_BALANCE,
+                "coarse_step": symbol in COARSE_STEP_TICKERS,
+                "quantity": quantity,
+                "size_multiple": round(quantity / base_size, 6) if base_size else None,
+                "stacks_now": None,
+                "max_increments": float(asset.get("max_increments") or 0),
+            }
             if quantity <= 0:
                 _bump("accounts_skipped")
-                return base | {"status": "skipped", "reason": "size too small"}
+                return base | {"status": "skipped", "reason": "size too small", "sizing": sizing}
 
             # Stack cap in whole increments: DB-first (batched), Binance fallback.
-            max_increments = float(asset.get("max_increments") or 0)
+            position_side = "LONG" if action == "BUY" else "SHORT"
+            max_increments = sizing["max_increments"]
             if max_increments > 0:
-                position_side = "LONG" if action == "BUY" else "SHORT"
                 if open_amounts is not None:
                     current = open_amounts.get(account["api_key"], 0.0)
                 else:
                     current = _binance_open_amount(api, symbol, position_side)
-                stacks_now = round(current / asset["base_size"], 4) if asset["base_size"] else 0.0
+                stacks_now = round(current / base_size, 4) if base_size else 0.0
+                sizing["stacks_now"] = stacks_now
                 if stacks_now + 1 > max_increments + 1e-9:
                     _bump("accounts_skipped")
-                    return base | {"status": "skipped", "reason": "maxed sizing"}
+                    return base | {"status": "skipped", "reason": "maxed sizing", "sizing": sizing}
 
             _maybe_set_leverage(api, symbol, leverage)
             result = handle_entry(api, symbol, "BUY" if action == "BUY" else "SELL", quantity, price)
@@ -327,15 +422,20 @@ def _run_account(
                 return base | {
                     "error": (result or {}).get("error", "no response"),
                     "retryable": retryable,
+                    "sizing": sizing,
                 }
 
-            position_side = "LONG" if action == "BUY" else "SHORT"
             new_amount = (open_amounts or {}).get(account["api_key"], 0.0) + quantity
             _upsert_position_api(account, symbol, position_side, new_amount, price)
             if strategy:
                 _store_open_strategy(account, symbol, position_side, strategy)
             _bump("accounts_traded")
-            return base | {"status": "filled", "quantity": quantity}
+            return base | {
+                "status": "filled",
+                "quantity": quantity,
+                "fill_price": _avg_fill_price(result.get("result")),
+                "sizing": sizing,
+            }
 
         # --- EXIT_LONG / EXIT_SHORT ------------------------------------------
         position_side = "LONG" if action == "EXIT_LONG" else "SHORT"
@@ -358,7 +458,8 @@ def _run_account(
         _upsert_position_api(account, symbol, position_side, 0.0, None)
         _ACCOUNT_EXECUTOR.submit(
             _deferred_close_bookkeeping,
-            account, api, symbol, position_side, closed_qty, entry_price, tag, result.get("result"),
+            account, api, symbol, position_side, closed_qty, entry_price, tag,
+            result.get("result"), exit_batch_id,
         )
         _bump("accounts_traded")
         return base | {"status": "filled", "closed_quantity": closed_qty}
@@ -414,9 +515,17 @@ def _process_trade_job(
         if open_amounts is None:
             log.warning("engine positions/check unavailable — per-account Binance fallback")
 
+    # Exits announce once, with realized PnL — opened BEFORE the fan-out so no
+    # account's deferred bookkeeping can report into a batch that doesn't exist
+    # yet. Retry runs stay silent: the live run already posted.
+    exit_batch_id = None
+    if not is_entry and not is_retry:
+        exit_batch_id = notify.open_exit_batch(action, symbol, price=price)
+
     futures = {
         _ACCOUNT_EXECUTOR.submit(
-            _run_account, account, action, symbol, price, leverage, strategy, asset, open_amounts
+            _run_account, account, action, symbol, price, leverage, strategy, asset,
+            open_amounts, exit_batch_id,
         ): account
         for account in accounts
     }
@@ -439,6 +548,10 @@ def _process_trade_job(
     filled = sum(1 for r in results if r["status"] == "filled")
     failed = sum(1 for r in results if r["status"] == "failed")
     skipped = sum(1 for r in results if r["status"] == "skipped")
+
+    _notify_job(action, symbol, price, results,
+                filled=filled, failed=failed, skipped=skipped,
+                exit_batch_id=exit_batch_id, is_retry=is_retry)
 
     summary = {
         "action": action,
@@ -468,8 +581,51 @@ def _process_trade_job(
     return summary
 
 
+def _mean_fill_price(results: list) -> Optional[float]:
+    """Average executed price across the accounts that filled. Order-independent
+    (as_completed is not deterministic) and None when no fill reported a price."""
+    prices = [r["fill_price"] for r in results if r.get("fill_price")]
+    return sum(prices) / len(prices) if prices else None
+
+
+def _notify_job(
+    action: str,
+    symbol: str,
+    price: Optional[float],
+    results: list,
+    *,
+    filled: int,
+    failed: int,
+    skipped: int,
+    exit_batch_id: Optional[str],
+    is_retry: bool,
+) -> None:
+    """Telegram fan-out for one finished job. Never raises — a notification
+    problem must not fail the trade job that already executed."""
+    try:
+        if exit_batch_id:
+            # Releases the exit message once every closed account reports its PnL
+            # (or discards it when nothing actually closed).
+            notify.seal_exit_batch(exit_batch_id, expected=filled, skipped=skipped, failed=failed)
+        elif action in ENTRY_ACTIONS and not is_retry:
+            notify.notify_entry(
+                action, symbol,
+                fill_price=_mean_fill_price(results), price=price,
+                filled=filled, skipped=skipped, failed=failed,
+            )
+        if failed and not is_retry:
+            notify.notify_account_failures(
+                action, symbol,
+                [(r.get("account"), r.get("error") or "unknown") for r in results
+                 if r["status"] == "failed"],
+            )
+    except Exception:  # noqa: BLE001
+        log.exception("telegram notification failed for %s %s", action, symbol)
+
+
 def _reject_summary(action: str, symbol: str, price, strategy, leverage, reason: str) -> dict:
     log.warning("signal rejected: %s %s (%s)", action, symbol, reason)
+    notify.notify_rejected(action, symbol, reason)
     return {
         "action": action,
         "ticker": symbol,

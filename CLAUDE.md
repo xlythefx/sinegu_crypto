@@ -45,7 +45,11 @@ page by page ("we slowly do it"). Rules for every ported page:
   `/api/user/*`; payment method, crypto wallets, bank wire still static),
   **Admin Dashboard** (`/admin`, from AdminOverview — master account card, 4 stat cards,
   cumulative P&L chart + date/ticker filters, performance breakdown, daily P&L calendar;
-  static prototype data), **Billing & Invoices** (`/dashboard/invoices`, from
+  **wired live** to the master account via `GET /admin/master-stats`, `/admin/performance`
+  and `/admin/daily-pnl`, all reading the `binance_*` tables of the
+  `user_credentials.type = 'master'` row. `stats.balance` is **nullable** — null means the
+  balance poller has not written yet and the card shows "Awaiting sync" rather than $0.00),
+  **Billing & Invoices** (`/dashboard/invoices`, from
   UserInvoicePayment — stat cards + HWM banner, Outstanding/History tabs, exchange filter
   chips, collapsible invoice cards with performance breakdown, "How billing works" sidebar,
   and an in-depth detail page at `/dashboard/invoices/:id`; **wired live** to
@@ -65,6 +69,39 @@ a user's closed P&L and marks it paid (manual charging). Monthly auto-generation
 Stripe/Coinsbuy webhooks + off-session auto-charge are deferred phases that reuse
 `InvoiceService::settle`.
 
+**Payment failures speak twice — one fault, two audiences.** A trader always gets
+the single friendly sentence ("Could not start the crypto payment."); a
+`developer` account gets that PLUS a `debug` envelope on the same response —
+error code, a hint naming what to check first, the environment verdict, and
+`CoinsbuyGateway::diagnostics()` (mode, callback URL, credential PRESENCE
+booleans, and an ordered `trace` of every provider step: `token.rejected`,
+`wallet.none_active`, `deposit.rejected`, with Coinsbuy's own status/detail).
+The gate is the ROLE, not the environment — the interesting failures happen on
+the live box, and `PaymentController` is the only place that decides who sees
+it, so a trader's response simply has no `debug` key to leak. Rendered by
+`components/ui/DevDetails.tsx` (collapsible, copy-to-clipboard) behind
+`isDeveloper(user.type)`. **A diagnostic must never become a key leak** — expose
+`*_set` booleans, never a credential value; a test asserts the payload contains
+no secret. Same rule for any future dev-only error surface.
+
+**Invoice scenario runner** (`SandboxInvoiceController`, **Admin Sandbox → Invoice
+Scenarios**). Ten automated cases regression-test the billing rules end to end: each
+resets a throwaway account, seeds real `binance_pastpositions`/`binance_transactions`
+rows plus open P&L for the month, invoices through `InvoiceService::generateForAccount`
+at fixed 20%/6% rates, then asserts the row against hand-derived figures (first invoice,
+realized-only, unrealized-only, loss month, below-HWM, recovery, month chaining, deposit
+mid-month, regenerate-idempotency, paid-row protection). Endpoints:
+`GET|POST /admin/sandbox/invoice-scenarios[/run]`,
+`DELETE /admin/sandbox/users/{uniId}/{invoices,scenario-account}`.
+**Runs only ever write to a scratch account whose `api_key` starts `SBXINV-`** — real
+exchange accounts, trade history and invoices are never touched, which is what makes the
+runner safe to point at any user. Add a case by appending to `scenarios()`; expected
+figures must be derived by hand from the rules, never copied from the code under test.
+
+**Month strings are parsed with `'!Y-m'`, never `'Y-m'`.** Without the `!`, PHP fills the
+missing day from *today*, so `'2026-06'` parsed on the 31st overflows to 2026-07-01 and
+the invoice bills the wrong month. The scenario suite catches this.
+
 **Admin access rule:** users whose `user_credentials.type` is `master` or `admin` get an
 "Admin Dashboard" button in the trader sidebar footer (above Log out) routing to `/admin`.
 `AdminLayout` client-guards the route (logged-in plain users bounce to `/dashboard`); the
@@ -81,7 +118,7 @@ read-only reference material, consulted only when explicitly prompted.
 |---|---|
 | `C:\Users\Xlythe\sinequal-dash-fusion-main` | **Mother project.** Use only as context/reference when prompted. |
 | `C:\wamp64\www\sinegu-api` | **Mother API.** Consult ONLY when explicitly prompted — it is legacy spaghetti code. Never use it as the sole reference or copy its architecture; at most a lookup for domain facts (field names, business rules). |
-| `C:\wamp64\www\sinegutrade-api` | **This project's API** (Laravel + Sanctum, DB `sinegu_crypto`). Live: auth, profile/password, dashboard summary, binance positions/past-positions, invoices, referrals, and the engine's `/api/engine/*` surface. `mexc_*`/`bybit_*` tables coming soon. |
+| `C:\wamp64\www\sinegutrade-api` | **This project's API** (Laravel + Sanctum, DB `sinegu_crypto`). Live: auth, profile/password, dashboard summary, binance positions/past-positions, invoices, referrals, the public `/api/public/track-record` feed, and the engine's `/api/engine/*` surface. `mexc_*`/`bybit_*` tables coming soon. |
 | `C:\Users\Xlythe\trading-flask` | **Original multi-exchange bot — READ-ONLY.** Reference for env-driven config, tests, and the per-exchange service split. Never edit it, not even its `.env`. |
 | `C:\Users\Xlythe\binance-flask` | **Mature bot reference — READ-ONLY.** The runtime pattern the in-repo engine was modeled on (fast-ACK dispatch + account pools, retry queue, billing gate via `enabled=0`). Consult only; never edit. |
 
@@ -96,6 +133,21 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   the webhook fast-ACKs (~2 ms) and a bounded worker pool fans the signal out to
   every tradeable account. Pollers push balances/positions/past-positions/
   transfers back into `sinegu_crypto`. Full docs in `trading-flask/README.md`.
+- **Signal log:** every processed signal appends one row to the unified
+  `trade_logs` table (exchange discriminator, same pattern as `invoices`) via
+  `POST /api/engine/{exchange}/trade-logs`. The `details` JSON holds the
+  per-account fan-out, and each **entry** detail carries a `sizing` block —
+  `balance`, `total_deposit`, `min_deposit`, `base_size`, `reference_balance`,
+  `coarse_step`, `quantity`, `size_multiple`, `stacks_now`, `max_increments`.
+  A deposit-gated skip writes a **partial** block (deposit fields + balance
+  only, no `base_size`/`quantity`) — readers must not assume a full block.
+  Recording the sizing
+  **inputs** (not just the resulting quantity) is the point: a size, or a
+  "maxed sizing" / "size too small" skip, must be explainable from the row
+  alone without replaying the account's balance at signal time. Read it at
+  **Admin → Signal Log** (`/admin/trade-logs`, `AdminTradeLogController`,
+  read-only — the engine is the only writer). Also mirrored to the local
+  JSONL `trading-flask/out/webhook_trades.log`.
 - **Backend surface:** `sinegutrade-api`'s `/api/engine/{exchange}/*` routes
   (`EngineController`, `EngineSyncController`, `VerifyEngineSecret` middleware,
   `X-Engine-Secret` header). Who may trade is decided THERE: accounts endpoint
@@ -104,9 +156,33 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   invoices; `InvoiceService::settle` re-enables on payment.
 - **Live orders:** accounts with `demo=1` route to the Binance futures testnet;
   everything else is REAL. Entries fail closed on unconfigured assets.
+- **Sizing & the deposit gate** (`_scale_qty` + `_deposit_gate` in
+  `routes/webhook.py`). Two independent rules, both entry-only — **exits are
+  never gated, so an open position is always closable**:
+  1. **Deposit gate** — an account may only OPEN a position once its
+     `total_deposit` (deposited capital net of withdrawals) reaches
+     `BINANCE_ABCD_MIN_DEPOSIT` (1000). Gated on **deposit, not balance**: an
+     account funded above the minimum keeps trading after a drawdown well
+     below it. An unknown deposit **fails closed** (skip reason
+     `deposit unknown`). Set to 0 to disable.
+  2. **Size** — `BINANCE_ABCD_REFERENCE_BALANCE` (1000) is the balance earning
+     one `base_size`. Below it every account still gets exactly one
+     `base_size`; above it BTCUSDT (`COARSE_STEP_TICKERS`) steps in whole
+     multiples per reference block, everything else in tenths, floored.
+  `total_deposit` comes from `GET /api/engine/{exchange}/accounts` as
+  `initial_deposit + (deposits − withdrawals)` over `binance_transactions` —
+  **not** raw `initial_deposit`, which `EngineSyncController` writes once and
+  never updates, so top-ups would otherwise never count. Same figure invoicing
+  bills against (`BinancePnlSource::adjustedDeposit`).
+- **Telegram:** every signal is announced to the channel **Voltrax Trades**
+  (`t.me/voltraxtrades`, id `-1003995568293`) — entries, exits, realized PnL,
+  plus ops alerts. `binance_abcd/notify.py`; config is `BINANCE_ABCD_TELEGRAM_*`
+  and the bot token lives in the gitignored `.env` only. Off unless both a token
+  and a chat id are set; `tests/conftest.py` forces it off so the suite never posts.
 - **Config:** env-driven, prefix `BINANCE_ABCD_*` — committed `.env.example`,
   gitignored `.env` (webhook secret + engine secret; engine secret must match
-  `ENGINE_SECRET` in `sinegutrade-api/.env`).
+  `ENGINE_SECRET` in `sinegutrade-api/.env`, and the webhook secret must match
+  `BINANCE_ENGINE_WEBHOOK_SECRET` there).
 - **Commands:** `python -m binance_abcd.main` (waitress), `python -m pytest
   tests/ -q` (42 tests, no network), `python webhook_tester.py` (Tkinter GUI
   trade sender — local or prod target, red banner on prod).
@@ -115,6 +191,44 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   conventions never bleed across the boundary.
 - **Not deployed yet:** prod needs an nginx location + systemd unit and an
   IP-restriction on `/api/engine/*` (see README's deploy TODO).
+
+### TradingView alert setup
+
+Paste this into a TradingView alert's **Message** box, with the webhook URL set to
+`http://<engine-host>:5010/binance_abcd_webhook` (locally
+`http://127.0.0.1:5010/binance_abcd_webhook`). The engine authenticates on the
+`secret` field alone — there is no signature header.
+
+```json
+{
+  "secret": "<BINANCE_ENGINE_WEBHOOK_SECRET>",
+  "action": "BUY",
+  "symbol": "{{ticker}}",
+  "price": "{{close}}",
+  "leverage": 25,
+  "strategy": "ABCD-v1"
+}
+```
+
+**The real secret is NOT in this file** — this repo is public on GitHub, so the
+live token lives in gitignored `.claude/tradingview.creds.md` alongside a
+ready-to-paste copy of the block above. Open that file, copy, paste into
+TradingView.
+
+Field contract (`trading-flask/binance_abcd/routes/webhook.py`):
+
+| Field | Required | Notes |
+|---|---|---|
+| `secret` | yes | Must equal the engine's `BINANCE_ABCD_WEBHOOK_SECRET`; mismatch → `403 Unauthorized`. May also be sent as `?secret=` or a form field. |
+| `action` | yes | `BUY` \| `SELL` \| `EXIT_LONG` \| `EXIT_SHORT` (case-insensitive). Exits skip every size/asset gate. |
+| `symbol` | yes | Or `ticker`. A `BINANCE:` prefix is stripped, so `{{ticker}}` works as-is. |
+| `price` | no | Or `close`. Informational — sizing uses the live mark price. |
+| `leverage` | no | 1–125; defaults to 25 in the admin console. Omit to let the engine decide. |
+| `strategy` | no | Free label stored on the position so the closing trade keeps it. |
+| `target_uni_ids` | no | Admin manual-trade only — restricts the fan-out to specific users. Never put it in a TradingView alert. |
+
+Only enabled, non-sandbox accounts of non-suspended, non-overdue users receive
+the fan-out — that filtering happens in `sinegutrade-api`, not in the alert.
 
 ## Design reference
 
@@ -185,6 +299,11 @@ When it grows into a full dashboard, migrate to `features/<domain>/` folders
 ## .claude setup
 
 - `.claude/settings.json` — permission allow-list (npm/tsc, php artisan/composer, deploy script). No secrets in it, ever.
+- **Auto-allowlist hook** (`.claude/hooks/auto-allow.mjs`, wired in `settings.json` under
+  `hooks`): whenever the user manually approves a permission prompt for a shell/WebFetch/MCP
+  call, a generalized prefix rule (e.g. `PowerShell(php artisan *)`) is appended to the
+  gitignored `.claude/settings.local.json` so the same kind of command never prompts again.
+  Destructive first tokens (rm, Remove-Item, …) are never auto-added.
 - **Two agents live in `.claude/agents/`** — one for frontend, one for backend:
   - `.claude/agents/frontend.md` — frontend specialist for this repo (React conventions above).
   - `.claude/agents/backend.md` — backend specialist pointing at `C:\wamp64\www\sinegutrade-api` (Laravel), using `sinegu-api` as read-only reference.
@@ -201,3 +320,17 @@ When it grows into a full dashboard, migrate to `features/<domain>/` folders
 - Wire auth forms (currently client-state only via `preventDefault`) to the real API.
 - Ticker / order book / chart / stats are static prototype data only until an endpoint
   exists; connect them to the API as soon as one does.
+
+**Landing page track record (live).** The "See every trade, verified" section
+(`components/landing/Performance.tsx` + `TrackRecordChart.tsx`, math in
+`lib/trackRecord.ts`) is wired to `GET /api/public/track-record` — the FIRST and
+only unauthenticated data endpoint (`PublicStatsController`, 5-minute server-side
+cache). **Privacy rule for anything under `/api/public/*`: percentages and counts
+only — never a balance, a USD amount, an account name or a uni_id**, since the
+whole internet can read it (same rule as the public Telegram channel). That is
+why the chart's Y axis is a percentage, not dollars. Daily returns are measured
+against the capital the master account started each day with, and the headline
+figures are simple sums/means of those daily percentages, so "avg daily × trading
+days" reconciles with the total shown beside it. `available: false` in the
+payload means nothing is published yet and the section renders its empty state
+rather than inventing numbers.

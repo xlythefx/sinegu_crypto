@@ -4,6 +4,7 @@ import type { ExchangeAccount, ExchangeKind } from '../../types/exchanges'
 import { EXCHANGE_META, EXCHANGE_ORDER } from './meta'
 import { connectBinanceAccount } from '../../services/exchanges'
 import { getApiErrorMessage } from '../../services/api'
+import { updateStoredUser } from '../../lib/session'
 
 interface ConnectExchangeWizardProps {
   open: boolean
@@ -91,6 +92,9 @@ export default function ConnectExchangeWizard({
         api_key: form.api_key.trim(),
         secret_key: form.secret_key.trim(),
       })
+      // Keep the session flag in sync so onboarding nudges (strip, equity
+      // empty state) clear instantly without a /auth/me round-trip.
+      updateStoredUser({ has_exchange_account: true })
       onConnected(account)
       onClose()
     } catch (err) {

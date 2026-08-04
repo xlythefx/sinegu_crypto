@@ -1,19 +1,25 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, Navigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
   ArrowRight,
   Calendar,
   CheckCircle2,
   Clock,
-  CreditCard,
   FileText,
+  FlaskConical,
   Landmark,
+  Loader2,
   Receipt,
   TrendingUp,
+  Wallet,
+  X,
 } from 'lucide-react'
 import DashboardLayout from '../components/dashboard/DashboardLayout'
 import DataState from '../components/dashboard/DataState'
+import { useInterval } from '../hooks/useInterval'
+import { useSessionUser } from '../hooks/useSessionUser'
+import { isDeveloper } from '../lib/roles'
 import BillingHelpSidebar from '../components/billing/BillingHelpSidebar'
 import ExchangeBadge from '../components/billing/ExchangeBadge'
 import PaymentMethodModal from '../components/billing/PaymentMethodModal'
@@ -58,10 +64,17 @@ function Tile({
 
 export default function InvoiceDetail() {
   const { id } = useParams()
+  // Developer accounts pay with the providers' test credentials — the button
+  // says so before it is pressed, and the API decides it again server-side.
+  const developer = isDeveloper(useSessionUser()?.type)
+  const [searchParams, setSearchParams] = useSearchParams()
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<unknown>(null)
   const [payOpen, setPayOpen] = useState(false)
+  /** Set when Coinsbuy bounced the trader back here after checkout. */
+  const [returned, setReturned] = useState<'success' | 'cancelled' | null>(null)
+  const [polls, setPolls] = useState(0)
 
   const load = useCallback(() => {
     let cancelled = false
@@ -83,6 +96,28 @@ export default function InvoiceDetail() {
   }, [id])
 
   useEffect(() => load(), [load])
+
+  // Coinsbuy returns to `?payment=success&transaction_id=…` (or `=cancelled`).
+  // Read it once, then strip the params so a refresh doesn't replay the banner.
+  useEffect(() => {
+    const status = searchParams.get('payment')
+    if (status !== 'success' && status !== 'cancelled') return
+    setReturned(status)
+    const next = new URLSearchParams(searchParams)
+    next.delete('payment')
+    next.delete('transaction_id')
+    next.delete('session_id')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
+
+  // The redirect only means the trader finished at the gateway — settlement
+  // lands on the webhook. Poll for a couple of minutes so the page flips to
+  // Paid on its own once the transfer confirms on-chain.
+  const settling = returned === 'success' && invoice?.status !== 'paid' && polls < 15
+  useInterval(() => {
+    setPolls((n) => n + 1)
+    load()
+  }, settling ? 8000 : null)
 
   if (error instanceof ApiError && error.status === 401) {
     return <Navigate to="/auth" replace />
@@ -157,6 +192,63 @@ export default function InvoiceDetail() {
         </div>
       </div>
 
+      {/* post-checkout banner — settlement itself happens on the webhook */}
+      {returned && (
+        <div
+          className={`relative flex items-start gap-2.5 rounded-card border py-3.5 px-4 pr-11 mb-[18px] animate-[fadeup_0.3s_ease_both] ${
+            returned === 'cancelled'
+              ? 'border-border bg-surface2'
+              : paid
+                ? 'border-[color-mix(in_srgb,var(--green)_40%,transparent)] bg-[color-mix(in_srgb,var(--green)_10%,transparent)]'
+                : 'border-accent-line bg-accent-soft'
+          }`}
+          role="status"
+        >
+          <span
+            className={`flex-shrink-0 mt-px ${
+              returned === 'cancelled' ? 'text-muted' : paid ? 'text-green' : 'text-accent'
+            }`}
+          >
+            {returned === 'cancelled' ? (
+              <Clock size={16} />
+            ) : paid ? (
+              <CheckCircle2 size={16} />
+            ) : (
+              <Loader2
+                size={16}
+                className={settling ? 'animate-[dstate-spin_0.8s_linear_infinite]' : ''}
+              />
+            )}
+          </span>
+          <div className="min-w-0">
+            <p className="text-[13.5px] font-bold text-text">
+              {returned === 'cancelled'
+                ? 'Payment cancelled'
+                : paid
+                  ? 'Payment confirmed'
+                  : 'Payment received — confirming on-chain'}
+            </p>
+            <p className="text-[12px] text-muted leading-[1.5] mt-0.5">
+              {returned === 'cancelled'
+                ? 'You left the Coinsbuy checkout, so nothing was charged. This invoice is still outstanding.'
+                : paid
+                  ? 'This billing period is settled and your high-water mark has been updated.'
+                  : settling
+                    ? 'Your transfer is waiting for blockchain confirmation. This page updates automatically — it usually takes a few minutes.'
+                    : 'Still not settled. Confirmation can lag behind the network; refresh in a few minutes or contact support if it persists.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="absolute top-3 right-3 w-7 h-7 grid place-items-center rounded-btn text-faint cursor-pointer transition-colors duration-150 hover:bg-surface2 hover:text-text"
+            onClick={() => setReturned(null)}
+            aria-label="Dismiss"
+          >
+            <X size={15} />
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-7 items-start max-[1080px]:grid-cols-1">
         <div className="min-w-0 flex flex-col gap-[18px]">
           {/* hero */}
@@ -200,13 +292,21 @@ export default function InvoiceDetail() {
 
             <div className="flex-shrink-0">
               {!paid && fee ? (
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-[9px] rounded-[14px] py-[15px] px-7 text-[14.5px] font-bold cursor-pointer text-on-accent bg-accent shadow-[0_12px_28px_-12px_var(--glow)] transition-[filter,transform] duration-150 hover:brightness-[1.07] active:translate-y-px"
-                  onClick={() => setPayOpen(true)}
-                >
-                  <CreditCard size={18} /> Pay Invoice
-                </button>
+                <div className="flex flex-col items-center gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-[9px] rounded-[14px] py-[15px] px-7 text-[14.5px] font-bold cursor-pointer text-on-accent bg-accent shadow-[0_12px_28px_-12px_var(--glow)] transition-[filter,transform] duration-150 hover:brightness-[1.07] active:translate-y-px"
+                    onClick={() => setPayOpen(true)}
+                  >
+                    {developer ? <FlaskConical size={18} /> : <Wallet size={18} />}
+                    {developer ? 'Test pay (no real money)' : 'Pay with crypto'}
+                  </button>
+                  {developer && (
+                    <span className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-accent">
+                      Developer · sandbox credentials
+                    </span>
+                  )}
+                </div>
               ) : !paid && !fee ? (
                 <div className="text-center py-3.5 px-5 rounded-[12px] border border-dashed border-border bg-surface2">
                   <p className="text-[13px] font-semibold text-muted">
@@ -408,9 +508,10 @@ export default function InvoiceDetail() {
       <PaymentMethodModal
         open={payOpen}
         invoice={invoice}
-        onClose={() => setPayOpen(false)}
-        onPayWithCard={() => setPayOpen(false)}
-        onPayWithCrypto={() => setPayOpen(false)}
+        onClose={() => {
+          setPayOpen(false)
+          load()
+        }}
       />
     </DashboardLayout>
   )

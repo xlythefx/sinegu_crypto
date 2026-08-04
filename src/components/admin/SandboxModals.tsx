@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import {
   AlertCircle,
+  CalendarRange,
   Dices,
   FlaskConical,
   UserPlus,
@@ -17,12 +18,41 @@ import type {
 
 /* ---- static option sets used by the forms + randomizer ---- */
 const STATUS_OPTS: UserStatus[] = ['pending', 'active', 'suspended']
-const ROLE_OPTS: UserRole[] = ['user', 'admin', 'master']
+const ROLE_OPTS: UserRole[] = ['user', 'admin', 'master', 'developer']
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT']
 const STRATEGIES = ['Momentum', 'Mean Reversion', 'Breakout', 'Scalp', 'Trend Follow']
 
+/** Rows one date-range insert may produce — mirrors the API's own cap. */
+const MAX_RANGE_DAYS = 366
+
+const MODE_OPTS = [
+  { value: 'count' as const, label: 'Fixed count', icon: <FlaskConical size={13} /> },
+  { value: 'range' as const, label: 'Date range', icon: <CalendarRange size={13} /> },
+]
+
 const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)]
-const todayIso = () => new Date().toISOString().slice(0, 10)
+
+/** Local (not UTC) 'YYYY-MM-DD' — what `<input type="date">` expects. */
+const isoDay = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate(),
+  ).padStart(2, '0')}`
+
+const todayIso = () => isoDay(new Date())
+
+const daysAgoIso = (n: number) => {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return isoDay(d)
+}
+
+/** Inclusive day count of a range, or 0 when the range is invalid. */
+const rangeDays = (from: string, to: string) => {
+  const a = Date.parse(`${from}T00:00:00`)
+  const b = Date.parse(`${to}T00:00:00`)
+  if (Number.isNaN(a) || Number.isNaN(b) || b < a) return 0
+  return Math.round((b - a) / 86_400_000) + 1
+}
 
 /* ---- token-mapped class strings (was SandboxModals.css) ---- */
 const CHIP =
@@ -269,6 +299,11 @@ export function SandboxPositionModal({
   const [strategy, setStrategy] = useState('Momentum')
   const [closedAt, setClosedAt] = useState(todayIso())
   const [count, setCount] = useState('1')
+  const [mode, setMode] = useState<'count' | 'range'>('count')
+  const [dateFrom, setDateFrom] = useState(daysAgoIso(29))
+  const [dateTo, setDateTo] = useState(todayIso())
+  const [pnlMin, setPnlMin] = useState('-250')
+  const [pnlMax, setPnlMax] = useState('600')
   const [randomizeEach, setRandomizeEach] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -283,7 +318,10 @@ export function SandboxPositionModal({
 
   if (!open) return null
 
+  const isRange = mode === 'range'
   const countNum = Math.max(1, Math.min(200, Math.round(Number(count) || 1)))
+  const dayCount = rangeDays(dateFrom, dateTo)
+  const rowCount = isRange ? dayCount : countNum
 
   const randomizeFields = () => {
     const e = +(Math.random() * 60000 + 100).toFixed(2)
@@ -297,7 +335,7 @@ export function SandboxPositionModal({
     setExit(String(x))
     setPnl(((Math.random() < 0.55 ? 1 : -1) * (Math.random() * 400 + 10)).toFixed(2))
     setStrategy(pick(STRATEGIES))
-    setClosedAt(d.toISOString().slice(0, 10))
+    setClosedAt(isoDay(d))
   }
 
   const submit = async (ev: FormEvent) => {
@@ -306,13 +344,31 @@ export function SandboxPositionModal({
       setError('Select a target user first.')
       return
     }
+    if (isRange) {
+      if (dayCount === 0) {
+        setError('Pick a valid date range — the end date cannot be before the start date.')
+        return
+      }
+      if (dayCount > MAX_RANGE_DAYS) {
+        setError(`That range covers ${dayCount} days; the maximum is ${MAX_RANGE_DAYS}.`)
+        return
+      }
+    }
     setSaving(true)
     setError(null)
     try {
       const { inserted, account } = await insertPastPositions({
         uni_id: targetUni,
-        count: countNum,
-        randomize: countNum > 1 && randomizeEach,
+        randomize: rowCount > 1 && randomizeEach,
+        ...(isRange
+          ? {
+              mode: 'range' as const,
+              date_from: dateFrom,
+              date_to: dateTo,
+              pnl_min: Number(pnlMin) || 0,
+              pnl_max: Number(pnlMax) || 0,
+            }
+          : { count: countNum }),
         position: {
           symbol: symbol.trim().toUpperCase(),
           position_side: side,
@@ -321,11 +377,13 @@ export function SandboxPositionModal({
           exit_price: Number(exit) || 0,
           realized_pnl: Number(pnl) || 0,
           strategy: strategy.trim(),
-          closed_at: closedAt,
+          closed_at: isRange ? dateFrom : closedAt,
         },
       })
       onSuccess(
-        `Inserted ${inserted} position${inserted === 1 ? '' : 's'} into account ${account.name}.`,
+        isRange
+          ? `Inserted ${inserted} position${inserted === 1 ? '' : 's'} — one per day from ${dateFrom} to ${dateTo} — into account ${account.name}.`
+          : `Inserted ${inserted} position${inserted === 1 ? '' : 's'} into account ${account.name}.`,
       )
     } catch (err) {
       setError(getApiErrorMessage(err, 'Could not insert positions.'))
@@ -372,6 +430,30 @@ export function SandboxPositionModal({
             </select>
           </Field>
 
+          {/* Fixed count vs. one row per day across a date range. */}
+          <div className="col-span-full flex flex-col gap-1.5 min-w-0">
+            <span className="inline-flex items-center gap-1.5 font-mono text-[10.5px] tracking-[0.08em] uppercase text-faint">
+              Insert mode
+            </span>
+            <div className="inline-flex self-start items-center gap-1 rounded-pill border border-border bg-surface2 p-1">
+              {MODE_OPTS.map((m) => (
+                <button
+                  key={m.value}
+                  type="button"
+                  className={`inline-flex items-center gap-1.5 h-8 rounded-pill px-3.5 text-[12px] font-bold cursor-pointer font-body transition-[background,color] duration-150 ${
+                    mode === m.value
+                      ? 'bg-accent text-on-accent'
+                      : 'bg-transparent text-muted hover:text-text'
+                  }`}
+                  onClick={() => setMode(m.value)}
+                >
+                  {m.icon}
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <Field label="Symbol">
             <input
               className={INPUT}
@@ -400,16 +482,6 @@ export function SandboxPositionModal({
               onChange={(e) => setQty(e.target.value)}
             />
           </Field>
-          <Field label="Realized P&L">
-            <input
-              className={INPUT}
-              type="number"
-              step="any"
-              value={pnl}
-              onChange={(e) => setPnl(e.target.value)}
-            />
-          </Field>
-
           <Field label="Entry price">
             <input
               className={INPUT}
@@ -419,53 +491,132 @@ export function SandboxPositionModal({
               onChange={(e) => setEntry(e.target.value)}
             />
           </Field>
-          <Field label="Exit price">
-            <input
-              className={INPUT}
-              type="number"
-              step="any"
-              value={exit}
-              onChange={(e) => setExit(e.target.value)}
-            />
-          </Field>
 
-          <Field label="Strategy">
-            <input
-              className={INPUT}
-              value={strategy}
-              onChange={(e) => setStrategy(e.target.value)}
-              placeholder="Momentum"
-            />
-          </Field>
-          <Field label="Closed at">
-            <input
-              className={INPUT}
-              type="date"
-              value={closedAt}
-              onChange={(e) => setClosedAt(e.target.value)}
-            />
-          </Field>
+          {isRange ? (
+            <>
+              <Field label="From date">
+                <input
+                  className={INPUT}
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                />
+              </Field>
+              <Field label="To date">
+                <input
+                  className={INPUT}
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                />
+              </Field>
 
-          <Field label="Count (1–200)">
-            <input
-              className={INPUT}
-              type="number"
-              min={1}
-              max={200}
-              value={count}
-              onChange={(e) => setCount(e.target.value)}
-            />
-          </Field>
+              <Field label="Min realized P&L">
+                <input
+                  className={INPUT}
+                  type="number"
+                  step="any"
+                  value={pnlMin}
+                  onChange={(e) => setPnlMin(e.target.value)}
+                />
+              </Field>
+              <Field label="Max realized P&L">
+                <input
+                  className={INPUT}
+                  type="number"
+                  step="any"
+                  value={pnlMax}
+                  onChange={(e) => setPnlMax(e.target.value)}
+                />
+              </Field>
+
+              <div
+                className={`col-span-full flex items-start gap-2 rounded-[10px] border py-2.5 px-[13px] text-[12.5px] leading-[1.5] ${
+                  dayCount > 0 && dayCount <= MAX_RANGE_DAYS
+                    ? 'border-accent-line bg-accent-soft text-muted'
+                    : 'border-[color-mix(in_srgb,var(--red)_35%,transparent)] bg-[color-mix(in_srgb,var(--red)_8%,transparent)] text-red'
+                }`}
+              >
+                <CalendarRange size={15} className="flex-none mt-px" />
+                <span>
+                  {dayCount === 0
+                    ? 'The end date cannot be before the start date.'
+                    : dayCount > MAX_RANGE_DAYS
+                      ? `That range covers ${dayCount} days — the maximum is ${MAX_RANGE_DAYS}.`
+                      : `${dayCount} position${dayCount === 1 ? '' : 's'} — one per day from ${dateFrom} to ${dateTo}, each with a realized P&L rolled between ${pnlMin || 0} and ${pnlMax || 0} and the exit price back-solved to match.`}
+                </span>
+              </div>
+
+              <Field label="Strategy">
+                <input
+                  className={INPUT}
+                  value={strategy}
+                  onChange={(e) => setStrategy(e.target.value)}
+                  placeholder="Momentum"
+                />
+              </Field>
+            </>
+          ) : (
+            <>
+              <Field label="Realized P&L">
+                <input
+                  className={INPUT}
+                  type="number"
+                  step="any"
+                  value={pnl}
+                  onChange={(e) => setPnl(e.target.value)}
+                />
+              </Field>
+              <Field label="Exit price">
+                <input
+                  className={INPUT}
+                  type="number"
+                  step="any"
+                  value={exit}
+                  onChange={(e) => setExit(e.target.value)}
+                />
+              </Field>
+
+              <Field label="Strategy">
+                <input
+                  className={INPUT}
+                  value={strategy}
+                  onChange={(e) => setStrategy(e.target.value)}
+                  placeholder="Momentum"
+                />
+              </Field>
+              <Field label="Closed at">
+                <input
+                  className={INPUT}
+                  type="date"
+                  value={closedAt}
+                  onChange={(e) => setClosedAt(e.target.value)}
+                />
+              </Field>
+
+              <Field label="Count (1–200)">
+                <input
+                  className={INPUT}
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={count}
+                  onChange={(e) => setCount(e.target.value)}
+                />
+              </Field>
+            </>
+          )}
+
           <label
             className={`inline-flex items-center gap-2 h-10 text-[12.5px] text-muted select-none ${
-              countNum > 1 ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'
+              rowCount > 1 ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'
             }`}
           >
             <input
               type="checkbox"
               className="w-[15px] h-[15px] accent-[var(--accent)] cursor-pointer"
               checked={randomizeEach}
-              disabled={countNum <= 1}
+              disabled={rowCount <= 1}
               onChange={(e) => setRandomizeEach(e.target.checked)}
             />
             Randomize each row
@@ -500,10 +651,18 @@ export function SandboxPositionModal({
           <button
             type="submit"
             className={`${BTN} ${BTN_PRIMARY}`}
-            disabled={saving || users.length === 0}
+            disabled={
+              saving ||
+              users.length === 0 ||
+              (isRange && (dayCount === 0 || dayCount > MAX_RANGE_DAYS))
+            }
           >
             <FlaskConical size={15} />
-            {saving ? 'Inserting…' : 'Insert position(s)'}
+            {saving
+              ? 'Inserting…'
+              : isRange
+                ? `Insert ${dayCount} position${dayCount === 1 ? '' : 's'}`
+                : 'Insert position(s)'}
           </button>
         </div>
       </form>

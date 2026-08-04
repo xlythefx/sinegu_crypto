@@ -10,7 +10,7 @@ import { useApiData } from '../../hooks/useApiData'
 import { getAdminDailyPnl } from '../../services/admin'
 import { displaySymbol } from '../../lib/chart'
 import { fmtMediumDate, fmtSignedMoney } from '../../lib/format'
-import type { DailyPnlDay } from '../../types/admin'
+import type { DailyPnlDay, DailyPnlMap } from '../../types/admin'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -48,13 +48,30 @@ function buildCells(
   return cells
 }
 
+interface AdminPnlCalendarProps {
+  /**
+   * Data source override (defaults to the master GET /admin/daily-pnl).
+   * MUST be referentially stable (module fn or `useCallback`) — an inline
+   * arrow here would make the calendar refetch in a loop.
+   */
+  fetchDays?: () => Promise<DailyPnlMap>
+  /** Replaces the default "n green / n red days" subtitle line. */
+  subtitle?: string
+  /** AOS reveal delay in ms (matches the admin-dashboard stagger by default). */
+  aosDelay?: number
+}
+
 /**
  * Full-width admin Daily P&L calendar. Cells are tinted red→green by the sign
  * and magnitude of that day's realized P&L; clicking a day opens a panel with
  * every trade closed on it (asset, side, and P&L).
  */
-export default function AdminPnlCalendar() {
-  const { data: days } = useApiData(getAdminDailyPnl)
+export default function AdminPnlCalendar({
+  fetchDays = getAdminDailyPnl,
+  subtitle,
+  aosDelay = 250,
+}: AdminPnlCalendarProps = {}) {
+  const { data: days } = useApiData(fetchDays, [fetchDays])
   const now = useMemo(() => new Date(), [])
   const [view, setView] = useState(
     () => new Date(now.getFullYear(), now.getMonth(), 1)
@@ -106,7 +123,7 @@ export default function AdminPnlCalendar() {
     <section
       className="rounded-card border border-border bg-surface p-card"
       data-aos="fade-up"
-      data-aos-delay="250"
+      data-aos-delay={aosDelay}
     >
       <div className="flex items-center gap-2.5 mb-[14px]">
         <span className="w-7 h-7 rounded-[9px] bg-accent-soft border border-accent-line grid place-items-center text-accent flex-none">
@@ -117,7 +134,8 @@ export default function AdminPnlCalendar() {
             Daily P&L Calendar
           </div>
           <div className="text-[12px] text-muted mt-px">
-            {winDays} green / {lossDays} red days · click a day for its trades
+            {subtitle ??
+              `${winDays} green / ${lossDays} red days · click a day for its trades`}
           </div>
         </div>
       </div>

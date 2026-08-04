@@ -1,5 +1,5 @@
 import { apiFetch } from './api'
-import type { Analytics } from '../types/analytics'
+import type { Analytics, ChipMode } from '../types/analytics'
 
 export interface AnalyticsFilters {
   /** 'all' (or omitted) returns every exchange. */
@@ -8,6 +8,30 @@ export interface AnalyticsFilters {
   from?: string
   /** 'YYYY-MM-DD' inclusive upper bound. */
   to?: string
+  /** Raw symbols (e.g. 'BTCUSDT'), not display labels. Empty = no filter. */
+  symbols?: string[]
+  symbolMode?: ChipMode
+  /** Strategy tags; untagged trades are selected as 'Untagged'. */
+  strategies?: string[]
+  strategyMode?: ChipMode
+}
+
+/**
+ * Append a chip selection as `key[]=A&key[]=B`, which PHP reads as an array.
+ * The mode rides along only when something is actually selected, so an idle
+ * filter bar leaves the URL (and the browser cache key) untouched.
+ */
+function appendChips(
+  params: URLSearchParams,
+  key: string,
+  modeKey: string,
+  values: string[] | undefined,
+  mode: ChipMode | undefined,
+): void {
+  if (!values || values.length === 0) return
+  // Sorted so the same selection always produces the same URL.
+  for (const value of [...values].sort()) params.append(`${key}[]`, value)
+  params.set(modeKey, mode ?? 'exclude')
 }
 
 export async function getAnalytics(
@@ -19,6 +43,20 @@ export async function getAnalytics(
   }
   if (filters?.from) params.set('from', filters.from)
   if (filters?.to) params.set('to', filters.to)
+  appendChips(
+    params,
+    'symbols',
+    'symbol_mode',
+    filters?.symbols,
+    filters?.symbolMode,
+  )
+  appendChips(
+    params,
+    'strategies',
+    'strategy_mode',
+    filters?.strategies,
+    filters?.strategyMode,
+  )
 
   const qs = params.toString()
   const res = await apiFetch<{ success: boolean; analytics: Analytics }>(

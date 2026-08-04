@@ -18,6 +18,14 @@ os.environ.setdefault("BINANCE_ABCD_ENGINE_API_BASE", "http://engine.test/api")
 os.environ.setdefault("BINANCE_ABCD_RUN_POLLERS", "false")
 os.environ.setdefault("BINANCE_ABCD_RETRY_ENABLED", "true")
 os.environ.setdefault("BINANCE_ABCD_RETRY_INTERVAL_SECONDS", "0.05")
+# Telegram OFF for the whole suite. hooks.py load_dotenv()s the real .env, so
+# without these the fan-out tests would post to the live channel. Setting them
+# here wins: load_dotenv runs with override=False. test_notify.py re-enables
+# notifications per-test by monkeypatching hooks, with _send captured.
+os.environ.setdefault("BINANCE_ABCD_TELEGRAM_ENABLED", "false")
+os.environ.setdefault("BINANCE_ABCD_TELEGRAM_BOT_TOKEN", "")
+os.environ.setdefault("BINANCE_ABCD_TELEGRAM_CHAT_ID", "")
+os.environ.setdefault("BINANCE_ABCD_TELEGRAM_ADMIN_CHAT_ID", "")
 
 import pytest  # noqa: E402
 
@@ -46,6 +54,11 @@ def client(app):
 
 @pytest.fixture()
 def fake_accounts():
+    """Three accounts, all past the MIN_DEPOSIT gate.
+
+    "Demo Two" is deliberately funded above the minimum but drawn down well
+    below it — the case that proves the gate reads deposit, not balance.
+    """
     return [
         {
             "api_key": "live-key-1",
@@ -54,6 +67,7 @@ def fake_accounts():
             "uni_id": "uni-live-1",
             "balance": 1000.0,
             "initial_deposit": 1000.0,
+            "total_deposit": 1000.0,
             "currency_type": "USDT",
             "demo": False,
             "enabled": True,
@@ -64,7 +78,8 @@ def fake_accounts():
             "name": "Demo Two",
             "uni_id": "uni-demo-2",
             "balance": 300.0,
-            "initial_deposit": 300.0,
+            "initial_deposit": 1500.0,
+            "total_deposit": 1500.0,
             "currency_type": "USDT",
             "demo": True,
             "enabled": True,
@@ -76,6 +91,7 @@ def fake_accounts():
             "uni_id": "uni-live-3",
             "balance": 2500.0,
             "initial_deposit": 2000.0,
+            "total_deposit": 2500.0,
             "currency_type": "USDT",
             "demo": False,
             "enabled": True,

@@ -5,6 +5,7 @@ import 'aos/dist/aos.css'
 import DashboardShell from './DashboardShell'
 import TraderSidebar from './TraderSidebar'
 import TopBar from './TopBar'
+import OnboardingGate from './OnboardingGate'
 import ConfirmModal from '../ui/ConfirmModal'
 import { logout } from '../../services/auth'
 
@@ -38,6 +39,7 @@ export default function DashboardLayout({
       sidebar={<TraderSidebar onLogout={() => setConfirmLogout(true)} />}
     >
       <TopBar />
+      <OnboardingGate />
       {children}
       <ConfirmModal
         open={confirmLogout}

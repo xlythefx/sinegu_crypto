@@ -1,6 +1,5 @@
 import {
   AlertTriangle,
-  Scale,
   Sparkles,
   Target,
   TrendingDown,
@@ -18,7 +17,6 @@ interface TradeQualityCardProps {
 /** "Trade Quality Metrics" — per-trade averages, extremes and edge. */
 export default function TradeQualityCard({ quality }: TradeQualityCardProps) {
   const avgLossAbs = Math.abs(quality.avg_loss)
-  const rr = avgLossAbs > 0 ? Math.abs(quality.avg_win) / avgLossAbs : null
 
   return (
     <section
@@ -54,12 +52,6 @@ export default function TradeQualityCard({ quality }: TradeQualityCardProps) {
           tone="neg"
           icon={TrendingDown}
           iconTone="neg"
-        />
-        <MetricTile
-          label="Risk : Reward"
-          value={rr === null ? '—' : `1 : ${rr.toFixed(2)}`}
-          tone={rr === null ? '' : rr >= 1 ? 'pos' : 'neg'}
-          icon={Scale}
         />
         <MetricTile
           label="Expectancy"

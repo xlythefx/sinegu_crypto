@@ -93,12 +93,6 @@ export default function PortfolioMetrics({
       tone: 'neg',
     },
     {
-      label: 'Risk : Reward',
-      value: metrics.avg_rr !== null ? `${metrics.avg_rr.toFixed(2)}×` : '—',
-      hint: 'Avg win ÷ avg loss',
-      tone: 'pos',
-    },
-    {
       label: 'Expectancy',
       value:
         metrics.expectancy !== null ? fmtSignedMoney(metrics.expectancy) : '—',

@@ -125,6 +125,118 @@ def test_stack_cap_skips_maxed_account(fake_accounts, fake_assets):
     assert skipped[0]["reason"] == "maxed sizing"
 
 
+def test_filled_entry_records_the_sizing_inputs(fake_accounts, fake_assets):
+    """Every entry detail carries the inputs the size was derived from, so a
+    trade_logs row explains itself without replaying balances."""
+    summary, _, _, _ = _run_job(fake_accounts, fake_assets, action="BUY", ticker="BTCUSDT")
+
+    by_account = {r["account"]: r for r in summary["details"]}
+
+    # BTCUSDT is a coarse-step ticker: whole base_size steps per 1000 of balance.
+    live_one = by_account["Live One"]["sizing"]          # balance 1000 -> 1 step
+    assert live_one["balance"] == 1000.0
+    assert live_one["base_size"] == 0.005
+    assert live_one["reference_balance"] == 1000.0
+    assert live_one["coarse_step"] is True
+    assert live_one["quantity"] == by_account["Live One"]["quantity"] == 0.005
+    assert live_one["size_multiple"] == 1.0
+    assert live_one["max_increments"] == 10.0
+    assert live_one["min_deposit"] == 1000.0
+    assert live_one["total_deposit"] == 1000.0
+
+    # Funded above the minimum but drawn down to 300 -> still trades, at one
+    # base_size. This is the drawdown case the deposit gate exists to allow.
+    demo_two = by_account["Demo Two"]["sizing"]
+    assert demo_two["balance"] == 300.0
+    assert demo_two["total_deposit"] == 1500.0
+    assert demo_two["size_multiple"] == 1.0
+
+    # 2500 / 1000 -> 2 whole steps.
+    assert by_account["Live Three"]["sizing"]["size_multiple"] == 2.0
+
+
+def test_entries_are_refused_below_the_minimum_deposit(fake_accounts, fake_assets):
+    """Under-funded accounts are skipped, not sized down."""
+    fake_accounts[1]["total_deposit"] = 400.0
+
+    summary, entry_mock, _, _ = _run_job(fake_accounts, fake_assets, action="BUY")
+
+    assert summary["filled"] == 2
+    assert summary["skipped"] == 1
+    assert entry_mock.call_count == 2  # the blocked account never reaches Binance
+    skipped = [r for r in summary["details"] if r["status"] == "skipped"][0]
+    assert skipped["account"] == "Demo Two"
+    assert skipped["reason"] == "deposit below minimum"
+    assert skipped["sizing"]["total_deposit"] == 400.0
+    assert skipped["sizing"]["min_deposit"] == 1000.0
+
+
+def test_an_unknown_deposit_fails_closed(fake_accounts, fake_assets):
+    """No deposit figure = no entry. A never-polled account must not trade."""
+    fake_accounts[1].pop("total_deposit")
+    fake_accounts[1].pop("initial_deposit")
+
+    summary, _, _, _ = _run_job(fake_accounts, fake_assets, action="BUY")
+
+    skipped = [r for r in summary["details"] if r["status"] == "skipped"][0]
+    assert skipped["reason"] == "deposit unknown"
+    assert summary["filled"] == 2
+
+
+def test_deposit_gate_reads_deposit_not_balance(fake_accounts, fake_assets):
+    """Deposited over the minimum but drawn down under it -> still trades."""
+    fake_accounts[1]["total_deposit"] = 1200.0
+    fake_accounts[1]["balance"] = 50.0
+
+    summary, _, _, _ = _run_job(fake_accounts, fake_assets, action="BUY")
+
+    assert summary["filled"] == 3
+    assert summary["skipped"] == 0
+
+
+def test_exits_are_never_deposit_gated(fake_accounts, fake_assets):
+    """An open position must be closable even once the account is ineligible."""
+    fake_accounts[1]["total_deposit"] = 10.0
+
+    summary, _, exit_mock, _ = _run_job(fake_accounts, fake_assets, action="EXIT_LONG")
+
+    assert summary["filled"] == 3
+    assert exit_mock.call_count == 3
+
+
+def test_total_deposit_falls_back_to_initial_deposit(fake_accounts, fake_assets):
+    """Backends predating total_deposit still gate correctly."""
+    fake_accounts[1].pop("total_deposit")
+    fake_accounts[1]["initial_deposit"] = 2000.0
+
+    summary, _, _, _ = _run_job(fake_accounts, fake_assets, action="BUY")
+
+    assert summary["filled"] == 3
+    by_account = {r["account"]: r for r in summary["details"]}
+    assert by_account["Demo Two"]["sizing"]["total_deposit"] == 2000.0
+
+
+def test_maxed_sizing_skip_records_the_stack_state(fake_accounts, fake_assets):
+    """A 'maxed sizing' skip says how full the stack was when it was refused."""
+    open_positions = {"success": True, "positions": [
+        {"api_key": "live-key-1", "position_side": "LONG", "position_amt": 0.05, "entry_price": 60000},
+    ]}
+    with (
+        patch.object(webhook, "fetch_accounts", return_value=fake_accounts),
+        patch.object(webhook, "get_asset", side_effect=lambda t: fake_assets.get(t.upper())),
+        patch.object(webhook, "BinanceAPI", MagicMock()),
+        patch.object(webhook, "handle_entry", side_effect=_entry_ok),
+        patch.object(webhook.engine_client, "get_json", return_value=open_positions),
+        patch.object(webhook.engine_client, "post_json", return_value={"success": True}),
+    ):
+        summary = webhook._process_trade_job("BUY", "BTCUSDT", 100.0, None, None)
+
+    skipped = [r for r in summary["details"] if r["status"] == "skipped"][0]
+    assert skipped["reason"] == "maxed sizing"
+    assert skipped["sizing"]["stacks_now"] == 10.0
+    assert skipped["sizing"]["max_increments"] == 10.0
+
+
 def test_symbol_lock_serializes_same_account(fake_accounts, fake_assets):
     """Two concurrent jobs for the same account+symbol must not overlap."""
     active = threading.Semaphore(1)

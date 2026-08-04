@@ -15,7 +15,7 @@ import time
 
 from flask import Flask, jsonify
 
-from binance_abcd import hooks
+from binance_abcd import hooks, notify
 from binance_abcd.accounts_api import accounts_cache_age, account_futures_base_url, fetch_accounts
 from binance_abcd.assets_api import assets_cache_age, fetch_assets
 from binance_abcd.binance_api import (
@@ -66,9 +66,10 @@ def _mask(key: str) -> str:
     return f"{key[:6]}...{key[-4:]}" if len(key) > 12 else "***"
 
 
-def startup_checks() -> None:
+def startup_checks() -> tuple[int, int]:
     """Print accounts/assets, sync position mode per account (seeds the
-    verified cache so the trade path never re-checks)."""
+    verified cache so the trade path never re-checks). Returns the
+    (account, asset) counts for the Telegram startup ping."""
     accounts = fetch_accounts(force=True)
     log.info("accounts enabled for trading: %d", len(accounts))
     for account in accounts:
@@ -93,6 +94,7 @@ def startup_checks() -> None:
 
     assets = fetch_assets(force=True)
     log.info("assets enabled: %s", ", ".join(sorted(assets)) or "(none)")
+    return len(accounts), len(assets)
 
 
 def _poller_loop(name: str, fetch_fn, interval: float) -> None:
@@ -105,9 +107,10 @@ def _poller_loop(name: str, fetch_fn, interval: float) -> None:
             if failing:
                 log.info("[%s] recovered", name)
                 failing = False
-        except Exception:  # noqa: BLE001 - a poller must never die
+        except Exception as exc:  # noqa: BLE001 - a poller must never die
             if not failing:
                 log.exception("[%s] failing", name)
+                notify.notify_error(f"poller '{name}' failing", str(exc))
                 failing = True
         if _shutdown.wait(interval):
             break
@@ -141,10 +144,15 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s %(levelname)-7s [%(threadName)s] %(message)s",
     )
-    set_rate_limit_alert_hook(lambda message: log.critical("RATE LIMIT ALERT: %s", message))
+    def _on_rate_limit(message: str) -> None:
+        log.critical("RATE LIMIT ALERT: %s", message)
+        notify.notify_error("Binance rate limit / ban", message)
+
+    set_rate_limit_alert_hook(_on_rate_limit)
 
     log.info("starting %s on port %s (webhook %s)", hooks.SERVICE_NAME, hooks.FLASK_PORT, hooks.WEBHOOK_PATH)
-    startup_checks()
+    account_count, asset_count = startup_checks()
+    notify.notify_startup(account_count, asset_count)
     start_retry_queue(_shutdown)
     if hooks.RUN_POLLERS:
         start_pollers()

@@ -1,5 +1,10 @@
 export type UserStatus = 'pending' | 'active' | 'suspended'
-export type UserRole = 'user' | 'admin' | 'master'
+
+/**
+ * `user_credentials.type`. `developer` is staff too, plus the Database console
+ * and test-mode payments — see `lib/roles.ts`.
+ */
+export type UserRole = 'user' | 'admin' | 'master' | 'developer'
 
 export interface AuthUser {
   uni_id: string
@@ -14,6 +19,12 @@ export interface AuthUser {
   user_profile?: string | null
   /** Banner image (data URL or path) — local-only until upload is wired. */
   user_banner?: string | null
+  /**
+   * True when a non-deleted exchange account is connected. Returned by
+   * /auth/me; absent in sessions stored before this field existed — treat
+   * undefined as "unknown", never as "not connected".
+   */
+  has_exchange_account?: boolean
 }
 
 export interface AuthResponse {

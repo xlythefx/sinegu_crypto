@@ -13,6 +13,7 @@ import DataState from '../components/dashboard/DataState'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import ExchangeAccountCard from '../components/exchanges/ExchangeAccountCard'
 import ConnectExchangeWizard from '../components/exchanges/ConnectExchangeWizard'
+import RenameAccountModal from '../components/exchanges/RenameAccountModal'
 import { EXCHANGE_META, EXCHANGE_ORDER } from '../components/exchanges/meta'
 import { useApiData } from '../hooks/useApiData'
 import {
@@ -20,6 +21,7 @@ import {
   getExchangeAccounts,
 } from '../services/exchanges'
 import { ApiError, getApiErrorMessage } from '../services/api'
+import { updateStoredUser } from '../lib/session'
 import type { ExchangeAccount, ExchangeKind } from '../types/exchanges'
 
 type Filter = 'all' | ExchangeKind
@@ -42,6 +44,7 @@ export default function Exchanges() {
 
   const [filter, setFilter] = useState<Filter>('all')
   const [wizardOpen, setWizardOpen] = useState(false)
+  const [renameTarget, setRenameTarget] = useState<ExchangeAccount | null>(null)
   const [disconnectTarget, setDisconnectTarget] =
     useState<ExchangeAccount | null>(null)
   const [disconnecting, setDisconnecting] = useState(false)
@@ -72,6 +75,9 @@ export default function Exchanges() {
     setActionError(null)
     try {
       await deleteExchangeAccount(disconnectTarget.id)
+      // One account per user, so a disconnect means none remain — sync the
+      // session flag so the onboarding nudges come back instantly.
+      updateStoredUser({ has_exchange_account: false })
       setDisconnectTarget(null)
       reload()
     } catch (err) {
@@ -163,12 +169,17 @@ export default function Exchanges() {
         </p>
       )}
 
+      {/* Keyed CSS fadeup, not AOS: this region is swapped in place after a
+          connect/disconnect reload, and AOS (once: true) never reveals nodes
+          mounted after init — they'd stay stuck at opacity 0. */}
+      <div
+        key={`${filter}-${
+          filtered.map((a) => `${a.id}:${a.name}`).join('.') || 'empty'
+        }`}
+        className="animate-[fadeup_0.35s_ease-out]"
+      >
       {filtered.length === 0 ? (
-        <div
-          className="rounded-card border-2 border-dashed border-accent-line bg-[linear-gradient(160deg,var(--accentSoft),var(--surface))] px-6 py-12 text-center"
-          data-aos="fade-up"
-          data-aos-delay="100"
-        >
+        <div className="rounded-card border-2 border-dashed border-accent-line bg-[linear-gradient(160deg,var(--accentSoft),var(--surface))] px-6 py-12 text-center">
           <div className="mx-auto mb-[18px] flex h-[76px] w-[76px] animate-[float_3s_ease-in-out_infinite] items-center justify-center rounded-[20px] border border-accent-line bg-accent-soft text-accent">
             <Building2 size={36} />
           </div>
@@ -202,27 +213,34 @@ export default function Exchanges() {
           </div>
         </div>
       ) : (
-        <div
-          className="grid grid-cols-2 gap-3.5 max-[1000px]:grid-cols-1"
-          data-aos="fade-up"
-          data-aos-delay="100"
-        >
+        <div className="grid grid-cols-2 gap-3.5 max-[1000px]:grid-cols-1">
           {filtered.map((account) => (
             <ExchangeAccountCard
               key={account.id}
               account={account}
               exchange="binance"
+              onRename={(a) => {
+                setActionError(null)
+                setRenameTarget(a)
+              }}
               onDisconnect={(a) => setDisconnectTarget(a)}
             />
           ))}
         </div>
       )}
+      </div>
 
       <ConnectExchangeWizard
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
         onConnected={() => reload()}
         connectedKinds={accounts.length > 0 ? ['binance'] : []}
+      />
+
+      <RenameAccountModal
+        account={renameTarget}
+        onClose={() => setRenameTarget(null)}
+        onRenamed={() => reload()}
       />
 
       <ConfirmModal

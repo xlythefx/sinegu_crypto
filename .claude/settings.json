@@ -25,5 +25,31 @@
     "additionalDirectories": [
       "C:\\wamp64\\www\\sinegutrade-api"
     ]
+  },
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "matcher": "Bash|PowerShell|WebFetch|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/auto-allow.mjs\" request",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|PowerShell|WebFetch|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/auto-allow.mjs\" post",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
   }
 }

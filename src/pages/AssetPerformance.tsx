@@ -4,8 +4,10 @@ import { ChevronLeft, ChevronRight, Search, Tags } from 'lucide-react'
 import DashboardLayout from '../components/dashboard/DashboardLayout'
 import DataState from '../components/dashboard/DataState'
 import AssetPerformanceCard from '../components/asset-performance/AssetPerformanceCard'
+import TradableAssetsShowcase from '../components/asset-performance/TradableAssetsShowcase'
 import { useApiData } from '../hooks/useApiData'
 import { getAssetPerformance } from '../services/dashboard'
+import { getTradableAssets } from '../services/assets'
 import { ApiError } from '../services/api'
 import { displaySymbol } from '../lib/chart'
 
@@ -16,12 +18,19 @@ const PAG_BTN =
 
 export default function AssetPerformance() {
   const { data, loading, error, reload } = useApiData(getAssetPerformance)
+  const catalog = useApiData(getTradableAssets)
 
   const [search, setSearch] = useState('')
   const [assetFilter, setAssetFilter] = useState('all')
   const [page, setPage] = useState(1)
 
   const assets = useMemo(() => data?.assets ?? [], [data])
+
+  /** Tickers with closed trades — marks the showcase tiles already traded. */
+  const tradedTickers = useMemo(
+    () => new Set(assets.map((a) => a.ticker)),
+    [assets]
+  )
 
   // Ranks follow the API's P&L ordering, independent of search/filter
   const rankByTicker = useMemo(() => {
@@ -57,19 +66,6 @@ export default function AssetPerformance() {
     return <Navigate to="/auth" replace />
   }
 
-  if (!data) {
-    return (
-      <DashboardLayout title="Asset Performance">
-        <DataState
-          loading={loading}
-          error={error}
-          onRetry={reload}
-          label="asset performance"
-        />
-      </DashboardLayout>
-    )
-  }
-
   return (
     <DashboardLayout title="Asset Performance">
       <div className="mb-[22px]" data-aos="fade-up">
@@ -87,7 +83,31 @@ export default function AssetPerformance() {
         </div>
       </div>
 
-      {assets.length === 0 ? (
+      <TradableAssetsShowcase
+        assets={catalog.data}
+        loading={catalog.loading}
+        error={catalog.error}
+        onRetry={catalog.reload}
+        tradedTickers={tradedTickers}
+      />
+
+      <div className="mb-3.5" data-aos="fade-up">
+        <h2 className="font-display text-[20px] font-extrabold tracking-[-0.01em]">
+          Your performance by asset
+        </h2>
+        <p className="mt-1 max-w-[520px] text-[13px] text-muted">
+          Built from your closed trades, ranked by total P&L.
+        </p>
+      </div>
+
+      {!data ? (
+        <DataState
+          loading={loading}
+          error={error}
+          onRetry={reload}
+          label="asset performance"
+        />
+      ) : assets.length === 0 ? (
         <div
           className="rounded-card border border-dashed border-border bg-surface py-12 px-6 text-center text-muted text-[14px]"
           data-aos="fade-up"

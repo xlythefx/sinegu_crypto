@@ -62,7 +62,10 @@ key auth is set up (recommended — then disable password auth in sshd).
 /var/www/sinegualerts/
 ├── dashboard/            React dist — nginx root, SPA fallback
 ├── api/                  Laravel sinegutrade-api — nginx /api -> api/public via php8.3-fpm
-└── _backups/<ts>/        dashboard.tar.gz + api.tar.gz + api.env  (newest 10 kept)
+├── engine/               trading-flask binance_abcd — systemd `sinegualerts-engine`,
+│                         waitress on 127.0.0.1:5010; nginx proxies ONLY
+│                         /binance_abcd_webhook (health/admin stay local-only)
+└── _backups/<ts>/        dashboard/api/engine tar.gz + api.env + engine.env (newest 10 kept)
 ```
 
 nginx vhost: `/etc/nginx/sites-available/sinegualerts` (written by `provision`,
@@ -80,10 +83,29 @@ python .claude/deploy_sinegualcrypto.py deploy-nginx     # rewrite + test + relo
 npm run build                                            # ALWAYS before deploying frontend
 python .claude/deploy_sinegualcrypto.py deploy-dash      # frontend only
 python .claude/deploy_sinegualcrypto.py deploy-api       # backend only
+python .claude/deploy_sinegualcrypto.py deploy-engine    # bot engine (tests-gated; venv +
+                                                         #   .env + systemd + nginx route)
 python .claude/deploy_sinegualcrypto.py full             # backup -> dash -> api -> verify
 python .claude/deploy_sinegualcrypto.py verify           # asset refs + .env + services + HTTP probe
+python .claude/deploy_sinegualcrypto.py verify-engine    # systemd + /health + webhook gate + engine auth
 python .claude/deploy_sinegualcrypto.py backup           # timestamped backup only
 ```
+
+**Bot Engine admin page** (`/admin/engine`) drives `GET /api/admin/engine/status|logs` and
+`POST /api/admin/engine/restart` (`AdminEngineController`). Those run `systemctl`/`journalctl`
+locally as `www-data`, which `deploy-engine` enables idempotently: a sudoers rule limited to
+`systemctl restart sinegualerts-engine` (`/etc/sudoers.d/`, validated with `visudo -c`) plus
+`www-data` in the `systemd-journal` group. Off Linux the endpoints report
+`available: false` and the page degrades to a read-only "LOCAL DEV" state.
+
+**Engine specifics** (first deployed 2026-07-30): `deploy-engine` refuses to ship if the
+local `trading-flask` pytest suite fails. The server-side `engine/.env` is generated once
+and never overwritten — webhook secret copied from local `trading-flask/.env` (so
+TradingView URLs keep working), `ENGINE_SECRET` shared with `api/.env` (appended +
+`config:cache` if missing). First-boot defaults: `RUN_POLLERS=true`,
+`SYNC_POSITION_MODE_ON_STARTUP=false` — flip the latter on the server when you want
+per-account position-mode sync at startup. Prod TradingView webhook URL:
+`http://2.24.139.176/binance_abcd_webhook` (secret in JSON body or `?secret=`).
 
 **First-deploy order** (already done once — needed again only on a rebuilt box):
 `provision` → `provision-db` → `deploy-api` (stops, no .env) → `setup-env` → `deploy-api`.

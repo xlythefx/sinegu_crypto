@@ -116,6 +116,18 @@ export function mapApiInvoice(row: ApiInvoice): Invoice {
 /** A period earns a fee only when its total fee is positive. */
 export const hasFee = (inv: Invoice): boolean => inv.totalFee > 0
 
+/**
+ * Whole days from today to an invoice's due date — negative when it is already
+ * past due, `null` when the due date can't be parsed.
+ */
+export function daysUntilDue(inv: Invoice): number | null {
+  const due = new Date(`${inv.dueDate.slice(0, 10)}T00:00:00`)
+  if (Number.isNaN(due.getTime())) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return Math.round((due.getTime() - today.getTime()) / 86_400_000)
+}
+
 export interface BillingStats {
   totalPaymentsMade: number
   totalAmountPaid: number

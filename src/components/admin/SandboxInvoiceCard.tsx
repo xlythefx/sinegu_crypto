@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { AlertCircle, ArrowRight, CheckCircle2, FileText, Receipt } from 'lucide-react'
 import { generateInvoices, updateInvoice } from '../../services/admin'
 import { getApiErrorMessage } from '../../services/api'
-import { fmtMoney } from '../../lib/format'
+import { fmtMoney, prevMonth } from '../../lib/format'
 import type { Invoice } from '../../lib/billing'
 import type { AdminUser } from '../../types/admin'
 
@@ -18,14 +18,6 @@ const BTN =
   'inline-flex items-center gap-[7px] h-10 rounded-pill border border-transparent px-[18px] text-[13px] font-bold cursor-pointer transition-[filter,border-color,background,opacity] duration-150 disabled:opacity-[0.55] disabled:cursor-not-allowed'
 const BTN_PRIMARY = 'bg-accent border-transparent text-on-accent enabled:hover:brightness-[1.06]'
 const BTN_SM = 'h-8 px-3 text-[12px]'
-
-/** Previous calendar month as YYYY-MM (the period invoices bill for). */
-function prevMonth(): string {
-  const d = new Date()
-  d.setDate(1)
-  d.setMonth(d.getMonth() - 1)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
 
 /**
  * Manual invoice workflow for the admin sandbox: pick a user + month, generate

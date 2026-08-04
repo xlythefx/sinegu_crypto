@@ -27,6 +27,7 @@ graphify-out
 # Deploy secrets — never commit
 .claude/deploy.creds.json
 .claude/settings.local.json
+.claude/tradingview.creds.md
 
 # Editor directories and files
 .vscode/*

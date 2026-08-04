@@ -25,6 +25,18 @@ export async function connectBinanceAccount(
   return res.account
 }
 
+/** Rename an account — display label only, does not touch its API keys. */
+export async function renameExchangeAccount(
+  id: number,
+  name: string,
+): Promise<ExchangeAccount> {
+  const res = await apiFetch<{ success: boolean; account: ExchangeAccount }>(
+    `/exchange/accounts/${id}`,
+    { method: 'PUT', body: { name }, auth: true },
+  )
+  return res.account
+}
+
 export async function deleteExchangeAccount(id: number): Promise<void> {
   await apiFetch<{ success: boolean }>(`/exchange/accounts/${id}`, {
     method: 'DELETE',

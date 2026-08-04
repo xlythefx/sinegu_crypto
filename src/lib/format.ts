@@ -82,6 +82,24 @@ export function fmtShortDate(iso: string): string {
   })
 }
 
+/** "Jul '26" from "2026-07-21" (or "2026-07"). */
+export function fmtShortMonth(iso: string): string {
+  const date = new Date(`${iso.slice(0, 7)}-01T00:00:00`)
+  if (Number.isNaN(date.getTime())) return iso
+  return `${date.toLocaleDateString('en-US', { month: 'short' })} '${iso.slice(2, 4)}`
+}
+
+/**
+ * Previous calendar month as 'YYYY-MM' — the period invoices bill for.
+ * Sets the day to 1 before stepping back so the 31st cannot skip a month.
+ */
+export function prevMonth(): string {
+  const d = new Date()
+  d.setDate(1)
+  d.setMonth(d.getMonth() - 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
 /** "Jul 21, 02:30 PM" from a MySQL datetime. */
 export function fmtDateTime(dt: string): string {
   return new Date(dt.replace(' ', 'T')).toLocaleDateString('en-US', {

@@ -19,9 +19,11 @@ import {
   SandboxUserModal,
 } from '../../components/admin/SandboxModals'
 import SandboxInvoiceCard from '../../components/admin/SandboxInvoiceCard'
+import SandboxScenarioCard from '../../components/admin/SandboxScenarioCard'
 import { useApiData } from '../../hooks/useApiData'
 import {
   clearSandboxPositions,
+  clearUserInvoices,
   deleteSandboxUser,
   getAdminUsers,
   getSandboxUsers,
@@ -83,7 +85,7 @@ export default function AdminSandbox() {
   /* ---- cleanup confirmations ---- */
   const [cleanup, setCleanup] = useState<{
     user: SandboxUser
-    kind: 'clear' | 'delete'
+    kind: 'clear' | 'delete' | 'invoices'
   } | null>(null)
   const [cleanupBusy, setCleanupBusy] = useState(false)
   const [cleanupErr, setCleanupErr] = useState<string | null>(null)
@@ -114,6 +116,12 @@ export default function AdminSandbox() {
     try {
       if (cleanup.kind === 'clear') {
         await clearSandboxPositions(cleanup.user.uni_id)
+      } else if (cleanup.kind === 'invoices') {
+        const res = await clearUserInvoices(cleanup.user.uni_id)
+        setBanner(
+          `Deleted ${res.deleted} invoice${res.deleted === 1 ? '' : 's'} for ${cleanup.user.email}` +
+            (res.skipped_paid ? ` · kept ${res.skipped_paid} already paid` : ''),
+        )
       } else {
         await deleteSandboxUser(cleanup.user.uni_id)
       }
@@ -125,7 +133,9 @@ export default function AdminSandbox() {
           err,
           cleanup.kind === 'clear'
             ? 'Could not clear positions.'
-            : 'Could not delete the user.',
+            : cleanup.kind === 'invoices'
+              ? 'Could not clear the invoices.'
+              : 'Could not delete the user.',
         ),
       )
       setCleanup(null)
@@ -133,6 +143,28 @@ export default function AdminSandbox() {
       setCleanupBusy(false)
     }
   }
+
+  /** Copy for the cleanup confirmation, keyed by which action is pending. */
+  const CLEANUP_COPY = {
+    clear: {
+      title: `Clear positions for ${cleanup?.user.name || 'user'}?`,
+      message:
+        'All fabricated past positions for this test user will be removed. This cannot be undone.',
+      confirm: 'Yes, clear',
+    },
+    invoices: {
+      title: `Clear invoices for ${cleanup?.user.name || 'user'}?`,
+      message:
+        'Unpaid invoices for this user will be deleted; settled ones are kept. This cannot be undone.',
+      confirm: 'Yes, clear',
+    },
+    delete: {
+      title: `Delete ${cleanup?.user.name || 'user'}?`,
+      message:
+        'This test user and their data will be permanently removed. This cannot be undone.',
+      confirm: 'Yes, delete',
+    },
+  } as const
 
   return (
     <AdminLayout title="Sandbox" subtitle="Create test data to exercise the platform.">
@@ -151,7 +183,7 @@ export default function AdminSandbox() {
           {
             icon: <FlaskConical size={17} />,
             title: 'Insert Past Position',
-            sub: 'Add fabricated closed trades to exercise statistics.',
+            sub: 'Add fabricated closed trades — one-off, or one per day across a date range.',
             onClick: () => setPosModal(true),
           },
           {
@@ -280,6 +312,14 @@ export default function AdminSandbox() {
                   </button>
                   <button
                     type="button"
+                    className={`${BTN} ${BTN_GHOST} ${BTN_SM}`}
+                    disabled={cleanupBusy}
+                    onClick={() => setCleanup({ user: u, kind: 'invoices' })}
+                  >
+                    Clear invoices
+                  </button>
+                  <button
+                    type="button"
                     className={`${BTN} ${BTN_DANGER} ${BTN_SM}`}
                     disabled={cleanupBusy}
                     onClick={() => setCleanup({ user: u, kind: 'delete' })}
@@ -296,6 +336,9 @@ export default function AdminSandbox() {
 
       {/* ============ invoice testing ============ */}
       <SandboxInvoiceCard users={users} />
+
+      {/* ============ automated invoice scenarios ============ */}
+      <SandboxScenarioCard users={users} />
 
       {/* ============ modals ============ */}
       <SandboxUserModal
@@ -328,22 +371,10 @@ export default function AdminSandbox() {
 
       <ConfirmModal
         open={cleanup !== null}
-        title={
-          cleanup?.kind === 'clear'
-            ? `Clear positions for ${cleanup?.user.name || 'user'}?`
-            : `Delete ${cleanup?.user.name || 'user'}?`
-        }
-        message={
-          cleanup?.kind === 'clear'
-            ? 'All fabricated past positions for this test user will be removed. This cannot be undone.'
-            : 'This test user and their data will be permanently removed. This cannot be undone.'
-        }
+        title={cleanup ? CLEANUP_COPY[cleanup.kind].title : ''}
+        message={cleanup ? CLEANUP_COPY[cleanup.kind].message : undefined}
         confirmLabel={
-          cleanupBusy
-            ? 'Working…'
-            : cleanup?.kind === 'clear'
-              ? 'Yes, clear'
-              : 'Yes, delete'
+          cleanupBusy ? 'Working…' : cleanup ? CLEANUP_COPY[cleanup.kind].confirm : 'Yes'
         }
         cancelLabel="No"
         danger

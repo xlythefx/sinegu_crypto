@@ -69,11 +69,14 @@ const isEntry = (action: TradeAction) => action === 'BUY' || action === 'SELL'
 const brokerMatches = (broker: string | null, exchange: ExchangeKind) =>
   (broker ?? '').trim().toLowerCase() === exchange
 
+/** Leverage the console pre-fills — the engine's own default. */
+const DEFAULT_LEVERAGE = '25'
+
 /**
  * Manual trade console — the browser replacement for the engine's Tkinter
  * tester. Builds a TradingView-shaped signal and hands it to the API, which
- * signs it with the webhook secret and forwards it to the engine. Nothing
- * secret is ever exposed to this page.
+ * signs it with the webhook secret and forwards it to the engine. The preview
+ * shows the real secret (admin-only page) but sends never carry it from here.
  */
 export default function AdminManualTrade() {
   const { data: assets, loading, error, reload } = useApiData(getAdminAssets)
@@ -83,8 +86,7 @@ export default function AdminManualTrade() {
   const [ticker, setTicker] = useState('')
   const [action, setAction] = useState<TradeAction>('BUY')
   const [increments, setIncrements] = useState(1)
-  const [price, setPrice] = useState('')
-  const [leverage, setLeverage] = useState('')
+  const [leverage, setLeverage] = useState(DEFAULT_LEVERAGE)
   const [strategy, setStrategy] = useState('Manual-Test')
   const [target, setTarget] = useState<EngineTarget>('local')
 
@@ -119,13 +121,13 @@ export default function AdminManualTrade() {
   useEffect(() => {
     let alive = true
     setEngine(null)
-    getEngineStatus(target)
+    getEngineStatus(target, exchange)
       .then((status) => alive && setEngine(status))
       .catch(() => alive && setEngine(null))
     return () => {
       alive = false
     }
-  }, [target])
+  }, [target, exchange])
 
   const exchangeAssets = useMemo(
     () => (assets ?? []).filter((a) => a.enabled && brokerMatches(a.broker, exchange)),
@@ -153,10 +155,13 @@ export default function AdminManualTrade() {
     () =>
       JSON.stringify(
         {
-          secret: '••••••  (added by the API, never sent from the browser)',
+          secret:
+            engine?.webhook_secret_masked ??
+            (engine === null
+              ? 'loading…'
+              : `${exchange.toUpperCase()}_ENGINE_WEBHOOK_SECRET not set`),
           action,
           symbol: ticker || '—',
-          ...(price ? { price } : {}),
           ...(leverage ? { leverage } : {}),
           ...(strategy ? { strategy } : {}),
           ...(mode === 'selected' && selected.length > 0
@@ -166,7 +171,7 @@ export default function AdminManualTrade() {
         null,
         2,
       ),
-    [action, ticker, price, leverage, strategy, mode, selected],
+    [engine, exchange, action, ticker, leverage, strategy, mode, selected],
   )
 
   if (error instanceof ApiError && error.status === 401) {
@@ -183,7 +188,6 @@ export default function AdminManualTrade() {
         target,
         action,
         symbol: ticker,
-        price: price ? Number(price) : null,
         leverage: leverage ? Number(leverage) : null,
         strategy: strategy || null,
         increments: isEntry(action) ? increments : 1,
@@ -320,7 +324,7 @@ export default function AdminManualTrade() {
             )}
 
             {isEntry(action) && (
-              <div className="grid grid-cols-3 max-[560px]:grid-cols-1 gap-3.5 mt-4">
+              <div className="grid grid-cols-2 max-[560px]:grid-cols-1 gap-3.5 mt-4">
                 <div>
                   <label className={LABEL} htmlFor="mt-increments">
                     Increments
@@ -343,7 +347,7 @@ export default function AdminManualTrade() {
                 </div>
                 <div>
                   <label className={LABEL} htmlFor="mt-leverage">
-                    Leverage (optional)
+                    Leverage
                   </label>
                   <input
                     id="mt-leverage"
@@ -351,24 +355,13 @@ export default function AdminManualTrade() {
                     type="number"
                     min={1}
                     max={125}
-                    placeholder="e.g. 20"
+                    placeholder={DEFAULT_LEVERAGE}
                     value={leverage}
                     onChange={(e) => setLeverage(e.target.value)}
                   />
-                </div>
-                <div>
-                  <label className={LABEL} htmlFor="mt-price">
-                    Price (optional)
-                  </label>
-                  <input
-                    id="mt-price"
-                    className={INPUT}
-                    type="number"
-                    step="any"
-                    placeholder="alert price"
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                  />
+                  <p className="mt-1 text-[11px] text-muted leading-[1.4]">
+                    Defaults to {DEFAULT_LEVERAGE}× — clear it to let the engine decide.
+                  </p>
                 </div>
               </div>
             )}
@@ -503,9 +496,14 @@ export default function AdminManualTrade() {
             <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-1.5">
               Payload preview
             </p>
-            <pre className="max-h-[172px] overflow-auto rounded-[10px] border border-hair bg-surface2 p-2.5 font-mono text-[11px] leading-[1.5] text-text mb-3.5">
+            {/* Wraps rather than scrolls so nothing is clipped out of sight. */}
+            <pre className="max-h-[240px] overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-all rounded-[10px] border border-hair bg-surface2 p-2.5 font-mono text-[11px] leading-[1.5] text-text">
               {payloadPreview}
             </pre>
+            <p className="mt-1.5 mb-3.5 text-[11px] text-muted leading-[1.4]">
+              The secret is masked — the API adds the real one. The full token for
+              TradingView alerts lives in <code className="font-mono">CLAUDE.md</code>.
+            </p>
 
             {sendError && (
               <div className={`${MSG} ${MSG_ERR} mb-3`} role="alert">

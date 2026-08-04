@@ -3,17 +3,36 @@ import { getToken } from '../lib/session'
 import { mapApiInvoice, type ApiInvoice, type Invoice } from '../lib/billing'
 import type {
   AdminAsset,
+  AdminEngineStatus,
   AdminPerformance,
   AdminPositionsData,
   AdminUser,
+  AdminUserDetail,
+  AdminUserSummary,
+  AdminUserUpdateInput,
   AssetInput,
+  CacheClearResult,
+  ClearInvoicesResult,
   DailyPnlMap,
+  DatabaseTablesData,
+  DbRow,
+  EngineLogsData,
+  EngineRestartResult,
+  InvoiceScenario,
   MasterStats,
   PerformanceFilters,
   SandboxPositionInput,
   SandboxUser,
+  ScenarioRun,
+  ScenarioRunInput,
+  SqlQueryInput,
+  SqlQueryResult,
   StrategiesData,
+  TableRowsData,
+  TableRowsParams,
+  TableStructure,
   TestUserInput,
+  UserReferralRow,
 } from '../types/admin'
 
 export async function getMasterStats(): Promise<MasterStats> {
@@ -215,6 +234,78 @@ export async function rejectUser(uniId: string): Promise<void> {
   })
 }
 
+/* ============ user detail (/admin/users/{uniId}) ============ */
+
+export async function getAdminUserDetail(
+  uniId: string,
+): Promise<AdminUserDetail> {
+  const res = await apiFetch<{ success: boolean; user: AdminUserDetail }>(
+    `/admin/users/${uniId}`,
+    { auth: true },
+  )
+  return res.user
+}
+
+export async function getAdminUserSummary(
+  uniId: string,
+): Promise<AdminUserSummary> {
+  const res = await apiFetch<{ success: boolean; summary: AdminUserSummary }>(
+    `/admin/users/${uniId}/summary`,
+    { auth: true },
+  )
+  return res.summary
+}
+
+export async function getAdminUserDailyPnl(
+  uniId: string,
+): Promise<DailyPnlMap> {
+  const res = await apiFetch<{ success: boolean; days: DailyPnlMap }>(
+    `/admin/users/${uniId}/daily-pnl`,
+    { auth: true },
+  )
+  // PHP serializes an empty map as [] — normalize to an object
+  return Array.isArray(res.days) ? {} : res.days
+}
+
+export async function getAdminUserPositions(
+  uniId: string,
+): Promise<AdminPositionsData> {
+  const res = await apiFetch<{ success: boolean } & AdminPositionsData>(
+    `/admin/users/${uniId}/positions`,
+    { auth: true },
+  )
+  return { positions: res.positions, trades: res.trades }
+}
+
+export async function getAdminUserInvoices(uniId: string): Promise<Invoice[]> {
+  const res = await apiFetch<{ success: boolean; invoices: ApiInvoice[] }>(
+    `/admin/users/${uniId}/invoices`,
+    { auth: true },
+  )
+  return res.invoices.map(mapApiInvoice)
+}
+
+export async function getAdminUserReferrals(
+  uniId: string,
+): Promise<UserReferralRow[]> {
+  const res = await apiFetch<{ success: boolean; referrals: UserReferralRow[] }>(
+    `/admin/affiliate/users/${uniId}/referrals`,
+    { auth: true },
+  )
+  return res.referrals
+}
+
+export async function updateAdminUser(
+  uniId: string,
+  input: AdminUserUpdateInput,
+): Promise<Omit<AdminUserDetail, 'accounts'>> {
+  const res = await apiFetch<{
+    success: boolean
+    user: Omit<AdminUserDetail, 'accounts'>
+  }>(`/admin/users/${uniId}`, { method: 'PUT', body: input, auth: true })
+  return res.user
+}
+
 /* ============ invoices ============ */
 
 export interface AdminInvoiceRow extends Invoice {
@@ -319,6 +410,33 @@ export async function deleteInvoice(id: string): Promise<void> {
   })
 }
 
+/* ============ bot engine ============ */
+
+export async function getEngineStatus(): Promise<AdminEngineStatus> {
+  const res = await apiFetch<{ success: boolean; engine: AdminEngineStatus }>(
+    '/admin/engine/status',
+    { auth: true },
+  )
+  return res.engine
+}
+
+export async function getEngineLogs(lines: number): Promise<EngineLogsData> {
+  const res = await apiFetch<{ success: boolean } & EngineLogsData>(
+    `/admin/engine/logs?lines=${lines}`,
+    { auth: true },
+  )
+  return { available: res.available, lines: res.lines ?? [] }
+}
+
+/** Restart the systemd unit — may take a few seconds server-side. */
+export async function restartEngine(): Promise<EngineRestartResult> {
+  const res = await apiFetch<{ success: boolean } & EngineRestartResult>(
+    '/admin/engine/restart',
+    { method: 'POST', auth: true },
+  )
+  return { state: res.state ?? null }
+}
+
 /* ============ sandbox (testing) ============ */
 
 export async function getSandboxUsers(): Promise<SandboxUser[]> {
@@ -363,4 +481,159 @@ export async function insertPastPositions(
     account: { api_key: string; name: string }
   }>('/admin/sandbox/positions', { method: 'POST', body: input, auth: true })
   return { inserted: res.inserted, account: res.account }
+}
+
+/* ============ invoice scenario runner ============ */
+
+/** The catalogue — read-only, safe to call without touching any data. */
+export async function getInvoiceScenarios(): Promise<InvoiceScenario[]> {
+  const res = await apiFetch<{ success: boolean; scenarios: InvoiceScenario[] }>(
+    '/admin/sandbox/invoice-scenarios',
+    { auth: true },
+  )
+  return res.scenarios
+}
+
+/**
+ * Run the suite (or the given `keys`). Every write lands on a throwaway
+ * `SBXINV-` account created under the user — real exchange accounts, their
+ * trade history and their invoices are never touched.
+ */
+export async function runInvoiceScenarios(
+  input: ScenarioRunInput,
+): Promise<ScenarioRun> {
+  const res = await apiFetch<{ success: boolean } & ScenarioRun>(
+    '/admin/sandbox/invoice-scenarios/run',
+    { method: 'POST', body: input, auth: true },
+  )
+  return {
+    month_year: res.month_year,
+    rates: res.rates,
+    cleaned_up: res.cleaned_up,
+    account: res.account,
+    passed: res.passed,
+    failed: res.failed,
+    results: res.results,
+  }
+}
+
+/**
+ * Delete a user's invoices. Settled ones are spared unless `includePaid` is
+ * set; pass `accountId` to limit the wipe to a single exchange account.
+ */
+export async function clearUserInvoices(
+  uniId: string,
+  opts: { accountId?: number; includePaid?: boolean } = {},
+): Promise<ClearInvoicesResult> {
+  const params = new URLSearchParams()
+  if (opts.accountId !== undefined) params.set('account_id', String(opts.accountId))
+  if (opts.includePaid) params.set('include_paid', 'true')
+  const query = params.toString() ? `?${params}` : ''
+
+  const res = await apiFetch<{ success: boolean } & ClearInvoicesResult>(
+    `/admin/sandbox/users/${uniId}/invoices${query}`,
+    { method: 'DELETE', auth: true },
+  )
+  return { deleted: res.deleted, skipped_paid: res.skipped_paid }
+}
+
+/** Remove the scratch account a scenario run created, with everything it owns. */
+export async function clearScenarioAccount(uniId: string): Promise<boolean> {
+  const res = await apiFetch<{ success: boolean; deleted: boolean }>(
+    `/admin/sandbox/users/${uniId}/scenario-account`,
+    { method: 'DELETE', auth: true },
+  )
+  return res.deleted
+}
+
+/* ============ database browser ============ */
+
+export async function getDatabaseTables(): Promise<DatabaseTablesData> {
+  const res = await apiFetch<{ success: boolean } & DatabaseTablesData>(
+    '/admin/database/tables',
+    { auth: true },
+  )
+  return { database: res.database, driver: res.driver, tables: res.tables }
+}
+
+export async function getTableStructure(
+  table: string,
+): Promise<TableStructure> {
+  return apiFetch<{ success: boolean } & TableStructure>(
+    `/admin/database/tables/${encodeURIComponent(table)}/structure`,
+    { auth: true },
+  )
+}
+
+export async function getTableRows(
+  table: string,
+  params: TableRowsParams = {},
+): Promise<TableRowsData> {
+  const query = new URLSearchParams()
+  if (params.page) query.set('page', String(params.page))
+  if (params.per_page) query.set('per_page', String(params.per_page))
+  if (params.sort) query.set('sort', params.sort)
+  if (params.direction) query.set('direction', params.direction)
+  if (params.search) query.set('search', params.search)
+
+  const qs = query.toString()
+  return apiFetch<{ success: boolean } & TableRowsData>(
+    `/admin/database/tables/${encodeURIComponent(table)}/rows${qs ? `?${qs}` : ''}`,
+    { auth: true },
+  )
+}
+
+export async function createTableRow(
+  table: string,
+  values: DbRow,
+): Promise<DbRow | null> {
+  const res = await apiFetch<{ success: boolean; row: DbRow | null }>(
+    `/admin/database/tables/${encodeURIComponent(table)}/rows`,
+    { method: 'POST', body: { values }, auth: true },
+  )
+  return res.row
+}
+
+export async function updateTableRow(
+  table: string,
+  key: DbRow,
+  values: DbRow,
+): Promise<DbRow | null> {
+  const res = await apiFetch<{ success: boolean; row: DbRow | null }>(
+    `/admin/database/tables/${encodeURIComponent(table)}/rows`,
+    { method: 'PUT', body: { key, values }, auth: true },
+  )
+  return res.row
+}
+
+export async function deleteTableRow(
+  table: string,
+  key: DbRow,
+): Promise<number> {
+  const res = await apiFetch<{ success: boolean; deleted: number }>(
+    `/admin/database/tables/${encodeURIComponent(table)}/rows`,
+    { method: 'DELETE', body: { key }, auth: true },
+  )
+  return res.deleted
+}
+
+export async function runSqlQuery(
+  input: SqlQueryInput,
+): Promise<SqlQueryResult> {
+  return apiFetch<{ success: boolean } & SqlQueryResult>(
+    '/admin/database/query',
+    { method: 'POST', body: input, auth: true },
+  )
+}
+
+/**
+ * Flush server-side caches: Laravel config/route/view plus the engine's
+ * cached account + asset lists. Does not affect browser caching — nginx
+ * serves index.html no-cache so clients always pick up a new build.
+ */
+export function clearServerCaches(): Promise<CacheClearResult> {
+  return apiFetch<CacheClearResult>('/admin/cache/clear', {
+    method: 'POST',
+    auth: true,
+  })
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import {
   Building2,
   Check,
@@ -7,17 +7,24 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
-  Crown,
+  Eye,
   Search,
-  Shield,
   UserCog,
   X,
 } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
 import ConfirmModal from '../../components/ui/ConfirmModal'
+import { BADGE, StatusBadge } from '../../components/admin/badges'
+import RolePicker from '../../components/admin/RolePicker'
 import { useApiData } from '../../hooks/useApiData'
-import { acceptUser, getAdminUsers, rejectUser } from '../../services/admin'
+import { useSessionUser } from '../../hooks/useSessionUser'
+import {
+  acceptUser,
+  getAdminUsers,
+  rejectUser,
+  updateAdminUser,
+} from '../../services/admin'
 import { ApiError, getApiErrorMessage } from '../../services/api'
 import { fmtMediumDate, fmtMoney } from '../../lib/format'
 import type { AdminUser, UserRole, UserStatus } from '../../types/admin'
@@ -36,27 +43,19 @@ const ROLE_FILTERS: { key: RoleFilter; label: string }[] = [
   { key: 'all', label: 'All roles' },
   { key: 'master', label: 'Master' },
   { key: 'admin', label: 'Admin' },
+  { key: 'developer', label: 'Developer' },
   { key: 'user', label: 'User' },
 ]
 
 const USERS_PER_PAGE = 10
 
 // Shared class-strings ------------------------------------------------------
-const BADGE =
-  'inline-flex items-center rounded-pill border py-[3px] px-2.5 text-[11px] font-bold whitespace-nowrap'
-/** rgba/color-mix tints preserved exactly from the original CSS. */
-const STATUS_BADGE: Record<UserStatus, string> = {
-  active:
-    'bg-[color-mix(in_srgb,var(--green)_12%,transparent)] border-[color-mix(in_srgb,var(--green)_35%,transparent)] text-green',
-  pending: 'bg-accent-soft border-accent-line text-accent',
-  suspended:
-    'bg-[color-mix(in_srgb,var(--red)_10%,transparent)] border-[color-mix(in_srgb,var(--red)_35%,transparent)] text-red',
-}
-
+// (BADGE / status + role badges now live in components/admin/badges.tsx)
 const BTN =
   'inline-flex items-center gap-[5px] rounded-pill border py-1.5 px-3 text-[12px] font-bold cursor-pointer transition disabled:opacity-[.55] disabled:cursor-not-allowed'
 const BTN_ACCEPT = `${BTN} bg-green border-green text-white enabled:hover:brightness-110`
 const BTN_REJECT = `${BTN} bg-transparent border-[color-mix(in_srgb,var(--red)_40%,transparent)] text-red enabled:hover:bg-[color-mix(in_srgb,var(--red)_10%,transparent)]`
+const BTN_VIEW = `${BTN} bg-transparent border-border text-muted enabled:hover:text-accent enabled:hover:border-accent-line enabled:hover:bg-accent-soft`
 
 const TH =
   'text-left border-b border-hair py-3 px-3.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.1em] text-faint whitespace-nowrap'
@@ -64,44 +63,29 @@ const TD = 'border-b border-hair py-3 px-3.5 align-middle'
 const PAG_BTN =
   'grid place-items-center w-[30px] h-[30px] rounded-[9px] border border-border bg-surface2 text-text cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed'
 
-/** Crown for master, shield for admin — plain users get no badge. */
-function RoleBadge({ role }: { role: UserRole }) {
-  if (role === 'master') {
-    return (
-      <span className={`${BADGE} gap-[5px] bg-accent-soft border-accent-line text-accent`}>
-        <Crown size={11} />
-        Master
-      </span>
-    )
-  }
-  if (role === 'admin') {
-    return (
-      <span
-        className={`${BADGE} gap-[5px] bg-[color-mix(in_srgb,#4f8ef7_12%,transparent)] border-[color-mix(in_srgb,#4f8ef7_35%,transparent)] text-[#4f8ef7]`}
-      >
-        <Shield size={11} />
-        Admin
-      </span>
-    )
-  }
-  return null
-}
-
-function StatusBadge({ status }: { status: UserStatus }) {
-  return (
-    <span className={`${BADGE} ${STATUS_BADGE[status]}`}>
-      {status.charAt(0).toUpperCase() + status.slice(1)}
-    </span>
-  )
-}
-
 /** Pending accept / reject action target. */
 interface PendingAction {
   user: AdminUser
   action: 'accept' | 'reject'
 }
 
+/** Pending role change, held until the confirmation is answered. */
+interface PendingRole {
+  user: AdminUser
+  role: UserRole
+}
+
+const ROLE_EFFECT: Record<UserRole, string> = {
+  user: 'They lose the admin portal and keep only their trader dashboard.',
+  admin: 'They get the admin portal — users, invoices, engine and assets. Not the database console.',
+  master: 'This is the house account the master stats and public track record are read from.',
+  developer:
+    'They get the admin portal plus the database console, and their invoice payments run against the providers’ sandbox instead of real money.',
+}
+
 export default function AdminUsers() {
+  const navigate = useNavigate()
+  const sessionUser = useSessionUser()
   const { data, loading, error, reload } = useApiData(getAdminUsers)
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -110,6 +94,7 @@ export default function AdminUsers() {
   const [page, setPage] = useState(1)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
+  const [pendingRole, setPendingRole] = useState<PendingRole | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -190,6 +175,23 @@ export default function AdminUsers() {
     } catch (err) {
       setActionError(getApiErrorMessage(err, 'Unable to update user.'))
       setPendingAction(null)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const runRoleChange = async () => {
+    if (!pendingRole) return
+    setActionLoading(true)
+    setActionError(null)
+    try {
+      await updateAdminUser(pendingRole.user.uni_id, { type: pendingRole.role })
+      setPendingRole(null)
+      reload()
+    } catch (err) {
+      // The API owns the rules (no self-change, one master) — show what it said.
+      setActionError(getApiErrorMessage(err, 'Unable to change the role.'))
+      setPendingRole(null)
     } finally {
       setActionLoading(false)
     }
@@ -395,9 +397,12 @@ export default function AdminUsers() {
                     user={u}
                     expanded={isExpanded}
                     actionLoading={actionLoading}
+                    isSelf={u.uni_id === sessionUser?.uni_id}
                     onToggle={() => toggleExpanded(u.uni_id)}
                     onAccept={() => setPendingAction({ user: u, action: 'accept' })}
                     onReject={() => setPendingAction({ user: u, action: 'reject' })}
+                    onView={() => navigate(`/admin/users/${u.uni_id}`)}
+                    onRoleSelect={(role) => setPendingRole({ user: u, role })}
                   />
                 )
               })}
@@ -464,6 +469,21 @@ export default function AdminUsers() {
         onConfirm={runPendingAction}
         onCancel={() => setPendingAction(null)}
       />
+
+      <ConfirmModal
+        open={pendingRole !== null}
+        title={
+          pendingRole
+            ? `Make ${pendingRole.user.name || 'this user'} a ${pendingRole.role}?`
+            : 'Change role?'
+        }
+        message={pendingRole ? ROLE_EFFECT[pendingRole.role] : undefined}
+        confirmLabel={actionLoading ? 'Working…' : 'Yes, change role'}
+        cancelLabel="No"
+        danger={pendingRole?.role === 'master' || pendingRole?.role === 'developer'}
+        onConfirm={runRoleChange}
+        onCancel={() => setPendingRole(null)}
+      />
     </AdminLayout>
   )
 }
@@ -472,9 +492,13 @@ interface UserRowsProps {
   user: AdminUser
   expanded: boolean
   actionLoading: boolean
+  /** The signed-in admin's own row — self-demotion to `user` is refused. */
+  isSelf: boolean
   onToggle: () => void
   onAccept: () => void
   onReject: () => void
+  onView: () => void
+  onRoleSelect: (role: UserRole) => void
 }
 
 /** Main user row + (when expanded) its exchange-account sub-rows. */
@@ -482,9 +506,12 @@ function UserRows({
   user,
   expanded,
   actionLoading,
+  isSelf,
   onToggle,
   onAccept,
   onReject,
+  onView,
+  onRoleSelect,
 }: UserRowsProps) {
   return (
     <>
@@ -508,10 +535,11 @@ function UserRows({
         </td>
         <td className={`${TD} text-muted`}>{user.email}</td>
         <td className={TD}>
-          <RoleBadge role={user.type} />
-          {user.type === 'user' && (
-            <span className="text-[12px] text-muted">User</span>
-          )}
+          <RolePicker
+            role={user.type}
+            isSelf={isSelf}
+            onSelect={(role) => onRoleSelect(role)}
+          />
         </td>
         <td className={TD}>
           <StatusBadge status={user.status} />
@@ -520,30 +548,34 @@ function UserRows({
           {user.created_at ? fmtMediumDate(user.created_at) : '—'}
         </td>
         <td className={`${TD} text-right`}>
-          {user.status === 'pending' ? (
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                className={BTN_ACCEPT}
-                disabled={actionLoading}
-                onClick={onAccept}
-              >
-                <Check size={13} />
-                Accept
-              </button>
-              <button
-                type="button"
-                className={BTN_REJECT}
-                disabled={actionLoading}
-                onClick={onReject}
-              >
-                <X size={13} />
-                Reject
-              </button>
-            </div>
-          ) : (
-            <span className="text-faint">—</span>
-          )}
+          <div className="flex flex-wrap justify-end gap-2">
+            {user.status === 'pending' && (
+              <>
+                <button
+                  type="button"
+                  className={BTN_ACCEPT}
+                  disabled={actionLoading}
+                  onClick={onAccept}
+                >
+                  <Check size={13} />
+                  Accept
+                </button>
+                <button
+                  type="button"
+                  className={BTN_REJECT}
+                  disabled={actionLoading}
+                  onClick={onReject}
+                >
+                  <X size={13} />
+                  Reject
+                </button>
+              </>
+            )}
+            <button type="button" className={BTN_VIEW} onClick={onView}>
+              <Eye size={13} />
+              View details
+            </button>
+          </div>
         </td>
       </tr>
       {expanded && (

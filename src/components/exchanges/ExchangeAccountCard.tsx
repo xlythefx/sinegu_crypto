@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Copy, Eye, EyeOff, Trash2 } from 'lucide-react'
+import { Check, Copy, Eye, EyeOff, Pencil, Trash2 } from 'lucide-react'
 import type { ExchangeAccount, ExchangeKind } from '../../types/exchanges'
 import { EXCHANGE_META } from './meta'
 import { maskSecret } from '../../lib/mask'
@@ -7,6 +7,7 @@ import { maskSecret } from '../../lib/mask'
 interface ExchangeAccountCardProps {
   account: ExchangeAccount
   exchange: ExchangeKind
+  onRename: (account: ExchangeAccount) => void
   onDisconnect: (account: ExchangeAccount) => void
 }
 
@@ -68,6 +69,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
 export default function ExchangeAccountCard({
   account,
   exchange,
+  onRename,
   onDisconnect,
 }: ExchangeAccountCardProps) {
   const meta = EXCHANGE_META[exchange]
@@ -75,8 +77,8 @@ export default function ExchangeAccountCard({
 
   return (
     <article className="flex flex-col gap-stack rounded-card border border-border bg-surface p-card">
-      <div className="flex items-start justify-between gap-2.5">
-        <div className="flex min-w-0 items-center gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-2.5">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <span
             className="flex h-11 w-11 flex-none items-center justify-center rounded-row border font-display text-[20px] font-extrabold"
             style={{
@@ -92,7 +94,7 @@ export default function ExchangeAccountCard({
             <p className="mt-px text-[12px] text-muted">{meta.label}</p>
           </div>
         </div>
-        <div className="flex flex-none items-center gap-1.5">
+        <div className="flex flex-none flex-wrap items-center justify-end gap-1.5">
           <span
             className={`${BADGE_BASE} ${
               account.enabled
@@ -111,6 +113,15 @@ export default function ExchangeAccountCard({
           >
             {account.demo ? 'Demo' : 'Live'}
           </span>
+          <button
+            type="button"
+            className={`${ICON_BTN} hover:bg-accent-soft hover:text-accent`}
+            onClick={() => onRename(account)}
+            aria-label={`Rename ${account.name}`}
+            title="Rename account"
+          >
+            <Pencil size={14} />
+          </button>
           <button
             type="button"
             className={`${ICON_BTN} hover:bg-[rgba(255,90,90,0.1)] hover:text-red`}

@@ -5,6 +5,7 @@ import AdminStatCards from '../../components/admin/AdminStatCards'
 import AdminPerformanceChart from '../../components/admin/AdminPerformanceChart'
 import PerformanceBreakdown from '../../components/admin/PerformanceBreakdown'
 import AdminPnlCalendar from '../../components/admin/AdminPnlCalendar'
+import MaintenanceCard from '../../components/admin/MaintenanceCard'
 import { useApiData } from '../../hooks/useApiData'
 import { getMasterStats } from '../../services/admin'
 
@@ -37,6 +38,10 @@ export default function AdminDashboard() {
       </div>
 
       <AdminPnlCalendar />
+
+      <div className="flex flex-wrap items-stretch gap-stack mt-stack">
+        <MaintenanceCard />
+      </div>
     </AdminLayout>
   )
 }

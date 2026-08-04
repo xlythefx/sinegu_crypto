@@ -22,9 +22,10 @@ export async function getManualTradeTargets(
 /** Probe the engine's /health through the API (the browser never calls it directly). */
 export async function getEngineStatus(
   target: EngineTarget,
+  exchange: ExchangeKind = 'binance',
 ): Promise<EngineStatus> {
   const res = await apiFetch<{ success: boolean; engine: EngineStatus }>(
-    `/admin/manual-trade/engine?target=${target}`,
+    `/admin/manual-trade/engine?target=${target}&exchange=${exchange}`,
     { auth: true },
   )
   return res.engine

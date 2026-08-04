@@ -23,8 +23,11 @@ import AdminSandbox from './pages/admin/AdminSandbox'
 import AdminManualTrade from './pages/admin/AdminManualTrade'
 import AdminStrategyDetail from './pages/admin/AdminStrategyDetail'
 import AdminPositions from './pages/admin/AdminPositions'
+import AdminEngine from './pages/admin/AdminEngine'
+import AdminTradeLogs from './pages/admin/AdminTradeLogs'
 import AdminInvoiceHistory from './pages/admin/AdminInvoiceHistory'
 import AdminResources from './pages/admin/AdminResources'
+import AdminDatabase from './pages/admin/AdminDatabase'
 import AdminReferrals from './pages/admin/AdminReferrals'
 import AdminReleasePayment from './pages/admin/AdminReleasePayment'
 
@@ -53,12 +56,15 @@ function App() {
             <Route path="/admin/strategies" element={<AdminStrategies />} />
             <Route path="/admin/assets" element={<AdminAssets />} />
             <Route path="/admin/positions" element={<AdminPositions />} />
+            <Route path="/admin/engine" element={<AdminEngine />} />
+            <Route path="/admin/trade-logs" element={<AdminTradeLogs />} />
             <Route path="/admin/invoices" element={<AdminInvoiceHistory />} />
             <Route path="/admin/referrals/release/:referrerUniId" element={<AdminReleasePayment />} />
             <Route path="/admin/referrals" element={<AdminReferrals />} />
             <Route path="/admin/sandbox/manual-trade" element={<AdminManualTrade />} />
             <Route path="/admin/sandbox" element={<AdminSandbox />} />
             <Route path="/admin/resources" element={<AdminResources />} />
+            <Route path="/admin/database" element={<AdminDatabase />} />
             <Route path="/admin/*" element={<AdminDashboard />} />
           </Routes>
         </PortalSwitchProvider>

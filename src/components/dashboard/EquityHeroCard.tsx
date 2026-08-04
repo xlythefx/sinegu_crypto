@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { Link2, Plus } from 'lucide-react'
 import { linePath } from '../../lib/chart'
 import { fmtNum, fmtPctOf, fmtSigned, fmtShortDate } from '../../lib/format'
 import type { EquityPoint } from '../../types/dashboard'
@@ -47,6 +49,9 @@ interface EquityHeroCardProps {
   totalPnl: number
   pctBase: number
   curve: EquityPoint[]
+  /** false = no exchange connected: swaps the LIVE pill and chart for a
+   *  "connect a broker" empty state. Defaults to true. */
+  connected?: boolean
 }
 
 /** Equity hero: ACCOUNT EQUITY label + LIVE pill, big mono balance, the
@@ -58,6 +63,7 @@ export default function EquityHeroCard({
   totalPnl,
   pctBase,
   curve,
+  connected = true,
 }: EquityHeroCardProps) {
   const [range, setRange] = useState<RangeKey>('All')
 
@@ -97,53 +103,89 @@ export default function EquityHeroCard({
             <span className="font-mono text-[11.5px] font-semibold tracking-[1.2px] text-faint">
               ACCOUNT EQUITY
             </span>
-            <span className="inline-flex items-center gap-[5px] font-mono text-[10px] text-green border border-[rgba(47,214,122,0.35)] bg-[rgba(47,214,122,0.08)] py-[2px] px-2 rounded-pill">
-              <span className="w-[5px] h-[5px] rounded-full bg-green animate-[pulse_1.6s_infinite]" />
-              LIVE
-            </span>
+            {connected ? (
+              <span className="inline-flex items-center gap-[5px] font-mono text-[10px] text-green border border-[rgba(47,214,122,0.35)] bg-[rgba(47,214,122,0.08)] py-[2px] px-2 rounded-pill">
+                <span className="w-[5px] h-[5px] rounded-full bg-green animate-[pulse_1.6s_infinite]" />
+                LIVE
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-[5px] font-mono text-[10px] text-faint border border-border bg-surface2 py-[2px] px-2 rounded-pill">
+                <span className="w-[5px] h-[5px] rounded-full bg-faint" />
+                NOT CONNECTED
+              </span>
+            )}
           </div>
           <div className="font-mono text-[44px] font-extrabold tracking-[-1.2px] leading-none max-[900px]:text-[34px]">
             ${fmtNum(equity)}
           </div>
-          <div className="flex gap-[26px] mt-stack flex-wrap">
-            <PnlStat
-              label="Realized P&L"
-              value={fmtSigned(realizedPnl)}
-              pct={fmtPctOf(realizedPnl, pctBase)}
-              negative={realizedPnl < 0}
-            />
-            <PnlStat
-              label="Unrealized P&L"
-              value={fmtSigned(unrealizedPnl)}
-              pct={fmtPctOf(unrealizedPnl, pctBase)}
-              negative={unrealizedPnl < 0}
-            />
-            <PnlStat
-              label="Total P&L"
-              value={fmtSigned(totalPnl)}
-              pct={fmtPctOf(totalPnl, pctBase)}
-              negative={totalPnl < 0}
-            />
+          {connected && (
+            <div className="flex gap-[26px] mt-stack flex-wrap">
+              <PnlStat
+                label="Realized P&L"
+                value={fmtSigned(realizedPnl)}
+                pct={fmtPctOf(realizedPnl, pctBase)}
+                negative={realizedPnl < 0}
+              />
+              <PnlStat
+                label="Unrealized P&L"
+                value={fmtSigned(unrealizedPnl)}
+                pct={fmtPctOf(unrealizedPnl, pctBase)}
+                negative={unrealizedPnl < 0}
+              />
+              <PnlStat
+                label="Total P&L"
+                value={fmtSigned(totalPnl)}
+                pct={fmtPctOf(totalPnl, pctBase)}
+                negative={totalPnl < 0}
+              />
+            </div>
+          )}
+        </div>
+        {connected && (
+          <div className="flex gap-[3px] bg-surface2 border border-hair rounded-seg p-1">
+            {RANGES.map((r) => (
+              <button
+                key={r}
+                type="button"
+                className={`font-body py-[5px] px-2.5 text-[11.5px] rounded-btn border ${
+                  range === r
+                    ? 'bg-surface border-border text-text font-bold'
+                    : 'border-transparent bg-transparent text-muted font-semibold'
+                }`}
+                onClick={() => setRange(r)}
+              >
+                {r}
+              </button>
+            ))}
           </div>
-        </div>
-        <div className="flex gap-[3px] bg-surface2 border border-hair rounded-seg p-1">
-          {RANGES.map((r) => (
-            <button
-              key={r}
-              type="button"
-              className={`font-body py-[5px] px-2.5 text-[11.5px] rounded-btn border ${
-                range === r
-                  ? 'bg-surface border-border text-text font-bold'
-                  : 'border-transparent bg-transparent text-muted font-semibold'
-              }`}
-              onClick={() => setRange(r)}
-            >
-              {r}
-            </button>
-          ))}
-        </div>
+        )}
       </div>
 
+      {!connected && (
+        <div className="min-h-[300px] max-[900px]:min-h-[200px] grid place-items-center">
+          <div className="text-center py-8">
+            <div className="mx-auto mb-[18px] flex h-[64px] w-[64px] animate-[float_3s_ease-in-out_infinite] items-center justify-center rounded-[18px] border border-accent-line bg-accent-soft text-accent">
+              <Link2 size={30} />
+            </div>
+            <h3 className="font-display text-[17px] font-extrabold tracking-[-0.02em]">
+              Connect a broker to start receiving trades
+            </h3>
+            <p className="mx-auto mt-2 mb-5 max-w-[420px] text-[13px] leading-[1.6] text-muted">
+              Live equity, PNL and analytics appear here once an exchange is
+              connected.
+            </p>
+            <Link
+              to="/dashboard/exchanges"
+              className="mx-auto inline-flex h-[38px] items-center gap-[7px] rounded-pill bg-accent px-4 text-[13px] font-bold text-on-accent shadow-[0_10px_24px_var(--glow)] transition-[filter] hover:brightness-[1.06]"
+            >
+              <Plus size={15} />
+              Connect an exchange
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {connected && (
       <svg
         viewBox="0 0 1200 190"
         preserveAspectRatio="none"
@@ -178,13 +220,16 @@ export default function EquityHeroCard({
           </>
         )}
       </svg>
-      <div className="flex font-mono text-[10.5px] text-faint mt-[6px]">
-        {axisLabels.map((label, i) => (
-          <span key={`${label}-${i}`} className="flex-1 text-center">
-            {label}
-          </span>
-        ))}
-      </div>
+      )}
+      {connected && (
+        <div className="flex font-mono text-[10.5px] text-faint mt-[6px]">
+          {axisLabels.map((label, i) => (
+            <span key={`${label}-${i}`} className="flex-1 text-center">
+              {label}
+            </span>
+          ))}
+        </div>
+      )}
     </section>
   )
 }

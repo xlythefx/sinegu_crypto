@@ -76,12 +76,6 @@ export default function AdminPositionsAnalytics({
       tone: 'neg',
     },
     {
-      label: 'Risk : Reward',
-      value: m.avgRr !== null ? `${m.avgRr.toFixed(2)}×` : '—',
-      hint: 'Avg win ÷ avg loss',
-      tone: 'pos',
-    },
-    {
       label: 'Expectancy',
       value: m.expectancy !== null ? fmtSignedMoney(m.expectancy) : '—',
       hint: 'Expected per trade',

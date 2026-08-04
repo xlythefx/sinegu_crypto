@@ -19,7 +19,7 @@ const SECTIONS = [
   {
     icon: Clock,
     title: 'Due date & payment',
-    body: 'You have 7 days (due by the 8th). Pay by card or crypto. Payment is secure and updates your HWM automatically.',
+    body: 'You have 7 days (due by the 8th). Pay in crypto — USDT on the TRC20 network; card payments are coming soon. Payment updates your HWM automatically.',
   },
 ]
 

@@ -14,6 +14,7 @@ import {
   Shield,
 } from 'lucide-react'
 import { getUser } from '../../lib/session'
+import { canSeeAdmin } from '../../lib/roles'
 import { usePortalSwitch } from '../ui/PortalSwitchOverlay'
 import {
   RAIL,
@@ -64,9 +65,8 @@ interface TraderSidebarProps {
  */
 export default function TraderSidebar({ onLogout }: TraderSidebarProps) {
   const switchPortal = usePortalSwitch()
-  // Only user_credentials rows with type master/admin see the admin switch.
-  const role = getUser()?.type
-  const canSeeAdmin = role === 'master' || role === 'admin'
+  // Only staff rows (master/admin/developer) see the admin switch.
+  const showAdmin = canSeeAdmin(getUser()?.type)
 
   return (
     <aside className={RAIL}>
@@ -97,7 +97,7 @@ export default function TraderSidebar({ onLogout }: TraderSidebarProps) {
       </nav>
 
       <div className={FOOTER}>
-        {canSeeAdmin && (
+        {showAdmin && (
           <button
             type="button"
             className={ADMIN_SWITCH}

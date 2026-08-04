@@ -102,13 +102,32 @@ RETRY_INTERVAL_SECONDS = _env_float("RETRY_INTERVAL_SECONDS", 60.0)
 RETRY_MAX_ATTEMPTS = _env_int("RETRY_MAX_ATTEMPTS", 5)
 
 # --- Sizing -------------------------------------------------------------------
-REFERENCE_BALANCE = _env_float("REFERENCE_BALANCE", 500.0)
+REFERENCE_BALANCE = _env_float("REFERENCE_BALANCE", 1000.0)
+# Entries are refused below this much total deposited capital (initial_deposit
+# net of later deposits/withdrawals, supplied by the accounts endpoint). The
+# gate is on DEPOSIT, not balance: an account funded above the threshold keeps
+# trading after a drawdown. 0 disables the gate. Exits are never gated — a
+# position must always be closable.
+MIN_DEPOSIT = _env_float("MIN_DEPOSIT", 1000.0)
 # Tickers whose size only scales in whole base_size steps (no /10 fine steps).
 COARSE_STEP_TICKERS = {
     t.strip().upper()
     for t in _env_str("COARSE_STEP_TICKERS", "BTCUSDT").split(",")
     if t.strip()
 }
+
+# --- Telegram notifications ----------------------------------------------------
+# Entries, exits + PnL percent go to TELEGRAM_CHAT_ID; operational alerts
+# (rejected signals, per-account failures, poller crashes) go to
+# TELEGRAM_ADMIN_CHAT_ID, which falls back to the main chat when unset.
+# Everything is off unless BOTH a bot token and a chat id are configured.
+TELEGRAM_ENABLED = _env_bool("TELEGRAM_ENABLED", True)
+TELEGRAM_BOT_TOKEN = _env_str("TELEGRAM_BOT_TOKEN", "")  # secret — .env only
+TELEGRAM_CHAT_ID = _env_str("TELEGRAM_CHAT_ID", "")      # -100... id or @channelname
+TELEGRAM_ADMIN_CHAT_ID = _env_str("TELEGRAM_ADMIN_CHAT_ID", "")
+# How long an exit message waits for every closed account to report its realized
+# PnL (read from userTrades, deferred) before sending with whatever arrived.
+TELEGRAM_PNL_WAIT_SECONDS = _env_float("TELEGRAM_PNL_WAIT_SECONDS", 25.0)
 
 # --- Local output -------------------------------------------------------------
 OUT_DIR = PROJECT_ROOT / "out"

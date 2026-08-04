@@ -9,6 +9,7 @@ import ConfirmModal from '../ui/ConfirmModal'
 import UserAvatar from '../ui/UserAvatar'
 import { useTheme } from '../../theme'
 import { useSessionUser } from '../../hooks/useSessionUser'
+import { canSeeAdmin } from '../../lib/roles'
 import { logout } from '../../services/auth'
 import {
   TOPBAR,
@@ -65,7 +66,7 @@ function AdminTopBar({ title, subtitle }: { title: string; subtitle?: string }) 
 
 /**
  * Chrome + client-side guard for admin pages. Only user_credentials rows with
- * type master/admin may enter; plain users bounce to their dashboard.
+ * type master/admin/developer may enter; plain users bounce to their dashboard.
  * (Cosmetic gate only — real enforcement lives in the API's admin middleware.)
  */
 export default function AdminLayout({
@@ -81,7 +82,7 @@ export default function AdminLayout({
     AOS.init({ duration: 700, once: true, offset: 80, easing: 'ease-out-cubic' })
   }, [])
 
-  if (user && user.type !== 'master' && user.type !== 'admin') {
+  if (user && !canSeeAdmin(user.type)) {
     return <Navigate to="/dashboard" replace />
   }
 

@@ -1,4 +1,4 @@
-import { Activity, DollarSign, TrendingUp, Users } from 'lucide-react'
+import { Activity, DollarSign, TrendingUp, Wallet } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { fmtNum, fmtSignedMoney } from '../../lib/format'
 import type { MasterStats } from '../../types/admin'
@@ -38,10 +38,11 @@ export default function AdminStatCards({ stats }: AdminStatCardsProps) {
       icon: Activity,
     },
     {
-      title: 'Closed Positions',
-      value: fmtNum(stats.closed_positions, 0),
-      description: 'Finished positions contributing to P&L.',
-      icon: Users,
+      title: 'Unrealized P&L',
+      value: fmtSignedMoney(stats.unrealized_pnl),
+      description: 'Live P&L across the open positions above.',
+      icon: Wallet,
+      tone: stats.unrealized_pnl < 0 ? 'neg' : 'pos',
     },
   ]
 

@@ -8,13 +8,17 @@ import {
   Bell,
   FileText,
   Activity,
-  Settings,
+  Database,
+  ServerCog,
+  ScrollText,
   FlaskConical,
   Home,
   LogOut,
   Share2,
 } from 'lucide-react'
 import { usePortalSwitch } from '../ui/PortalSwitchOverlay'
+import { getUser } from '../../lib/session'
+import { isDeveloper } from '../../lib/roles'
 import {
   RAIL,
   BRAND,
@@ -37,6 +41,8 @@ export interface AdminNavItem {
   label: string
   url: string
   icon: LucideIcon
+  /** Hidden from admin/master — only `developer` accounts see it. */
+  developerOnly?: boolean
 }
 
 export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
@@ -46,10 +52,12 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { label: 'Trading Assets', url: '/admin/assets', icon: Coins },
   { label: 'Sandbox', url: '/admin/sandbox', icon: FlaskConical },
   { label: 'Trading Positions', url: '/admin/positions', icon: Bell },
+  { label: 'Bot Engine', url: '/admin/engine', icon: ServerCog },
+  { label: 'Signal Log', url: '/admin/trade-logs', icon: ScrollText },
   { label: 'Invoice History', url: '/admin/invoices', icon: FileText },
   { label: 'Affiliate', url: '/admin/referrals', icon: Share2 },
   { label: 'System Resources', url: '/admin/resources', icon: Activity },
-  { label: 'Settings', url: '/admin/settings', icon: Settings },
+  { label: 'Database', url: '/admin/database', icon: Database, developerOnly: true },
 ]
 
 interface AdminSidebarProps {
@@ -59,6 +67,8 @@ interface AdminSidebarProps {
 /** Admin variant of the icon-rail sidebar — same chrome, admin nav + portal switch. */
 export default function AdminSidebar({ onLogout }: AdminSidebarProps) {
   const switchPortal = usePortalSwitch()
+  const developer = isDeveloper(getUser()?.type)
+  const navItems = ADMIN_NAV_ITEMS.filter((item) => developer || !item.developerOnly)
 
   return (
     <aside className={RAIL}>
@@ -71,7 +81,7 @@ export default function AdminSidebar({ onLogout }: AdminSidebarProps) {
       </Link>
 
       <nav className={NAV}>
-        {ADMIN_NAV_ITEMS.map((item) => (
+        {navItems.map((item) => (
           <NavLink
             key={item.url}
             to={item.url}
