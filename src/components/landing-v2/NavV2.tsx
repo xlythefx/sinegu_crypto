@@ -43,7 +43,7 @@ export default function NavV2() {
                 alt=""
               />
               <span className="font-display font-extrabold text-lg tracking-tight">
-                SineguAlerts
+                Pixel Alpha
               </span>
             </a>
             <div className="hidden lg:flex gap-7 text-[13.5px] font-medium text-muted">

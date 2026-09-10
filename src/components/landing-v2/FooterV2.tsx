@@ -2,7 +2,11 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Check } from 'lucide-react'
 
-const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
+// `to` = an in-app route (rendered as a <Link>); `href` = an on-page anchor.
+const COLUMNS: {
+  title: string
+  links: { label: string; href?: string; to?: string }[]
+}[] = [
   {
     title: 'Product',
     links: [
@@ -17,7 +21,7 @@ const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
     links: [
       { label: 'FAQ', href: '#faq' },
       { label: 'Contact', href: '#' },
-      { label: 'Terms', href: '#' },
+      { label: 'Terms', to: '/terms' },
       { label: 'Privacy', href: '#' },
     ],
   },
@@ -48,7 +52,7 @@ export default function FooterV2() {
                 alt=""
               />
               <span className="font-display font-extrabold text-lg">
-                SineguAlerts
+                Pixel Alpha
               </span>
             </div>
             <p className="mt-4 max-w-xs text-[14px] text-muted">
@@ -66,12 +70,21 @@ export default function FooterV2() {
               <ul className="mt-4 space-y-2.5">
                 {col.links.map((l) => (
                   <li key={l.label}>
-                    <a
-                      href={l.href}
-                      className="text-[14px] text-muted hover:text-text transition-colors"
-                    >
-                      {l.label}
-                    </a>
+                    {l.to ? (
+                      <Link
+                        to={l.to}
+                        className="text-[14px] text-muted hover:text-text transition-colors"
+                      >
+                        {l.label}
+                      </Link>
+                    ) : (
+                      <a
+                        href={l.href}
+                        className="text-[14px] text-muted hover:text-text transition-colors"
+                      >
+                        {l.label}
+                      </a>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -110,7 +123,7 @@ export default function FooterV2() {
 
         <div className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-hair pt-8 sm:flex-row">
           <p className="text-[13px] text-faint">
-            © {new Date().getFullYear()} SineguAlerts. All rights reserved.
+            © {new Date().getFullYear()} Pixel Alpha. All rights reserved.
           </p>
           <div className="flex items-center gap-6 text-[13px] text-muted">
             <Link to="/auth" className="hover:text-text transition-colors">

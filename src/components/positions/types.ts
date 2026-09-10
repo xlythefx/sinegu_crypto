@@ -20,8 +20,11 @@ export interface ClosedTrade {
   price: string
   strategy: string
   exchange: Exchange
+  /** Net of `fee` — matches what the exchange's own app shows for the trade. */
   pnl: number
   pnlPct: number
+  /** Exchange commission deducted from this trade; null when not yet known. */
+  fee: number | null
   positions: number
   closedAt: string
 }

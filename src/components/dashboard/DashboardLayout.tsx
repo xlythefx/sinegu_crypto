@@ -31,7 +31,7 @@ export default function DashboardLayout({
 
   // Title now only names the browser tab — the top bar no longer displays it
   useEffect(() => {
-    document.title = `${title} — SineguAlerts`
+    document.title = `${title} — Pixel Alpha`
   }, [title])
 
   return (

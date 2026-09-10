@@ -80,6 +80,16 @@
   select {
     text-transform: none;
   }
+  /* The dropdown a native <select> opens is painted by the browser with the OS
+     palette — a white list with a blue highlight on top of our dark theme. Only
+     background-color/color reach an <option>, so set those from the tokens
+     here (with `color-scheme` below telling the browser which chrome to use)
+     rather than remembering to class every option at every call site. */
+  select option,
+  select optgroup {
+    background-color: var(--surface);
+    color: var(--text);
+  }
   :focus {
     outline: none;
   }
@@ -104,6 +114,10 @@
 
 :root,
 [data-theme='dark'] {
+  /* Tells the browser which palette to paint its own widgets with —
+     scrollbars, select popups, date pickers, autofill. Without it they render
+     light on the dark theme. */
+  color-scheme: dark;
   --bg: #0a0c11;
   --surface: #0f1319;
   --surface2: #0b0e13;
@@ -125,6 +139,7 @@
 }
 
 [data-theme='light'] {
+  color-scheme: light;
   --bg: #faf7f1;
   --surface: #ffffff;
   --surface2: #fbf8f2;
@@ -366,5 +381,54 @@ body {
   50% {
     opacity: 0.75;
     transform: scale(0.94);
+  }
+}
+
+/* ---------- invoice document (InvoiceDocumentModal) ----------
+   The sheet is a real document, so Print must put the PAPER on the page and
+   nothing else — not the dashboard behind it, not the scrim, not the toolbar.
+   The modal portals into <body>, so while it is open every other body child is
+   hidden and the overlay flattens to plain white.
+
+   Gated on `body.invoice-doc-open`, which the modal sets and clears: without
+   that marker, hitting Ctrl+P on any normal page would hide the whole app and
+   print a blank sheet. */
+@media print {
+  body.invoice-doc-open > *:not(.invoice-doc-overlay) {
+    display: none !important;
+  }
+
+  body.invoice-doc-open .invoice-doc-overlay {
+    position: static !important;
+    display: block !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    background: #fff !important;
+    backdrop-filter: none !important;
+    animation: none !important;
+  }
+
+  /* The centering wrapper caps the sheet at 880px on screen; on paper the page
+     margin is the only margin there should be. */
+  body.invoice-doc-open .invoice-doc-overlay > * {
+    max-width: none !important;
+    margin: 0 !important;
+  }
+
+  body.invoice-doc-open .invoice-doc-sheet {
+    max-width: none !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    animation: none !important;
+    /* Keep the tinted header/footer and the status pill — a status printed as
+       white-on-white is a document that doesn't say whether it was paid. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  @page {
+    margin: 14mm;
   }
 }

@@ -3,12 +3,36 @@ import { getToken } from '../lib/session'
 /** Local Laravel dev server (`php artisan serve`). */
 const DEV_API_URL = 'http://127.0.0.1:8000/api'
 
+/** The live API — where `VITE_USE_PROD_API=1` sends `npm run dev`. */
+const PROD_API_URL = 'https://pixel-alpha.com/api'
+
+/** localhost / 127.0.0.1 / *.local — i.e. `npm run dev`, never a deployment. */
+const isDevHost = (): boolean => {
+  if (typeof window === 'undefined') return true
+  const host = window.location.hostname
+  return host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local')
+}
+
+/**
+ * The dev/prod DATA switch: `VITE_USE_PROD_API=1` in `.env` makes the local dev
+ * server read and WRITE the live database (real users, real invoices, real
+ * exchange accounts) instead of the WAMP one. 0 or unset = local.
+ *
+ * It only ever applies on a dev host — a deployed build cannot be flipped by
+ * an env var, in either direction. Vite restarts `npm run dev` when `.env`
+ * changes, so flipping it takes effect on the next page load; a `npm run build`
+ * bakes whatever the flag said at build time, which is why it is dev-only.
+ */
+export const USING_PROD_API =
+  isDevHost() && import.meta.env.VITE_USE_PROD_API === '1'
+
 /**
  * API base URL resolution — decided at RUNTIME from the host, never baked into
  * the build. One `npm run build` works on localhost, on the bare VPS IP, and on
  * any domain pointed at it later, so no manual switching per deployment.
  *
  *   localhost / 127.0.0.1 / *.local  -> http://127.0.0.1:8000/api (or VITE_API_URL)
+ *                                       ...unless VITE_USE_PROD_API=1
  *   any deployed host                -> <same origin>/api
  *
  * Same-origin works because the nginx vhost serves both from one host:
@@ -22,16 +46,24 @@ const DEV_API_URL = 'http://127.0.0.1:8000/api'
 const resolveApiUrl = (): string => {
   if (typeof window === 'undefined') return DEV_API_URL
 
-  const host = window.location.hostname
-  const isDevHost =
-    host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local')
-
-  if (isDevHost) return import.meta.env.VITE_API_URL ?? DEV_API_URL
+  if (isDevHost()) {
+    if (USING_PROD_API) return import.meta.env.VITE_PROD_API_URL ?? PROD_API_URL
+    return import.meta.env.VITE_API_URL ?? DEV_API_URL
+  }
 
   return `${window.location.origin}/api`
 }
 
 export const API_URL = resolveApiUrl()
+
+if (USING_PROD_API) {
+  // Loud on purpose: the browser looks identical either way, and every write
+  // from here lands on live customer data.
+  console.warn(
+    `[Pixel Alpha] LIVE PRODUCTION API — ${API_URL}. Writes hit real data. ` +
+      'Set VITE_USE_PROD_API=0 in .env to go back to local.',
+  )
+}
 
 /** Error thrown for non-2xx API responses, carrying the backend payload. */
 export class ApiError extends Error {

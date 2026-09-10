@@ -24,6 +24,7 @@ from binance_abcd.binance_api import (
     rate_limited_until,
     set_rate_limit_alert_hook,
 )
+from binance_abcd.reports import reports_status, start_reporter
 from binance_abcd.retry_queue import queue_depth, start_retry_queue
 from binance_abcd.routes.admin import admin_bp
 from binance_abcd.routes.webhook import metrics_snapshot, webhook_bp
@@ -57,6 +58,7 @@ def create_app() -> Flask:
             "retry_queue_depth": queue_depth(),
             "rate_limited_until": rate_limited_until() or None,
             "pollers": list(_pollers_running),
+            "reports": reports_status(),
         })
 
     return app
@@ -97,10 +99,19 @@ def startup_checks() -> tuple[int, int]:
     return len(accounts), len(assets)
 
 
-def _poller_loop(name: str, fetch_fn, interval: float) -> None:
-    """Run fetch_fn every interval; log failure transitions and recoveries."""
+def _poller_loop(name: str, fetch_fn, interval: float, start_delay: float = 0.0) -> None:
+    """Run fetch_fn every interval; log failure transitions and recoveries.
+
+    `start_delay` staggers the first tick so the pollers don't all fire on the
+    same second. They share one IP's Binance weight budget, and intervals of
+    300/300/600 realign on every multiple — spreading the starts turns one tall
+    burst into a few short ones without changing how often anything runs.
+    """
     failing = False
     _pollers_running.append(name)
+    if start_delay > 0 and _shutdown.wait(start_delay):
+        _pollers_running.remove(name)
+        return
     while not _shutdown.is_set():
         try:
             fetch_fn()
@@ -132,9 +143,12 @@ def start_pollers() -> None:
         ("transfers", transfers, hooks.TRANSFERS_FETCH_INTERVAL),
         ("past-positions", past_positions, hooks.PAST_POSITIONS_FETCH_INTERVAL),
     ]
-    for name, fn, interval in jobs:
+    for index, (name, fn, interval) in enumerate(jobs):
         threading.Thread(
-            target=_poller_loop, args=(name, fn, interval), name=f"poller-{name}", daemon=True
+            target=_poller_loop,
+            args=(name, fn, interval, index * hooks.POLLER_START_STAGGER_SECONDS),
+            name=f"poller-{name}",
+            daemon=True,
         ).start()
     log.info("pollers started: %s", ", ".join(name for name, _, _ in jobs))
 
@@ -154,6 +168,7 @@ def main() -> None:
     account_count, asset_count = startup_checks()
     notify.notify_startup(account_count, asset_count)
     start_retry_queue(_shutdown)
+    start_reporter(_shutdown)
     if hooks.RUN_POLLERS:
         start_pollers()
     else:

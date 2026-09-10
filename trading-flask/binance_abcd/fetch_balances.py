@@ -15,8 +15,18 @@ from binance_abcd.binance_api import BinanceAPI
 log = logging.getLogger(__name__)
 
 
-def fetch_and_save() -> dict | None:
+def fetch_and_save(api_keys: list[str] | None = None) -> dict | None:
+    """Sync balances to the backend.
+
+    ``api_keys`` narrows the run to specific accounts — that is what the
+    trader-facing "Refresh balance" button uses, so one person pressing it
+    costs one Binance call instead of one per account on the platform. None
+    (the poller's call) means every tradeable account.
+    """
     accounts = fetch_accounts()
+    if api_keys is not None:
+        wanted = set(api_keys)
+        accounts = [a for a in accounts if a.get("api_key") in wanted]
     if not accounts:
         log.info("[balances] no accounts")
         return None

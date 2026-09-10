@@ -19,7 +19,7 @@ import { ApiError } from '../../services/api'
 const TITLE = 'Signal Log'
 const SUBTITLE =
   'Every signal the engine processed, with the sizing decision it made per account.'
-const PER_PAGE = 25
+const PER_PAGE = 10
 
 const ACTIONS = ['all', 'BUY', 'SELL', 'EXIT_LONG', 'EXIT_SHORT'] as const
 const RESULTS = [

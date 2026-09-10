@@ -11,7 +11,7 @@ function SectionHead() {
   return (
     <div className="mb-12 text-center" data-aos="fade-up">
       <div className="inline-flex items-center gap-2 rounded-pill border border-accent-line bg-accent-soft px-3.5 py-1.5 text-[12.5px] font-medium text-accent">
-        Why SineguAlerts
+        Why Pixel Alpha
       </div>
       <h2 className="mt-5 font-display text-[clamp(2rem,4.2vw,3rem)] font-extrabold leading-[1.08] tracking-[-0.02em]">
         Everything runs itself.

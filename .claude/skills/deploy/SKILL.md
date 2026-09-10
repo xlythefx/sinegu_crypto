@@ -3,13 +3,13 @@ name: deploy
 description: Deploy sinegual-crypto (React frontend) and sinegutrade-api (Laravel backend) to the project's Ubuntu VPS over SSH. Use when the user says "deploy", "push to prod", "deploy frontend/backend", or similar.
 ---
 
-# Deploy — SineguAlerts crypto (sinegual-crypto + sinegutrade-api)
+# Deploy — Pixel Alpha crypto (sinegual-crypto + sinegutrade-api)
 
 ## Target
 
 | Env | Host | OS | Remote parent |
 |-----|------|----|---------------|
-| **prod** | `2.24.139.176` (Contabo KVM 2, `srv1860230`) | Ubuntu 24.04 LTS | `/var/www/sinegualerts` |
+| **prod** | **https://pixel-alpha.com** — origin `2.24.139.176` (Contabo KVM 2, `srv1860230`) | Ubuntu 24.04 LTS | `/var/www/sinegualerts` |
 
 Aliases for the target arg: `sinegualerts`, `2.24`. SSH user is `root`.
 
@@ -68,9 +68,47 @@ key auth is set up (recommended — then disable password auth in sshd).
 └── _backups/<ts>/        dashboard/api/engine tar.gz + api.env + engine.env (newest 10 kept)
 ```
 
-nginx vhost: `/etc/nginx/sites-available/sinegualerts` (written by `provision`,
+nginx vhost: `/etc/nginx/sites-available/sinegualerts` (written by `deploy-nginx`,
 `default` removed). Serves the SPA at `/`, Laravel at `/api`, immutable caching on
-`/assets/`, gzip on.
+`/assets/`, gzip on. Two generated files back it:
+`/etc/nginx/snippets/sinegualerts-app.conf` (the app's locations, included by every
+server block that serves it) and `/etc/nginx/conf.d/cloudflare-realip.conf`
+(refreshed from Cloudflare's published ranges on every `deploy-nginx`).
+
+## Domain & TLS — pixel-alpha.com (live 2026-08-11)
+
+DNS is Cloudflare's, **proxied** (public A records are Cloudflare's, not ours).
+`setup-tls` issued a Let's Encrypt cert (ECDSA, auto-renewing via `certbot.timer`).
+
+Four things about this setup are load-bearing:
+
+- **`:80 default_server` must NOT redirect to https.** It answers the bare IP and,
+  critically, it is what the trading engine talks to — `BINANCE_ABCD_ENGINE_API_BASE`
+  is `http://127.0.0.1/api`. A blanket http→https redirect would 301 every engine
+  call and cut the loop. Only the **domain's** `:80` block redirects, and even it
+  exempts `/binance_abcd_webhook` (a 301 on a POST may drop the body) and
+  `/.well-known/acme-challenge/` (renewals arrive over :80).
+- **`certonly --webroot`, never `--nginx`.** The nginx plugin rewrites the vhost to
+  insert its own `:443` block, and `deploy-nginx` rewrites that file from a template
+  every run. Whichever ran last would win and the loser would be TLS. Certbot only
+  ever touches `/etc/letsencrypt`.
+- **`deploy-nginx` emits the `:443` blocks only when a cert is on disk** — an
+  `ssl_certificate` pointing at a missing file is a hard `nginx -t` failure, which
+  would make the command unrunnable on a rebuilt box.
+- **Real visitor IPs** come from `CF-Connecting-IP`, trusted **only** from
+  Cloudflare's ranges. That is not just for logs: `/api/engine/*` is gated on
+  `allow 127.0.0.1`, so a spoofable real-IP would hand the internet the endpoint
+  that hands out account API keys. `verify-tls` asserts a forged header from
+  outside still gets 403.
+
+**Cloudflare dashboard settings that must match:** SSL/TLS mode **Full (strict)**
+(the origin now has a real cert, so nothing weaker is warranted). If issuance ever
+fails, the usual cause is *Always Use HTTPS* answering the HTTP-01 challenge at the
+edge — turn it off, re-run `setup-tls`, turn it back on.
+
+**Not done deliberately:** HSTS (easy to enable at the Cloudflare edge, hard to
+undo), and restricting ufw 80/443 to Cloudflare ranges — the origin IP still serves
+the app directly.
 
 ## Commands
 
@@ -80,16 +118,37 @@ python .claude/deploy_sinegualcrypto.py provision        # ONE-TIME server setup
 python .claude/deploy_sinegualcrypto.py provision-db     # create MySQL db + user from creds
 python .claude/deploy_sinegualcrypto.py setup-env        # write api/.env + php artisan key:generate
 python .claude/deploy_sinegualcrypto.py deploy-nginx     # rewrite + test + reload the vhost
+python .claude/deploy_sinegualcrypto.py setup-tls        # issue/renew the LE cert, enable :443
+python .claude/deploy_sinegualcrypto.py verify-tls        # listeners, origin probes, www 301,
+                                                         #   engine loop, real-IP spoof check
 npm run build                                            # ALWAYS before deploying frontend
 python .claude/deploy_sinegualcrypto.py deploy-dash      # frontend only
 python .claude/deploy_sinegualcrypto.py deploy-api       # backend only
 python .claude/deploy_sinegualcrypto.py deploy-engine    # bot engine (tests-gated; venv +
                                                          #   .env + systemd + nginx route)
+python .claude/deploy_sinegualcrypto.py sync-engine-env  # config only: re-mirror engine/.env
+                                                         #   from local + restart (no code)
+python .claude/deploy_sinegualcrypto.py sync-api-env     # config only: Coinsbuy keys from local
+                                                         #   sinegutrade-api/.env + PAYMENTS_* URLs
+                                                         #   + config:cache (no code)
+python .claude/deploy_sinegualcrypto.py deploy-telegram  # pixel-telegram ops alerts (tests-gated;
+                                                         #   venv + .env + 2 systemd timers)
+python .claude/deploy_sinegualcrypto.py sync-telegram-env # config only: bot token / group chat id
 python .claude/deploy_sinegualcrypto.py full             # backup -> dash -> api -> verify
 python .claude/deploy_sinegualcrypto.py verify           # asset refs + .env + services + HTTP probe
 python .claude/deploy_sinegualcrypto.py verify-engine    # systemd + /health + webhook gate + engine auth
+python .claude/deploy_sinegualcrypto.py verify-telegram  # timers armed + credentials present + log tail
 python .claude/deploy_sinegualcrypto.py backup           # timestamped backup only
 ```
+
+**pixel-telegram specifics** (`/var/www/sinegualerts/telegram`, first deployed 2026-09-04):
+its own venv and `.env`, no nginx route (it only makes outbound calls), and **two oneshot
+timers** — `pixel-telegram.timer` (4-hourly resource report, `Persistent=true` so a tick
+missed while the box was down fires on boot) and `pixel-telegram-watch.timer` (every 2 min,
+silent unless a service restarted or a resource crossed a threshold). `deploy-telegram`
+gates on the local `pixel-telegram` pytest suite, then starts one watch run so the state
+file is SEEDED before anything can alert — without that the deploy itself announces every
+service on the box as freshly restarted. `state/` is server-owned and never synced.
 
 **Bot Engine admin page** (`/admin/engine`) drives `GET /api/admin/engine/status|logs` and
 `POST /api/admin/engine/restart` (`AdminEngineController`). Those run `systemctl`/`journalctl`
@@ -100,12 +159,20 @@ locally as `www-data`, which `deploy-engine` enables idempotently: a sudoers rul
 
 **Engine specifics** (first deployed 2026-07-30): `deploy-engine` refuses to ship if the
 local `trading-flask` pytest suite fails. The server-side `engine/.env` is generated once
-and never overwritten — webhook secret copied from local `trading-flask/.env` (so
-TradingView URLs keep working), `ENGINE_SECRET` shared with `api/.env` (appended +
-`config:cache` if missing). First-boot defaults: `RUN_POLLERS=true`,
+and never overwritten wholesale, but `MIRRORED_ENGINE_ENV_KEYS` are **upserted from the
+local `trading-flask/.env` on every engine deploy** — the webhook secret (so TradingView
+URLs keep working) and the whole `BINANCE_ABCD_TELEGRAM_*` block. Those keys describe the
+product, so prod drifting from local is always a bug: prod posted nothing to Telegram
+until 2026-08-10 purely because the generated file had no token or chat id.
+Host-specific keys (`ENGINE_API_BASE`, `ENGINE_SECRET`, `FLASK_PORT`, `RUN_POLLERS`,
+`SYNC_POSITION_MODE_ON_STARTUP`) are never mirrored — a dev value there breaks prod.
+Only key NAMES are logged, never values. `ENGINE_SECRET` is shared with `api/.env`
+(appended + `config:cache` if missing). First-boot defaults: `RUN_POLLERS=true`,
 `SYNC_POSITION_MODE_ON_STARTUP=false` — flip the latter on the server when you want
 per-account position-mode sync at startup. Prod TradingView webhook URL:
-`http://2.24.139.176/binance_abcd_webhook` (secret in JSON body or `?secret=`).
+`https://pixel-alpha.com/binance_abcd_webhook` (secret in JSON body or `?secret=`).
+The old `http://2.24.139.176/binance_abcd_webhook` still works — the bare IP is not
+redirected, and the domain's :80 block exempts this path rather than 301-ing a POST.
 
 **First-deploy order** (already done once — needed again only on a rebuilt box):
 `provision` → `provision-db` → `deploy-api` (stops, no .env) → `setup-env` → `deploy-api`.
@@ -175,9 +242,30 @@ Default is `prod` — there is only one target today.
 4. ~~Repoint the frontend API URL~~ — solved properly: resolution is now runtime/host-based
    (see above), so there is nothing to switch per deployment.
 5. ~~Migrate the schema~~ — done; `deploy-api` runs `migrate --force` every deploy.
-6. **Point a domain at `2.24.139.176`**, then `certbot --nginx` for TLS, and set
-   `server_name` in `NGINX_VHOST` (currently `_`, so it answers on the bare IP).
-   The frontend needs no rebuild — same-origin resolution picks up https automatically.
+6. ~~Point a domain at `2.24.139.176` + TLS~~ — done 2026-08-11:
+   **https://pixel-alpha.com** via Cloudflare + Let's Encrypt (`setup-tls`). The
+   frontend needed no rebuild — same-origin resolution picked up https on its own.
+   ~~**Still open:** the payment callback URLs are the last thing on the bare IP.~~
+   Done 2026-08-14 via **`sync-api-env`**: `PAYMENTS_FRONTEND_URL` /
+   `PAYMENTS_API_URL` / `PAYMENTS_LIVE_HOSTS` now name the domain, so
+   `callbacksAreSecure()` is true and **Coinsbuy runs on its PRODUCTION key set —
+   real crypto, real money.** The credentials themselves were already on the
+   server; the URLs were the entire gate, because
+   `payments.stripe.require_https_in_live` holds **both** providers on test keys
+   while the callback base is plaintext.
+   There is **no webhook URL to set in the Coinsbuy dashboard** —
+   `CoinsbuyGateway` sends `callback_url` with every deposit, so the URL travels
+   with the request. What the dashboard still has to carry is the **outbound IP
+   allow-list**: `2.24.139.176` must be listed, or deposits come back 403 /
+   code 2016 (`COINSBUY_ERROR`).
+   Verified from outside the network: `POST /api/payments/coinsbuy/webhook`
+   answers `401 COINSBUY_SIGNATURE_INVALID` (Cloudflare → nginx → Laravel →
+   signature middleware all reachable), and a `developer` account still pays with
+   SANDBOX keys on this same box — `PaymentController::applyRoleOverrides` forces
+   them, and `VerifyCoinsbuySignature` accepts the sandbox-signed callback for a
+   developer's invoice only.
+   **Stripe is NOT live**: no `STRIPE_*` keys anywhere, and the UI hides cards
+   behind `CARD_PAYMENTS_ENABLED = false`.
 7. **Switch SSH to key auth and disable password login** — the root password is currently
    the only thing guarding the box, and it has been shared in plaintext. Rotate it, add
    `"key_file"` to the creds file in place of `"password"`, then set

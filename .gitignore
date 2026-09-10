@@ -15,11 +15,15 @@ dist-ssr
 # Env — commit .env.example only
 .env
 
-# Python (trading-flask engine)
+# Python (trading-flask engine, pixel-telegram)
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.venv/
 trading-flask/out/
+# Last-seen unit states: server-owned, and shipping it would make the first
+# deploy announce every service on the box as freshly restarted.
+pixel-telegram/state/
 
 # Generated tooling output (graphify knowledge graph — regenerable)
 graphify-out
@@ -28,6 +32,9 @@ graphify-out
 .claude/deploy.creds.json
 .claude/settings.local.json
 .claude/tradingview.creds.md
+
+# Production database dumps — every secret_key and password hash is in here
+.claude/_db_backups/
 
 # Editor directories and files
 .vscode/*

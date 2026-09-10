@@ -23,14 +23,22 @@ import { daysUntilDue, type Invoice } from '../../lib/billing'
 import {
   FALLBACK_CRYPTOCURRENCIES,
   createCoinsbuyDeposit,
+  createTronIntent,
   getPaymentMethods,
 } from '../../services/payments'
 import { getApiErrorDebug, getApiErrorMessage, type ApiErrorDebug } from '../../services/api'
 import { getUser } from '../../lib/session'
 import { isDeveloper } from '../../lib/roles'
-import type { CoinsbuyDeposit, PaymentMethods } from '../../types/payments'
+import type {
+  CoinsbuyDeposit,
+  PaymentMethods,
+  TronIntent,
+  TronSettlement,
+} from '../../types/payments'
 import DevDetails from '../ui/DevDetails'
 import ExchangeBadge from './ExchangeBadge'
+import TronPayPanel from './TronPayPanel'
+import PaymentSuccess from './PaymentSuccess'
 
 /**
  * Card / Stripe payments are hidden until the Stripe flow is switched on — flip
@@ -74,6 +82,17 @@ export default function PaymentMethodModal({
   const [error, setError] = useState<string | null>(null)
   /** Set only on the Enterprise-wallet path — a bare address to send to. */
   const [deposit, setDeposit] = useState<CoinsbuyDeposit | null>(null)
+  /** Which rail the trader picked. Only ever 'tron' when {@link tronVisible}. */
+  const [provider, setProvider] = useState<'coinsbuy' | 'tron'>('coinsbuy')
+  /** Set once a TRON amount is reserved — replaces the whole method section. */
+  const [tronIntent, setTronIntent] = useState<TronIntent | null>(null)
+  /**
+   * Set the moment the invoice is actually settled. Replaces the ENTIRE sheet
+   * with a confirmation: once the money has landed, restating the fee breakdown
+   * and the payment options is noise — the only useful things left are what was
+   * paid and where to go next.
+   */
+  const [settled, setSettled] = useState<TronSettlement | null>(null)
   const [copied, setCopied] = useState(false)
   /** Developer-only: the full failure envelope behind `error`. */
   const [errorDebug, setErrorDebug] = useState<ApiErrorDebug | null>(null)
@@ -110,6 +129,9 @@ export default function PaymentMethodModal({
     setPhase('idle')
     setError(null)
     setDeposit(null)
+    setProvider('coinsbuy')
+    setTronIntent(null)
+    setSettled(null)
     setCopied(false)
     setErrorDebug(null)
     setMethodsDebug(null)
@@ -121,6 +143,10 @@ export default function PaymentMethodModal({
         if (cancelled) return
         setMethods(m)
         setCrypto(m.coinsbuy.defaultCryptocurrency || 'USDT')
+        // The server decides which rail leads; the trader can still switch.
+        if (m.defaultProvider === 'tron' && m.tron.visible && m.tron.enabled) {
+          setProvider('tron')
+        }
       })
       .catch((err: unknown) => {
         // Non-fatal for a trader: fall back to the known coin list and let the
@@ -171,6 +197,26 @@ export default function PaymentMethodModal({
     }
   }, [invoice, crypto, onDepositCreated])
 
+  /**
+   * Reserve a TRON amount. Unlike the Coinsbuy path this leaves no page — the
+   * address and figure render in place — and it makes no outbound call
+   * server-side, so it cannot fail on transport.
+   */
+  const startTronPayment = useCallback(async () => {
+    if (!invoice) return
+    setPhase('creating')
+    setError(null)
+    setErrorDebug(null)
+    try {
+      setTronIntent(await createTronIntent({ invoiceId: invoice.id, amount: invoice.totalFee }))
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not start the crypto payment.'))
+      setErrorDebug(getApiErrorDebug(err))
+    } finally {
+      setPhase('idle')
+    }
+  }, [invoice])
+
   const copyAddress = useCallback(async () => {
     if (!deposit?.destination) return
     try {
@@ -203,6 +249,29 @@ export default function PaymentMethodModal({
   // Developer account: test credentials on every machine, including production.
   const testAccount = methods?.testAccount === true
   const busy = phase !== 'idle'
+
+  /**
+   * Whether to offer the direct-wallet rail at all. The server is the authority
+   * — it 404s the endpoint for anyone who should not see it — so this is only
+   * about not rendering a button that would fail.
+   */
+  const tronVisible = methods?.tron.visible === true && methods.tron.enabled
+  const tronIsTestnet = tronVisible && methods.tron.network !== 'mainnet'
+  const payDisabled = provider === 'tron' ? !tronVisible : !cryptoEnabled
+
+  // Once the invoice is settled the sheet has one job left: confirm what was
+  // paid and offer somewhere to go. Everything above it — the fee breakdown,
+  // the payment options — is now describing a decision already made.
+  if (settled) {
+    return createPortal(
+      <PaymentSuccess
+        invoice={invoice}
+        settlement={settled}
+        onDone={onClose}
+      />,
+      document.body,
+    )
+  }
 
   return createPortal(
     <div
@@ -418,7 +487,14 @@ export default function PaymentMethodModal({
               <Wallet size={13} className="text-accent" /> Pay with
             </p>
 
-            {deposit ? (
+            {tronIntent ? (
+              /* Direct wallet: the address and the exact figure, in place. */
+              <TronPayPanel
+                intent={tronIntent}
+                developer={developer}
+                onSettled={setSettled}
+              />
+            ) : deposit ? (
               /* Enterprise-wallet fallback: no hosted page, just an address. */
               <div className="rounded-[14px] border border-accent bg-accent-soft p-4 max-[420px]:p-3.5">
                 <p className="text-[13.5px] font-bold text-text mb-1">
@@ -444,7 +520,17 @@ export default function PaymentMethodModal({
                 </div>
               </div>
             ) : (
-              <div className="rounded-[14px] border border-accent bg-accent-soft p-4 max-[420px]:p-3.5">
+              <>
+              <div
+                className={`rounded-[14px] border p-4 max-[420px]:p-3.5 transition-[border-color] duration-150 ${
+                  provider === 'coinsbuy'
+                    ? 'border-accent bg-accent-soft'
+                    : 'border-border bg-surface2'
+                }`}
+                role={tronVisible ? 'button' : undefined}
+                tabIndex={tronVisible && provider !== 'coinsbuy' ? 0 : undefined}
+                onClick={tronVisible && provider !== 'coinsbuy' ? () => setProvider('coinsbuy') : undefined}
+              >
                 <div className="flex items-center gap-3 mb-3.5">
                   <span className="w-9 h-9 flex-shrink-0 grid place-items-center rounded-[10px] bg-[var(--bubble)] border border-accent-line text-accent">
                     <Wallet size={16} />
@@ -486,9 +572,54 @@ export default function PaymentMethodModal({
                   automatically once the transfer confirms on-chain.
                 </p>
               </div>
+
+              {/* Direct wallet — no provider in the middle. Hidden entirely
+                  until the server says this caller may see it. */}
+              {tronVisible && (
+                <div
+                  className={`mt-2.5 rounded-[14px] border p-4 max-[420px]:p-3.5 cursor-pointer transition-[border-color] duration-150 ${
+                    provider === 'tron'
+                      ? 'border-accent bg-accent-soft'
+                      : 'border-border bg-surface2 hover:border-accent'
+                  }`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setProvider('tron')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') setProvider('tron')
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="w-9 h-9 flex-shrink-0 grid place-items-center rounded-[10px] border border-accent-line bg-[var(--bubble)] text-accent">
+                      <Landmark size={16} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      {/* The chain label already carries its own parentheses
+                          ("TRC-20 (TRON Nile testnet)"), so wrapping it in more
+                          nests them. */}
+                      <p className="flex items-center gap-2 text-[13.5px] font-bold text-text">
+                        Direct {methods?.tron.asset ?? 'USDT'} ·{' '}
+                        {methods?.tron.chainLabel ?? 'TRC-20'}
+                        {tronIsTestnet && (
+                          <span className="inline-flex items-center gap-1 rounded-pill border border-accent-line bg-[var(--bubble)] py-0.5 px-2 text-[10px] font-bold uppercase tracking-[0.08em] text-accent">
+                            <FlaskConical size={10} /> Test net
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-[11.5px] text-muted">
+                        Send straight to our wallet — no provider, no redirect.
+                      </p>
+                    </div>
+                    {provider === 'tron' && (
+                      <Check size={16} strokeWidth={3} className="flex-shrink-0 text-accent" />
+                    )}
+                  </div>
+                </div>
+              )}
+              </>
             )}
 
-            {!cryptoEnabled && (
+            {!cryptoEnabled && !tronVisible && (
               <p className="flex items-start gap-2 text-[11.5px] font-semibold text-red mt-2.5">
                 <AlertTriangle size={13} className="flex-shrink-0 mt-px" />
                 Crypto payments are not configured on this server yet.
@@ -554,26 +685,37 @@ export default function PaymentMethodModal({
               onClick={onClose}
               disabled={busy}
             >
-              {deposit ? 'Done' : 'Cancel'}
+              {deposit || tronIntent ? 'Done' : 'Cancel'}
             </button>
-            {!deposit && (
+            {!deposit && !tronIntent && (
               <button
                 type="button"
                 className="inline-flex items-center justify-center gap-2 text-[13.5px] font-bold bg-accent text-on-accent border-0 py-3 px-[22px] rounded-pill cursor-pointer shadow-[0_10px_24px_var(--glow)] transition-[filter,transform] duration-150 hover:brightness-[1.06] active:translate-y-px disabled:opacity-60 disabled:cursor-not-allowed disabled:shadow-none max-[430px]:w-full"
-                onClick={startPayment}
-                disabled={busy || !cryptoEnabled}
+                onClick={provider === 'tron' ? startTronPayment : startPayment}
+                disabled={busy || payDisabled}
                 autoFocus
               >
                 {phase === 'idle' ? (
-                  <>
-                    {testAccount ? <FlaskConical size={16} /> : <ExternalLink size={16} />}
-                    {testAccount ? 'Test pay' : 'Pay'} {fmtMoney(invoice.totalFee)} with{' '}
-                    {crypto}
-                  </>
+                  provider === 'tron' ? (
+                    <>
+                      {testAccount ? <FlaskConical size={16} /> : <Landmark size={16} />}
+                      Show payment address
+                    </>
+                  ) : (
+                    <>
+                      {testAccount ? <FlaskConical size={16} /> : <ExternalLink size={16} />}
+                      {testAccount ? 'Test pay' : 'Pay'} {fmtMoney(invoice.totalFee)} with{' '}
+                      {crypto}
+                    </>
+                  )
                 ) : (
                   <>
                     <Loader2 size={16} className="animate-[dstate-spin_0.8s_linear_infinite]" />
-                    {phase === 'creating' ? 'Opening checkout…' : 'Redirecting…'}
+                    {provider === 'tron'
+                      ? 'Reserving amount…'
+                      : phase === 'creating'
+                        ? 'Opening checkout…'
+                        : 'Redirecting…'}
                   </>
                 )}
               </button>

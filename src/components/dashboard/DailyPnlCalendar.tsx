@@ -2,8 +2,19 @@ import { useMemo, useState } from 'react'
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useApiData } from '../../hooks/useApiData'
 import { getDashboardDailyPnl } from '../../services/dashboard'
+import { deleteAdminPastTrade, updateAdminPastTrade } from '../../services/admin'
+import { getApiErrorMessage } from '../../services/api'
+import { canSeeAdmin } from '../../lib/roles'
+import { getUser } from '../../lib/session'
+import { displaySymbol } from '../../lib/chart'
+import { fmtMediumDate } from '../../lib/format'
+import type { PositionRow } from '../../lib/adminPositionRows'
 import DayTradesModal from './DayTradesModal'
-import type { DayPnl } from '../../types/dashboard'
+import PositionEditModal, {
+  type PositionEditPayload,
+} from '../admin/positions/PositionEditModal'
+import ConfirmModal from '../ui/ConfirmModal'
+import type { DayPnl, DayTrade } from '../../types/dashboard'
 
 const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
@@ -44,10 +55,41 @@ function buildCells(
   return cells
 }
 
+/** A day's trade wearing the shape the shared position editor expects. The
+ *  account fields are empty on purpose: this list is already scoped to the
+ *  viewer's own accounts, and the editor never writes ownership anyway. */
+function toEditableRow(t: DayTrade): PositionRow {
+  return {
+    key: `t${t.id}`,
+    ids: [t.id],
+    count: 1,
+    rowId: t.id,
+    accountId: null,
+    accountName: null,
+    accountBalance: 0,
+    symbol: t.symbol,
+    price: t.exit_price ?? 0,
+    pnl: t.realized_pnl,
+    side: t.side,
+    qty: t.position_amt,
+    strategy: t.strategy,
+    closedAt: t.closed_at,
+    broker: 'Binance',
+  }
+}
+
 /** Daily P&L calendar — month grid tinted by P&L sign + magnitude, with month
  *  navigation, an Amount/% toggle, and a click-to-open trades modal per day. */
 export default function DailyPnlCalendar({ balance }: DailyPnlCalendarProps) {
-  const { data: days } = useApiData(getDashboardDailyPnl)
+  const { data: days, reload } = useApiData(getDashboardDailyPnl)
+  // Same predicate as the sidebar's admin button and as EnsureAdmin::ROLES on
+  // the server — the icons are cosmetic, the /admin/* endpoints do the gating.
+  const canManage = canSeeAdmin(getUser()?.type)
+  const [editTrade, setEditTrade] = useState<DayTrade | null>(null)
+  const [pendingEdit, setPendingEdit] = useState<PositionEditPayload | null>(null)
+  const [deleteTrade, setDeleteTrade] = useState<DayTrade | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const now = useMemo(() => new Date(), [])
   const [view, setView] = useState(
     () => new Date(now.getFullYear(), now.getMonth(), 1)
@@ -73,6 +115,39 @@ export default function DailyPnlCalendar({ balance }: DailyPnlCalendarProps) {
     view.getFullYear() < now.getFullYear() ||
     (view.getFullYear() === now.getFullYear() &&
       view.getMonth() < now.getMonth())
+
+  const runEdit = async () => {
+    if (!pendingEdit || pendingEdit.kind !== 'trade') return
+    setBusy(true)
+    setActionError(null)
+    try {
+      await updateAdminPastTrade(pendingEdit.id, pendingEdit.input)
+      setPendingEdit(null)
+      setEditTrade(null)
+      reload()
+    } catch (err) {
+      setActionError(getApiErrorMessage(err, 'Failed to save the change.'))
+      setPendingEdit(null)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const runDelete = async () => {
+    if (!deleteTrade) return
+    setBusy(true)
+    setActionError(null)
+    try {
+      await deleteAdminPastTrade(deleteTrade.id)
+      setDeleteTrade(null)
+      reload()
+    } catch (err) {
+      setActionError(getApiErrorMessage(err, 'Failed to delete the trade.'))
+      setDeleteTrade(null)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const display = (pnl: number) => {
     if (pnl === 0) return '—'
@@ -152,6 +227,16 @@ export default function DailyPnlCalendar({ balance }: DailyPnlCalendarProps) {
         </div>
       </div>
 
+      {/* a failed edit/delete can outlive the modal it was started from */}
+      {actionError && !editTrade && (
+        <p
+          className="mb-3 py-2 px-3 border border-[color-mix(in_srgb,var(--red)_30%,transparent)] rounded-field bg-[color-mix(in_srgb,var(--red)_8%,transparent)] text-[12.5px] text-red"
+          role="alert"
+        >
+          {actionError}
+        </p>
+      )}
+
       <div className="grid grid-cols-7 gap-[7px] mb-[7px]">
         {WEEKDAYS.map((d) => (
           <span
@@ -221,6 +306,62 @@ export default function DailyPnlCalendar({ balance }: DailyPnlCalendarProps) {
         date={selected}
         day={selected ? daysMap[selected] ?? null : null}
         onClose={() => setSelected(null)}
+        canManage={canManage}
+        onEditTrade={(t) => {
+          setActionError(null)
+          setEditTrade(t)
+        }}
+        onDeleteTrade={(t) => {
+          setActionError(null)
+          setDeleteTrade(t)
+        }}
+      />
+
+      <PositionEditModal
+        row={editTrade ? toEditableRow(editTrade) : null}
+        kind="trade"
+        saving={busy}
+        error={actionError}
+        confirming={pendingEdit !== null}
+        subtitle={
+          editTrade
+            ? `Closed trade #${editTrade.id} · ${displaySymbol(editTrade.symbol)} · ${fmtMediumDate(editTrade.closed_at)}`
+            : undefined
+        }
+        onSubmit={setPendingEdit}
+        onCancel={() => {
+          setEditTrade(null)
+          setActionError(null)
+        }}
+      />
+
+      <ConfirmModal
+        open={pendingEdit !== null}
+        title={`Update trade #${pendingEdit?.id ?? ''}?`}
+        message={
+          pendingEdit
+            ? `${pendingEdit.changes.join(' · ')}. Invoicing and the public track record read these figures.`
+            : ''
+        }
+        confirmLabel={busy ? 'Saving…' : 'Yes, update'}
+        cancelLabel="No"
+        onConfirm={runEdit}
+        onCancel={() => setPendingEdit(null)}
+      />
+
+      <ConfirmModal
+        open={deleteTrade !== null}
+        title="Delete this trade?"
+        message={
+          deleteTrade
+            ? `This permanently removes trade #${deleteTrade.id} — ${displaySymbol(deleteTrade.symbol)} closed ${fmtMediumDate(deleteTrade.closed_at)}. The day's P&L, invoicing and the public track record all stop counting it.`
+            : ''
+        }
+        confirmLabel={busy ? 'Deleting…' : 'Yes, delete'}
+        cancelLabel="No"
+        danger
+        onConfirm={runDelete}
+        onCancel={() => setDeleteTrade(null)}
       />
     </section>
   )

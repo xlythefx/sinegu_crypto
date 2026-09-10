@@ -4,3 +4,6 @@ requests>=2.28
 certifi>=2023
 python-dotenv>=1.0
 waitress>=3.0
+# zoneinfo has no tz database to read on Windows, so ZoneInfo("Asia/Manila")
+# raises there without this. The scheduled reports run on a local timezone.
+tzdata>=2024.1; sys_platform == "win32"

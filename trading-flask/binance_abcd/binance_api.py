@@ -21,6 +21,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import requests
 
+from binance_abcd import key_status
 from binance_abcd.hooks import API_TIMEOUT, BINANCE_API_BASE, POSITION_MODE_CACHE_TTL
 from binance_abcd.http_client import get_session
 
@@ -34,6 +35,14 @@ _rate_limit_alert_hook: Optional[Callable[[str], None]] = None
 
 _DEFAULT_BACKOFF_429 = 60.0
 _DEFAULT_BACKOFF_418 = 300.0
+
+# Statuses that say the REQUEST failed, not that the ORDER was wrong. 408 is how
+# Binance ships -1007 ("Timeout waiting for response from backend server. Send
+# status unknown; execution status unknown") and 5xx is the exchange being
+# unavailable; a None status means the connection or read timed out before any
+# answer arrived. Callers may re-attempt these — a rejection (-1111 precision,
+# -2019 margin, -4164 notional) will be rejected identically next time.
+_TRANSIENT_HTTP = frozenset({408, 500, 502, 503, 504})
 
 
 def set_rate_limit_alert_hook(hook: Callable[[str], None]) -> None:
@@ -154,6 +163,25 @@ def _parse_binance_error_body(text: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+def error_summary(result: Any) -> str:
+    """Human text for one ``_error`` dict — Binance's own code and message when
+    it sent a body, else the transport error.
+
+    ``requests`` says "408 Client Error: Request Timeout"; the body says
+    ``-1007 ... Send status unknown; execution status unknown``. Those are two
+    different facts, and only the second one tells whoever reads the alert that
+    the order may have executed. Alerts carry this, not str(exc).
+    """
+    if not isinstance(result, dict):
+        return "No response"
+    parsed = _parse_binance_error_body(str(result.get("response") or ""))
+    if parsed and parsed.get("msg"):
+        code = parsed.get("code")
+        prefix = f"{code} " if isinstance(code, int) else ""
+        return f"{prefix}{parsed['msg']}".strip()[:300]
+    return str(result.get("message") or "Unknown error")[:300]
+
+
 def _is_no_need_position_side_change(parsed: Dict[str, Any]) -> bool:
     """-4059 'No need to change position side.' = already in the wanted mode."""
     if not isinstance(parsed.get("code"), int) or parsed["code"] != -4059:
@@ -184,7 +212,28 @@ class BinanceAPI:
         if response is not None and response.status_code in (418, 429):
             _enter_backoff(response.status_code, response.headers.get("Retry-After"))
 
-    def _request_get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Optional[Any]:
+    def _report_key(self, response: "requests.Response | None") -> None:
+        """Tell the backend when Binance refuses these credentials.
+
+        Only an error code from Binance counts — a timeout or a 5xx says
+        nothing about the key, and flagging on those would disconnect people
+        for our own outages.
+        """
+        if response is None:
+            return
+        verdict = key_status.classify(_parse_binance_error_body(response.text or ""))
+        if verdict is not None:
+            code, reason, message = verdict
+            key_status.report_blocked(self.api_key, code, reason, message)
+
+    def _request_get(
+        self,
+        path: str,
+        params: Optional[Dict[str, Any]] = None,
+        account_scoped: bool = True,
+    ) -> Optional[Any]:
+        """`account_scoped=False` for public data (exchangeInfo): such a call
+        succeeds with any key, so it must never clear a blocked flag."""
         if not _check_clear():
             return None
         params = dict(params or {})
@@ -195,10 +244,13 @@ class BinanceAPI:
         try:
             resp = get_session().get(url, headers={"X-MBX-APIKEY": self.api_key}, timeout=self.timeout)
             resp.raise_for_status()
+            if account_scoped:
+                key_status.report_ok(self.api_key)
             return resp.json()
         except requests.RequestException as exc:
             response = getattr(exc, "response", None)
             self._handle_rate_limit(response)
+            self._report_key(response)
             log.error("[Binance] GET %s: %s", path, exc)
             if response is not None and response.text:
                 log.error("[Binance] response: %.500s", response.text)
@@ -215,10 +267,12 @@ class BinanceAPI:
         try:
             resp = get_session().post(f"{self.base_url}{path}", data=body, headers=headers, timeout=self.timeout)
             resp.raise_for_status()
+            key_status.report_ok(self.api_key)
             return resp.json()
         except requests.RequestException as exc:
             response = getattr(exc, "response", None)
             self._handle_rate_limit(response)
+            self._report_key(response)
             err_text = ""
             http_status = None
             if response is not None:
@@ -234,6 +288,7 @@ class BinanceAPI:
                 "response": err_text,
                 "http_status": http_status,
                 "rate_limited": http_status in (418, 429),
+                "transient": http_status is None or http_status in _TRANSIENT_HTTP,
             }
 
     # --- market data ----------------------------------------------------------
@@ -247,7 +302,7 @@ class BinanceAPI:
                 cache = _STEP_SIZE_CACHE.get(self.base_url)
                 if cache is None:
                     parsed: Dict[str, str] = {}
-                    data = self._request_get("/fapi/v1/exchangeInfo", {})
+                    data = self._request_get("/fapi/v1/exchangeInfo", {}, account_scoped=False)
                     for entry in ((data or {}).get("symbols") or []):
                         sym = entry.get("symbol")
                         for f in (entry.get("filters") or []):
@@ -274,22 +329,45 @@ class BinanceAPI:
         data = self._request_get("/fapi/v3/balance")
         return data if isinstance(data, list) else None
 
-    def get_positions_v3(self, symbol: Optional[str] = None) -> List[Dict[str, Any]]:
-        """GET /fapi/v3/positionRisk — positions with entryPrice etc. Weight 5."""
+    def get_positions_v3(self, symbol: Optional[str] = None) -> Optional[List[Dict[str, Any]]]:
+        """GET /fapi/v3/positionRisk — positions with entryPrice etc. Weight 5.
+
+        **None is a failed read; [] is a genuinely flat account.** Collapsing
+        the two is not a cosmetic sloppiness — `positions/sync` replaces an
+        account's rows wholesale, so a failed read reported as "flat" DELETES
+        live positions from the DB, and the stack cap (which counts open size)
+        then reads 0 open and stops firing. On 2026-08-18 every positionRisk
+        read on prod timed out (-1007) for four hours; the poller logged
+        "synced 2 account(s)" the whole time and three entries stacked with the
+        engine believing each one was the first.
+        """
         params: Dict[str, Any] = {}
         if symbol:
             params["symbol"] = symbol.upper()
         data = self._request_get("/fapi/v3/positionRisk", params)
         if not isinstance(data, list):
-            return []
-        return [p for p in data if float(p.get("positionAmt", 0)) != 0]
+            return None
+        open_positions = []
+        for position in data:
+            try:
+                if float(position.get("positionAmt", 0)) != 0:
+                    open_positions.append(position)
+            except (TypeError, ValueError):
+                continue
+        return open_positions
 
-    def get_user_trades(self, symbol: str, order_id: Optional[int] = None, limit: int = 10) -> List[Dict[str, Any]]:
+    def get_user_trades(
+        self, symbol: str, order_id: Optional[int] = None, limit: int = 10
+    ) -> Optional[List[Dict[str, Any]]]:
+        """GET /fapi/v1/userTrades. None on a failed read, [] when Binance has
+        no fills for this query YET — the index trails the fill by a second or
+        two, so an empty answer right after an order is normal and temporary.
+        Callers retry either way; only one of the two is worth logging."""
         params: Dict[str, Any] = {"symbol": symbol.upper(), "limit": limit}
         if order_id is not None:
             params["orderId"] = order_id
         data = self._request_get("/fapi/v1/userTrades", params)
-        return data if isinstance(data, list) else []
+        return data if isinstance(data, list) else None
 
     def get_income_history(
         self,
@@ -299,7 +377,14 @@ class BinanceAPI:
         end_time: Optional[int] = None,
         limit: int = 1000,
     ) -> List[Dict[str, Any]]:
-        """GET /fapi/v1/income (TRANSFER, REALIZED_PNL, ...). Weight 30."""
+        """GET /fapi/v1/income (TRANSFER, REALIZED_PNL, ...). Weight 30.
+
+        Deliberately the ONE read that still answers [] on failure, unlike
+        get_positions_v3/get_user_trades above: its callers only ever INSERT
+        rows or fill NULLs, never delete, so an empty answer just means "nothing
+        synced this cycle" and the next tick retries. Do not copy this into a
+        read whose result replaces stored state.
+        """
         params: Dict[str, Any] = {"limit": min(limit, 1000)}
         if income_type:
             params["incomeType"] = income_type

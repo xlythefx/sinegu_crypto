@@ -1,4 +1,49 @@
-/** Build an SVG polyline path from values, scaled to a viewBox. */
+/** One plotted point, in viewBox units. */
+export interface LinePoint {
+  x: number
+  y: number
+  /** Index into the ORIGINAL values array (a single value is drawn twice). */
+  index: number
+}
+
+/**
+ * Plot values into a viewBox and return the points.
+ *
+ * Shares its geometry with {@link linePath} on purpose: a hover crosshair that
+ * computes its own coordinates drifts off the line it is supposed to be reading.
+ *
+ * `xs` gives each point an explicit horizontal position as a fraction of the
+ * width (0..1) — pass it when the points are events at uneven times, or the
+ * even index spacing renders a busy day as wide as a quiet week. Omit it and
+ * points are spaced evenly, which is right for one-per-period series.
+ */
+export function linePoints(
+  values: number[],
+  width: number,
+  height: number,
+  pad = 10,
+  yMin?: number,
+  yMax?: number,
+  xs?: number[],
+): LinePoint[] {
+  if (values.length === 0) return []
+  const pts = values.length === 1 ? [values[0], values[0]] : values
+  const min = yMin ?? Math.min(...pts)
+  const max = yMax ?? Math.max(...pts)
+  const span = max - min || 1
+  const stepX = width / (pts.length - 1)
+  const at = xs?.length === pts.length ? xs : null
+  return pts.map((v, i) => ({
+    x: at ? at[i] * width : i * stepX,
+    y: height - pad - ((v - min) / span) * (height - pad * 2),
+    index: Math.min(i, values.length - 1),
+  }))
+}
+
+/**
+ * Build an SVG polyline path from values, scaled to a viewBox.
+ * See {@link linePoints} for the arguments.
+ */
 export function linePath(
   values: number[],
   width: number,
@@ -6,19 +51,10 @@ export function linePath(
   pad = 10,
   yMin?: number,
   yMax?: number,
+  xs?: number[],
 ): string {
-  if (values.length === 0) return ''
-  const pts = values.length === 1 ? [values[0], values[0]] : values
-  const min = yMin ?? Math.min(...pts)
-  const max = yMax ?? Math.max(...pts)
-  const span = max - min || 1
-  const stepX = width / (pts.length - 1)
-  return pts
-    .map((v, i) => {
-      const x = i * stepX
-      const y = height - pad - ((v - min) / span) * (height - pad * 2)
-      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
-    })
+  return linePoints(values, width, height, pad, yMin, yMax, xs)
+    .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
     .join(' ')
 }
 

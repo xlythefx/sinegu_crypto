@@ -1,5 +1,8 @@
 export interface EquityPoint {
   date: string
+  /** Full event timestamp (ISO 8601). Optional — older responses send only
+   *  `date`, and the chart falls back to that day's local midnight. */
+  at?: string
   equity: number
 }
 
@@ -92,10 +95,13 @@ export interface AssetPerformanceData {
 
 /** One closed trade within a calendar day (from /dashboard/daily-pnl). */
 export interface DayTrade {
+  /** `binance_pastpositions.id` — names the row for an admin correction. */
+  id: number
   symbol: string
   position_side: string
   position_amt: number
   realized_pnl: number
+  exit_price: number | null
   side: string
   strategy: string | null
   closed_at: string
@@ -135,7 +141,10 @@ export interface PastPosition {
   position_amt: string
   entry_price: string | null
   exit_price: string | null
+  /** NET of `exchange_fee` — the figure Binance's own Position History shows. */
   realized_pnl: string | null
+  /** Estimated round-trip commission already deducted from `realized_pnl`. */
+  exchange_fee: string | null
   side: string
   order_id: number | null
   closed_at: string

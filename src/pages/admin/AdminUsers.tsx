@@ -10,24 +10,32 @@ import {
   Eye,
   Search,
   UserCog,
+  UserPlus,
   X,
 } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
 import ConfirmModal from '../../components/ui/ConfirmModal'
+import CreateUserModal from '../../components/admin/CreateUserModal'
 import { BADGE, StatusBadge } from '../../components/admin/badges'
 import RolePicker from '../../components/admin/RolePicker'
 import { useApiData } from '../../hooks/useApiData'
 import { useSessionUser } from '../../hooks/useSessionUser'
 import {
   acceptUser,
+  createAdminUser,
   getAdminUsers,
   rejectUser,
   updateAdminUser,
 } from '../../services/admin'
 import { ApiError, getApiErrorMessage } from '../../services/api'
 import { fmtMediumDate, fmtMoney } from '../../lib/format'
-import type { AdminUser, UserRole, UserStatus } from '../../types/admin'
+import type {
+  AdminUser,
+  AdminUserCreateInput,
+  UserRole,
+  UserStatus,
+} from '../../types/admin'
 
 type StatusFilter = 'all' | UserStatus
 type RoleFilter = 'all' | UserRole
@@ -97,6 +105,10 @@ export default function AdminUsers() {
   const [pendingRole, setPendingRole] = useState<PendingRole | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [createdEmail, setCreatedEmail] = useState<string | null>(null)
 
   const users = useMemo(() => data ?? [], [data])
 
@@ -177,6 +189,29 @@ export default function AdminUsers() {
       setPendingAction(null)
     } finally {
       setActionLoading(false)
+    }
+  }
+
+  const runCreate = async (input: AdminUserCreateInput) => {
+    setCreating(true)
+    setCreateError(null)
+    try {
+      const user = await createAdminUser(input)
+      setCreateOpen(false)
+      // Clear the filters so the new row is actually visible — creating a
+      // user while "Pending" is selected must not look like nothing happened.
+      setFilterAndResetPage(() => {
+        setSearch('')
+        setStatusFilter('all')
+        setRoleFilter('all')
+      })
+      setCreatedEmail(user.email)
+      reload()
+    } catch (err) {
+      // The API owns the rules (unique email, one master) — show what it said.
+      setCreateError(getApiErrorMessage(err, 'Unable to create the account.'))
+    } finally {
+      setCreating(false)
     }
   }
 
@@ -288,6 +323,26 @@ export default function AdminUsers() {
         </p>
       )}
 
+      {createdEmail && (
+        <p
+          className="mb-3.5 flex items-center justify-between gap-3 rounded-[10px] border border-[color-mix(in_srgb,var(--green)_30%,transparent)] bg-[color-mix(in_srgb,var(--green)_8%,transparent)] px-3 py-[9px] text-[12.5px] text-green"
+          role="status"
+        >
+          <span>
+            Account created for <strong>{createdEmail}</strong>. Send them the
+            password — it is not shown again.
+          </span>
+          <button
+            type="button"
+            className="flex-none cursor-pointer text-green opacity-70 hover:opacity-100"
+            onClick={() => setCreatedEmail(null)}
+            aria-label="Dismiss"
+          >
+            <X size={14} />
+          </button>
+        </p>
+      )}
+
       <section
         className="overflow-hidden rounded-card border border-border bg-surface"
         data-aos="fade-up"
@@ -341,25 +396,39 @@ export default function AdminUsers() {
                 )
               })}
             </div>
-            <label className="ml-auto flex items-center gap-2 h-9 flex-none rounded-full border border-border bg-surface2 px-3 text-muted">
-              <UserCog size={14} />
-              <select
-                value={roleFilter}
-                onChange={(e) =>
-                  setFilterAndResetPage(() =>
-                    setRoleFilter(e.target.value as RoleFilter),
-                  )
-                }
-                aria-label="Filter by role"
-                className="cursor-pointer border-0 bg-transparent text-[12.5px] font-semibold text-text outline-none"
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2 h-9 flex-none rounded-full border border-border bg-surface2 px-3 text-muted">
+                <UserCog size={14} />
+                <select
+                  value={roleFilter}
+                  onChange={(e) =>
+                    setFilterAndResetPage(() =>
+                      setRoleFilter(e.target.value as RoleFilter),
+                    )
+                  }
+                  aria-label="Filter by role"
+                  className="cursor-pointer border-0 bg-transparent text-[12.5px] font-semibold text-text outline-none"
+                >
+                  {ROLE_FILTERS.map((r) => (
+                    <option key={r.key} value={r.key} className="bg-surface text-text">
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="inline-flex h-9 flex-none items-center gap-1.5 rounded-pill bg-accent px-4 text-[12.5px] font-bold text-on-accent cursor-pointer hover:brightness-110"
+                onClick={() => {
+                  setCreateError(null)
+                  setCreatedEmail(null)
+                  setCreateOpen(true)
+                }}
               >
-                {ROLE_FILTERS.map((r) => (
-                  <option key={r.key} value={r.key} className="bg-surface text-text">
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <UserPlus size={15} />
+                New User
+              </button>
+            </div>
           </div>
         </div>
 
@@ -444,6 +513,14 @@ export default function AdminUsers() {
           </div>
         )}
       </section>
+
+      <CreateUserModal
+        open={createOpen}
+        saving={creating}
+        error={createError}
+        onSubmit={runCreate}
+        onCancel={() => setCreateOpen(false)}
+      />
 
       <ConfirmModal
         open={pendingAction !== null}

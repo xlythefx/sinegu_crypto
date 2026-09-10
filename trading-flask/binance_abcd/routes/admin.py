@@ -41,12 +41,25 @@ def refresh_assets():
 
 @admin_bp.route("/refresh-balances", methods=["POST"])
 def refresh_balances():
+    """Sync balances now.
+
+    An optional ``api_keys`` list narrows the run to those accounts — the
+    trader "Refresh balance" button sends exactly one, so a person pressing it
+    costs one Binance call rather than one per account on the platform. Omit it
+    (the invoice generator's call) to sync everything.
+    """
     if not _authorized():
         return jsonify({"error": "Unauthorized"}), 403
     from binance_abcd.fetch_balances import fetch_and_save  # deferred: poller pulls in accounts
 
-    result = fetch_and_save()
-    return jsonify({"success": bool(result), "result": result})
+    body = request.get_json(silent=True) or {}
+    raw = body.get("api_keys")
+    api_keys = [str(k) for k in raw if k] if isinstance(raw, list) else None
+    if api_keys is not None and not api_keys:
+        return jsonify({"error": "api_keys was empty"}), 400
+
+    result = fetch_and_save(api_keys)
+    return jsonify({"success": bool(result), "result": result, "scoped": api_keys is not None})
 
 
 @admin_bp.route("/stats", methods=["GET"])

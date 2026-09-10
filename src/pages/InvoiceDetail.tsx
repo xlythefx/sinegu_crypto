@@ -22,6 +22,7 @@ import { useSessionUser } from '../hooks/useSessionUser'
 import { isDeveloper } from '../lib/roles'
 import BillingHelpSidebar from '../components/billing/BillingHelpSidebar'
 import ExchangeBadge from '../components/billing/ExchangeBadge'
+import InvoiceDocumentModal from '../components/billing/InvoiceDocumentModal'
 import PaymentMethodModal from '../components/billing/PaymentMethodModal'
 import { EXCHANGE_META } from '../components/exchanges/meta'
 import { getInvoice } from '../services/billing'
@@ -66,12 +67,15 @@ export default function InvoiceDetail() {
   const { id } = useParams()
   // Developer accounts pay with the providers' test credentials — the button
   // says so before it is pressed, and the API decides it again server-side.
-  const developer = isDeveloper(useSessionUser()?.type)
+  const sessionUser = useSessionUser()
+  const developer = isDeveloper(sessionUser?.type)
   const [searchParams, setSearchParams] = useSearchParams()
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<unknown>(null)
   const [payOpen, setPayOpen] = useState(false)
+  /** The printable invoice document (white paper, outside the dark theme). */
+  const [docOpen, setDocOpen] = useState(false)
   /** Set when Coinsbuy bounced the trader back here after checkout. */
   const [returned, setReturned] = useState<'success' | 'cancelled' | null>(null)
   const [polls, setPolls] = useState(0)
@@ -168,28 +172,41 @@ export default function InvoiceDetail() {
   return (
     <DashboardLayout title={`Invoice ${invoice.formattedId}`}>
       {/* header */}
-      <div className="flex items-start gap-[14px] mb-[22px]" data-aos="fade-up">
-        <Link
-          to="/dashboard/invoices"
-          className="grid place-items-center w-10 h-10 flex-shrink-0 rounded-[12px] border border-border bg-surface2 text-text transition-[border-color,transform] duration-150 hover:border-accent hover:-translate-x-0.5"
-          aria-label="Back to invoices"
-        >
-          <ArrowLeft size={18} />
-        </Link>
-        <div>
-          <p className="font-mono text-[11px] tracking-[0.14em] text-accent mb-[5px]">
-            {invoice.formattedId}
-          </p>
-          <h1 className="font-display text-[27px] font-extrabold tracking-[-0.02em] mb-2">
-            {invoice.accountName}
-          </h1>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <ExchangeBadge exchange={invoice.exchange} />
-            <span className="text-[13px] text-muted">
-              {invoice.monthLabel} billing period
-            </span>
+      <div
+        className="flex items-start justify-between gap-[14px] flex-wrap mb-[22px]"
+        data-aos="fade-up"
+      >
+        <div className="flex items-start gap-[14px] min-w-0">
+          <Link
+            to="/dashboard/invoices"
+            className="grid place-items-center w-10 h-10 flex-shrink-0 rounded-[12px] border border-border bg-surface2 text-text transition-[border-color,transform] duration-150 hover:border-accent hover:-translate-x-0.5"
+            aria-label="Back to invoices"
+          >
+            <ArrowLeft size={18} />
+          </Link>
+          <div className="min-w-0">
+            <p className="font-mono text-[11px] tracking-[0.14em] text-accent mb-[5px]">
+              {invoice.formattedId}
+            </p>
+            <h1 className="font-display text-[27px] font-extrabold tracking-[-0.02em] mb-2">
+              {invoice.accountName}
+            </h1>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <ExchangeBadge exchange={invoice.exchange} />
+              <span className="text-[13px] text-muted">
+                {invoice.monthLabel} billing period
+              </span>
+            </div>
           </div>
         </div>
+
+        <button
+          type="button"
+          className="inline-flex items-center gap-2 flex-shrink-0 rounded-pill border border-border bg-surface2 py-2.5 px-[18px] text-[13px] font-semibold text-text cursor-pointer transition-[border-color,transform] duration-150 hover:border-accent hover:-translate-y-px"
+          onClick={() => setDocOpen(true)}
+        >
+          <FileText size={16} className="text-accent" /> View invoice
+        </button>
       </div>
 
       {/* post-checkout banner — settlement itself happens on the webhook */}
@@ -504,6 +521,17 @@ export default function InvoiceDetail() {
 
         <BillingHelpSidebar />
       </div>
+
+      <InvoiceDocumentModal
+        open={docOpen}
+        invoice={invoice}
+        customer={sessionUser}
+        onClose={() => setDocOpen(false)}
+        onPay={() => {
+          setDocOpen(false)
+          setPayOpen(true)
+        }}
+      />
 
       <PaymentMethodModal
         open={payOpen}

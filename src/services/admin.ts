@@ -2,15 +2,27 @@ import { apiFetch, API_URL, ApiError } from './api'
 import { getToken } from '../lib/session'
 import { mapApiInvoice, type ApiInvoice, type Invoice } from '../lib/billing'
 import type {
+  AdminApiKey,
+  AdminApiKeyCounts,
+  AdminApiKeysData,
+  AdminApiKeyUpdateInput,
   AdminAsset,
   AdminEngineStatus,
+  AdminPastTradeUpdate,
   AdminPerformance,
   AdminPositionsData,
+  AdminPositionUpdate,
   AdminUser,
+  AdminUserCreateInput,
   AdminUserDetail,
   AdminUserSummary,
+  AdminTronCounts,
+  AdminTronNetwork,
+  AdminTronTransfer,
+  AdminTronTransfersData,
   AdminUserUpdateInput,
   AssetInput,
+  BulkKeyDeleteResult,
   CacheClearResult,
   ClearInvoicesResult,
   DailyPnlMap,
@@ -18,9 +30,13 @@ import type {
   DbRow,
   EngineLogsData,
   EngineRestartResult,
+  KeyIssueAccount,
+  KeyIssuesData,
+  KeyRecheckResult,
   InvoiceScenario,
   MasterStats,
   PerformanceFilters,
+  PurgeKeyResult,
   SandboxPositionInput,
   SandboxUser,
   ScenarioRun,
@@ -220,6 +236,31 @@ export async function deleteAdminPastTrade(id: number): Promise<void> {
   })
 }
 
+/** Correct one open position row. The poller overwrites it on the account's
+ *  next sync — this fixes what is displayed, not what Binance holds. */
+export async function updateAdminPosition(
+  id: number,
+  input: AdminPositionUpdate,
+): Promise<void> {
+  await apiFetch<{ success: boolean }>(`/admin/positions/${id}`, {
+    method: 'PUT',
+    body: input,
+    auth: true,
+  })
+}
+
+/** Correct one closed trade row — permanent, and read by invoicing. */
+export async function updateAdminPastTrade(
+  id: number,
+  input: AdminPastTradeUpdate,
+): Promise<void> {
+  await apiFetch<{ success: boolean }>(`/admin/past-positions/${id}`, {
+    method: 'PUT',
+    body: input,
+    auth: true,
+  })
+}
+
 export async function acceptUser(uniId: string): Promise<void> {
   await apiFetch<{ success: boolean }>(`/admin/users/${uniId}/accept`, {
     method: 'POST',
@@ -293,6 +334,17 @@ export async function getAdminUserReferrals(
     { auth: true },
   )
   return res.referrals
+}
+
+/** Create an account from the admin side. Returns it with no exchange accounts. */
+export async function createAdminUser(
+  input: AdminUserCreateInput,
+): Promise<Omit<AdminUserDetail, 'accounts'>> {
+  const res = await apiFetch<{
+    success: boolean
+    user: Omit<AdminUserDetail, 'accounts'>
+  }>('/admin/users', { method: 'POST', body: input, auth: true })
+  return res.user
 }
 
 export async function updateAdminUser(
@@ -420,6 +472,99 @@ export async function getEngineStatus(): Promise<AdminEngineStatus> {
   return res.engine
 }
 
+/**
+ * Accounts whose API key the exchange is refusing. Reads columns the engine
+ * already wrote, so opening the page costs nothing at Binance.
+ */
+export async function getEngineKeyIssues(): Promise<KeyIssuesData> {
+  const res = await apiFetch<{
+    success: boolean
+    grace_days: number
+    server_ip: string | null
+    accounts: KeyIssueAccount[]
+  }>('/admin/engine/key-issues', { auth: true })
+
+  return {
+    graceDays: res.grace_days,
+    serverIp: res.server_ip,
+    accounts: res.accounts ?? [],
+  }
+}
+
+/** Re-test one account against the exchange from the admin side. */
+export async function recheckEngineKey(id: number): Promise<KeyRecheckResult> {
+  return apiFetch<KeyRecheckResult>(`/admin/engine/key-issues/${id}/recheck`, {
+    method: 'POST',
+    auth: true,
+  })
+}
+
+/* ============ API-key inventory (/admin/api-keys) ============ */
+
+/**
+ * Every exchange account in the system with its owner, soft-deleted ones
+ * included. Reads DB columns only — no exchange round trips.
+ */
+export async function getAdminApiKeys(): Promise<AdminApiKeysData> {
+  const res = await apiFetch<{
+    success: boolean
+    grace_days: number
+    server_ip: string | null
+    counts: AdminApiKeyCounts
+    keys: AdminApiKey[]
+  }>('/admin/api-keys', { auth: true })
+
+  return {
+    graceDays: res.grace_days,
+    serverIp: res.server_ip,
+    counts: res.counts,
+    keys: res.keys ?? [],
+  }
+}
+
+/** Rename / enable / disable one account. */
+export async function updateAdminApiKey(
+  id: number,
+  input: AdminApiKeyUpdateInput,
+): Promise<AdminApiKey> {
+  const res = await apiFetch<{ success: boolean; key: AdminApiKey }>(
+    `/admin/api-keys/${id}`,
+    { method: 'PUT', body: input, auth: true },
+  )
+  return res.key
+}
+
+/** Disconnect one account (soft delete — the trade history survives). */
+export async function deleteAdminApiKey(id: number): Promise<void> {
+  await apiFetch(`/admin/api-keys/${id}`, { method: 'DELETE', auth: true })
+}
+
+/**
+ * Erase one account and its market data from the database — the only hard
+ * delete on the page. The server re-checks the guard (not-working keys only,
+ * never one with invoices) and answers 422 if the row has since recovered.
+ */
+export async function purgeAdminApiKey(id: number): Promise<PurgeKeyResult> {
+  return apiFetch<PurgeKeyResult>(`/admin/api-keys/${id}/purge`, {
+    method: 'DELETE',
+    auth: true,
+  })
+}
+
+/**
+ * Disconnect several at once. The ids travel in the body, so the server can
+ * only ever delete what the admin actually had on screen.
+ */
+export async function bulkDeleteAdminApiKeys(
+  ids: number[],
+): Promise<BulkKeyDeleteResult> {
+  return apiFetch<BulkKeyDeleteResult>('/admin/api-keys/bulk-delete', {
+    method: 'POST',
+    body: { ids },
+    auth: true,
+  })
+}
+
 export async function getEngineLogs(lines: number): Promise<EngineLogsData> {
   const res = await apiFetch<{ success: boolean } & EngineLogsData>(
     `/admin/engine/logs?lines=${lines}`,
@@ -518,23 +663,32 @@ export async function runInvoiceScenarios(
 }
 
 /**
- * Delete a user's invoices. Settled ones are spared unless `includePaid` is
- * set; pass `accountId` to limit the wipe to a single exchange account.
+ * Delete invoices. With `uniId` it clears that user's; without it, every
+ * user's — a different URL, not a flag, so the global wipe cannot be reached
+ * by accident. Settled invoices are spared unless `includePaid` is set; pass
+ * `accountId` to limit the wipe to a single exchange account.
  */
-export async function clearUserInvoices(
-  uniId: string,
-  opts: { accountId?: number; includePaid?: boolean } = {},
+export async function clearInvoices(
+  opts: { uniId?: string; accountId?: number; includePaid?: boolean } = {},
 ): Promise<ClearInvoicesResult> {
   const params = new URLSearchParams()
   if (opts.accountId !== undefined) params.set('account_id', String(opts.accountId))
   if (opts.includePaid) params.set('include_paid', 'true')
   const query = params.toString() ? `?${params}` : ''
+  const path = opts.uniId
+    ? `/admin/sandbox/users/${opts.uniId}/invoices`
+    : '/admin/sandbox/invoices'
 
   const res = await apiFetch<{ success: boolean } & ClearInvoicesResult>(
-    `/admin/sandbox/users/${uniId}/invoices${query}`,
+    `${path}${query}`,
     { method: 'DELETE', auth: true },
   )
-  return { deleted: res.deleted, skipped_paid: res.skipped_paid }
+  return {
+    deleted: res.deleted,
+    skipped_paid: res.skipped_paid,
+    scope: res.scope,
+    users: res.users,
+  }
 }
 
 /** Remove the scratch account a scenario run created, with everything it owns. */
@@ -636,4 +790,49 @@ export function clearServerCaches(): Promise<CacheClearResult> {
     method: 'POST',
     auth: true,
   })
+}
+
+/* ── Admin → Crypto Transfers ─────────────────────────────────────────── */
+
+/** GET /admin/tron-transfers — every USDT-TRC20 arrival, matched or not. */
+export async function getAdminTronTransfers(): Promise<AdminTronTransfersData> {
+  const res = await apiFetch<{
+    success: boolean
+    networks: AdminTronNetwork[]
+    counts: AdminTronCounts
+    transfers: AdminTronTransfer[]
+  }>('/admin/tron-transfers', { auth: true })
+
+  return {
+    networks: res.networks ?? [],
+    counts: res.counts,
+    transfers: res.transfers ?? [],
+  }
+}
+
+/**
+ * Settle an invoice from a transfer the matcher could not place. The server
+ * re-checks eligibility, so a 422 here means the world changed under the page.
+ */
+export async function attributeTronTransfer(
+  id: number,
+  invoiceId: number,
+): Promise<{ settled: boolean; message: string }> {
+  const res = await apiFetch<{ success: boolean; settled: boolean; message: string }>(
+    `/admin/tron-transfers/${id}/attribute`,
+    { method: 'POST', auth: true, body: { invoice_id: invoiceId } },
+  )
+  return { settled: res.settled, message: res.message }
+}
+
+/** Take a transfer out of the queue without pretending it never arrived. */
+export async function ignoreTronTransfer(
+  id: number,
+  note?: string,
+): Promise<{ message: string }> {
+  const res = await apiFetch<{ success: boolean; message: string }>(
+    `/admin/tron-transfers/${id}/ignore`,
+    { method: 'POST', auth: true, body: { note } },
+  )
+  return { message: res.message }
 }

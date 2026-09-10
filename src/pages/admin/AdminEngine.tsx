@@ -5,9 +5,14 @@ import DataState from '../../components/dashboard/DataState'
 import EngineStatusCard from '../../components/admin/engine/EngineStatusCard'
 import EngineHealthCard from '../../components/admin/engine/EngineHealthCard'
 import EngineLogCard from '../../components/admin/engine/EngineLogCard'
+import KeyIssuesCard from '../../components/admin/engine/KeyIssuesCard'
 import { useApiData } from '../../hooks/useApiData'
 import { useInterval } from '../../hooks/useInterval'
-import { getEngineStatus, restartEngine } from '../../services/admin'
+import {
+  getEngineKeyIssues,
+  getEngineStatus,
+  restartEngine,
+} from '../../services/admin'
 import { ApiError, getApiErrorMessage } from '../../services/api'
 
 const TITLE = 'Bot Engine'
@@ -16,6 +21,10 @@ const STATUS_REFRESH_MS = 10_000
 
 export default function AdminEngine() {
   const { data, loading, error, reload } = useApiData(getEngineStatus)
+  // Its own fetch: a blocked key is a customer-facing fault, not engine health,
+  // and it must still render when systemd is unavailable (local dev).
+  const { data: keyIssues, reload: reloadKeyIssues } =
+    useApiData(getEngineKeyIssues)
   const [restarting, setRestarting] = useState(false)
   const [restartError, setRestartError] = useState<string | null>(null)
   const [logsToken, setLogsToken] = useState(0)
@@ -65,6 +74,11 @@ export default function AdminEngine() {
           onRestart={doRestart}
         />
         <EngineHealthCard health={data.health} available={data.available} />
+        {/* Accounts the exchange is refusing — the silent failure the engine
+            can see but the customer cannot. */}
+        {keyIssues && (
+          <KeyIssuesCard data={keyIssues} onChanged={reloadKeyIssues} />
+        )}
         <EngineLogCard available={data.available} refreshToken={logsToken} />
       </div>
     </AdminLayout>

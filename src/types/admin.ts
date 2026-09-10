@@ -47,10 +47,13 @@ export interface StrategiesData {
 
 /** One closed trade inside a calendar day. */
 export interface DailyPnlTrade {
+  /** `binance_pastpositions.id` — names the row for an admin correction. */
+  id: number
   symbol: string
   position_side: string
   position_amt: number
   realized_pnl: number
+  exit_price: number | null
   side: string
   strategy: string | null
   closed_at: string
@@ -89,7 +92,10 @@ export interface AdminPastTrade {
   account_balance: number
   symbol: string
   price: number
+  /** NET of `exchange_fee` — matches the trade in the exchange's own app. */
   realized_pnl: number
+  /** Exchange commission already deducted; null when it could not be estimated. */
+  exchange_fee: number | null
   side: string
   strategy: string | null
   closed_at: string
@@ -101,6 +107,27 @@ export interface AdminPastTrade {
 export interface AdminPositionsData {
   positions: AdminOpenPosition[]
   trades: AdminPastTrade[]
+}
+
+/** PUT /admin/positions/{id} — every field the admin may correct on an open
+ *  row. Ownership (api_key / uni_id) is not among them by design. */
+export interface AdminPositionUpdate {
+  symbol: string
+  position_side: string
+  position_amt: number
+  mark_price: number
+  unrealized_profit: number
+}
+
+/** PUT /admin/past-positions/{id} — same, for a closed trade. */
+export interface AdminPastTradeUpdate {
+  symbol: string
+  side: string
+  position_amt: number
+  exit_price: number
+  realized_pnl: number
+  strategy: string | null
+  closed_at: string
 }
 
 /** Defined with the trader-facing asset types; re-exported for admin callers. */
@@ -244,8 +271,15 @@ export interface ScenarioRun {
   results: ScenarioResult[]
 }
 
-/** Outcome of DELETE /admin/sandbox/users/{uniId}/invoices. */
+/**
+ * Outcome of DELETE /admin/sandbox/invoices — with a `{uniId}` segment for one
+ * user, without it for every user.
+ */
 export interface ClearInvoicesResult {
+  /** 'all' = every user's invoices, 'user' = the selected one only. */
+  scope?: 'all' | 'user'
+  /** How many distinct users the deleted invoices belonged to. */
+  users?: number
   deleted: number
   /** Settled invoices left alone because `include_paid` was off. */
   skipped_paid: number
@@ -392,6 +426,22 @@ export interface UserReferralRow {
   referred_at: string | null
 }
 
+/**
+ * Body of POST /admin/users — an account typed in by an admin rather than
+ * self-registered. Name/email/password are required; the rest fall back to the
+ * API's defaults (role `user`, status `active`, the standard fee percentages).
+ */
+export interface AdminUserCreateInput {
+  name: string
+  email: string
+  password: string
+  type?: UserRole
+  status?: UserStatus
+  realized_percentage?: number
+  unrealized_percentage?: number
+  affiliate_percentage?: number
+}
+
 /** Body of PUT /admin/users/{uniId} — every field optional. */
 export interface AdminUserUpdateInput {
   realized_percentage?: number
@@ -445,6 +495,144 @@ export interface AdminEngineStatus {
   health: EngineHealth | null
   /** Human note from the backend when something is off. */
   message: string | null
+}
+
+/**
+ * One account the exchange is refusing. `error_reason` is our classification
+ * of the exchange's code — IP_OR_PERMISSION is the common one (the key's
+ * allow-list does not include our server).
+ */
+export interface KeyIssueAccount {
+  id: number
+  name: string
+  uni_id: string
+  /** First 6 and last 4 characters only — enough to find it on Binance. */
+  api_key_hint: string
+  owner_name: string | null
+  owner_email: string | null
+  owner_status: string | null
+  demo: boolean
+  enabled: boolean
+  balance: number | null
+  error_code: string | null
+  error_reason: string | null
+  error_message: string | null
+  blocked_at: string | null
+  checked_at: string | null
+  grace_ends_at: string | null
+  /** Days until the automatic disconnect; ≤0 means the sweep is due. */
+  days_left: number | null
+}
+
+/** GET /admin/engine/key-issues */
+export interface KeyIssuesData {
+  graceDays: number
+  serverIp: string | null
+  accounts: KeyIssueAccount[]
+}
+
+/** POST /admin/engine/key-issues/{id}/recheck */
+export interface KeyRecheckResult {
+  success: boolean
+  status?: string
+  /** True when the exchange accepted the key this time. */
+  cleared?: boolean
+  message: string
+}
+
+/* ============ API-key inventory (/admin/api-keys) ============ */
+
+/** The owner block joined onto every API-key row. */
+export interface ApiKeyOwner {
+  uni_id: string | null
+  name: string | null
+  email: string | null
+  status: UserStatus | null
+  type: UserRole | null
+}
+
+/**
+ * One exchange account as the admin inventory sees it. Soft-deleted accounts
+ * are included (`deleted_at` set) — the page is a history, not just a roster.
+ */
+export interface AdminApiKey {
+  id: number
+  exchange: string
+  name: string
+  /** First 6 + last 4 characters. The full key never leaves the server. */
+  api_key_hint: string
+  demo: boolean
+  enabled: boolean
+  is_sandbox: boolean
+  balance: number | null
+  unrealized_pnl: number | null
+  currency_type: string | null
+  key_status: string
+  /** True when the exchange is refusing these credentials from our server. */
+  key_blocked: boolean
+  error_code: string | null
+  error_reason: string | null
+  error_message: string | null
+  blocked_at: string | null
+  checked_at: string | null
+  grace_ends_at: string | null
+  /** Days until the automatic disconnect; ≤0 means the sweep is due. */
+  days_left: number | null
+  created_at: string | null
+  deleted_at: string | null
+  owner: ApiKeyOwner
+  /** What a permanent delete would take with it. */
+  usage: ApiKeyUsage
+  /** True when this row may be erased from the database. */
+  purgeable: boolean
+  /** Why it may not be — null when `purgeable`. */
+  purge_blocked_reason: string | null
+}
+
+/** Rows attached to one API key, counted server-side. */
+export interface ApiKeyUsage {
+  trades: number
+  positions: number
+  transactions: number
+  invoices: number
+}
+
+/** DELETE /admin/api-keys/{id}/purge — what the hard delete removed. */
+export interface PurgeKeyResult {
+  message: string
+  removed: { trades: number; positions: number; transactions: number }
+}
+
+/** The chip counts, computed server-side so every consumer agrees. */
+export interface AdminApiKeyCounts {
+  all: number
+  connected: number
+  faulty: number
+  disabled: number
+  disconnected: number
+  sandbox: number
+}
+
+/** GET /admin/api-keys */
+export interface AdminApiKeysData {
+  graceDays: number
+  serverIp: string | null
+  counts: AdminApiKeyCounts
+  keys: AdminApiKey[]
+}
+
+/** Body of PUT /admin/api-keys/{id} — key/secret/demo are not editable. */
+export interface AdminApiKeyUpdateInput {
+  name?: string
+  enabled?: boolean
+}
+
+/** POST /admin/api-keys/bulk-delete */
+export interface BulkKeyDeleteResult {
+  deleted: number
+  /** Ids that were already disconnected, or no longer exist. */
+  skipped: number
+  message: string
 }
 
 /** GET /admin/engine/logs — journal lines, oldest → newest. */
@@ -586,4 +774,86 @@ export interface CacheClearResult {
     refreshed: string[]
     error: string | null
   }
+}
+
+/* ── Admin → Crypto Transfers ─────────────────────────────────────────── */
+
+/**
+ * One incoming USDT-TRC20 transfer. Row fields stay snake_case, matching
+ * {@link AdminApiKey} — admin services camelCase the envelope and pass rows
+ * through as the API shaped them.
+ */
+export interface AdminTronTransfer {
+  id: number
+  network: string
+  tx_hash: string
+  explorer_url: string
+  from_address: string
+  to_address: string
+  contract_address: string
+  /** Server-computed: is this our token, or something that merely says it is? */
+  contract_trusted: boolean
+  token_symbol_reported: string | null
+  amount: string | null
+  amount_usd: number | null
+  value_raw: string
+  block_timestamp: number
+  seen_at: string | null
+  confirmed: boolean
+  status: 'unmatched' | 'settled' | 'ignored' | 'rejected'
+  reject_reason: string | null
+  intent_id: number | null
+  invoice_id: number | null
+  settled_by: string | null
+  settled_at: string | null
+  note: string | null
+  /** Server-computed, and re-checked when the action arrives. */
+  attributable: boolean
+  attribution_blocked_reason: string | null
+  suggestions: AdminTronSuggestion[]
+}
+
+/**
+ * An invoice this transfer plausibly pays — usually one whose reservation has
+ * since expired, i.e. someone paid late. A hint for a human, never an
+ * auto-settle.
+ */
+export interface AdminTronSuggestion {
+  invoice_id: number
+  intent_id: number
+  intent_status: string
+  expected: string
+  expected_usd: number
+  delta_usd: number
+  invoice_status: string | null
+  user_id: string
+  why: string
+  owner: { uni_id: string; name: string | null; email: string | null } | null
+}
+
+export interface AdminTronNetwork {
+  name: string
+  configured: boolean
+  address: string | null
+  address_valid: boolean
+  contract_valid: boolean
+  label: string
+  last_scan_at: string | null
+  /** The watcher has not run recently — payments are arriving unnoticed. */
+  scan_stale: boolean
+  last_transfer_at: string | null
+}
+
+export interface AdminTronCounts {
+  all: number
+  unmatched: number
+  settled: number
+  ignored: number
+  rejected: number
+}
+
+export interface AdminTronTransfersData {
+  networks: AdminTronNetwork[]
+  counts: AdminTronCounts
+  transfers: AdminTronTransfer[]
 }

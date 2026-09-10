@@ -23,7 +23,7 @@ import SandboxScenarioCard from '../../components/admin/SandboxScenarioCard'
 import { useApiData } from '../../hooks/useApiData'
 import {
   clearSandboxPositions,
-  clearUserInvoices,
+  clearInvoices,
   deleteSandboxUser,
   getAdminUsers,
   getSandboxUsers,
@@ -117,7 +117,7 @@ export default function AdminSandbox() {
       if (cleanup.kind === 'clear') {
         await clearSandboxPositions(cleanup.user.uni_id)
       } else if (cleanup.kind === 'invoices') {
-        const res = await clearUserInvoices(cleanup.user.uni_id)
+        const res = await clearInvoices({ uniId: cleanup.user.uni_id })
         setBanner(
           `Deleted ${res.deleted} invoice${res.deleted === 1 ? '' : 's'} for ${cleanup.user.email}` +
             (res.skipped_paid ? ` · kept ${res.skipped_paid} already paid` : ''),

@@ -27,6 +27,7 @@ from binance_abcd.accounts_api import account_futures_base_url, fetch_accounts
 from binance_abcd.assets_api import get_asset
 from binance_abcd.binance_api import BinanceAPI
 from binance_abcd.hooks import (
+    BOOKKEEPING_WORKERS,
     COARSE_STEP_TICKERS,
     DISPATCH_WORKERS,
     FANOUT_WORKERS,
@@ -34,10 +35,16 @@ from binance_abcd.hooks import (
     MIN_DEPOSIT,
     OUT_DIR,
     REFERENCE_BALANCE,
+    RETRY_ENABLED,
     WEBHOOK_PATH,
     WEBHOOK_SECRET,
 )
-from binance_abcd.trading_handler import get_order_fill_summary, handle_entry, handle_exit
+from binance_abcd.trading_handler import (
+    get_order_fill_summary,
+    handle_entry,
+    handle_exit,
+    position_risk_map,
+)
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +55,10 @@ ENTRY_ACTIONS = ("BUY", "SELL")
 
 _DISPATCH_EXECUTOR = ThreadPoolExecutor(max_workers=DISPATCH_WORKERS, thread_name_prefix="dispatch")
 _ACCOUNT_EXECUTOR = ThreadPoolExecutor(max_workers=FANOUT_WORKERS, thread_name_prefix="account")
+# Post-close bookkeeping only. Separate from the fan-out pool because the fill
+# summary now sleeps between retries, and a whole fan-out closing at once would
+# otherwise park every account worker on a sleep while the next signal waits.
+_BOOKKEEPING_EXECUTOR = ThreadPoolExecutor(max_workers=BOOKKEEPING_WORKERS, thread_name_prefix="bookkeep")
 
 TRADES_LOG = OUT_DIR / "webhook_trades.log"
 _TRADES_LOG_LOCK = threading.Lock()
@@ -84,9 +95,11 @@ def metrics_snapshot() -> dict:
 def _scale_qty(ticker: str, base_size: float, balance: float) -> float:
     """Balance-proportional size in units of base_size.
 
-    balance < REFERENCE(500) -> base_size as-is; coarse tickers (BTCUSDT) step in
-    whole base_size multiples per 500; everything else scales in base_size/10
-    steps, floored.
+    balance < REFERENCE_BALANCE -> base_size as-is; coarse tickers (BTCUSDT)
+    step in whole base_size multiples per reference block; everything else
+    scales in base_size/10 steps, floored. REFERENCE_BALANCE is env-driven and
+    defaults to 1000 (this docstring said 500 until 2026-08-13, which was never
+    the value the code used).
     """
     try:
         base = float(base_size)
@@ -195,14 +208,25 @@ def _fetch_open_amounts(symbol: str, position_side: str) -> Optional[dict[str, f
     return amounts
 
 
-def _binance_open_amount(api: BinanceAPI, symbol: str, position_side: str) -> float:
-    """Fallback when the engine API is down: read the side's size from Binance."""
+def _binance_open_amount(api: BinanceAPI, symbol: str, position_side: str) -> Optional[float]:
+    """Fallback when the engine API is down: read the side's size from Binance.
+
+    None means the read FAILED, 0.0 means the side is genuinely flat. The stack
+    cap is enforced off this number, so answering 0.0 for an account we could
+    not read is precisely how a cap stops firing without anyone noticing.
+    """
     try:
-        for p in api.get_positions_v3(symbol):
-            if (p.get("positionSide") or "BOTH").upper() == position_side:
-                return abs(float(p.get("positionAmt") or 0))
+        positions = api.get_positions_v3(symbol)
     except Exception:  # noqa: BLE001
-        pass
+        return None
+    if positions is None:
+        return None
+    for p in positions:
+        if (p.get("positionSide") or "BOTH").upper() == position_side:
+            try:
+                return abs(float(p.get("positionAmt") or 0))
+            except (TypeError, ValueError):
+                return None
     return 0.0
 
 
@@ -245,6 +269,49 @@ def _consume_strategy(account: dict, symbol: str, position_side: str) -> None:
     )
 
 
+def _closed_increments(
+    account: dict,
+    asset: Optional[dict],
+    symbol: str,
+    closed_qty: float,
+) -> tuple[Optional[int], Optional[int]]:
+    """How many of THIS account's entry-sized units the closed position was
+    worth, as (increments, cap) — the exit-side mirror of the entry's depth.
+
+    The divisor is the SCALED entry size (`_scale_qty`), not the raw base_size,
+    for exactly the reason the stack cap is measured that way: a 5,000 USDT
+    account's entry is several base sizes, so dividing by base_size would report
+    a 2-increment position as 10.
+
+    Fail-soft everywhere — exits deliberately skip every asset gate, so a close
+    must still work for a ticker whose asset row was disabled or deleted since
+    the entry. No asset, no base size, or a zero scaled size just means the
+    line is omitted from the message.
+
+    Caveat worth knowing when reading a number back: the balance is today's, so
+    a position opened before a large PnL swing is measured against a slightly
+    different entry size than the one that opened it. Same approximation the
+    entry-side `stacks_now` carries, and the reason this is rounded.
+    """
+    if not asset or closed_qty <= 0:
+        return None, None
+    try:
+        base_size = float(asset.get("base_size") or 0)
+        balance = float(account.get("balance") or 0)
+    except (TypeError, ValueError):
+        return None, None
+    if base_size <= 0:
+        return None, None
+    unit = _scale_qty(symbol, base_size, balance)
+    if unit <= 0:
+        return None, None
+    count = int(round(closed_qty / unit))
+    if count < 1:  # closed less than one entry — still a real close, just not a stack
+        count = 1
+    cap = int(float(asset.get("max_increments") or 0)) or None
+    return count, cap
+
+
 def _deferred_close_bookkeeping(
     account: dict,
     api: BinanceAPI,
@@ -255,6 +322,8 @@ def _deferred_close_bookkeeping(
     strategy: Optional[str],
     order_result: Any,
     exit_batch_id: Optional[str] = None,
+    increments_closed: Optional[int] = None,
+    max_increments: Optional[int] = None,
 ) -> None:
     """After a close: fill summary from userTrades -> past-position row + strategy consume.
     Runs on the account pool, off the close path; the poller safety-net catches misses.
@@ -302,6 +371,8 @@ def _deferred_close_bookkeeping(
             exit_price=exit_price,
             quantity=closed_qty,
             balance=account.get("balance"),
+            increments=increments_closed,
+            max_increments=max_increments,
         )
 
 
@@ -335,6 +406,48 @@ def _avg_fill_price(order_result: Any) -> Optional[float]:
     return avg if avg > 0 else None
 
 
+def _position_entry_price(
+    accounts: list, results: list, symbol: str, position_side: str
+) -> Optional[float]:
+    """The open position's entryPrice, read ONCE for a whole entry fan-out.
+
+    Binance answers ``avgPrice`` "0.00" often enough on a filled MARKET order
+    that the public alert would otherwise publish TradingView's signal price
+    instead of the executed one — or, when the signal carried no price at all
+    (the admin manual-trade console sends none), no ``Entry Price:`` line
+    whatsoever. positionRisk carries the true post-fill entryPrice, which is
+    the same fallback ``binance-flask`` reads for its master account.
+
+    Read once per SIGNAL, not once per account: the channel publishes a single
+    price and this is a weight-5 call, so spending it per account would put the
+    poller budget behind a decoration. It is the entryPrice of the whole open
+    position, so on a stacked entry it is the blended average rather than this
+    fill alone — which is why it is consulted only when no account reported a
+    real avgPrice. Fail-soft: None on any read error, and the caller keeps the
+    signal price.
+    """
+    by_uni = {a.get("uni_id"): a for a in accounts}
+    account = next(
+        (by_uni[r["uni_id"]] for r in results
+         if r.get("status") == "filled" and by_uni.get(r.get("uni_id"))),
+        None,
+    )
+    if account is None:
+        return None
+    api = BinanceAPI(
+        account["api_key"], account["secret_key"], base_url=account_futures_base_url(account)
+    )
+    risk = position_risk_map(api, symbol)
+    if not risk:  # None = unreadable, {} = flat — neither is a price
+        return None
+    _, entry = risk.get(position_side) or risk.get("BOTH") or (0.0, None)
+    try:
+        entry = float(entry)
+    except (TypeError, ValueError):
+        return None
+    return entry if entry > 0 else None
+
+
 def _run_account(
     account: dict,
     action: str,
@@ -358,6 +471,19 @@ def _run_account(
     lock = symbol_locks.lock_for(account["api_key"], symbol)
     with lock:
         if is_entry:
+            # The exchange itself refuses these credentials from our server
+            # (Binance -2015: key invalid, our IP not allow-listed, or a
+            # permission missing). Opening would burn an API call to be told
+            # no, and the account has a disconnect deadline running.
+            #
+            # Entry-only, like every other gate here: an EXIT still tries. If
+            # the user has since fixed their whitelist the exit goes through
+            # and the success clears the flag — refusing to try would leave a
+            # position open on an account we had written off.
+            if account.get("key_blocked"):
+                _bump("accounts_skipped")
+                return base | {"status": "skipped", "reason": "api key blocked"}
+
             # Minimum-deposit gate, before any sizing work. Gated on deposited
             # capital, not balance, so a funded account keeps trading through a
             # drawdown. Exits never reach here — closing is always allowed.
@@ -393,6 +519,13 @@ def _run_account(
                 "quantity": quantity,
                 "size_multiple": round(quantity / base_size, 6) if base_size else None,
                 "stacks_now": None,
+                # Two distinct numbers, deliberately both recorded: max_size is
+                # the raw `assets.max_increments` COLUMN (position-size units),
+                # max_increments is the entry COUNT derived from it. Storing only
+                # the count would make a row unexplainable after someone edits
+                # the asset; storing only the size repeats the confusion that
+                # let the cap read "42 entries" for LTCUSDT.
+                "max_size": float(asset.get("max_size") or 0),
                 "max_increments": float(asset.get("max_increments") or 0),
             }
             if quantity <= 0:
@@ -400,24 +533,66 @@ def _run_account(
                 return base | {"status": "skipped", "reason": "size too small", "sizing": sizing}
 
             # Stack cap in whole increments: DB-first (batched), Binance fallback.
+            #
+            # Measured in THIS ACCOUNT'S entry size (`quantity`), not the raw
+            # base_size — so max_increments means "how many entries may stack",
+            # the same number for everyone, and the exposure it allows scales
+            # with the balance exactly as the entry does. Dividing by base_size
+            # instead made the cap one fixed absolute size for every account:
+            # anything from ~3x the reference balance up filled it with its
+            # first entry and could never add.
+            #
+            # The divisor is the size THIS signal would open, so a balance that
+            # moved since the earlier entries shifts the count slightly. That is
+            # the intended reading: the cap is about exposure relative to what
+            # the account trades today.
             position_side = "LONG" if action == "BUY" else "SHORT"
             max_increments = sizing["max_increments"]
-            if max_increments > 0:
-                if open_amounts is not None:
-                    current = open_amounts.get(account["api_key"], 0.0)
-                else:
-                    current = _binance_open_amount(api, symbol, position_side)
-                stacks_now = round(current / base_size, 4) if base_size else 0.0
+            # `current` is resolved whenever it is already paid for: the batched
+            # DB read covers the whole fan-out in one call, so the depth is free
+            # even for an asset with no cap — and recording it makes an entry's
+            # position in the stack explainable from the trade_logs row alone.
+            # The per-account Binance fallback is NOT spent just to decorate a
+            # Telegram line: without the batch, only a real cap justifies it.
+            current = None
+            if open_amounts is not None:
+                current = open_amounts.get(account["api_key"], 0.0)
+            elif max_increments > 0:
+                current = _binance_open_amount(api, symbol, position_side)
+
+            stacks_now = None
+            if current is not None:
+                stacks_now = round(current / quantity, 4) if quantity else 0.0
                 sizing["stacks_now"] = stacks_now
-                if stacks_now + 1 > max_increments + 1e-9:
+                if max_increments > 0 and stacks_now + 1 > max_increments + 1e-9:
                     _bump("accounts_skipped")
-                    return base | {"status": "skipped", "reason": "maxed sizing", "sizing": sizing}
+                    return base | {
+                        "status": "skipped",
+                        "reason": "maxed sizing",
+                        "sizing": sizing,
+                        # Depth this account is stuck at, for the admin note.
+                        "increment": int(round(stacks_now)),
+                        "max_increments": int(max_increments),
+                    }
+            elif max_increments > 0:
+                # A cap is configured but the open size could not be read from
+                # either source. Entering blind is how a stack walks past its
+                # limit, so this fails closed — the same rule the asset and
+                # deposit gates follow. Entry-only: exits never reach here, so
+                # an unreadable account can still close what it holds.
+                _bump("accounts_skipped")
+                return base | {"status": "skipped", "reason": "stack depth unknown", "sizing": sizing}
 
             _maybe_set_leverage(api, symbol, leverage)
             result = handle_entry(api, symbol, "BUY" if action == "BUY" else "SELL", quantity, price)
 
             if result is None or result.get("result") is None:
                 _bump("accounts_failed")
+                # Entries retry ONLY when the request never reached the exchange
+                # (a rate-limit backoff fails fast, before any order). A
+                # timeout, by contrast, leaves the execution status unknown —
+                # and an entry replayed blind is how one signal becomes two
+                # positions. Exits are the opposite case: they re-read first.
                 retryable = bool(result and result.get("rate_limited"))
                 return base | {
                     "error": (result or {}).get("error", "no response"),
@@ -425,16 +600,28 @@ def _run_account(
                     "sizing": sizing,
                 }
 
+            # The order's real executed price beats TradingView's `close` for the
+            # snapshot: `price` is what the strategy saw, not what we paid. Still
+            # only a hint — the positions poller overwrites it with Binance's own
+            # entryPrice on the next tick.
+            fill_price = _avg_fill_price(result.get("result"))
             new_amount = (open_amounts or {}).get(account["api_key"], 0.0) + quantity
-            _upsert_position_api(account, symbol, position_side, new_amount, price)
+            _upsert_position_api(account, symbol, position_side, new_amount, fill_price or price)
             if strategy:
                 _store_open_strategy(account, symbol, position_side, strategy)
             _bump("accounts_traded")
             return base | {
                 "status": "filled",
                 "quantity": quantity,
-                "fill_price": _avg_fill_price(result.get("result")),
+                "fill_price": fill_price,
                 "sizing": sizing,
+                # Stack depth AFTER this fill: the pre-entry count plus this one.
+                # Derived rather than re-read — the reference bot asks Binance for
+                # the new position size per account per signal purely to print
+                # this number, which is an API call per account we already have
+                # the answer for.
+                "increment": int(round(stacks_now)) + 1 if stacks_now is not None else None,
+                "max_increments": int(max_increments) or None,
             }
 
         # --- EXIT_LONG / EXIT_SHORT ------------------------------------------
@@ -449,20 +636,33 @@ def _run_account(
             return base | {"status": "skipped", "reason": result["status"]}
         if result.get("result") is None:
             _bump("accounts_failed")
-            # Unconfirmed exits are safe to retry (reduce-only cannot overshoot).
-            return base | {"error": result.get("error", "unknown"), "retryable": True}
+            # Unconfirmed exits are safe to retry — every attempt re-reads the
+            # position first, so a close that did land is seen as flat. But only
+            # a TRANSIENT failure is worth repeating: a rejection (precision,
+            # min notional, position-mode mismatch) answers the same way in 60s,
+            # and marking it retryable is what buried a real problem under five
+            # silent attempts before anyone was told.
+            retryable = bool(result.get("transient") or result.get("rate_limited"))
+            return base | {"error": result.get("error", "unknown"), "retryable": retryable}
 
         closed_qty = float(result.get("closed_quantity") or 0)
         entry_price = result.get("entry_price")
         tag = strategy or _recover_strategy(account, symbol, position_side)
+        increments_closed, max_increments = _closed_increments(account, asset, symbol, closed_qty)
         _upsert_position_api(account, symbol, position_side, 0.0, None)
-        _ACCOUNT_EXECUTOR.submit(
+        _BOOKKEEPING_EXECUTOR.submit(
             _deferred_close_bookkeeping,
             account, api, symbol, position_side, closed_qty, entry_price, tag,
             result.get("result"), exit_batch_id,
+            increments_closed, max_increments,
         )
         _bump("accounts_traded")
-        return base | {"status": "filled", "closed_quantity": closed_qty}
+        return base | {
+            "status": "filled",
+            "closed_quantity": closed_qty,
+            "increment": increments_closed,
+            "max_increments": max_increments,
+        }
 
 
 # --- Job (one signal, all accounts) -------------------------------------------
@@ -475,8 +675,16 @@ def _process_trade_job(
     strategy: Optional[str],
     target_uni_ids: Optional[set[str]] = None,
     is_retry: bool = False,
+    announce: bool = True,
 ) -> dict:
-    """Runs on the dispatch pool. Fans the signal out to every account."""
+    """Runs on the dispatch pool. Fans the signal out to every account.
+
+    `announce` is whether THIS run owes the public channel a message. A live run
+    always does; a retry does only when the live run published nothing (every
+    account failed), which is the case where the close would otherwise never
+    reach the channel at all. The retry queue clears the flag as soon as any run
+    fills, so one signal is never announced twice.
+    """
     started = time.time()
     symbol = ticker.upper()
     is_entry = action in ENTRY_ACTIONS
@@ -517,9 +725,10 @@ def _process_trade_job(
 
     # Exits announce once, with realized PnL — opened BEFORE the fan-out so no
     # account's deferred bookkeeping can report into a batch that doesn't exist
-    # yet. Retry runs stay silent: the live run already posted.
+    # yet. A retry opens one only when the live run published nothing, so a
+    # close that took two attempts still reaches the channel exactly once.
     exit_batch_id = None
-    if not is_entry and not is_retry:
+    if not is_entry and announce:
         exit_batch_id = notify.open_exit_batch(action, symbol, price=price)
 
     futures = {
@@ -549,9 +758,37 @@ def _process_trade_job(
     failed = sum(1 for r in results if r["status"] == "failed")
     skipped = sum(1 for r in results if r["status"] == "skipped")
 
+    # The retry decision is made BEFORE the alert, because it decides what the
+    # alert says: a red "MANUAL ACTION REQUIRED" for a timeout the queue clears
+    # 60s later is how a real alert learns to be ignored.
+    retrying_ids: set[str] = set()
+    if RETRY_ENABLED and not is_retry:
+        retrying_ids = {
+            r["uni_id"] for r in results
+            if r["status"] == "failed" and r.get("retryable") and r.get("uni_id")
+        }
+        if retrying_ids:
+            from binance_abcd.retry_queue import enqueue_retry  # local import: avoid cycle
+
+            enqueue_retry(
+                action, symbol, price, leverage, strategy, sorted(retrying_ids),
+                # Nothing filled -> this run published nothing, so the retry
+                # inherits the message.
+                announce=(filled == 0),
+            )
+
+    # What the channel prints beside an entry, best source first: a real
+    # avgPrice from any account that filled, then the position's own entryPrice
+    # (one extra read, only when Binance withheld every avgPrice), and the
+    # signal price last — which for a manual trade does not exist at all.
+    fill_price = _mean_fill_price(results)
+    if is_entry and announce and not is_retry and filled and fill_price is None:
+        fill_price = _position_entry_price(accounts, results, symbol, position_side)
+
     _notify_job(action, symbol, price, results,
                 filled=filled, failed=failed, skipped=skipped,
-                exit_batch_id=exit_batch_id, is_retry=is_retry)
+                exit_batch_id=exit_batch_id, is_retry=is_retry,
+                retrying_ids=retrying_ids, fill_price=fill_price)
 
     summary = {
         "action": action,
@@ -569,15 +806,6 @@ def _process_trade_job(
         "ts": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
     }
     _finish_job(summary, results, started)
-
-    # Hand retryable failures to the retry queue (entries: only rate-limited
-    # ones — an unconfirmed entry retried blind could double a position).
-    retry_ids = [r["uni_id"] for r in results if r["status"] == "failed" and r.get("retryable") and r.get("uni_id")]
-    if retry_ids and not is_retry:
-        from binance_abcd.retry_queue import enqueue_retry  # local import: avoid cycle
-
-        enqueue_retry(action, symbol, price, leverage, strategy, retry_ids)
-
     return summary
 
 
@@ -586,6 +814,29 @@ def _mean_fill_price(results: list) -> Optional[float]:
     (as_completed is not deterministic) and None when no fill reported a price."""
     prices = [r["fill_price"] for r in results if r.get("fill_price")]
     return sum(prices) / len(prices) if prices else None
+
+
+def _published_increment(results: list) -> tuple[Optional[int], Optional[int]]:
+    """The stack depth to publish for a whole fan-out, as (increment, max).
+
+    The reference bot shows the MASTER account's depth; this engine has no
+    master in its account payload, so it publishes the most common depth among
+    the accounts that filled. They all trade the same signal against the same
+    per-asset cap, so they normally agree — the mode is what keeps one account
+    that connected late (still at #1 while everyone else is at #3) from
+    deciding what the channel says. Ties break toward the deeper count, since
+    that is the one the cap is about.
+    """
+    depths = [r["increment"] for r in results
+              if r.get("status") == "filled" and r.get("increment")]
+    if not depths:
+        return None, None
+    ranked = sorted(depths, key=lambda d: (depths.count(d), d), reverse=True)
+    winner = ranked[0]
+    caps = [r["max_increments"] for r in results
+            if r.get("status") == "filled" and r.get("increment") == winner
+            and r.get("max_increments")]
+    return winner, (caps[0] if caps else None)
 
 
 def _notify_job(
@@ -599,6 +850,8 @@ def _notify_job(
     skipped: int,
     exit_batch_id: Optional[str],
     is_retry: bool,
+    retrying_ids: set[str],
+    fill_price: Optional[float] = None,
 ) -> None:
     """Telegram fan-out for one finished job. Never raises — a notification
     problem must not fail the trade job that already executed."""
@@ -606,18 +859,40 @@ def _notify_job(
         if exit_batch_id:
             # Releases the exit message once every closed account reports its PnL
             # (or discards it when nothing actually closed).
-            notify.seal_exit_batch(exit_batch_id, expected=filled, skipped=skipped, failed=failed)
+            notify.seal_exit_batch(exit_batch_id, expected=filled)
         elif action in ENTRY_ACTIONS and not is_retry:
+            increment, max_increments = _published_increment(results)
             notify.notify_entry(
                 action, symbol,
-                fill_price=_mean_fill_price(results), price=price,
-                filled=filled, skipped=skipped, failed=failed,
+                fill_price=fill_price if fill_price is not None else _mean_fill_price(results),
+                price=price,
+                filled=filled, increment=increment, max_increments=max_increments,
+            )
+            # Accounts already at their cap: an add that placed nothing. Admin
+            # only, and live runs only — a retry re-walks the same accounts and
+            # would repeat the note every 60s.
+            notify.notify_max_increments(
+                action, symbol,
+                [(r.get("account"), r.get("increment"), r.get("max_increments"))
+                 for r in results if r.get("reason") == "maxed sizing"],
             )
         if failed and not is_retry:
+            # Two audiences, one fan-out: what the engine is about to re-place
+            # itself, and what will stay broken until someone opens Binance.
+            # Sending both under one red headline is what made the real one
+            # unreadable. Retry runs stay silent entirely — the queue reports
+            # the ending, once, when there is one.
+            failures = [r for r in results if r["status"] == "failed"]
             notify.notify_account_failures(
                 action, symbol,
-                [(r.get("account"), r.get("error") or "unknown") for r in results
-                 if r["status"] == "failed"],
+                [(r.get("account"), r.get("error") or "unknown") for r in failures
+                 if r.get("uni_id") not in retrying_ids],
+            )
+            notify.notify_account_failures(
+                action, symbol,
+                [(r.get("account"), r.get("error") or "unknown") for r in failures
+                 if r.get("uni_id") in retrying_ids],
+                retrying=True,
             )
     except Exception:  # noqa: BLE001
         log.exception("telegram notification failed for %s %s", action, symbol)

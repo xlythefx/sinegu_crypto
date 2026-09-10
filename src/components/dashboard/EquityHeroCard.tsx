@@ -1,9 +1,18 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState, type PointerEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Link2, Plus } from 'lucide-react'
-import { linePath } from '../../lib/chart'
-import { fmtNum, fmtPctOf, fmtSigned, fmtShortDate } from '../../lib/format'
+import { linePath, linePoints } from '../../lib/chart'
+import {
+  fmtMediumDate,
+  fmtNum,
+  fmtPctOf,
+  fmtSigned,
+  fmtShortDate,
+} from '../../lib/format'
 import type { EquityPoint } from '../../types/dashboard'
+
+const VB_W = 1200
+const VB_H = 190
 
 type RangeKey = '1W' | '1M' | '3M' | 'YTD' | 'All'
 
@@ -13,6 +22,34 @@ const RANGE_START: Record<Exclude<RangeKey, 'All' | 'YTD'>, number> = {
   '1W': 7,
   '1M': 30,
   '3M': 90,
+}
+
+/** A plotted point plus everything the hover readout shows for it. */
+interface Mark {
+  /** Position in the plot box, 0..1 — resolution-independent, so the overlay
+   *  can be plain HTML on top of a stretched viewBox. */
+  xFrac: number
+  yFrac: number
+  date: string
+  equity: number
+  delta: number
+}
+
+/** Event time for a curve point: the API's ISO timestamp when it sends one,
+ *  else that day at local midnight. */
+function pointTime(point: EquityPoint): number {
+  const fallback = `${point.date.slice(0, 10)}T00:00:00`
+  const parsed = new Date(point.at ?? fallback).getTime()
+  return Number.isNaN(parsed) ? new Date(fallback).getTime() : parsed
+}
+
+/** ms -> "YYYY-MM-DD" in the viewer's own timezone (fmtShortDate slices this,
+ *  so building it from UTC would shift the label a day either side of midnight). */
+function localDate(ms: number): string {
+  const d = new Date(ms)
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${month}-${day}`
 }
 
 function PnlStat({
@@ -66,8 +103,10 @@ export default function EquityHeroCard({
   connected = true,
 }: EquityHeroCardProps) {
   const [range, setRange] = useState<RangeKey>('All')
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null)
+  const plotRef = useRef<HTMLDivElement>(null)
 
-  const { path, axisLabels } = useMemo(() => {
+  const { path, axisLabels, marks } = useMemo(() => {
     let points = curve
     if (range !== 'All' && curve.length > 0) {
       const start = new Date()
@@ -83,14 +122,85 @@ export default function EquityHeroCard({
       if (before.length > 0) points = [before[before.length - 1], ...points]
     }
     const values = points.map((p) => p.equity)
+    if (values.length === 0)
+      return { path: '', axisLabels: [] as string[], marks: [] as Mark[] }
+
+    // X by TIME, not by array index. The points are events — a deposit, a closed
+    // trade — so index spacing gave a day with four trades four times the width
+    // of a day with one, under labels that still read as dates.
+    const times = points.map(pointTime)
+    const first = times[0]
+    const elapsed = times[times.length - 1] - first
+    const xs =
+      elapsed > 0 ? times.map((t) => (t - first) / elapsed) : undefined
+
+    // Domain. Fitting min..max alone misreads the account in both directions: a
+    // deposit squashes real trading into a sliver, and a flat week gets
+    // amplified into a mountain range. So the span never falls below 2% of the
+    // equity level, and it is padded so the line never touches the frame.
+    const lo = Math.min(...values)
+    const hi = Math.max(...values)
+    const mid = (lo + hi) / 2
+    const span = Math.max(hi - lo, Math.abs(mid) * 0.02, 1)
+    const margin = span * 0.12
+    const yMin = mid - span / 2 - margin
+    const yMax = mid + span / 2 + margin
+
+    // Labels are evenly spaced in TIME now that x is, so they sit under the
+    // point they name rather than under the nth event.
     const labelCount = Math.min(6, points.length)
     const labels: string[] = []
     for (let i = 0; i < labelCount; i++) {
-      const idx = Math.round((i * (points.length - 1)) / Math.max(1, labelCount - 1))
-      labels.push(fmtShortDate(points[idx].date))
+      const t = first + (elapsed * i) / Math.max(1, labelCount - 1)
+      labels.push(fmtShortDate(localDate(t)))
     }
-    return { path: linePath(values, 1200, 190, 14), axisLabels: labels }
+    // Same geometry the path is drawn from, expressed as fractions of the box,
+    // so the crosshair lands ON the line at any container width.
+    const marks: Mark[] = linePoints(
+      values,
+      VB_W,
+      VB_H,
+      14,
+      yMin,
+      yMax,
+      xs,
+    ).map((p) => ({
+      xFrac: p.x / VB_W,
+      yFrac: p.y / VB_H,
+      date: points[p.index].date,
+      equity: points[p.index].equity,
+      /** Change since the start of the visible range — what the range tabs are
+       *  for; the absolute equity alone answers a different question. */
+      delta: points[p.index].equity - values[0],
+    }))
+
+    return {
+      path: linePath(values, VB_W, VB_H, 14, yMin, yMax, xs),
+      axisLabels: labels,
+      marks,
+    }
   }, [curve, range])
+
+  const hovered = hoverIdx !== null ? (marks[hoverIdx] ?? null) : null
+
+  /** Nearest plotted point to the pointer, horizontally. Snapping to a real
+   *  point (rather than interpolating) keeps the readout to figures that
+   *  actually happened. */
+  const trackPointer = (e: PointerEvent<HTMLDivElement>) => {
+    const rect = plotRef.current?.getBoundingClientRect()
+    if (!rect || rect.width === 0 || marks.length === 0) return
+    const ratio = (e.clientX - rect.left) / rect.width
+    let best = 0
+    let bestGap = Infinity
+    for (let i = 0; i < marks.length; i++) {
+      const gap = Math.abs(marks[i].xFrac - ratio)
+      if (gap < bestGap) {
+        bestGap = gap
+        best = i
+      }
+    }
+    setHoverIdx(best)
+  }
 
   return (
     <section
@@ -186,40 +296,93 @@ export default function EquityHeroCard({
       )}
 
       {connected && (
-      <svg
-        viewBox="0 0 1200 190"
-        preserveAspectRatio="none"
-        className="w-full h-[300px] block max-[900px]:h-[200px]"
-      >
-        <defs>
-          <linearGradient id="dheroFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--accent)" stopOpacity=".32" />
-            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <g stroke="var(--hair)" strokeWidth="1">
-          <line x1="0" y1="45" x2="1200" y2="45" />
-          <line x1="0" y1="90" x2="1200" y2="90" />
-          <line x1="0" y1="135" x2="1200" y2="135" />
-        </g>
-        {path && (
-          <>
-            <path d={`${path} L1200,190 L0,190 Z`} fill="url(#dheroFill)" />
-            <path
-              d={path}
-              fill="none"
-              stroke="var(--accent)"
-              strokeWidth="2.5"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              pathLength={1000}
-              strokeDasharray="1000"
-              strokeDashoffset="1000"
-              className="animate-[draw_2.2s_ease_0.2s_forwards]"
-            />
-          </>
-        )}
-      </svg>
+        <div
+          ref={plotRef}
+          className="relative touch-pan-y"
+          onPointerMove={trackPointer}
+          onPointerLeave={() => setHoverIdx(null)}
+        >
+          <svg
+            viewBox={`0 0 ${VB_W} ${VB_H}`}
+            preserveAspectRatio="none"
+            className="w-full h-[300px] block max-[900px]:h-[200px]"
+          >
+            <defs>
+              <linearGradient id="dheroFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--accent)" stopOpacity=".32" />
+                <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <g stroke="var(--hair)" strokeWidth="1">
+              <line x1="0" y1="45" x2={VB_W} y2="45" />
+              <line x1="0" y1="90" x2={VB_W} y2="90" />
+              <line x1="0" y1="135" x2={VB_W} y2="135" />
+            </g>
+            {path && (
+              <>
+                <path
+                  d={`${path} L${VB_W},${VB_H} L0,${VB_H} Z`}
+                  fill="url(#dheroFill)"
+                />
+                <path
+                  d={path}
+                  fill="none"
+                  stroke="var(--accent)"
+                  strokeWidth="2.5"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                  pathLength={1000}
+                  strokeDasharray="1000"
+                  strokeDashoffset="1000"
+                  className="animate-[draw_2.2s_ease_0.2s_forwards]"
+                />
+              </>
+            )}
+          </svg>
+
+          {hovered && (
+            <>
+              <span
+                className="pointer-events-none absolute inset-y-0 w-px bg-[var(--accent)] opacity-40"
+                style={{ left: `${hovered.xFrac * 100}%` }}
+              />
+              <span
+                className="pointer-events-none absolute h-[11px] w-[11px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-accent shadow-[0_0_0_4px_var(--glow)]"
+                style={{
+                  left: `${hovered.xFrac * 100}%`,
+                  top: `${hovered.yFrac * 100}%`,
+                }}
+              />
+              <div
+                className="pointer-events-none absolute top-2 z-10 rounded-card border border-border bg-surface2/97 px-3 py-2 backdrop-blur-sm"
+                style={{
+                  left: `${hovered.xFrac * 100}%`,
+                  transform: `translateX(${
+                    hovered.xFrac > 0.75
+                      ? 'calc(-100% - 12px)'
+                      : hovered.xFrac < 0.25
+                        ? '12px'
+                        : '-50%'
+                  })`,
+                }}
+              >
+                <div className="font-mono text-[10.5px] tracking-[0.4px] text-faint whitespace-nowrap">
+                  {fmtMediumDate(hovered.date)}
+                </div>
+                <div className="font-mono text-[15px] font-extrabold whitespace-nowrap">
+                  ${fmtNum(hovered.equity)}
+                </div>
+                <div
+                  className={`font-mono text-[11px] font-bold whitespace-nowrap ${
+                    hovered.delta < 0 ? 'text-red' : 'text-green'
+                  }`}
+                >
+                  {fmtSigned(hovered.delta)} since {range === 'All' ? 'start' : range}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       )}
       {connected && (
         <div className="flex font-mono text-[10.5px] text-faint mt-[6px]">

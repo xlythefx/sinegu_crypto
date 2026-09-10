@@ -1,6 +1,33 @@
-# SineguAlerts (sinegual-crypto)
+# Pixel Alpha (sinegual-crypto)
 
-Frontend for SineguAlerts — an automated crypto-trading-bot product (users connect Binance / Bybit / MEXC via trade-only API keys; pricing is 20% of profit only).
+Frontend for Pixel Alpha — an automated crypto-trading-bot product (users connect Binance / Bybit / MEXC via trade-only API keys; pricing is 20% of profit only).
+
+## The product is called **Pixel Alpha**
+
+Renamed from "SineguAlerts" on 2026-08-13. **Every user-visible mention of the
+product is "Pixel Alpha"** — page titles, landing copy, sidebars, auth screens,
+emails, the Telegram channel, docs. If you find "SineguAlerts" in anything a
+user or reader can see, it is a leftover: fix it.
+
+**Do NOT rename infrastructure identifiers.** These contain "sinegualerts" or
+"sinegu" as an *address*, not a name, and renaming them breaks production or
+silently splits state in two:
+
+| Identifier | Where |
+|---|---|
+| `/var/www/sinegualerts/{dashboard,api,engine}` | server paths, every deploy command |
+| `sinegualerts-engine` | systemd unit + its sudoers rule + journal reads |
+| `/etc/nginx/sites-available/sinegualerts` | the vhost (and its `sites-enabled` symlink) |
+| `sinegu_crypto` | the MySQL database |
+| `sinegutrade-api` | the backend repo/folder |
+| `sinegual-crypto`, `deploy_sinegualcrypto.py` | this repo and its deploy script |
+| `prod` target alias `sinegualerts` | `.claude/deploy_sinegualcrypto.py` |
+
+The rule is simple: **if a human reads it, it says Pixel Alpha; if a machine
+resolves it, leave it alone.** A rename of the machine-side names is a
+migration (move directories, rewrite the unit, re-point nginx, re-run certbot's
+webroot), not a find-and-replace — and there is no benefit to justify it.
+The domain is already `pixel-alpha.com`.
 
 ## Stack
 
@@ -9,10 +36,22 @@ Frontend for SineguAlerts — an automated crypto-trading-bot product (users con
   Exchange data lives in `binance_*` tables (accounts, positions, pastpositions, transactions, invoices);
   **`mexc_*` and `bybit_*` tables will be added soon** — keep exchange-specific reads behind API
   endpoints so the new exchanges can be merged in without frontend changes.
-- **Deployment (live):** **http://2.24.139.176** — Ubuntu 24.04 Contabo VPS, provisioned
-  2026-07-28. nginx serves the React build at `/` and `sinegutrade-api` at `/api` from the
-  same origin (`/var/www/sinegualerts/{dashboard,api}`). Deploy with `/deploy` (see
-  `.claude/skills/deploy/SKILL.md`). No domain/TLS yet — it answers on the bare IP.
+- **Deployment (live):** **https://pixel-alpha.com** — Ubuntu 24.04 Contabo VPS
+  (origin `2.24.139.176`), provisioned 2026-07-28, domain + TLS 2026-08-11. nginx
+  serves the React build at `/` and `sinegutrade-api` at `/api` from the same origin
+  (`/var/www/sinegualerts/{dashboard,api}`). Deploy with `/deploy` (see
+  `.claude/skills/deploy/SKILL.md`).
+  DNS is Cloudflare, **proxied**; the origin holds its own Let's Encrypt cert
+  (`setup-tls`, auto-renewing) so Cloudflare can run **Full (strict)**. `www` 301s
+  to the apex; the bare IP still serves over http. Two rules the vhost exists to
+  protect: **port 80 must never blanket-redirect to https** (the engine reaches the
+  API at `http://127.0.0.1/api`, so a global 301 would cut the loop — only the
+  DOMAIN's :80 block redirects), and **`CF-Connecting-IP` is trusted only from
+  Cloudflare's published ranges**, because `/api/engine/*` is gated on
+  `allow 127.0.0.1` and a spoofable real-IP would expose the endpoint that hands out
+  account API keys.
+  The frontend needed no rebuild — `src/services/api.ts` resolves the API base from
+  the host at runtime, so https came for free.
 
 **Supported exchanges (the only brokers) — Binance, Bybit, MEXC.** These three are the
 entire universe of exchanges the product supports; there are no others (no Capital.com, no
@@ -39,8 +78,19 @@ page by page ("we slowly do it"). Rules for every ported page:
 - Ported so far: **Trading Dashboard** (`/dashboard`, from DashboardV2), **Positions**
   (`/dashboard/positions`, from UserAlerts), **Performance Analytics**
   (`/dashboard/analytics`, from UserAnalytics), **Exchange Accounts**
-  (`/dashboard/exchanges`, from UserBrokers — Binance connect wizard live against
-  `/api/exchange/*`; Bybit/MEXC locked "Coming soon"), **Settings**
+  (`/dashboard/exchanges`, from UserBrokers — live against `/api/exchange/*`;
+  Bybit/MEXC locked "Coming soon". Connecting is its own PAGE, not a modal:
+  `/dashboard/exchanges/connect` (`pages/ConnectExchange.tsx` +
+  `components/exchanges/connect/`), four steps — exchange → **mode (live or
+  demo)** → keys → review, confirmed through ConfirmModal. The mode step writes
+  `binance_accounts.demo`, which is the ONE choice on the page whose consequence
+  is invisible until a signal fires: the engine picks the API host from it, and
+  the key sets are not interchangeable — a mainnet key on the testnet never
+  trades, a testnet key on mainnet is refused — so the step names the site each
+  key comes from and the review step repeats the verdict. A page rather than a
+  dialog because the user leaves for Binance mid-flow and comes back, and
+  because the instructions belong BESIDE the fields, not stacked above them in
+  520px), **Settings**
   (`/dashboard/settings`, from UserProfile — account info/password/sign-out wired to
   `/api/user/*`; payment method, crypto wallets, bank wire still static),
   **Admin Dashboard** (`/admin`, from AdminOverview — master account card, 4 stat cards,
@@ -53,9 +103,25 @@ page by page ("we slowly do it"). Rules for every ported page:
   UserInvoicePayment — stat cards + HWM banner, Outstanding/History tabs, exchange filter
   chips, collapsible invoice cards with performance breakdown, "How billing works" sidebar,
   and an in-depth detail page at `/dashboard/invoices/:id`; **wired live** to
-  `sinegutrade-api` via `services/billing.ts` + `useApiData`. The trader pay button is still
-  a stub — no live Stripe/Coinsbuy yet). Remaining user pages:
+  `sinegutrade-api` via `services/billing.ts` + `useApiData`. The trader pay button opens
+  `PaymentMethodModal` → a real Coinsbuy deposit; cards stay hidden behind
+  `CARD_PAYMENTS_ENABLED = false` until the Stripe flow is written). Remaining user pages:
   Trading Assets, Referrals; further admin pages (Strategies, ...).
+
+**The printable invoice document** — "View invoice" on `/dashboard/invoices/:id` opens
+`components/billing/InvoiceDocumentModal.tsx`: white paper on the dark scrim, with the
+issuer (`lib/company.ts` — **Feature Digital LTD**, Reg. 516203072, Lilinblum 26, Gedera
+7070000, Israel), the billed trader, line items, subtotal / VAT / total, the performance
+summary the fee derives from, and payment terms. Two rules:
+- **It is styled with FIXED light colors, never the theme tokens.** It is a legal record
+  the customer files and prints; a dark PDF is not an invoice, and flipping the app to
+  light theme must not change what their copy looks like.
+- **It restates, never recomputes.** Every figure comes off the same `Invoice` the detail
+  page renders; the only arithmetic is summing the line items it was handed. A document
+  that derives its own total is a second, divergent source of what is owed.
+  Printing is real (`window.print()`): the `@media print` block in `index.css` is gated on
+  the `body.invoice-doc-open` class the modal sets, so Ctrl+P on any other page still
+  prints that page rather than a blank sheet.
 
 **Invoicing backend (live).** One unified `invoices` table (exchange discriminator
 binance|bybit|mexc — renamed from `binance_invoices`, HWM stored on the row).
@@ -65,9 +131,103 @@ mother-style: per-user `realized_percentage × realized + unrealized_percentage 
 (defaults 20% / 6% on `user_credentials`). Endpoints: user `GET /invoices`,`/invoices/{id}`;
 admin `GET/POST/PUT/DELETE /admin/invoices*`. **Admin Invoice History** (`/admin/invoices`)
 lists/filters/settles/deletes; **Admin Sandbox → Invoice Testing** generates an invoice from
-a user's closed P&L and marks it paid (manual charging). Monthly auto-generation and live
-Stripe/Coinsbuy webhooks + off-session auto-charge are deferred phases that reuse
-`InvoiceService::settle`.
+a user's closed P&L and marks it paid (manual charging). Still deferred, both reusing
+`InvoiceService::settle`: monthly auto-generation and off-session auto-charge.
+
+**Direct USDT-TRC20 payments — a second crypto rail, beside Coinsbuy (built
+2026-08-16).** Customers send USDT straight to a TRON wallet we control; a
+scheduled poller reads the public chain and settles the invoice. **Coinsbuy is
+untouched and still the default.** Two independent config switches turn the new
+rail on, in this order: `TRON_PUBLIC=true` makes it visible to every trader, then
+`PAYMENTS_DEFAULT_PROVIDER=tron` makes it the default. Until the first is true
+**only `developer` accounts see it**, which is what lets the whole flow be
+rehearsed on production with no customer noticing.
+
+- **Matching is by AMOUNT, not by sender or address.** One shared receiving
+  address; a `payment_intents` row reserves the exact figure for an invoice and
+  `UNIQUE(network, address, open_units)` makes it impossible for two *open*
+  intents to claim the same one (NULLs are distinct in a UNIQUE index on both
+  MySQL and SQLite, so it holds in CI too). The sender is useless as a signal:
+  most customers pay from an exchange withdrawal, where the on-chain `from` is
+  the exchange, not them.
+- **The "odd trailing decimals" fingerprint is OFF (`fingerprint_units = 0`) and
+  must stay off until measured.** Every major exchange DEDUCTS ITS WITHDRAWAL FEE
+  FROM THE AMOUNT THE CUSTOMER TYPES, so a payment arrives short by that fee
+  (1 USDT, then 0.2, on Binance TRC-20 at different times) — and a tolerance band
+  wide enough to absorb it is ~100,000× wider than sub-cent fingerprint spacing.
+  You get one or the other, never both. So: exact invoice amount, an asymmetric
+  band (shortfall `max($1.00, 1%)`, overpay 5%), and **settle only when EXACTLY
+  ONE open intent matches** — zero or several goes to a human.
+- **Only the contract address identifies the token.** `symbol` is
+  attacker-controlled (anyone can deploy a "USDT"), and so is `decimals`, where
+  a contract reporting 0 would make one base unit look like a dollar. Both are
+  stored as reported and never consulted.
+- **`TronAddress` is base58check, never a regex.** `^T[1-9A-HJ-NP-Za-km-z]{33}$`
+  passes a typo, and a mistyped RECEIVING address loses customers' money silently
+  — the watcher just reports zero transfers forever. A test asserts all 1,881
+  single-character mutations of the real USDT contract are rejected.
+- **`order_by=block_timestamp,asc` in the TronGrid query is load-bearing.**
+  TronGrid defaults to `desc`; with descending order plus a page limit, a dust
+  flood (free — the address is public) means we fetch the newest page, advance
+  the cursor past everything older we never fetched, and skip a real payment
+  permanently. The cursor is DERIVED (`MAX(block_timestamp)` over
+  `tron_transfers`, minus an overlap), which is why **every transfer is stored,
+  including rejected ones** — an early `continue` before the insert would freeze
+  it.
+- **`payment_intents.network` carries the environment on the DATA**, because
+  `PaymentEnvironment::forceSandbox()` is request-scoped and the watcher has no
+  request. `PaymentEnvironment::tron($network)` is therefore a pure lookup that
+  deliberately ignores `sandboxIsForced()`; `tronNetworkFor(bool $isDeveloper)`
+  is the single role-aware call. The watcher scans every configured network,
+  Nile included, on prod. **A client-supplied network is never read** — it would
+  let a trader settle a real invoice with testnet tokens.
+- **Settlement is unchanged**: `InvoiceService::settle($invoice, 'tron', $txid,
+  $usd)`, with the invoice's own USD figure rather than the USDT amount
+  reinterpreted. `payment_events` needed no schema change (`provider='tron'`,
+  `event_id` = a sha256 of the identifying tuple — **not the bare txid, because
+  one TRON transaction can carry several TRC-20 transfers**).
+- **Scheduling the poller made cron load-bearing for MONEY**, not just the daily
+  sweeps: `Schedule::command('payments:watch-tron')->everyMinute()->withoutOverlapping(5)`.
+  A dead scheduler now silently stops invoices settling, so `last_scan_at` is
+  surfaced per network on the admin screen and on the trader's pay sheet.
+- Surface: `POST /payments/tron/intent`, `GET /payments/tron/intent/{invoiceId}`
+  (**answers 200 for a paid invoice** — that is the state it exists to observe,
+  so it must not reuse `resolveInvoice()`, which 409s), and admin
+  `GET|POST /admin/tron-transfers*`. Frontend: `TronPayPanel` inside
+  `PaymentMethodModal`, and **Admin → Crypto Transfers** (`/admin/tron-transfers`)
+  for the manual attribution a matcher can never do — late payments, wrong
+  amounts, duplicates. That screen is permanent, not a stopgap.
+- **Still to do:** create a Nile wallet + look up the Nile USDT contract, run the
+  end-to-end rehearsal, then set `TRON_MAINNET_ADDRESS`. **Before `TRON_PUBLIC=true`,
+  measure a real withdrawal from each exchange customers use** and record how many
+  decimals survived and how much fee was deducted — only then decide whether a
+  fingerprint is viable. No QR (TRON wallet URI support is inconsistent, and a QR
+  that silently drops the amount is worse than none under amount matching).
+  Off-ramping USDT stays manual, and AML screening on inbound funds becomes ours
+  the day this is the default rather than Coinsbuy's.
+
+**Crypto payments are LIVE on prod (2026-08-14).** Coinsbuy production keys, real money.
+The one switch that decides it is a URL: `PaymentEnvironment` holds **both** providers on
+test credentials until `PAYMENTS_API_URL` is https (`callbacksAreSecure()`), because a live
+key with an unreachable callback charges the customer and leaves the invoice pending
+forever — which then disables their account through `engine:mark-overdue`. Push the config
+with `python .claude/deploy_sinegualcrypto.py sync-api-env` (mirrors `COINSBUY_*` from local
+`sinegutrade-api/.env`, writes the prod-only `PAYMENTS_*` URLs, re-runs `config:cache` —
+without which a new key stays invisible to every request). The callback URL is sent per
+deposit, so nothing needs configuring in the Coinsbuy dashboard except the **outbound IP
+allow-list** (2.24.139.176, else 403 / code 2016). **Stripe is not live** — no keys, and no
+frontend call for `/payments/stripe/checkout-session` yet.
+
+**A `developer` account is the test rig, on every box including prod.**
+`PaymentController::applyRoleOverrides` pins that role to the providers' SANDBOX keys
+one-way (nothing can force live keys ON), and `VerifyCoinsbuySignature` accepts the
+sandbox-signed callback only when its tracking_id resolves to a developer's invoice — so
+the full flow (deposit → checkout → real webhook → invoice flips to Paid) is exercisable
+against production without money moving. **Locally the callback cannot arrive**: with
+`PAYMENTS_PUBLIC_API_URL_DEV` unset the callback URL is `127.0.0.1`, so a local end-to-end
+test needs a tunnel (`cloudflared tunnel --url http://127.0.0.1:8000`) in that var. On WAMP
+also expect cURL error 60 (`COINSBUY_UNREACHABLE`) until `COINSBUY_CACERT` points at a
+cacert.pem.
 
 **Payment failures speak twice — one fault, two audiences.** A trader always gets
 the single friendly sentence ("Could not start the crypto payment."); a
@@ -139,6 +299,7 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   per-account fan-out, and each **entry** detail carries a `sizing` block —
   `balance`, `total_deposit`, `min_deposit`, `base_size`, `reference_balance`,
   `coarse_step`, `quantity`, `size_multiple`, `stacks_now`, `max_increments`.
+  plus `max_size` (the raw column) alongside the derived `max_increments`.
   A deposit-gated skip writes a **partial** block (deposit fields + balance
   only, no `base_size`/`quantity`) — readers must not assume a full block.
   Recording the sizing
@@ -154,6 +315,188 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   filters enabled + non-sandbox + non-suspended owners; `php artisan
   engine:mark-overdue` (scheduled daily) disables accounts with past-due
   invoices; `InvoiceService::settle` re-enables on payment.
+- **Cache freshness is PUSHED, never polled — and the engine is never
+  restarted for a data change.** The engine TTL-caches its account and asset
+  lists (90 s, `binance_abcd/cache.py`); Laravel's `App\Services\EngineCache`
+  POSTs `/admin/refresh-accounts|assets` on `127.0.0.1:5010` from every write
+  that changes what may be traded — connect/disconnect an account,
+  `InvoiceService::settle` (after COMMIT, never inside the transaction),
+  `engine:mark-overdue` (only when it actually disabled something), and every
+  `AssetController` write (base_size, max_increments, side, enabled). That is
+  **invalidation, not a fetch**: the engine drops the list and reloads it
+  lazily on the next signal or poller tick, in ONE call for all accounts — so a
+  hundred users connecting at once costs a hundred sub-millisecond local pings
+  and zero extra Binance calls, where a shorter TTL would spend requests on
+  every quiet minute instead. Best-effort by design: a failed ping is logged
+  and swallowed (the TTL is the safety net) so a dead engine can never make
+  "Connect Binance" fail. `/admin/*` is bound to localhost — nginx proxies only
+  `/binance_abcd_webhook`.
+- **Blocked API keys** (`binance_abcd/key_status.py`). Binance `-2015`
+  ("Invalid API-key, IP, or permissions") is what a key restricted to the
+  user's own IP says when OUR server uses it, and it is silent: the account
+  reads "connected", its balance freezes, no trades arrive. The engine reports
+  the verdict to `POST /api/engine/{exchange}/key-status`, which sets
+  `binance_accounts.key_status` + `key_blocked_at` (columns, not a new table —
+  it is one current state per account, and the engine's account list is the
+  hottest read in the system). Rules that make it recoverable:
+  - **Only an exchange error code flags a key** (-2015/-2014/-2008/-1022) —
+    never a timeout, 5xx or rate limit, which say nothing about the key.
+  - **Any successful signed call clears it**, which is how a user who
+    allow-lists our IP un-flags themselves. `_request_get(..., account_scoped=False)`
+    exists so a public call (exchangeInfo) can never clear a flag.
+  - **Blocked accounts stay in `GET /accounts`**, flagged `key_blocked`. The
+    fan-out skips them on ENTRY only (exits still try — an open position must
+    be closable, and a successful exit clears the flag); the pollers keep
+    probing them, which is the only way recovery is ever detected. Filtering
+    them out server-side would freeze them as broken and then disconnect them.
+  - **`key_blocked_at` is set once, on the transition**, never refreshed by a
+    repeat report, so the 3-day deadline cannot drift forever.
+  - After `BinanceAccount::KEY_GRACE_DAYS` (3), `exchange:disconnect-blocked-keys`
+    (scheduled daily) soft-deletes the account — which is what frees the
+    one-account-per-user slot so they can connect a new key.
+  - **Reconnecting a key you disconnected REVIVES that row** rather than
+    failing "This API key is already connected". `api_key` and `name` carry
+    table-wide UNIQUE indexes (not partial — MySQL has none), so a soft-deleted
+    row holds those credentials forever and is the only row they can live in;
+    without the revive, disconnecting locked the owner out of their own key,
+    which is exactly the path a blocked-key recovery walks. `storeBinance`
+    clears the stale key verdict (`key_status`/`key_error_*`/`key_blocked_at`)
+    because the old refusal says nothing about the key being pasted now, and
+    **deliberately keeps `balance`, `initial_deposit` and the invoice HWM** —
+    same account, same deposits, and a disconnect/reconnect must not be a way
+    to reset the high-water mark. Another user's disconnected row is never
+    revived (`API_KEY_TAKEN`): it carries their trade history.
+  UI: `KeyBlockedModal` (the IP to allow-list, copyable, plus recheck /
+  disconnect) raised on the dashboard by `KeyBlockedGate` and from a red strip
+  on the exchange card. "Recheck" is the balance-refresh call — a real exchange
+  round trip is what settles the verdict. The IP comes from
+  `config('services.engine.public_ip')`, never hardcoded in the frontend.
+
+**Admin → API Keys** (`/admin/api-keys`, `AdminApiKeyController`) is the whole
+inventory: every `binance_accounts` row with its owner, soft-deleted ones
+included, filtered by Connected / Faulty / Disabled / Disconnected. Three rules
+make it a support screen rather than a liability:
+- **Rows carry `api_key_hint` (first 6 + last 4) and never `secret_key`** — a
+  test asserts the full key does not appear in the response. Editing is limited
+  to the display name and `enabled`; re-keying stays in the owner's connect
+  flow, and `demo` (testnet-vs-real orders) is not a two-click toggle.
+- **Delete is the same soft disconnect** the trader and
+  `exchange:disconnect-blocked-keys` perform, so positions and invoices (joined
+  on `api_key`) survive and the user's one-account slot is freed. There is no
+  hard delete.
+- **Bulk delete takes explicit ids from the client**, never a server-side
+  "everything currently faulty" — the engine can flag another account between
+  the page loading and the button being pressed, and what gets disconnected must
+  be exactly what the admin saw. Already-deleted ids are skipped, not errors.
+- **Permanent delete** (`DELETE /admin/api-keys/{id}/purge`) is the one hard
+  delete, and the only way a stored credential leaves the DB. Two gates, both
+  re-evaluated server-side rather than trusted from the row the admin was
+  looking at: the key must be **not working** (refused by the exchange, or
+  already disconnected) — a healthy account is someone's live setup — and it
+  must have **no invoices**, because an invoice whose account row vanished
+  cannot be explained to whoever paid it. Closed trades do not block it; they
+  cascade, and the confirmation states the exact row counts (`usage` on every
+  listing row) instead of saying "cannot be undone".
+Faulty rows sort to the top of every filter, carry the exchange's own error
+text, and are counted on the stat cards — the fault is meant to be visible
+without picking a filter first.
+Listing reads only columns the engine wrote, so opening the page costs nothing
+at Binance; "Recheck" is the one action that spends an exchange call.
+
+**Admin → Trading Positions** (`/admin/positions`) lists every open position and
+closed trade across all accounts, in two views the admin switches between:
+**Combined** merges same account + ticker into one line with a count pill, and
+**Per row** shows every DB row with its own id, side and size. Search is
+multi-term over account name/id, row id, ticker, exchange and strategy
+(`lib/adminPositionRows.ts`, pure), beside per-user / ticker / exchange facets.
+Rules:
+- **Editing writes ONE row, so it exists only in the per-row view** — the button
+  is disabled on a merged line, which has no single target. Delete still works
+  on both (a merged line deletes its whole `ids` list).
+- **`api_key` / `uni_id` are not editable** through `PUT /admin/positions/{id}`
+  or `/admin/past-positions/{id}`. They join a row to its account's invoices and
+  to the published track record, so a mis-owned row is deleted and re-synced,
+  never moved to another user. A test asserts they are ignored in the payload.
+- **The two kinds of edit are not the same act.** An open position is replaced
+  by the poller on that account's next sync (full replace per `api_key`), so
+  editing it corrects the display for a minute; a closed trade is permanent and
+  its `realized_pnl` / `closed_at` are read by invoicing and the public track
+  record. The modal says which, and the confirm step reads back the exact
+  before → after of every changed field.
+- **The filter toolbar sits OUTSIDE the re-keyed animated region.** That key
+  replays the reveal on filter change by remounting — with the search box
+  inside it, every keystroke unmounted the input and dropped focus.
+
+The **same editor is reachable from the Daily P&L Calendar** on the trader
+dashboard (`DailyPnlCalendar` → `DayTradesModal`) for admin/master/developer
+accounts, gated on `canSeeAdmin` — the client twin of `EnsureAdmin::ROLES`.
+The icons live on a TRADE inside the day's popup, never on a calendar cell: a
+cell is a whole day, and edit/delete address one `binance_pastpositions` row.
+`UserStatsService::dailyPnlDays` therefore returns `id` and `exit_price` (a row
+the editor cannot name is a row it cannot correct); the write is still
+`/admin/past-positions/{id}` behind the admin middleware. `PositionEditModal`
+is portaled into `<body>` because both callers sit inside `data-aos` cards, and
+AOS animates with `transform` — which would make the card the containing block
+for the overlay's `position: fixed` and trap it inside.
+- **A failed Binance read is NEVER stored or acted on as "nothing there."**
+  `get_positions_v3` / `get_user_trades` return **`None` on a failed request**
+  and `[]` only for a genuinely flat account / an order with no fills yet.
+  Until 2026-08-19 both answered `[]` either way, and one prod incident
+  (2026-08-18, four hours of `-1007` timeouts on `demo-fapi`) produced three
+  symptoms from that single conflation:
+  - `positions/sync` is a **full replace per `api_key`**, so a failed read sent
+    as "flat" **deleted live positions from the DB**. The stack cap counts open
+    size from exactly those rows, so it read 0 open and **stopped firing** —
+    LTCUSDT took three entries with the engine believing each was the first.
+    The poller now **skips** an account it could not read (rows go stale for one
+    cycle, which the next tick fixes); a real close still syncs `[]`.
+  - The published `Increment (1/3)` was stuck at 1 for the same reason — the
+    Telegram line and the cap read the same number, so a wrong line is the
+    visible half of a cap that is not enforcing.
+  - `get_order_fill_summary` saw an empty `userTrades` and reported no PnL, so
+    the close message shipped with neither `Exit Price:` nor `PnL:`. It now
+    **retries** (`FILL_SUMMARY_ATTEMPTS`/`_RETRY_SECONDS`, worst case under
+    `TELEGRAM_PNL_WAIT_SECONDS`) on its own `BOOKKEEPING_WORKERS` pool, so a
+    sleeping retry can never hold a fan-out worker the next signal needs.
+    The DB self-heals either way (the past-positions poller backfills the
+    NULLs); the Telegram message is sent once and never edited, which is why
+    the retry belongs on the close path and not only in the poller.
+  Apply the same rule to any new exchange adapter: **empty and unavailable are
+  different answers**, and only one of them may be written to the DB.
+- **An unconfirmed close is retried; a rejected one is escalated** (2026-08-28,
+  after a `408`/`-1007` on `demo-fapi` announced "EXIT FAILED — MANUAL ACTION
+  REQUIRED" for two accounts the retry queue was already fixing). One verdict
+  drives both halves: `_request_post` stamps `transient` (no response at all,
+  408, or 5xx — the request failed on the way) versus a rejection (`-1111`,
+  `-2019`, position-mode mismatch — an answer that repeats identically).
+  - `handle_exit` re-attempts a transient failure in the fan-out worker
+    (`EXIT_RETRY_ATTEMPTS`, default 2) before the queue's 60s, because 60s is a
+    long time to hold a position the strategy has exited. Safe only because
+    **every attempt re-reads `positionRisk` first** — a 408'd order may be on
+    the book, and a flat side is how the engine learns it landed. Keep that
+    read; without it this is a double-close.
+  - **Exits retry, entries do not.** A close re-reads; an entry replayed on an
+    unknown execution status is one signal becoming two positions. Entries stay
+    retryable on a rate-limit backoff alone, which fails fast before any order.
+  - **Red is reserved for "nobody is coming".** A transient failure alerts
+    amber (⏳ RETRYING, sent AFTER the enqueue so it can say so); the red
+    MANUAL ACTION alert fires only on a rejection or from `retry_queue._requeue`
+    when the attempts run out — which until then was a log line nobody reads.
+    Alerts quote Binance's own code+msg (`error_summary`), since "408 Client
+    Error" does not say *execution status unknown*.
+  - **A retried exit still reaches the channel.** `_process_trade_job(...,
+    announce=)` carries the right to publish: a retry inherits it only when the
+    live run filled nothing, and the queue clears it once any run fills. One
+    close, one message.
+- **Poller weight is not evenly spread.** Per account per tick, balances /
+  positions / transfers cost weight 5; past-positions (`/fapi/v1/income`) costs
+  **30**. Against Binance's 2400/min per-IP ceiling that one loop is ~95% of the
+  budget and decides how many accounts the platform carries — which is why
+  `PAST_POSITIONS_FETCH_INTERVAL` is **180s, not 60s**, and why it is the first
+  interval to raise. Balances at 300s are ~3%; leave them. **Caching cannot
+  help**: `/fapi/v3/account` is signed per account key, so no two accounts can
+  share a response. What they share is the IP's weight budget, so the only
+  levers are interval and spread (`POLLER_START_STAGGER_SECONDS`).
 - **Live orders:** accounts with `demo=1` route to the Binance futures testnet;
   everything else is REAL. Entries fail closed on unconfigured assets.
 - **Sizing & the deposit gate** (`_scale_qty` + `_deposit_gate` in
@@ -169,6 +512,27 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
      one `base_size`. Below it every account still gets exactly one
      `base_size`; above it BTCUSDT (`COARSE_STEP_TICKERS`) steps in whole
      multiples per reference block, everything else in tenths, floored.
+  3. **Stack cap** — how many entries may stack in one open position, counted
+     in THIS ACCOUNT'S entry size: `stacks_now = open_amount / quantity`,
+     refused when `stacks_now + 1 > max_increments`. Per symbol AND side, so a
+     long stack never limits a short. Dividing by the raw `base_size` instead
+     (as it did until 2026-08-05) made the cap one fixed absolute size for
+     every account, so anything from ~3× the reference balance up filled it
+     with its first entry and could never add — the cap has to scale with the
+     size it is capping.
+     **The `assets.max_increments` COLUMN is a max position SIZE, not a count**
+     — the name is inherited from the mother schema, whose migration comments
+     it "Max position size", and `binance-flask` reads it the same way. The
+     count is DERIVED once, in `assets_api._increment_cap`:
+     `max_increments = max(1, round(max_size / base_size))`, and everything
+     downstream sees `max_size` (units) and `max_increments` (entries) as two
+     separate keys. Until 2026-08-13 the engine read the column as a count, so
+     LTCUSDT's `42` (= 3 stacks of 14) meant "42 entries" and **the cap never
+     fired** — an account reached a 4th increment against an intended max of 3,
+     and the Telegram line read `Increment (4/42)`. The count is
+     balance-independent by design (it is a property of the asset); only the
+     size each account trades scales with its balance, which is what makes one
+     cap correct for a 500 and a 50,000 USDT account alike.
   `total_deposit` comes from `GET /api/engine/{exchange}/accounts` as
   `initial_deposit + (deposits − withdrawals)` over `binance_transactions` —
   **not** raw `initial_deposit`, which `EngineSyncController` writes once and
@@ -179,12 +543,94 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   plus ops alerts. `binance_abcd/notify.py`; config is `BINANCE_ABCD_TELEGRAM_*`
   and the bot token lives in the gitignored `.env` only. Off unless both a token
   and a chat id are set; `tests/conftest.py` forces it off so the suite never posts.
+  **The public channel publishes no account counts** — an entry is
+  side + ticker, `Increment (2/3)`, and the executed price; an exit is
+  side + ticker, price, and the PnL percent. How many customers filled is
+  business information and the channel is readable by anyone (same rule as
+  `/api/public/*`). Counts live in `trade_logs` and, where a human is needed,
+  the admin chat: `notify_max_increments` lists the accounts already at their
+  cap (`3/3 🟢🟢🟢 · no add placed`) so a stack that stops adding is visible
+  without being mistaken for a missed trade.
+  **`BINANCE_ABCD_TELEGRAM_ADMIN_CHAT_ID` routes every ops alert to the private
+  group "Pixel Alpha Admin Control"** (2026-09-04) — account failures, capped
+  stacks, rejected signals, poller errors, and the engine's restart ping. Until
+  then it was unset, so `_admin_chat()` fell back to the PUBLIC channel and
+  published all of it, account names included. That is what the key exists to
+  stop, so **an empty value is a regression, not a default**: it silently
+  re-opens the leak. It is a config-only fix — paste the id in
+  `trading-flask/.env` and run `sync-engine-env` (the key is already in
+  `MIRRORED_ENGINE_ENV_KEYS`). `notify_startup` sends with `_send_admin` for the
+  same reason: it carries account and asset counts.
+  **`Increment (2/3)` is the stack depth this entry reached** = pre-entry
+  `stacks_now + 1`, over `assets.max_increments` (`(#2)` when the asset has no
+  cap). Derived from the batched `positions/check` read the fan-out already
+  makes — the reference bot in `binance-flask` re-reads the new position size
+  from Binance per account per signal purely to print this number. Published
+  per SIGNAL as the **most common** depth among filled accounts, since this
+  engine has no master account: one user who connected late is still at #1
+  while everyone else is at #3, and the mode keeps them from deciding what the
+  channel says.
+  **`Increments Closed (3/3)` is its mirror on the close** (`_closed_increments`)
+  = `closed_quantity / _scale_qty(...)`. The divisor is the SCALED entry size,
+  never the raw `base_size`, for the same reason the cap is measured that way:
+  a 5,000 USDT account's entry is several base sizes, so base_size would report
+  a 3-increment position as 15. Fail-soft — **exits skip every asset gate**, so
+  a close must still work for a ticker whose asset row was disabled or deleted
+  since the entry; no asset row just means the line is omitted. The count is
+  measured against TODAY's balance, so a position opened before a large PnL
+  swing is divided by a slightly different entry size than the one that opened
+  it — the same approximation `stacks_now` carries, and why it is rounded.
+- **Scheduled recaps** (`binance_abcd/reports.py`, 2026-09-07) are the ONE thing
+  the engine posts because a clock ticked rather than because a signal fired:
+  **daily 11:30, weekly Friday 11:30, monthly last-day 11:30 — Asia/Manila**, to
+  the PUBLIC channel (`BINANCE_ABCD_REPORT_*`, mirrored to prod).
+  **They are built from `GET /api/public/track-record`, never from a fresh
+  query**, and that is the whole design. It cannot leak — the channel is
+  world-readable, so a recap may carry percentages and TRADE counts only, and
+  sourcing it from an already-public endpoint makes that structural rather than
+  remembered (there is no balance or account count in the payload to print by
+  mistake; a test asserts it). And it cannot disagree with the landing page,
+  which renders the same series — a second P&L walk would drift, and then the
+  site and the channel would publish two different track records for the same
+  month. So `reports.py` touches neither Binance nor the DB: it slices the daily
+  series and chains it, and `notify.notify_report` owns what the channel may say.
+  - **Windows are whole COMPLETED UTC days** (the series is keyed by a UTC
+    `closed_at`) — a published percentage is never revised. 11:30 Manila is
+    03:30 UTC, so the reported day ended 3.5h earlier, past the past-positions
+    backfill.
+  - **Chained, not summed** — same time-weighted math as the endpoint's own
+    total, so a mid-period deposit cannot inflate it.
+  - **A failed fetch is not "no trades"** — `None` leaves the period unmarked
+    and the next tick retries it, the same empty-vs-unavailable rule the pollers
+    follow. `available: false` is an answer and is marked done.
+  - **First run seeds `out/report_state.json` silently** so a deploy does not
+    fire all three at once; a missed recap catches up only within
+    `REPORT_CATCHUP_HOURS` (12), then is dropped.
+  - **`monthly last` deliberately stops one day short** — firing on the final
+    day at 11:30 Manila is 03:30 UTC that day, so the month's last ~20h are
+    outside the window and the heading says `1 - 29 Sep 2026`. Use
+    `REPORT_MONTHLY_AT=1 11:30` for whole calendar months.
+  - `tzdata` is in `requirements.txt` because Windows has no tz database; an
+    unusable timezone disables reports and alerts admin, never stops the engine.
 - **Config:** env-driven, prefix `BINANCE_ABCD_*` — committed `.env.example`,
   gitignored `.env` (webhook secret + engine secret; engine secret must match
   `ENGINE_SECRET` in `sinegutrade-api/.env`, and the webhook secret must match
   `BINANCE_ENGINE_WEBHOOK_SECRET` there).
+- **Prod mirrors the local `.env` for product keys.** The server's
+  `engine/.env` is created once and never overwritten wholesale, but every
+  engine deploy now upserts `MIRRORED_ENGINE_ENV_KEYS` (deploy script) from the
+  local `trading-flask/.env`: the webhook secret and the whole
+  `BINANCE_ABCD_TELEGRAM_*` block. Those describe the PRODUCT — which
+  TradingView token, which channel — so prod differing from local is always a
+  mistake. It is the mistake that made prod silent on Telegram for its first
+  weeks while local posted fine, because `notify.py` disables itself unless
+  BOTH a token and a chat id are set and the generated prod file had neither.
+  **Never mirrored** (they describe the BOX, and copying a dev value breaks
+  prod): `ENGINE_API_BASE`, `ENGINE_SECRET`, `FLASK_PORT`, `RUN_POLLERS`,
+  `SYNC_POSITION_MODE_ON_STARTUP`. Config-only fix, no code, no test gate:
+  `python .claude/deploy_sinegualcrypto.py sync-engine-env` (upserts + restarts).
 - **Commands:** `python -m binance_abcd.main` (waitress), `python -m pytest
-  tests/ -q` (42 tests, no network), `python webhook_tester.py` (Tkinter GUI
+  tests/ -q` (146 tests, no network), `python webhook_tester.py` (Tkinter GUI
   trade sender — local or prod target, red banner on prod).
 - **Naming trap:** root `src/` is the React app; the engine package is
   `binance_abcd/`, deliberately not named `src`. Python and TypeScript
@@ -194,10 +640,13 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
 
 ### TradingView alert setup
 
-Paste this into a TradingView alert's **Message** box, with the webhook URL set to
-`http://<engine-host>:5010/binance_abcd_webhook` (locally
-`http://127.0.0.1:5010/binance_abcd_webhook`). The engine authenticates on the
-`secret` field alone — there is no signature header.
+Paste this into a TradingView alert's **Message** box. Webhook URL: prod is
+**`https://pixel-alpha.com/binance_abcd_webhook`** (nginx proxies that one path to
+waitress on 127.0.0.1:5010; `/health` and `/admin/*` stay local-only), locally
+`http://127.0.0.1:5010/binance_abcd_webhook`. The older
+`http://2.24.139.176/binance_abcd_webhook` still works — the bare IP is not
+redirected — so existing alerts keep firing; move them to https when convenient.
+The engine authenticates on the `secret` field alone — there is no signature header.
 
 ```json
 {
@@ -229,6 +678,53 @@ Field contract (`trading-flask/binance_abcd/routes/webhook.py`):
 
 Only enabled, non-sandbox accounts of non-suspended, non-overdue users receive
 the fan-out — that filtering happens in `sinegutrade-api`, not in the alert.
+
+## `pixel-telegram/` — VPS ops alerts (in this repo)
+
+**A third codebase in this repo**, beside the React app and the engine: a small
+Python package (`pixel_telegram/`) that reports the VPS to the private Telegram
+group **Pixel Alpha Admin Control**. Full docs in `pixel-telegram/README.md`.
+
+- **It is standalone on purpose.** It never imports `binance_abcd`, has its own
+  venv and `.env` (`PIXEL_TG_*`), and runs from its own systemd timers. The
+  situation it exists for is the engine being the thing that is down — a
+  reporter living inside the engine goes quiet exactly when it is needed.
+- **Two timers, one oneshot script.** `report` (`OnCalendar=00/4:00`,
+  `Persistent=true`) posts CPU/RAM/disk bars, uptime, every watched unit's
+  state and the engine's `/health`. `watch` (every 2 min) posts **nothing**
+  unless something changed: a unit restarted or went down, or a resource
+  crossed its threshold. Deployed to `/var/www/sinegualerts/telegram` with
+  `deploy-telegram`; config-only changes go through `sync-telegram-env`.
+- **A restart is `ActiveEnterTimestampMonotonic` changing**, not the human
+  `ActiveEnterTimestamp` string (locale- and timezone-formatted, and it would
+  have to be parsed back). Monotonic resets on reboot, so a reboot correctly
+  reads as "everything restarted".
+- **The first run seeds state silently** — a unit is only announced as
+  restarted once it has been seen before, or the deploy itself reports every
+  service on the box as freshly restarted. The one exception is a unit already
+  DOWN on that first run: that is the report, not noise. `state/` is
+  server-owned and excluded from the deploy sync for the same reason.
+- **Alerts are rate-limited but re-arm on recovery** — one message per metric
+  per hour, and dropping back under the threshold clears the cooldown, so the
+  next breach is not swallowed by an hour that started before the box recovered.
+- **Nothing in it raises.** An unreadable unit reports `unknown`, an
+  unreachable Telegram logs and exits 1, a truncated state file is treated as
+  empty. A monitoring job that crashes needs its own monitor.
+- **`PIXEL_TG_UNITS` is a list of `unit=Label` pairs, and the halves are
+  different things.** The unit is the address systemctl resolves
+  (`sinegualerts-engine`); the label is what a person reads in the group
+  (`Pixel Alpha engine`) — the machine-name/product-name rule at the top of this
+  file, applied to a Telegram message. **State is keyed by the unit, never the
+  label**, so a relabel does not make every service look brand new and
+  re-announce itself as restarted. Env-driven because the php-fpm unit carries
+  the PHP version in its name; the deploy step prints the units actually
+  installed so a stale name is visible rather than reading "not readable"
+  forever.
+- **The bot is the SAME bot as the public channel** — only the chat differs. It
+  must be added to the group as an admin; the id comes from
+  `python -m pixel_telegram.main chat-id`, never guessed. Token lives in the
+  gitignored `pixel-telegram/.env` only (this repo is public on GitHub), and the
+  deploy mirrors `MIRRORED_TELEGRAM_ENV_KEYS` logging key names only.
 
 ## Design reference
 
@@ -307,7 +803,7 @@ When it grows into a full dashboard, migrate to `features/<domain>/` folders
 - **Two agents live in `.claude/agents/`** — one for frontend, one for backend:
   - `.claude/agents/frontend.md` — frontend specialist for this repo (React conventions above).
   - `.claude/agents/backend.md` — backend specialist pointing at `C:\wamp64\www\sinegutrade-api` (Laravel), using `sinegu-api` as read-only reference.
-- `.claude/skills/deploy/SKILL.md` — deployment procedure (`/deploy`), driving `.claude/deploy_sinegualcrypto.py`. **Live at http://2.24.139.176** (Ubuntu 24.04); the skill holds the flow (backup → build → upload → verify). Credentials live in gitignored `.claude/deploy.creds.json` only; never in committed files, and never use the mother project's servers from this repo.
+- `.claude/skills/deploy/SKILL.md` — deployment procedure (`/deploy`), driving `.claude/deploy_sinegualcrypto.py`. **Live at https://pixel-alpha.com** (Ubuntu 24.04, origin `2.24.139.176`); the skill holds the flow (backup → build → upload → verify). Credentials live in gitignored `.claude/deploy.creds.json` only; never in committed files, and never use the mother project's servers from this repo.
 
 ## Notes
 
@@ -321,6 +817,105 @@ When it grows into a full dashboard, migrate to `features/<domain>/` folders
 - Ticker / order book / chart / stats are static prototype data only until an endpoint
   exists; connect them to the API as soon as one does.
 
+**`binance_pastpositions.realized_pnl` is NET of exchange commission** (2026-09-09).
+Binance's `realizedPnl` on a fill — what the engine reads and posts — is GROSS:
+`(exit − entry) × qty`, before commission and funding. Binance's own Position
+History screen shows the same trade NET, so every screen we owned published a
+bigger profit than the customer's exchange app did for the same trade (+$52.76
+against 43.09 on one LTC close; the $9.67 gap was exactly the round-trip fee),
+and invoices billed 20% of money the customer never received.
+- **The conversion happens ONCE, on ingest** (`EngineSyncController::syncPastPositions`
+  → `App\Services\Pnl\TradingFee`), never at read time. A dozen readers touch
+  `realized_pnl` — dashboard, analytics, calendar, referrals, `BinancePnlSource`,
+  the public track record — and netting at the column is what stops them
+  disagreeing about whether the number they hold includes fees. The engine stays
+  unaware: it reports what the exchange said, the API decides what that means.
+- **The fee is ESTIMATED, and stored** in `exchange_fee`, so gross is always
+  recoverable as `realized_pnl + exchange_fee` (which is how the migration
+  reverses). It cannot simply be read from Binance: the real commission is per
+  FILL and the ENTRY half belongs to the entry order, which a closed-trade row
+  never references — the same gap that leaves `entry_price` null. Capturing it
+  truly means aggregating `/fapi/v1/income` for COMMISSION + FUNDING_FEE, and
+  that endpoint is already ~95% of the poller's weight budget.
+- **The estimate is trustworthy only because the engine places MARKET orders
+  exclusively**, so every fill is a TAKER fill at the flat published rate
+  (`services.binance.taker_fee_rate`, 0.05%/side) — there is no maker/taker
+  ambiguity to guess wrong. Verified against the real closes to within two cents.
+  If limit orders are ever added, this estimate stops being valid.
+- **Null is not zero.** The webhook writes a close before Binance indexes its
+  fills; with no exit price there is no fee to estimate, so `exchange_fee` stays
+  null and that row's P&L stays gross until the poller backfills both together.
+  A zero fee and an unknown fee bill differently.
+- **The migration rewrote history on purpose** — the mismatch is on trades that
+  already happened, so netting only new rows would leave every past trade still
+  disagreeing with the exchange. Already-issued invoices do NOT move (they store
+  their own `realized_pnl` snapshot) and neither does the HWM (measured on
+  exchange-reported equity, not on this column); only invoices generated from
+  here on bill the new basis. Invoice-scenario rows (`SBXINV-…`) are excluded:
+  they are seeded straight into the table with hand-derived figures and never
+  pass through the netting ingest.
+- **The published track record moved with it**, since `PublicStatsController`
+  reads the same column. That is the intended direction — a customer can now
+  reproduce the published percentage from their own Binance account — but it did
+  revise numbers already shown.
+
+**Timestamps are UTC in the DB and rendered in the READER's zone**
+(`fmtDateTime`, `lib/format.ts`). The API runs on `'timezone' => 'UTC'`, but a
+bare `"2026-09-09 04:30:22"` has no zone designator and JS reads a zoneless
+datetime as LOCAL — so UTC digits were printed unchanged and labelled as local
+time, putting a trade seven hours from where the exchange app showed it. The
+helper appends `Z` only when the string carries no zone of its own. **Day
+GROUPING is still UTC server-side** (the P&L calendar, invoice months, the track
+record's daily buckets), so a trade closing near midnight UTC can list under a
+different date than the calendar cell it counts toward.
+
+**The dashboard equity curve separates SHAPE from LEVEL**
+(`UserStatsService::buildDailyEquityCurve`, pure and unit-tested in
+`EquityCurveTest`). One point per trading day:
+- **Shape is realized P&L alone.** Deposits and withdrawals are never points on
+  the line; they only move the starting base (`adjustedDeposit` =
+  `initial_deposit` + net flows, the same figure `BinancePnlSource` bills on).
+  The chart answers "what did trading do to the capital", so a withdrawal
+  cannot draw itself as a crash — structurally, not by special-casing it.
+- **Level is one constant offset**, `equity − lastCumulative`, applied to every
+  point. Shifting the whole series preserves each day's move exactly while
+  landing the last point on the balance the EXCHANGE reports — the only figure
+  on the page that is not a reconstruction. Unseen transfers, commissions and
+  funding fees all land in that offset instead of bending the line.
+
+This replaced a replay of funding + trades accumulated from zero (2026-09-08),
+which could not be made honest, because **the curve was only ever as complete as
+`binance_transactions` — and the transfers poller asks Binance for the last
+`TRANSFERS_LOOKBACK_DAYS` (3) only.** An account trading before it was connected
+has NO early funding rows at all: the live master's first closed trade was
+2026-05-11 and its first recorded deposit 2026-07-01, so the replay opened the
+account at **$2.52** (that first trade's own profit) against ~1,050 of real
+capital. Max Drawdown then divided by it and published **−3392.46%**. The
+missing +1,050.00 deposit is still in Binance's income history — we never asked
+for it — and the same probe showed commissions (hundreds of dollars) are never
+captured either, by us or by the mother. Anchoring needs neither.
+
+Two consequences worth keeping in mind:
+- **Mid-period deposits no longer show as steps**, and the early curve is drawn
+  at a capital level including money that had not arrived yet. Deliberate: the
+  mother (`DashboardV2/selectors.ts`, `rebasedPart`) accepts the same trade-off.
+- **Backfilling transfers would now DOUBLE-COUNT** unless `initial_deposit` is
+  zeroed in the same operation — on the master they are the same $1,050. That is
+  a billing-input migration (`adjustedDeposit` → HWM → invoices), not a data fix.
+
+**Max Drawdown** (`maxDrawdownPct`) walks daily realized P&L from the curve's own
+starting level (`equity − realized`) and divides by the peak AT THE TROUGH, not
+the highest peak ever — a later run-up must not shrink a drawdown that already
+happened. Never measure it on an equity curve that contains funding.
+
+**Sharpe** (`sharpeFromCurve`) is annualized from the curve's daily fractional
+RETURNS, so account size cancels; it is `null`, never 0, when there is nothing
+to measure. It previously used dollar P&L divided by an unexplained 10.
+
+**Still on `created_at`, deliberately left alone:** `PublicStatsController` (the
+published track record's per-day flow buckets) and `BinancePnlSource` (which
+month a deposit bills in). Both change a number someone has already been shown.
+
 **Landing page track record (live).** The "See every trade, verified" section
 (`components/landing/Performance.tsx` + `TrackRecordChart.tsx`, math in
 `lib/trackRecord.ts`) is wired to `GET /api/public/track-record` — the FIRST and
@@ -328,9 +923,31 @@ only unauthenticated data endpoint (`PublicStatsController`, 5-minute server-sid
 cache). **Privacy rule for anything under `/api/public/*`: percentages and counts
 only — never a balance, a USD amount, an account name or a uni_id**, since the
 whole internet can read it (same rule as the public Telegram channel). That is
-why the chart's Y axis is a percentage, not dollars. Daily returns are measured
-against the capital the master account started each day with, and the headline
-figures are simple sums/means of those daily percentages, so "avg daily × trading
-days" reconciles with the total shown beside it. `available: false` in the
+why the chart's Y axis is a percentage, not dollars. `available: false` in the
 payload means nothing is published yet and the section renders its empty state
 rather than inventing numbers.
+
+Three rules decide the numbers, all learned from one incident (2026-09-04, the
+page publishing **−980%** against a real +46.6%):
+
+- **The record is scoped by `api_key`, never by the master's `uni_id`.** That
+  uni_id also owned a **testnet** account (`demo=1`) and can own invoice-sandbox
+  scratch accounts; their play-money trades were being published as a verified
+  track record. Filter is `demo = 0` AND `is_sandbox = 0`, soft-deleted rows
+  INCLUDED — a rotated key still traded real money, and excluding it would
+  rewrite history every time an account is reconnected.
+- **Opening capital is seeded from `binance_accounts.initial_deposit`**, then
+  walked forward with net flows and realized P&L — the same figure
+  `BinancePnlSource::adjustedDeposit` bills on. `binance_transactions` holds
+  only transfers the poller has SEEN, and an account funded before it was
+  connected has none: the live master had exactly zero. Starting the walk at
+  zero divided day one's P&L by the pennies of profit that preceded it, which
+  is where −1220% for a −0.73 day came from.
+- **The total is the daily returns CHAINED, not summed** — a time-weighted
+  return, which is the growth a customer can check against a balance.
+  Deposits still cannot inflate it, because each day's return is already
+  measured on that day's own capital. The deliberate consequence: **`avg daily ×
+  trading days` no longer reconciles with the total**, since the mean is
+  arithmetic and the total is compounded. Both are labelled as such
+  ("Compounded return" / "Per trading day"). Monthly points compound within the
+  month for the same reason.

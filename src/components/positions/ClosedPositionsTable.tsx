@@ -78,6 +78,14 @@ export default function ClosedPositionsTable({
                         {positive ? '+' : '−'}
                         {Math.abs(t.pnlPct).toFixed(2)}%
                       </span>
+                      {/* Why this figure is smaller than the raw trade profit:
+                          the exchange's commission is already out of it, which
+                          is what makes the row agree with the Binance app. */}
+                      {t.fee !== null && (
+                        <span className="text-[10.5px] text-faint font-mono pt-0.5">
+                          net of ${t.fee.toFixed(2)} fees
+                        </span>
+                      )}
                     </div>
                   </td>
                   {/* fixed-width numeral so the "Position(s)" label starts at the
@@ -100,9 +108,13 @@ export default function ClosedPositionsTable({
 
       {trades.length > 0 && (
         <div className="flex flex-col items-center gap-2 pt-3.5">
-          <span className="text-[11.5px] text-faint">
+          <span className="text-[11.5px] text-faint text-center">
             Showing {start + 1}–{Math.min(start + ITEMS_PER_PAGE, trades.length)}{' '}
             of {trades.length}
+            <span className="block pt-1">
+              P&amp;L is shown after estimated exchange fees, matching your
+              exchange account.
+            </span>
           </span>
           {totalPages > 1 && (
             <div className="flex items-center gap-2.5">

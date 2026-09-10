@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { SECTION_IDS, scrollToSection } from '../../lib/scroll'
 
 // Bull parallax lives in index.css as `.cta-parallax` (W3Schools
 // background-attachment:fixed technique) — it needs per-layer attachment/blend
@@ -27,21 +28,19 @@ export default function FinalCta() {
           Connect your exchange and switch on your first bot in minutes. Keep
           80% of every win — we take 20% of profit and nothing else.
         </p>
-        <div className="flex gap-3.5 justify-center flex-wrap mb-[34px]">
+        <div className="flex gap-3.5 justify-center flex-wrap">
           <button
             className="text-base font-bold bg-[#d9ad55] text-[#0a0c11] border-none py-4 px-8 rounded-pill cursor-pointer shadow-[0_12px_30px_rgba(217,173,85,0.28)]"
             onClick={() => navigate('/auth')}
           >
-            Start free with SineguAlerts →
+            Start free with Pixel Alpha →
           </button>
-          <button className="text-base font-bold bg-[rgba(10,12,17,0.6)] text-[#e7ecf3] border border-[#3a4450] py-4 px-[30px] rounded-pill cursor-pointer backdrop-blur-[4px]">
+          <button
+            className="text-base font-bold bg-[rgba(10,12,17,0.6)] text-[#e7ecf3] border border-[#3a4450] py-4 px-[30px] rounded-pill cursor-pointer backdrop-blur-[4px]"
+            onClick={() => scrollToSection(SECTION_IDS.performance)}
+          >
             See live results
           </button>
-        </div>
-        <div className="flex gap-[34px] justify-center flex-wrap font-mono text-xs text-[#9aa4b2]">
-          <span>◆ 48,200+ active traders</span>
-          <span>◆ $128M profit generated</span>
-          <span>◆ Funds stay on your exchange</span>
         </div>
       </div>
     </section>

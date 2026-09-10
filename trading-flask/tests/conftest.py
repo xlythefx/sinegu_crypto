@@ -38,6 +38,15 @@ def _isolate_trade_log(tmp_path, monkeypatch):
     monkeypatch.setattr(webhook, "TRADES_LOG", tmp_path / "webhook_trades.log")
 
 
+@pytest.fixture(autouse=True)
+def _isolate_report_state(tmp_path, monkeypatch):
+    """Keep tests from reading or stamping the real out/report_state.json —
+    a test that marked today's daily as sent would silence the live channel."""
+    import binance_abcd.reports as reports
+
+    monkeypatch.setattr(reports, "STATE_FILE", tmp_path / "report_state.json")
+
+
 @pytest.fixture()
 def app():
     from binance_abcd.main import create_app
@@ -101,8 +110,18 @@ def fake_accounts():
 
 @pytest.fixture()
 def fake_assets():
+    """Assets as `assets_api` hands them downstream — i.e. already normalized.
+
+    `max_size` is the raw `assets.max_increments` COLUMN (a position size);
+    `max_increments` is the entry COUNT derived from it (max_size / base_size).
+    Keep the two consistent when editing, or a fixture will describe an asset
+    that the real loader could never produce.
+    """
     return {
-        "BTCUSDT": {"ticker": "BTCUSDT", "base_size": 0.005, "max_increments": 10.0, "side": "ALL"},
-        "ETHUSDT": {"ticker": "ETHUSDT", "base_size": 0.1, "max_increments": 5.0, "side": "ALL"},
-        "DOGEUSDT": {"ticker": "DOGEUSDT", "base_size": 100.0, "max_increments": 3.0, "side": "LONG"},
+        "BTCUSDT": {"ticker": "BTCUSDT", "base_size": 0.005, "max_size": 0.05,
+                    "max_increments": 10.0, "side": "ALL"},
+        "ETHUSDT": {"ticker": "ETHUSDT", "base_size": 0.1, "max_size": 0.5,
+                    "max_increments": 5.0, "side": "ALL"},
+        "DOGEUSDT": {"ticker": "DOGEUSDT", "base_size": 100.0, "max_size": 300.0,
+                     "max_increments": 3.0, "side": "LONG"},
     }

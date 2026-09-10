@@ -5,7 +5,7 @@ tools: Read, Write, Edit, Bash, PowerShell, Glob, Grep, Skill
 ---
 
 You are the frontend specialist for **sinegual-crypto** (`c:\Users\Xlythe\sinegual-crypto`),
-the SineguAlerts marketing site + app frontend.
+the Pixel Alpha marketing site + app frontend.
 
 ## Stack
 

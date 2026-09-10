@@ -1,10 +1,21 @@
-const COLUMNS = [
+import { Link } from 'react-router-dom'
+import { COMPANY } from '../../lib/company'
+
+// `to` marks the entries that are real pages; the rest are still placeholders
+// and stay as plain (non-navigating) labels rather than dead links.
+const COLUMNS: { title: string; links: { label: string; to?: string }[] }[] = [
   {
     title: 'PRODUCT',
-    links: ['Flow Master', 'Structure', 'Exchanges', 'Pricing'],
+    links: [{ label: 'Trading Bot', to: '/trading-bot' }],
   },
-  { title: 'RESOURCES', links: ['Docs', 'Live results', 'Security', 'Status'] },
-  { title: 'COMPANY', links: ['About', 'Careers', 'Blog', 'Terms'] },
+  {
+    title: 'RESOURCES',
+    links: [{ label: 'Binance Docs', to: '/docs/binance' }],
+  },
+  {
+    title: 'COMPANY',
+    links: [{ label: 'Terms & Conditions', to: '/terms' }],
+  },
 ]
 
 export default function Footer() {
@@ -19,7 +30,7 @@ export default function Footer() {
               alt=""
             />
             <span className="font-display font-extrabold text-[17px]">
-              SineguAlerts
+              Pixel Alpha
             </span>
           </div>
           <p className="text-[13px] text-faint leading-[1.6] max-w-[280px]">
@@ -33,21 +44,36 @@ export default function Footer() {
               {col.title}
             </div>
             <div className="flex flex-col gap-2.5 text-[13.5px] text-muted">
-              {col.links.map((link) => (
-                <span className="cursor-pointer" key={link}>
-                  {link}
-                </span>
-              ))}
+              {col.links.map((link) =>
+                link.to ? (
+                  <Link
+                    className="cursor-pointer w-fit hover:text-text transition-colors"
+                    key={link.label}
+                    to={link.to}
+                  >
+                    {link.label}
+                  </Link>
+                ) : (
+                  <span className="cursor-pointer" key={link.label}>
+                    {link.label}
+                  </span>
+                ),
+              )}
             </div>
           </div>
         ))}
       </div>
-      <div className="max-w-[1280px] mx-auto py-[18px] px-10 border-t border-hair flex justify-between font-mono text-[11px] text-faint flex-wrap gap-2">
+      <div className="max-w-[1280px] mx-auto py-[18px] px-10 border-t border-hair flex justify-between items-center font-mono text-[11px] leading-[1.6] text-faint flex-wrap gap-x-8 gap-y-2">
         <span>
-          © 2026 SINEGUALERTS · ALL SYSTEMS OPERATIONAL{' '}
-          <span className="text-green">●</span>
+          © {new Date().getFullYear()} {COMPANY.tradingName} — a trading name of{' '}
+          {COMPANY.legalName} (Reg. {COMPANY.registryNumber}). All rights
+          reserved.
         </span>
-        <span>Responsive: grids collapse ≤900px · theme persists</span>
+        <span className="max-w-[52ch]">
+          Trading cryptocurrency futures carries a high level of risk and may
+          result in the loss of your capital. Past performance is not indicative
+          of future results.
+        </span>
       </div>
     </footer>
   )

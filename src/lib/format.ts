@@ -100,9 +100,27 @@ export function prevMonth(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-/** "Jul 21, 02:30 PM" from a MySQL datetime. */
+/**
+ * "Jul 21, 02:30 PM" from a MySQL datetime, in the READER's timezone.
+ *
+ * The API runs on `'timezone' => 'UTC'`, so every datetime it stores and returns
+ * is UTC. A bare "2026-09-09 04:30:22" has no zone designator, though, and the
+ * Date constructor reads a zoneless datetime as LOCAL — so the UTC digits were
+ * being printed unchanged and labelled as the reader's own time. A trade the
+ * exchange app showed at 11:30 read as 04:30 here, seven hours adrift, which
+ * looked like the two systems disagreeing about which trade this even was.
+ *
+ * Appending the 'Z' is what converts rather than relabels. Only when the string
+ * carries no zone of its own: an ISO timestamp that already ends in 'Z' or
+ * carries a ±hh:mm offset is correct as it stands, and stamping a second zone
+ * onto it would break the ones that are right.
+ */
 export function fmtDateTime(dt: string): string {
-  return new Date(dt.replace(' ', 'T')).toLocaleDateString('en-US', {
+  const iso = dt.replace(' ', 'T')
+  const zoned = /(?:Z|[+-]\d{2}:?\d{2})$/.test(iso) ? iso : `${iso}Z`
+  const date = new Date(zoned)
+  if (Number.isNaN(date.getTime())) return dt
+  return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',

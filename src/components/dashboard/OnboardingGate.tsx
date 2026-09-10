@@ -13,6 +13,8 @@ import {
 } from '../../lib/onboarding'
 
 const EXCHANGES_PATH = '/dashboard/exchanges'
+/** The nudges point straight at the wizard — the list page is one click further. */
+const CONNECT_PATH = '/dashboard/exchanges/connect'
 
 /**
  * Onboarding nudges for every /dashboard/* page, driven by the session user:
@@ -88,7 +90,7 @@ export default function OnboardingGate() {
         ctaLabel="Connect an exchange"
         onCta={() => {
           dismissConnect()
-          navigate(EXCHANGES_PATH)
+          navigate(CONNECT_PATH)
         }}
         dismissLabel="Maybe later"
         onDismiss={dismissConnect}
@@ -104,9 +106,9 @@ export default function OnboardingGate() {
           icon={<Link2 size={16} />}
           message="Connect an exchange to start receiving trades."
           cta={
-            pathname === EXCHANGES_PATH
+            pathname === EXCHANGES_PATH || pathname === CONNECT_PATH
               ? undefined
-              : { label: 'Connect exchange', to: EXCHANGES_PATH }
+              : { label: 'Connect exchange', to: CONNECT_PATH }
           }
         />
       )}

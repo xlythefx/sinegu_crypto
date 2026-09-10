@@ -24,12 +24,96 @@ export interface PaymentMethods {
     defaultCryptocurrency: string
     cryptocurrencies: string[]
   }
+  /** Which rail a trader is offered by default. Config, not code. */
+  defaultProvider: string
+  tron: {
+    /** The network is configured well enough to quote an address. */
+    enabled: boolean
+    /**
+     * Whether THIS caller may see the rail at all. Deliberately separate from
+     * `defaultProvider`: the rail goes visible to everyone well before it
+     * becomes the default for everyone.
+     */
+    visible: boolean
+    network: string
+    asset: string
+    chainLabel: string
+  }
   /**
    * Which keys are set, where the callbacks point, why this box resolved the
    * way it did. Present ONLY for `developer` accounts — the API decides that,
    * so on a trader session this is simply absent.
    */
   debug?: Record<string, unknown>
+}
+
+/**
+ * A reserved USDT-TRC20 amount for one invoice.
+ *
+ * `amount` is the EXACT figure to send, at full precision — the amount shown is
+ * the amount matched, so it must not be rounded for display. The address is a
+ * shared receiving wallet; the amount is what identifies the payer, because
+ * anyone paying from an exchange arrives with the exchange's address as the
+ * sender.
+ */
+export interface TronIntent {
+  intentId: number
+  invoiceId: number
+  network: string
+  /** Issued against test-network tokens (developer account). */
+  testAccount: boolean
+  /** An existing open reservation was returned rather than a new one minted. */
+  reused: boolean
+  asset: string
+  chainLabel: string
+  address: string
+  contractAddress: string
+  decimals: number
+  amount: string
+  amountUnits: string
+  usdAmount: number
+  currency: string
+  tolerance: { shortfallUsd: number; overpayUsd: number }
+  expiresAt: string | null
+  secondsRemaining: number
+  status: string
+  explorerUrl: string
+  /**
+   * Whether the developer test button may be shown. The server decides and
+   * enforces it again on the endpoint — the button never gets to vote.
+   */
+  simulatable: boolean
+  debug?: Record<string, unknown>
+}
+
+/** What the pay sheet polls while it waits for the chain. */
+export interface TronIntentStatus {
+  invoiceId: number
+  invoiceStatus: 'paid' | 'pending'
+  intent: {
+    id: number
+    status: string
+    network: string
+    address: string
+    amount: string
+    expiresAt: string | null
+    secondsRemaining: number
+  } | null
+  transfer: {
+    txHash: string
+    amount: string
+    confirmed: boolean
+    status: string
+    seenAt: string | null
+    explorerUrl: string
+  } | null
+  /**
+   * When the watcher last ran. Polling is the only way a TRON payment is ever
+   * noticed, so a stalled scheduler has to be visible — otherwise the sheet
+   * spins forever on a payment nothing is looking for.
+   */
+  lastScanAt: string | null
+  scanStale: boolean
 }
 
 /**
@@ -49,4 +133,15 @@ export interface CoinsbuyDeposit {
   cryptocurrency: string
   amount: number
   currency: string
+}
+
+/** What the pay sheet needs to render its success state. */
+export interface TronSettlement {
+  amount: string
+  asset: string
+  usdAmount: number
+  txHash: string | null
+  explorerUrl: string | null
+  /** Settled by the developer test button rather than by real funds. */
+  simulated: boolean
 }

@@ -15,7 +15,7 @@ import DataState from '../dashboard/DataState'
 import { useApiData } from '../../hooks/useApiData'
 import {
   clearScenarioAccount,
-  clearUserInvoices,
+  clearInvoices,
   getInvoiceScenarios,
   runInvoiceScenarios,
 } from '../../services/admin'
@@ -126,6 +126,13 @@ export default function SandboxScenarioCard({ users }: { users: AdminUser[] }) {
   const [cleanup, setCleanup] = useState(false)
   const [includePaid, setIncludePaid] = useState(false)
 
+  /**
+   * Whose invoices "Clear invoices" removes. A visible choice, not an
+   * inference from an empty user box — the gap between "this tester's rows"
+   * and "everyone's" is too wide to leave to a field someone forgot to fill.
+   */
+  const [clearScope, setClearScope] = useState<'user' | 'all'>('user')
+
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [banner, setBanner] = useState<string | null>(null)
@@ -143,8 +150,12 @@ export default function SandboxScenarioCard({ users }: { users: AdminUser[] }) {
       return next
     })
 
+  /** Everything but a global invoice wipe is scoped to one user. */
+  const globalClear = (next: Pending) =>
+    next.kind === 'clear-invoices' && clearScope === 'all'
+
   const ask = (next: Pending) => {
-    if (!uniId) {
+    if (!uniId && !globalClear(next)) {
       setErr('Pick a user first.')
       return
     }
@@ -189,9 +200,14 @@ export default function SandboxScenarioCard({ users }: { users: AdminUser[] }) {
     setErr(null)
     setBanner(null)
     try {
-      const res = await clearUserInvoices(uniId, { includePaid })
+      const all = clearScope === 'all'
+      const res = await clearInvoices({
+        uniId: all ? undefined : uniId,
+        includePaid,
+      })
       setBanner(
         `Deleted ${res.deleted} invoice${res.deleted === 1 ? '' : 's'}` +
+          (all && res.users ? ` across ${res.users} user${res.users === 1 ? '' : 's'}` : '') +
           (res.skipped_paid ? ` · kept ${res.skipped_paid} already paid` : ''),
       )
     } catch (e) {
@@ -462,8 +478,28 @@ export default function SandboxScenarioCard({ users }: { users: AdminUser[] }) {
       <div className="flex flex-wrap items-center gap-3 mt-[18px] pt-[18px] border-t border-hair">
         <span className="text-[12px] text-muted flex-[1_1_180px]">
           Cleanup for{' '}
-          <span className="font-bold text-text">{selected?.name || selected?.email || 'the selected user'}</span>
+          <span className="font-bold text-text">
+            {clearScope === 'all'
+              ? 'every user'
+              : selected?.name || selected?.email || 'the selected user'}
+          </span>
         </span>
+        <label className="inline-flex items-center gap-2 text-[12.5px] text-muted">
+          <span className="text-faint">Invoices:</span>
+          <select
+            className={`${INPUT} ${BTN_SM} cursor-pointer [&>option]:bg-surface [&>option]:text-text ${
+              clearScope === 'all'
+                ? 'border-[color-mix(in_srgb,var(--red)_45%,transparent)] text-red'
+                : ''
+            }`}
+            value={clearScope}
+            onChange={(e) => setClearScope(e.target.value as 'user' | 'all')}
+            aria-label="Which invoices to clear"
+          >
+            <option value="user">Selected user only</option>
+            <option value="all">All users (global)</option>
+          </select>
+        </label>
         <label className="inline-flex items-center gap-2 text-[12.5px] text-muted cursor-pointer">
           <input
             type="checkbox"
@@ -479,7 +515,8 @@ export default function SandboxScenarioCard({ users }: { users: AdminUser[] }) {
           disabled={busy !== null}
           onClick={() => ask({ kind: 'clear-invoices' })}
         >
-          <Trash2 size={13} /> Clear invoices
+          <Trash2 size={13} />{' '}
+          {clearScope === 'all' ? 'Clear ALL invoices' : 'Clear invoices'}
         </button>
         <button
           type="button"
@@ -498,16 +535,25 @@ export default function SandboxScenarioCard({ users }: { users: AdminUser[] }) {
           pending?.kind === 'run'
             ? `Run ${pending.title}?`
             : pending?.kind === 'clear-invoices'
-              ? 'Delete this user’s invoices?'
+              ? clearScope === 'all'
+                ? 'Delete invoices for EVERY user?'
+                : 'Delete this user’s invoices?'
               : 'Remove the scenario account?'
         }
         message={
           pending?.kind === 'run'
             ? `A throwaway sandbox account will be created under ${selected?.email ?? 'this user'} and reset between cases. Their real accounts and invoices are not touched.`
             : pending?.kind === 'clear-invoices'
-              ? includePaid
-                ? `Every invoice belonging to ${selected?.email ?? 'this user'} will be deleted, INCLUDING settled ones. This cannot be undone.`
-                : `Unpaid invoices belonging to ${selected?.email ?? 'this user'} will be deleted. Settled invoices are kept. This cannot be undone.`
+              ? // Four sentences, one per scope × include-paid combination —
+                // the confirmation is the last place the scope is stated, so it
+                // says it in words rather than repeating the button's label.
+                clearScope === 'all'
+                ? includePaid
+                  ? 'EVERY invoice in the database will be deleted, for every user, INCLUDING settled ones. Payment records go with them. This cannot be undone.'
+                  : 'Every unpaid invoice in the database will be deleted, for every user. Settled invoices are kept. This cannot be undone.'
+                : includePaid
+                  ? `Every invoice belonging to ${selected?.email ?? 'this user'} will be deleted, INCLUDING settled ones. This cannot be undone.`
+                  : `Unpaid invoices belonging to ${selected?.email ?? 'this user'} will be deleted. Settled invoices are kept. This cannot be undone.`
               : 'The scratch account and all of its seeded trades, transfers and invoices will be permanently removed.'
         }
         confirmLabel={pending?.kind === 'run' ? 'Yes, run it' : 'Yes, delete'}

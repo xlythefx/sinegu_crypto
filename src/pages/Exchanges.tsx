@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import {
   BarChart3,
   Building2,
@@ -12,13 +12,12 @@ import DashboardLayout from '../components/dashboard/DashboardLayout'
 import DataState from '../components/dashboard/DataState'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import ExchangeAccountCard from '../components/exchanges/ExchangeAccountCard'
-import ConnectExchangeWizard from '../components/exchanges/ConnectExchangeWizard'
 import RenameAccountModal from '../components/exchanges/RenameAccountModal'
 import { EXCHANGE_META, EXCHANGE_ORDER } from '../components/exchanges/meta'
 import { useApiData } from '../hooks/useApiData'
 import {
   deleteExchangeAccount,
-  getExchangeAccounts,
+  getExchangeAccountsWithMeta,
 } from '../services/exchanges'
 import { ApiError, getApiErrorMessage } from '../services/api'
 import { updateStoredUser } from '../lib/session'
@@ -28,9 +27,9 @@ type Filter = 'all' | ExchangeKind
 
 const FILTER_ORDER: Filter[] = ['all', ...EXCHANGE_ORDER]
 
-/** Rounded pill CTA — "Connect exchange". */
+/** Rounded pill CTA — "Connect exchange". Links to the wizard page. */
 const CONNECT_BTN =
-  'flex h-[38px] items-center gap-[7px] rounded-pill bg-accent px-4 text-[13px] font-bold text-on-accent shadow-[0_10px_24px_var(--glow)] transition-[filter] hover:brightness-[1.06]'
+  'inline-flex h-[38px] items-center gap-[7px] rounded-pill bg-accent px-4 text-[13px] font-bold text-on-accent shadow-[0_10px_24px_var(--glow)] transition-[filter] hover:brightness-[1.06]'
 
 const EMPTY_FEATURES = [
   { icon: Link2, label: 'API connection' },
@@ -40,18 +39,30 @@ const EMPTY_FEATURES = [
 ]
 
 export default function Exchanges() {
-  const { data, loading, error, reload } = useApiData(getExchangeAccounts)
+  const { data, loading, error, reload } = useApiData(getExchangeAccountsWithMeta)
 
   const [filter, setFilter] = useState<Filter>('all')
-  const [wizardOpen, setWizardOpen] = useState(false)
   const [renameTarget, setRenameTarget] = useState<ExchangeAccount | null>(null)
   const [disconnectTarget, setDisconnectTarget] =
     useState<ExchangeAccount | null>(null)
   const [disconnecting, setDisconnecting] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
+  /**
+   * Rows updated in place by a manual balance refresh. Patched rather than
+   * reloaded because `useApiData.reload()` flips `loading` back on, which would
+   * swap the whole grid for skeletons just to change one number.
+   */
+  const [refreshed, setRefreshed] = useState<Record<number, ExchangeAccount>>({})
+
   // Every stored account is Binance for now — Bybit/MEXC land later.
-  const accounts = useMemo(() => data ?? [], [data])
+  const accounts = useMemo(
+    () => (data?.accounts ?? []).map((a) => refreshed[a.id] ?? a),
+    [data, refreshed],
+  )
+
+  /** The address a user must allow-list when their key blocks us. */
+  const serverIp = data?.serverIp ?? null
 
   const counts = useMemo<Record<Filter, number>>(
     () => ({
@@ -120,14 +131,10 @@ export default function Exchanges() {
           </p>
         </div>
         <div className="flex flex-col items-end gap-2.5 max-[700px]:w-full max-[700px]:items-start">
-          <button
-            type="button"
-            className={CONNECT_BTN}
-            onClick={() => setWizardOpen(true)}
-          >
+          <Link className={CONNECT_BTN} to="/dashboard/exchanges/connect">
             <Plus size={15} />
             Connect exchange
-          </button>
+          </Link>
           <div className="flex flex-wrap gap-1.5">
             {FILTER_ORDER.map((key) => {
               const label = key === 'all' ? 'All' : EXCHANGE_META[key].label
@@ -190,14 +197,13 @@ export default function Exchanges() {
             Connect an exchange to start tracking trades, viewing real-time
             PNL, and unlocking analytics.
           </p>
-          <button
-            type="button"
+          <Link
             className={`${CONNECT_BTN} mx-auto`}
-            onClick={() => setWizardOpen(true)}
+            to="/dashboard/exchanges/connect"
           >
             <Plus size={15} />
             Connect an exchange
-          </button>
+          </Link>
           <div className="mt-7 flex flex-wrap justify-center gap-x-[22px] gap-y-3">
             {EMPTY_FEATURES.map(({ icon: Icon, label }) => (
               <div
@@ -224,18 +230,15 @@ export default function Exchanges() {
                 setRenameTarget(a)
               }}
               onDisconnect={(a) => setDisconnectTarget(a)}
+              onBalanceRefreshed={(fresh) =>
+                setRefreshed((prev) => ({ ...prev, [fresh.id]: fresh }))
+              }
+              serverIp={serverIp}
             />
           ))}
         </div>
       )}
       </div>
-
-      <ConnectExchangeWizard
-        open={wizardOpen}
-        onClose={() => setWizardOpen(false)}
-        onConnected={() => reload()}
-        connectedKinds={accounts.length > 0 ? ['binance'] : []}
-      />
 
       <RenameAccountModal
         account={renameTarget}

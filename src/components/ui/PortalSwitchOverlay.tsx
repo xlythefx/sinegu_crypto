@@ -73,7 +73,7 @@ export function PortalSwitchProvider({ children }: { children: ReactNode }) {
               alt=""
             />
             <div className="font-display text-[20px] font-bold text-text tracking-[0.2px]">
-              SineguAlerts
+              Pixel Alpha
             </div>
             <div className="font-mono text-[12px] font-semibold uppercase tracking-[2.5px] text-accent">
               {sw.portal}

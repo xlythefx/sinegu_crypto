@@ -22,7 +22,7 @@ export default function Nav() {
             alt=""
           />
           <span className="font-display font-extrabold text-xl">
-            SineguAlerts
+            Pixel Alpha
           </span>
         </div>
         <div className="flex gap-[26px] text-sm font-medium text-muted whitespace-nowrap">

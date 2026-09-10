@@ -66,6 +66,17 @@ def test_admin_falls_back_to_the_main_chat(sent, monkeypatch):
     assert sent[1][1] == "-100999"
 
 
+def test_startup_goes_to_the_admin_chat_with_its_counts(sent, monkeypatch):
+    """The restart ping is an ops event carrying account counts — it belongs in
+    the admin group, never on the channel anyone can read."""
+    monkeypatch.setattr(hooks, "TELEGRAM_ADMIN_CHAT_ID", "-100999")
+    notify.notify_startup(7, 4)
+    text, chat_id = sent[0]
+    assert chat_id == "-100999"
+    assert "restarted" in text
+    assert "7 accounts" in text and "4 assets" in text
+
+
 # --- Formatting ---------------------------------------------------------------
 
 def test_price_formatting_keeps_sub_dollar_precision():
@@ -81,22 +92,38 @@ def test_pct_never_renders_negative_zero():
     assert notify._fmt_pct("nope") == ""
 
 
-def test_entry_message_contains_price_and_counts_only(sent):
+def test_entry_message_shows_price_and_increment_but_never_account_counts(sent):
     notify.notify_entry(
         "BUY", "BTCUSDT", fill_price=109250.5, price=109000,
-        filled=3, skipped=1, failed=0,
+        filled=3, increment=2, max_increments=3,
     )
     text = sent[0][0]
     assert "Opening Long Positions — BTCUSDT" in text
+    assert "Increment (2/3)" in text
     assert "Entry Price: 109,250.50" in text   # executed price wins over the signal price
-    assert "Accounts: 3 filled · 1 skipped" in text
-    # The channel never reveals how the engine is configured.
+    # How many customers filled is business information — the channel is public.
+    assert "Accounts" not in text
+    assert "filled" not in text
+    # The channel never reveals how the engine is configured either.
     assert "Leverage" not in text
     assert "Strategy" not in text
 
 
+def test_entry_increment_without_a_cap_uses_the_hash_form(sent):
+    notify.notify_entry("BUY", "BTCUSDT", fill_price=109250.5, filled=1,
+                        increment=2, max_increments=None)
+    assert "Increment (#2)" in sent[0][0]
+
+
+def test_entry_omits_the_increment_when_the_depth_is_unknown(sent):
+    """No batched position read and no cap configured — publish a guess, never."""
+    notify.notify_entry("BUY", "BTCUSDT", fill_price=109250.5, filled=1,
+                        increment=None, max_increments=3)
+    assert "Increment" not in sent[0][0]
+
+
 def test_entry_with_no_fills_is_silent(sent):
-    notify.notify_entry("BUY", "BTCUSDT", price=109000, filled=0, skipped=3)
+    notify.notify_entry("BUY", "BTCUSDT", price=109000, filled=0)
     assert sent == []
 
 
@@ -123,8 +150,42 @@ def test_exit_flushes_once_every_account_reports(sent):
     # 40 profit on (1030-30)+(510-10) = 1500 pre-trade capital
     assert "PnL: +2.667%" in text
     assert "Realized" not in text  # percentage only — no USDT amount
-    assert "Accounts: 2 closed" in text
+    assert "Accounts" not in text  # counts are not public on exits either
     assert batch_id not in notify._batches
+
+
+def test_exit_message_reports_how_deep_the_closed_stack_was(sent):
+    batch_id = notify.open_exit_batch("EXIT_LONG", "BTCUSDT", price=110000)
+    notify.seal_exit_batch(batch_id, expected=2)
+    notify.report_exit_fill(batch_id, realized_pnl=30.0, exit_price=110100, quantity=2,
+                            balance=1030.0, increments=3, max_increments=3)
+    notify.report_exit_fill(batch_id, realized_pnl=10.0, exit_price=110200, quantity=1,
+                            balance=510.0, increments=3, max_increments=3)
+    text = sent[0][0]
+    assert "Increments Closed (3/3)" in text
+    assert "Accounts" not in text
+
+
+def test_exit_increment_takes_the_most_common_across_accounts(sent):
+    """One account out of step must not decide what the channel says."""
+    batch_id = notify.open_exit_batch("EXIT_LONG", "BTCUSDT", price=110000)
+    notify.seal_exit_batch(batch_id, expected=3)
+    for depth in (2, 2, 1):
+        notify.report_exit_fill(batch_id, realized_pnl=1.0, exit_price=110100, quantity=1,
+                                balance=1000.0, increments=depth, max_increments=3)
+    assert "Increments Closed (2/3)" in sent[0][0]
+
+
+def test_exit_omits_the_increment_when_no_account_could_derive_it(sent):
+    """A close for a ticker whose asset row is gone still announces — exits
+    skip every asset gate, so the depth is simply unknown."""
+    batch_id = notify.open_exit_batch("EXIT_LONG", "BTCUSDT", price=110000)
+    notify.seal_exit_batch(batch_id, expected=1)
+    notify.report_exit_fill(batch_id, realized_pnl=30.0, exit_price=110100, quantity=1,
+                            balance=1030.0, increments=None, max_increments=None)
+    text = sent[0][0]
+    assert "Increments Closed" not in text
+    assert "Exit Price: 110,100.00" in text
 
 
 def test_exit_reports_arriving_before_the_seal_still_flush(sent):
@@ -140,7 +201,7 @@ def test_exit_reports_arriving_before_the_seal_still_flush(sent):
 
 def test_exit_with_nothing_closed_sends_nothing(sent):
     batch_id = notify.open_exit_batch("EXIT_LONG", "BTCUSDT")
-    notify.seal_exit_batch(batch_id, expected=0, skipped=3)
+    notify.seal_exit_batch(batch_id, expected=0)
     assert sent == []
     assert batch_id not in notify._batches
 
@@ -199,6 +260,27 @@ def test_account_failures_flag_exits_as_manual_action(sent):
     assert "Live One — -2015 invalid key" in text
 
 
+def test_a_retrying_exit_is_amber_not_red(sent):
+    """Red is reserved for what nobody is going to fix. An exchange timeout the
+    queue clears 60s later is not that, and dressing it as one is how the real
+    alert stops being read."""
+    notify.notify_account_failures(
+        "EXIT_LONG", "LTCUSDT", [("Demo Two", "-1007 execution status unknown")], retrying=True,
+    )
+    text = sent[0][0]
+    assert "RETRYING" in text
+    assert "MANUAL ACTION REQUIRED" not in text
+    assert "a red alert follows only if they all fail" in text
+
+
+def test_retry_abandoned_is_the_red_alert(sent):
+    notify.notify_retry_abandoned("EXIT_LONG", "LTCUSDT", ["uni-demo-2"], 5)
+    text = sent[0][0]
+    assert "MANUAL ACTION REQUIRED" in text
+    assert "gave up after 5 attempt(s)" in text
+    assert "uni-demo-2" in text
+
+
 def test_account_failures_truncate_long_lists(sent):
     notify.notify_account_failures("BUY", "BTCUSDT", [(f"acc{i}", "err") for i in range(25)])
     text = sent[0][0]
@@ -209,3 +291,30 @@ def test_account_failures_truncate_long_lists(sent):
 def test_rejected_signal_names_the_reason(sent):
     notify.notify_rejected("BUY", "PEPEUSDT", "asset_not_configured")
     assert "asset_not_configured" in sent[0][0]
+
+
+# --- Increments ---------------------------------------------------------------
+
+def test_increment_bar_fills_then_pads():
+    assert notify._increment_bar(2, 3) == "🟢🟢⚪"
+    assert notify._increment_bar(3, 3) == "🟢🟢🟢"
+    assert notify._increment_bar(5, 3) == "🟢🟢🟢"   # never overflows the cap
+    assert notify._increment_bar(1, 0) == ""
+
+
+def test_max_increments_note_is_admin_only_with_a_bar(sent):
+    notify.notify_max_increments("BUY", "BTCUSDT", [("Live One", 3, 3), ("Live Two", 3, 3)])
+    text = sent[0][0]
+    assert "Max increments reached — BTCUSDT (BUY)" in text
+    assert "Live One — 3/3 🟢🟢🟢 · no add placed" in text
+    assert "(2 account(s) affected)" in text
+
+
+def test_max_increments_survives_an_underivable_depth(sent):
+    notify.notify_max_increments("BUY", "BTCUSDT", [("Live One", None, None)])
+    assert "Live One — already at max · no add placed" in sent[0][0]
+
+
+def test_max_increments_sends_nothing_when_no_account_was_capped(sent):
+    notify.notify_max_increments("BUY", "BTCUSDT", [])
+    assert sent == []

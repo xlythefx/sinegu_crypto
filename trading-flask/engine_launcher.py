@@ -35,7 +35,7 @@ load_dotenv(ROOT / ".env", override=False)
 PORT = os.environ.get("BINANCE_ABCD_FLASK_PORT", "5010")
 SECRET = os.environ.get("BINANCE_ABCD_WEBHOOK_SECRET", "")
 WEBHOOK_PATH = "/binance_abcd_webhook"
-PROD_BASE = "http://2.24.139.176"
+PROD_BASE = "https://pixel-alpha.com"
 
 LOCAL_URL = f"http://127.0.0.1:{PORT}{WEBHOOK_PATH}"
 PROD_URL = f"{PROD_BASE}{WEBHOOK_PATH}"

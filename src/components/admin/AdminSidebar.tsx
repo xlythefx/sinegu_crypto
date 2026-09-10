@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react'
 import {
   LayoutDashboard,
   UserCog,
+  KeyRound,
   Target,
   Coins,
   Bell,
@@ -15,6 +16,7 @@ import {
   Home,
   LogOut,
   Share2,
+  ArrowDownToLine,
 } from 'lucide-react'
 import { usePortalSwitch } from '../ui/PortalSwitchOverlay'
 import { getUser } from '../../lib/session'
@@ -48,6 +50,7 @@ export interface AdminNavItem {
 export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { label: 'Admin Dashboard', url: '/admin', icon: LayoutDashboard },
   { label: 'User Management', url: '/admin/users', icon: UserCog },
+  { label: 'API Keys', url: '/admin/api-keys', icon: KeyRound },
   { label: 'Strategies', url: '/admin/strategies', icon: Target },
   { label: 'Trading Assets', url: '/admin/assets', icon: Coins },
   { label: 'Sandbox', url: '/admin/sandbox', icon: FlaskConical },
@@ -55,6 +58,14 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { label: 'Bot Engine', url: '/admin/engine', icon: ServerCog },
   { label: 'Signal Log', url: '/admin/trade-logs', icon: ScrollText },
   { label: 'Invoice History', url: '/admin/invoices', icon: FileText },
+  // developerOnly while the direct-wallet rail is hidden from customers. Drop
+  // the flag the day payments.tron.public goes true.
+  {
+    label: 'Crypto Transfers',
+    url: '/admin/tron-transfers',
+    icon: ArrowDownToLine,
+    developerOnly: true,
+  },
   { label: 'Affiliate', url: '/admin/referrals', icon: Share2 },
   { label: 'System Resources', url: '/admin/resources', icon: Activity },
   { label: 'Database', url: '/admin/database', icon: Database, developerOnly: true },
@@ -72,10 +83,10 @@ export default function AdminSidebar({ onLogout }: AdminSidebarProps) {
 
   return (
     <aside className={RAIL}>
-      <Link to="/" className={BRAND} aria-label="SineguAlerts home">
+      <Link to="/" className={BRAND} aria-label="Pixel Alpha home">
         <img className={BRAND_LOGO} src="/assets/logo.png" alt="" />
         <span className={BRAND_TEXT}>
-          <span className={BRAND_TITLE}>SineguAlerts</span>
+          <span className={BRAND_TITLE}>Pixel Alpha</span>
           <span className={BRAND_SUB}>Admin Portal</span>
         </span>
       </Link>

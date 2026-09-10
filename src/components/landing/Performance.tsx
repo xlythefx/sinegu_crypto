@@ -3,6 +3,7 @@ import { useApiData } from '../../hooks/useApiData'
 import { getTrackRecord } from '../../services/publicStats'
 import { fmtMediumDate } from '../../lib/format'
 import { CHART_MODES, statCards, type ChartMode } from '../../lib/trackRecord'
+import { SECTION_IDS } from '../../lib/scroll'
 import TrackRecordChart from './TrackRecordChart'
 
 const CONTAINER = 'max-w-[1280px] mx-auto px-10 max-[560px]:px-5'
@@ -48,7 +49,11 @@ export default function Performance() {
       : null
 
   return (
-    <section data-aos="fade-up" className={`${CONTAINER} pt-[60px] pb-[76px]`}>
+    <section
+      id={SECTION_IDS.performance}
+      data-aos="fade-up"
+      className={`${CONTAINER} scroll-mt-6 pt-[60px] pb-[76px]`}
+    >
       <div className="text-center mb-9">
         <h2 className={SECTION_TITLE}>See every trade, verified</h2>
         <p className={SECTION_SUB}>
@@ -56,7 +61,7 @@ export default function Performance() {
           numbers we're paid on.
         </p>
       </div>
-      <div className="grid grid-cols-6 gap-3.5 mb-5 max-[1100px]:grid-cols-3 max-[900px]:grid-cols-2 max-[560px]:grid-cols-1">
+      <div className="grid grid-cols-5 gap-3.5 mb-5 max-[1100px]:grid-cols-3 max-[900px]:grid-cols-2 max-[560px]:grid-cols-1">
         {cards.map((card) => (
           <div
             className="bg-surface border border-border rounded-card p-card"

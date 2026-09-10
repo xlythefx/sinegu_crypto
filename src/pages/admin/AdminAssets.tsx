@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
+import AssetCard from '../../components/admin/AssetCard'
 import AssetFormModal from '../../components/admin/AssetFormModal'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import { useApiData } from '../../hooks/useApiData'
@@ -13,48 +14,15 @@ import {
   type AssetImageChange,
 } from '../../services/admin'
 import { getApiErrorMessage } from '../../services/api'
-import { displaySymbol } from '../../lib/chart'
-import { fmtMediumDate, fmtQty } from '../../lib/format'
 import type { AdminAsset, AssetInput } from '../../types/admin'
 
-const PAGE_SIZE = 10
+/** 12 divides evenly by the 1/2/3-column grid, so no ragged last row. */
+const PAGE_SIZE = 12
 
-/* ---- shared class strings (were the .aassets-* rules in AdminAssets.css) ---- */
 const INPUT =
   'h-[38px] rounded-field border border-border bg-surface2 px-3 text-[13px] text-text outline-none focus:border-accent [&>option]:bg-surface [&>option]:text-text'
-const ICON_BTN_BASE =
-  'inline-flex items-center justify-center w-[30px] h-[30px] rounded-btn border border-border bg-surface2 text-muted transition-[border-color,color] duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
-const ICON_BTN = `${ICON_BTN_BASE} hover:border-accent hover:text-text`
-const ICON_BTN_DANGER = `${ICON_BTN_BASE} hover:border-red hover:text-red`
-const TH =
-  'border-b border-border py-2.5 px-3 text-left font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em] text-faint whitespace-nowrap'
-const TH_RIGHT = `${TH} text-right`
-const TD = 'border-b border-hair py-[11px] px-3 align-middle whitespace-nowrap'
-const TD_NUM = `${TD} text-right font-mono`
-const TD_META = `${TD} text-[12.5px] text-muted`
 const PAG_BTN =
   'rounded-pill border border-border bg-surface2 py-[7px] px-[15px] text-[12.5px] font-semibold text-text hover:border-accent disabled:opacity-45 disabled:cursor-not-allowed'
-const TOGGLE_BASE =
-  'relative mr-2 inline-block w-9 h-5 rounded-pill border align-middle transition-[background,border-color] duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
-const KNOB_BASE =
-  'absolute left-0.5 top-0.5 w-[14px] h-[14px] rounded-full transition-[transform,background] duration-150'
-
-const SIDE_TONE: Record<AdminAsset['side'], string> = {
-  LONG: 'text-green border-[color-mix(in_srgb,var(--green)_35%,transparent)] bg-[color-mix(in_srgb,var(--green)_8%,transparent)]',
-  SHORT:
-    'text-red border-[color-mix(in_srgb,var(--red)_35%,transparent)] bg-[color-mix(in_srgb,var(--red)_8%,transparent)]',
-  ALL: 'text-muted border-border',
-}
-
-function SideBadge({ side }: { side: AdminAsset['side'] }) {
-  return (
-    <span
-      className={`rounded-pill border px-2.5 py-[3px] font-mono text-[10.5px] font-semibold tracking-[0.06em] ${SIDE_TONE[side]}`}
-    >
-      {side}
-    </span>
-  )
-}
 
 export default function AdminAssets() {
   const { data: assets, loading, error, reload } = useApiData(getAdminAssets)
@@ -106,6 +74,12 @@ export default function AdminAssets() {
       return matchesSearch && matchesType && matchesTicker
     })
   }, [list, search, typeFilter, tickerFilter])
+
+  /** How many of the matched assets the bot may actually trade right now. */
+  const enabledCount = useMemo(
+    () => filtered.filter((a) => a.enabled).length,
+    [filtered]
+  )
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
@@ -222,12 +196,16 @@ export default function AdminAssets() {
               Showing {filtered.length === 0 ? 0 : start + 1}–
               {Math.min(start + PAGE_SIZE, filtered.length)} of{' '}
               {filtered.length} assets
+              <span className="text-faint">
+                {' · '}
+                {enabledCount} tradable, {filtered.length - enabledCount} off
+              </span>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <input
               type="search"
-              className={`${INPUT} min-w-[190px]`}
+              className={`${INPUT} min-w-0 flex-1 sm:min-w-[190px] sm:flex-none`}
               placeholder="Search by ticker, type…"
               value={search}
               onChange={(e) => {
@@ -288,113 +266,31 @@ export default function AdminAssets() {
           </p>
         )}
 
+        {/* Re-mounted on every filter/page change so the new set reveals
+            instead of hard-cutting (project convention). */}
         <div
-          key={`${typeFilter}-${tickerFilter}-${safePage}`}
-          className="overflow-x-auto animate-[fadeup_0.35s_ease-out]"
+          key={`${search}-${typeFilter}-${tickerFilter}-${safePage}`}
+          className="animate-[fadeup_0.35s_ease-out]"
         >
-          <table className="w-full min-w-[880px] border-collapse text-[13.5px]">
-            <thead>
-              <tr>
-                {['Ticker', 'Broker', 'Side'].map((h) => (
-                  <th key={h} className={TH}>
-                    {h}
-                  </th>
-                ))}
-                <th className={TH_RIGHT}>Max Position Size</th>
-                <th className={TH_RIGHT}>Base Size</th>
-                {['Status', 'Created', 'Updated'].map((h) => (
-                  <th key={h} className={TH}>
-                    {h}
-                  </th>
-                ))}
-                <th className={TH_RIGHT}>Actions</th>
-              </tr>
-            </thead>
-            <tbody className="[&_tr:last-child_td]:border-0">
-              {pageRows.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="py-9 px-3 text-center text-muted">
-                    No assets match your search. Adjust the filters or create a
-                    new asset.
-                  </td>
-                </tr>
-              )}
+          {pageRows.length === 0 ? (
+            <p className="rounded-card border border-dashed border-border bg-surface2 px-4 py-10 text-center text-[13px] text-muted">
+              No assets match your search. Adjust the filters or create a new
+              asset.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3.5 min-[560px]:grid-cols-2 min-[1180px]:grid-cols-3">
               {pageRows.map((asset) => (
-                <tr key={asset.asset_id} className="hover:bg-surface2">
-                  <td className={TD}>
-                    <div className="flex items-center gap-2.5">
-                      {asset.asset_image ? (
-                        <img
-                          className="w-[26px] h-[26px] flex-none rounded-full object-cover border border-border bg-surface2"
-                          src={asset.asset_image}
-                          alt=""
-                        />
-                      ) : (
-                        <span className="inline-flex items-center justify-center w-[26px] h-[26px] flex-none rounded-full bg-accent-soft font-mono text-[12px] font-bold text-accent">
-                          {asset.ticker[0]}
-                        </span>
-                      )}
-                      <span className="font-mono font-bold">
-                        {displaySymbol(asset.ticker)}
-                      </span>
-                    </div>
-                  </td>
-                  <td className={TD}>{asset.broker ?? '—'}</td>
-                  <td className={TD}>
-                    <SideBadge side={asset.side} />
-                  </td>
-                  <td className={TD_NUM}>{fmtQty(asset.max_increments)}</td>
-                  <td className={TD_NUM}>{fmtQty(asset.base_size)}</td>
-                  <td className={TD}>
-                    <button
-                      type="button"
-                      className={`${TOGGLE_BASE} ${asset.enabled ? 'border-accent bg-accent-soft' : 'border-border bg-surface2'}`}
-                      onClick={() => setToggling(asset)}
-                      disabled={actionBusy}
-                      aria-label={`${asset.enabled ? 'Disable' : 'Enable'} ${asset.ticker}`}
-                    >
-                      <span
-                        className={`${KNOB_BASE} ${asset.enabled ? 'translate-x-4 bg-accent' : 'bg-muted'}`}
-                      />
-                    </button>
-                    <span
-                      className={`text-[12px] ${asset.enabled ? 'text-green' : 'text-muted'}`}
-                    >
-                      {asset.enabled ? 'Enabled' : 'Disabled'}
-                    </span>
-                  </td>
-                  <td className={TD_META}>
-                    {asset.created_at ? fmtMediumDate(asset.created_at) : '—'}
-                  </td>
-                  <td className={TD_META}>
-                    {asset.updated_at ? fmtMediumDate(asset.updated_at) : '—'}
-                  </td>
-                  <td className={`${TD} text-right`}>
-                    <div className="inline-flex gap-1.5">
-                      <button
-                        type="button"
-                        className={ICON_BTN}
-                        onClick={() => openEdit(asset)}
-                        disabled={actionBusy}
-                        aria-label={`Edit ${asset.ticker}`}
-                      >
-                        <Pencil size={15} />
-                      </button>
-                      <button
-                        type="button"
-                        className={ICON_BTN_DANGER}
-                        onClick={() => setDeleting(asset)}
-                        disabled={actionBusy}
-                        aria-label={`Delete ${asset.ticker}`}
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                <AssetCard
+                  key={asset.asset_id}
+                  asset={asset}
+                  busy={actionBusy}
+                  onToggle={setToggling}
+                  onEdit={openEdit}
+                  onDelete={setDeleting}
+                />
               ))}
-            </tbody>
-          </table>
+            </div>
+          )}
         </div>
 
         {filtered.length > 0 && totalPages > 1 && (

@@ -20,10 +20,31 @@
       "Bash(python .claude/deploy_sinegualcrypto.py:*)",
       "PowerShell(python .claude/deploy_sinegualcrypto.py:*)",
       "Bash(py .claude/deploy_sinegualcrypto.py:*)",
-      "PowerShell(py .claude/deploy_sinegualcrypto.py:*)"
+      "PowerShell(py .claude/deploy_sinegualcrypto.py:*)",
+      "PowerShell($env:PYTHONIOENCODING='utf-8'; python \"C:\\\\Users\\\\Xlythe\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Xlythe-sinegual-crypto\\\\27eb5dc2-baa5-4d79-9f55-d0b9dce00e2b\\\\scratchpad\\\\render_check.py\")",
+      "PowerShell($env:PYTHONIOENCODING='utf-8'; python \"C:\\\\Users\\\\Xlythe\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Xlythe-sinegual-crypto\\\\27eb5dc2-baa5-4d79-9f55-d0b9dce00e2b\\\\scratchpad\\\\inc_check.py\")",
+      "PowerShell($env:PYTHONIOENCODING='utf-8'; python \"C:\\\\Users\\\\Xlythe\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Xlythe-sinegual-crypto\\\\27eb5dc2-baa5-4d79-9f55-d0b9dce00e2b\\\\scratchpad\\\\inc_check.py\" 2>&1 | Select-Object -Last 4)",
+      "PowerShell($env:PYTHONIOENCODING='utf-8'; python \"C:\\\\Users\\\\Xlythe\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Xlythe-sinegual-crypto\\\\27eb5dc2-baa5-4d79-9f55-d0b9dce00e2b\\\\scratchpad\\\\probe_live.py\")",
+      "PowerShell(git -C \"C:\\\\Users\\\\Xlythe\\\\binance-flask\" --no-pager diff --stat)",
+      "PowerShell(git -C \"C:\\\\Users\\\\Xlythe\\\\binance-flask\" --no-pager diff)",
+      "PowerShell(Push-Location \"c:\\\\Users\\\\Xlythe\\\\sinegual-crypto\\\\trading-flask\"; python -m pytest tests/ -q; $code = $LASTEXITCODE; Pop-Location; \"PYTEST EXIT: $code\")",
+      "PowerShell(Push-Location \"C:\\\\wamp64\\\\www\\\\sinegutrade-api\"; php artisan test --stop-on-failure 2>&1 | Select-Object -Last 25; $code = $LASTEXITCODE; Pop-Location; \"ARTISAN TEST EXIT: $code\")",
+      "PowerShell(Push-Location \"C:\\\\wamp64\\\\www\\\\sinegutrade-api\"; php artisan --version; \"ARTISAN BOOT EXIT: $LASTEXITCODE\"; Pop-Location)",
+      "PowerShell($r = Invoke-WebRequest -Uri \"https://pixel-alpha.com/terms\" -UseBasicParsing; \"$\\($r.StatusCode\\) $\\($r.Headers['Content-Type']\\) len=$\\($r.Content.Length\\)\")",
+      "PowerShell(python -c \"import sys\" ; $env:PGCLIENT=1)",
+      "Edit(/.claude/skills/deploy/**)",
+      "PowerShell(cd C:\\\\Users\\\\Xlythe\\\\sinegual-crypto\\\\pixel-telegram; python -m pixel_telegram.main test; \"exit=$LASTEXITCODE\")",
+      "PowerShell(cd C:\\\\Users\\\\Xlythe\\\\sinegual-crypto\\\\pixel-telegram; python -m pixel_telegram.main report; \"exit=$LASTEXITCODE\")",
+      "Bash(mkdir -p \"c:/Users/Xlythe/sinegual-crypto/public/binance-guide\" && cp \"C:/Users/Xlythe/sinequal-dash-fusion-main/public/binance-guide/\"*.png \"c:/Users/Xlythe/sinegual-crypto/public/binance-guide/\" && ls -la \"c:/Users/Xlythe/sinegual-crypto/public/binance-guide\")"
     ],
     "additionalDirectories": [
-      "C:\\wamp64\\www\\sinegutrade-api"
+      "C:\\wamp64\\www\\sinegutrade-api",
+      "C:\\Users\\Xlythe\\binance-flask\\src\\routes",
+      "C:\\Users\\Xlythe\\binance-flask",
+      "C:\\Users\\Xlythe\\quantlab\\backend\\services",
+      "C:\\Users\\Xlythe\\quantlab\\frontend\\src\\components\\walkforward",
+      "C:\\Users\\Xlythe\\quantlab\\frontend\\src\\pages",
+      "C:\\Users\\Xlythe\\sinequal-dash-fusion-main\\public\\binance-guide"
     ]
   },
   "hooks": {

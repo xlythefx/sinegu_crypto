@@ -1,7 +1,7 @@
 # Referrals / Affiliate — Feature Spec
 
 Spec set for porting the **Affiliate / Referrals** feature (user + admin) from the mother
-project (`sinequal-dash-fusion-main`) into **SineguAlerts** (`sinegual-crypto` frontend +
+project (`sinequal-dash-fusion-main`) into **Pixel Alpha** (`sinegual-crypto` frontend +
 `sinegutrade-api` Laravel backend).
 
 > **Status:** spec only — nothing built yet. Implementation is phased; see [CHECKLIST.md](./CHECKLIST.md).

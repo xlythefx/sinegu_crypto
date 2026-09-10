@@ -4,7 +4,7 @@ import { ChevronDown } from 'lucide-react'
 const FAQS = [
   {
     q: 'Is my money safe? Can you withdraw it?',
-    a: 'No. You connect with trade-only API keys, which let the bot open and close positions but never withdraw. Your funds stay in your own exchange account at all times — SineguAlerts is fully non-custodial.',
+    a: 'No. You connect with trade-only API keys, which let the bot open and close positions but never withdraw. Your funds stay in your own exchange account at all times — Pixel Alpha is fully non-custodial.',
   },
   {
     q: 'How does the 20% fee actually work?',

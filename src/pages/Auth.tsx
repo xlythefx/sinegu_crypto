@@ -61,7 +61,7 @@ function AuthForm() {
       ? 'Already trading with us?'
       : "Don't have an account?",
     switchAction: isRegister ? 'Sign in' : 'Create one free',
-    panelKicker: isRegister ? 'JOIN SINEGUALERTS' : 'WELCOME BACK',
+    panelKicker: isRegister ? 'JOIN PIXEL ALPHA' : 'WELCOME BACK',
     panelTitle: isRegister
       ? 'Keep 80% of the upside.'
       : 'Your edge, on autopilot.',
@@ -152,7 +152,7 @@ function AuthForm() {
                 alt=""
               />
               <span className="font-display text-[19px] font-extrabold">
-                SineguAlerts
+                Pixel Alpha
               </span>
             </div>
 

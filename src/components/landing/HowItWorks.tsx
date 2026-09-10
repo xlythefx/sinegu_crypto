@@ -8,18 +8,18 @@ const STEPS = [
   },
   {
     num: '02',
-    title: 'Pick a strategy',
-    body: 'Choose a strategy, set your risk level, and press go.',
-  },
-  {
-    num: '03',
     title: 'Bots trade for you',
     body: 'Signals execute automatically on your account, 24/7 — no screen time required.',
   },
   {
+    num: '03',
+    title: 'Stop anytime with 1 click',
+    body: 'Pause the bots whenever you want. No lock-in, no notice period.',
+  },
+  {
     num: '04',
     title: 'Keep 80%',
-    body: 'Withdraw anytime. We deduct 20% only from profit — never your capital.',
+    body: 'Withdraw anytime. You pay 20% only from profit — never from capital.',
     highlight: true,
   },
 ]

@@ -27,6 +27,9 @@ load_dotenv(ROOT / ".env", override=False)
 DEFAULT_PORT = os.environ.get("BINANCE_ABCD_FLASK_PORT", "5010")
 URL_PRESETS = [
     f"http://127.0.0.1:{DEFAULT_PORT}/binance_abcd_webhook",
+    "https://pixel-alpha.com/binance_abcd_webhook",
+    # The origin by address still answers (nginx does not redirect the bare IP),
+    # kept as the fallback for when DNS or Cloudflare is the thing being debugged.
     "http://2.24.139.176/binance_abcd_webhook",
 ]
 DEFAULT_SECRET = os.environ.get("BINANCE_ABCD_WEBHOOK_SECRET", "")

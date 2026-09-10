@@ -56,12 +56,6 @@ const pct = (value: number | null | undefined, dp: number): string =>
 export function statCards(stats: TrackRecordStats | null): StatCard[] {
   return [
     {
-      label: 'Total P&L',
-      value: pct(stats?.total_pnl_pct, 1),
-      tone: toneOf(stats?.total_pnl_pct),
-      hint: 'Total PNL %',
-    },
-    {
       label: 'Win Rate',
       value: stats?.win_rate == null ? DASH : `${stats.win_rate.toFixed(1)}%`,
       tone: 'accent',
@@ -108,14 +102,21 @@ export interface ChartModel {
   end: { x: number; y: number }
 }
 
-/** Sum each month's daily percentages into one point per month. */
+/**
+ * Chain each month's daily percentages into one return per month — compounded,
+ * not summed, so a month reads the same way the total does and the twelve
+ * months of a year multiply back out to that year.
+ */
 function toMonthly(series: TrackRecordPoint[]): { date: string; value: number }[] {
   const months = new Map<string, number>()
   for (const point of series) {
     const key = point.date.slice(0, 7)
-    months.set(key, (months.get(key) ?? 0) + point.pct)
+    months.set(key, (months.get(key) ?? 1) * Math.max(0, 1 + point.pct / 100))
   }
-  return [...months.entries()].map(([month, value]) => ({ date: month, value }))
+  return [...months.entries()].map(([month, growth]) => ({
+    date: month,
+    value: (growth - 1) * 100,
+  }))
 }
 
 /** Up to `max` evenly spaced items, always including the first and last. */

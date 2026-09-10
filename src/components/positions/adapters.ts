@@ -19,7 +19,11 @@ export function toActivePosition(p: OpenPosition): ActivePosition {
   }
 }
 
-/** API closed position → the Closed Positions table row shape. */
+/** API closed position → the Closed Positions table row shape.
+ *
+ *  `realized_pnl` already arrives net of the exchange's commission, so the row
+ *  reads the same as the trade does in the customer's Binance app. `fee` is
+ *  carried alongside only to show what came out — never to subtract again. */
 export function toClosedTrade(p: PastPosition, pctBase: number): ClosedTrade {
   const pnl = num(p.realized_pnl)
   return {
@@ -29,6 +33,7 @@ export function toClosedTrade(p: PastPosition, pctBase: number): ClosedTrade {
     exchange: 'Binance',
     pnl,
     pnlPct: pctBase > 0 ? (pnl / pctBase) * 100 : 0,
+    fee: p.exchange_fee === null ? null : num(p.exchange_fee),
     positions: 1,
     closedAt: fmtDateTime(p.closed_at),
   }

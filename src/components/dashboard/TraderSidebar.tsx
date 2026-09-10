@@ -70,10 +70,10 @@ export default function TraderSidebar({ onLogout }: TraderSidebarProps) {
 
   return (
     <aside className={RAIL}>
-      <Link to="/" className={BRAND} aria-label="SineguAlerts home">
+      <Link to="/" className={BRAND} aria-label="Pixel Alpha home">
         <img className={BRAND_LOGO} src="/assets/logo.png" alt="" />
         <span className={BRAND_TEXT}>
-          <span className={BRAND_TITLE}>SineguAlerts</span>
+          <span className={BRAND_TITLE}>Pixel Alpha</span>
           <span className={BRAND_SUB}>Trader Portal</span>
         </span>
       </Link>

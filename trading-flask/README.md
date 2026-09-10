@@ -1,6 +1,6 @@
 # trading-flask — the BINANCE_ABCD engine
 
-The Python trading engine for SineguAlerts. TradingView posts JSON signals to
+The Python trading engine for Pixel Alpha. TradingView posts JSON signals to
 `POST /binance_abcd_webhook`; the engine fans each signal out to **every
 tradeable Binance account** in `sinegu_crypto` and keeps the DB in sync through
 `sinegutrade-api`'s machine-to-machine `/api/engine/*` surface. Designed for a
@@ -31,6 +31,24 @@ pollers (daemon threads, RUN_POLLERS): balances · positions · transfers ·
 past-positions (the reconciliation safety net, watermarked)
 retry queue: re-runs retryable per-account failures via target_uni_ids
 ```
+
+**A close is re-attempted twice over, at two speeds.** `handle_exit` retries in
+the fan-out worker (`EXIT_RETRY_ATTEMPTS`, default 2) while the failure is
+*transient*, then the retry queue takes it 60s later. Two invariants make
+re-placing a close safe, and any edit to that path has to keep both:
+
+1. **Every attempt re-reads `positionRisk` first.** A 408/`-1007` leaves the
+   execution status unknown — the order may be on the book. Re-reading turns
+   "unknown" into a fact: a flat side means it landed, and the exit stops.
+2. **Only a transient failure is repeated.** A timeout, a 5xx or a rate-limit
+   backoff says nothing about the order; a rejection (`-1111` precision,
+   `-2019` margin, a position-mode mismatch) is an answer, and asking again
+   just delays telling a human. `_request_post` stamps the verdict
+   (`transient`) where it is actually known.
+
+Entries are the mirror image: they retry **only** on a rate-limit backoff,
+which fails fast before any order exists. An entry whose execution status is
+unknown is never replayed — that is how one signal becomes two positions.
 
 **Who may trade is decided by the backend, not here.** `GET
 /api/engine/binance/accounts` returns only accounts that are enabled, not
@@ -64,6 +82,8 @@ the gitignored `.env` only.
 | `BINANCE_ABCD_TELEGRAM_CHAT_ID` | Public channel: entries, exits, PnL |
 | `BINANCE_ABCD_TELEGRAM_ADMIN_CHAT_ID` | Ops alerts; falls back to the main chat |
 | `BINANCE_ABCD_TELEGRAM_PNL_WAIT_SECONDS` | Exit-message PnL wait (default 25) |
+| `BINANCE_ABCD_FILL_SUMMARY_ATTEMPTS` | userTrades reads per close (default 3) |
+| `BINANCE_ABCD_FILL_SUMMARY_RETRY_SECONDS` | Backoff base between them (default 2) |
 
 Everything is off unless **both** a token and a chat id are set, so a fresh
 clone (and the test suite — `conftest.py` forces it off) never posts.
@@ -76,9 +96,36 @@ What gets sent, one message per signal — never one per account:
 - **Exit** (`EXIT_LONG`/`EXIT_SHORT`) — quantity-weighted exit price, realized
   PnL **as a percentage only** (no USDT amounts), accounts closed.
 - **Admin** — rejected signals (asset not configured, side gate, no accounts),
-  consolidated per-account rejections (exits flagged MANUAL ACTION), poller
-  crashes, Binance rate limits. Plus a startup ping.
-- Retry-queue re-runs stay silent — the live run already posted.
+  consolidated per-account rejections, poller crashes, Binance rate limits.
+  Plus a startup ping.
+- Retry-queue re-runs stay silent *while they run*; the queue announces the
+  ending.
+
+**Red means nobody is coming.** A failed fan-out produces up to two admin
+messages, split by whether the engine is going to fix it itself:
+
+- ⏳ **RETRYING** — the failure was transient (a timeout, a 5xx, Binance's
+  408/`-1007` "execution status unknown") and the accounts are in the retry
+  queue. The enqueue happens *before* the alert precisely so the alert can say
+  this.
+- 🔴 **MANUAL ACTION REQUIRED** — either the exchange rejected the order
+  outright (`-1111`, `-2019`, a position-mode mismatch: asking again in 60s
+  gets the same answer), or the queue has run out of attempts and raises it
+  from `_requeue`. Until 2026-08-28 the red one fired on the *first* transient
+  timeout and the give-up was a log line nobody reads — exactly backwards, and
+  an alert that cries wolf on every exchange hiccup is one that gets ignored
+  when it matters.
+
+Alert lines quote **Binance's own code and message** (`error_summary`), not
+`str(exc)` — "408 Client Error" does not tell you the order may have executed;
+`-1007 ... execution status unknown` does.
+
+**A retried exit still reaches the public channel.** The live run only publishes
+if something filled, so a signal where every account failed used to close on the
+retry and be announced nowhere. `_process_trade_job(..., announce=)` carries the
+right to publish: the live run always has it, a retry inherits it only when the
+live run filled nothing, and the queue clears the flag the moment any run fills.
+One close, one message, never two.
 
 **How exit PnL is collected.** Realized PnL is only known once
 `get_order_fill_summary` reads userTrades, which runs deferred per account. So
@@ -89,8 +136,83 @@ account has reported — or after `TELEGRAM_PNL_WAIT_SECONDS`, whichever is
 first. Percentages use `balance - pnl` summed across accounts as the
 denominator: the capital the trade was actually sized against.
 
+`get_order_fill_summary` **retries** (`FILL_SUMMARY_ATTEMPTS` ×
+`FILL_SUMMARY_RETRY_SECONDS`, worst case well under the watchdog). Binance's
+userTrades index trails the fill by a second or two, and a single attempt is
+why closes used to reach the channel with neither an `Exit Price:` nor a `PnL:`
+line — an empty answer is not an error, so both lines were omitted rather than
+guessed. The retry runs on its own `BOOKKEEPING_WORKERS` pool: it sleeps, and a
+sleeping bookkeeping task must never sit in a fan-out worker that the next
+signal's orders are queued behind. When it still comes back empty the row is
+written with NULLs and the past-positions poller backfills it — the DB
+self-heals, but the Telegram message is sent once and never edited.
+
 Sends are fire-and-forget on a 2-thread pool over the shared pooled session —
 a slow or down Telegram never adds latency to the trade path.
+
+## Scheduled performance reports
+
+Everything above is event-driven — a message exists because a signal did.
+`binance_abcd/reports.py` is the one thing that posts because a **clock ticked**:
+a daily, weekly and monthly recap to the **public** channel.
+
+| Report | Default | Covers |
+|---|---|---|
+| Daily | `11:30` Asia/Manila | the previous UTC day |
+| Weekly | `fri 11:30` | the 7 UTC days ending on the previous one |
+| Monthly | `last 11:30` | the 1st of the month through the previous UTC day |
+
+Config is `BINANCE_ABCD_REPORT_*` (see `.env.example`); an empty `*_AT` disables
+that one report, and a malformed one is logged + alerted to the admin chat and
+skipped — a typo in a recap time must never stop the engine trading.
+
+**The numbers come from `GET /api/public/track-record`, not from a fresh query,**
+and that is the whole design:
+
+- **It cannot leak.** The channel is world-readable, so a recap may carry
+  percentages and counts of *trades* only. Building it from an endpoint that is
+  already public makes that structural instead of something a future edit has to
+  remember — there is no balance or account count in the payload to print by
+  mistake. A test asserts none of those words appears in any rendered report.
+- **It cannot disagree with the website.** The landing page renders the same
+  series. A second P&L walk would drift, and then the channel and the site would
+  publish two different track records for the same month.
+
+Consequently `reports.py` never calls Binance and never reads the DB. It slices
+the daily series to a window and chains it; `notify.notify_report` owns every
+decision about what the channel is allowed to say.
+
+Rules worth keeping:
+
+- **Windows are whole, completed UTC days** — the series is keyed by a UTC
+  `closed_at`, and a published percentage must never be revised later. At 11:30
+  Manila (03:30 UTC) the day being reported ended 3.5 hours earlier, comfortably
+  past the past-positions poller's backfill.
+- **The period return is chained, not summed**, identical to how the endpoint
+  computes its own total — so it is time-weighted and a mid-week deposit cannot
+  inflate it.
+- **A failed fetch is not "no trades".** `fetch_track_record()` returns `None`
+  on failure and the period stays unmarked, so the next tick retries it — the
+  same empty-vs-unavailable rule the pollers follow. `available: false` (nothing
+  published yet) *is* an answer and is marked done.
+- **First run seeds silently.** A missing `out/report_state.json` marks every
+  past period as sent without posting, so a deploy doesn't fire all three recaps
+  at once. That file is server-owned; don't ship it.
+- **A missed recap catches up, but only for `REPORT_CATCHUP_HOURS` (12).** Past
+  that it is dropped and marked done — a Tuesday recap arriving Thursday is
+  worse than none.
+- **`monthly last` deliberately stops a day short.** Firing on the final day at
+  11:30 Manila is 03:30 UTC *that day*, so the month's last ~20 hours are outside
+  the window and the heading says so (`1 - 29 Sep 2026`). Set
+  `BINANCE_ABCD_REPORT_MONTHLY_AT=1 11:30` to report whole calendar months.
+- `zoneinfo` has no tz database on Windows, hence `tzdata` in `requirements.txt`.
+  An unusable timezone disables reports and alerts the admin chat; it never
+  stops the engine.
+
+`/health` reports the schedule and each report's next firing under `reports`.
+The `REPORT_*` keys are mirrored to prod by `sync-engine-env` — they describe the
+product, not the box. (Mirroring skips a key that is *empty* locally, so disable
+a report on prod by editing prod's `.env`, not by blanking it here.)
 
 ## Run
 
@@ -134,6 +256,20 @@ Entries **fail closed**: the ticker must be an enabled `assets` row with a
 stack cap is `max_increments`. **Exits skip every gate and always close what
 exists** — a position must stay closable whatever an account's state.
 
+**A failed read is never "nothing there."** `get_positions_v3` and
+`get_user_trades` return `None` when the request fails and `[]` only when the
+account is genuinely flat / the order genuinely has no fills yet. Collapsing
+the two is the single root cause behind three prod symptoms on 2026-08-18:
+`positions/sync` is a **full replace per api_key**, so a failed read reported as
+"flat" deleted live positions from the DB, and the stack cap — which counts open
+size from exactly those rows — then read 0 open and stopped firing (LTCUSDT took
+three entries with the engine believing each was the first, and the channel said
+`Increment (1/3)` every time). The poller now **skips** an account it could not
+read, leaving its rows merely stale for one cycle; a real close still syncs `[]`
+and clears them. Where the depth cannot be read from either source and the asset
+*has* a cap, the entry is skipped (`stack depth unknown`) rather than placed
+blind — entry-only, so an unreadable account can still close what it holds.
+
 **Deposit gate.** An account may only OPEN a position once its `total_deposit`
 (deposited capital net of withdrawals, from the accounts endpoint) reaches
 `MIN_DEPOSIT` (1000). The gate reads **deposit, not balance**: fund $1,500 and
@@ -164,8 +300,15 @@ Both decisions are recorded per account in the signal's `trade_logs` row
 - Exits cost ~6 weight/account; the 32-worker ceiling spreads a mass exit over
   a few minutes and 429/418 trips a process-wide fail-fast backoff; the retry
   queue re-runs what got clipped.
-- **Pollers are the real weight consumers** — at hundreds of accounts raise
-  `*_FETCH_INTERVAL` (they're all env-tunable) before anything else.
+- **Pollers are the real weight consumers**, and they are not equal. Per account
+  per tick: balances/positions/transfers cost **weight 5**, past-positions
+  (`/fapi/v1/income`) costs **weight 30**. At the shipped intervals that one
+  loop is ~95% of the engine's whole budget and is what caps how many accounts
+  fit — it is the interval to raise first, and the reason its default is 180s
+  rather than 60s. Balances at 300s are ~3% and not worth touching.
+  Per-account balances cannot be cached or shared: each call is signed with
+  that account's own key. What accounts share is the IP's weight budget, so the
+  levers are interval and spread (`POLLER_START_STAGGER_SECONDS`), not caching.
 - Reserved for horizontal sharding: `BINANCE_ABCD_SHARD_INDEX/SHARD_COUNT`
   (hash(uni_id) % count per process) — documented, not implemented.
 
@@ -178,5 +321,7 @@ once (webhook secret shared with the local `.env`, `ENGINE_SECRET` shared with
 `api/.env`), installs the `sinegualerts-engine` systemd unit, and rewrites the
 nginx vhost: `location = /binance_abcd_webhook` proxied to `127.0.0.1:5010`,
 `/api/engine/` restricted to localhost (it serves plaintext account secrets).
-TradingView posts to `http://2.24.139.176/binance_abcd_webhook`.
+TradingView posts to `https://pixel-alpha.com/binance_abcd_webhook` (the old
+`http://2.24.139.176/...` still answers — the bare IP is not redirected, and the
+domain's :80 block exempts this path rather than 301-ing a POST body away).
 First-boot defaults: pollers ON, startup position-mode sync OFF.

@@ -137,6 +137,15 @@ export default function AssetFormModal({
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
+  // Entries that fit in the max position size — what the engine will actually
+  // enforce. null when it cannot be derived yet (no/invalid base size).
+  const stackDepth = (() => {
+    const max = Number(maxIncrements)
+    const base = Number(baseSize)
+    if (!Number.isFinite(max) || !Number.isFinite(base) || max <= 0 || base <= 0) return null
+    return Math.max(1, Math.round(max / base))
+  })()
+
   const submit = (e: FormEvent) => {
     e.preventDefault()
     onSubmit(
@@ -309,6 +318,18 @@ export default function AssetFormModal({
               step="0.001"
               required
             />
+            {/*
+              This field is a SIZE, and the engine turns it into a stack depth
+              (size / base size). Showing that depth live is the whole point:
+              typing "3" here means three CONTRACTS, not three entries, and the
+              difference is invisible until a position stacks further than it
+              should. Mirrors the same derivation in AssetCard and assets_api.
+            */}
+            <span className="mt-1 font-mono text-[11px] text-muted">
+              {stackDepth === null
+                ? 'set a base size to see the stack depth'
+                : `= ${stackDepth} entr${stackDepth === 1 ? 'y' : 'ies'} max per position`}
+            </span>
           </label>
           <label className={FIELD}>
             <span className={FIELD_LABEL}>Base size *</span>
@@ -321,6 +342,9 @@ export default function AssetFormModal({
               step="0.000001"
               required
             />
+            <span className="mt-1 font-mono text-[11px] text-muted">
+              one entry, per 1,000 USDT of balance
+            </span>
           </label>
         </div>
 

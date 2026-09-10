@@ -4,7 +4,7 @@ const BARS = [
   { name: 'Z-Score Reversion #2', value: '+11.4%', height: 74, highlight: false },
   { name: 'ATR Reversion #1', value: '+9.8%', height: 62, highlight: false },
   { name: 'Momentum Strategy', value: '+8.6%', height: 55, highlight: false },
-  { name: 'SineguAlerts blended', value: '+12.9%', height: 96, highlight: true },
+  { name: 'Pixel Alpha blended', value: '+12.9%', height: 96, highlight: true },
 ]
 
 export default function Receipts() {

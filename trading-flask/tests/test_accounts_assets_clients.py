@@ -80,7 +80,7 @@ def test_demo_flag_selects_testnet_base():
 
 def test_assets_client_indexes_enabled_by_ticker():
     payload = {"success": True, "assets": [
-        {"ticker": "btcusdt", "base_size": "0.005", "max_increments": "10", "side": "all", "enabled": True},
+        {"ticker": "btcusdt", "base_size": "0.005", "max_increments": "0.05", "side": "all", "enabled": True},
         {"ticker": "OFFUSDT", "base_size": 1, "max_increments": 1, "side": "ALL", "enabled": False},
         {"ticker": "", "base_size": 1, "enabled": True},
         {"ticker": "BADUSDT", "base_size": "junk", "max_increments": None, "side": None, "enabled": True},
@@ -91,7 +91,35 @@ def test_assets_client_indexes_enabled_by_ticker():
 
     assert set(assets) == {"BTCUSDT", "BADUSDT"}
     btc = assets["BTCUSDT"]
-    assert btc["base_size"] == 0.005 and btc["max_increments"] == 10.0 and btc["side"] == "ALL"
+    assert btc["base_size"] == 0.005 and btc["side"] == "ALL"
+    # The COLUMN is a max position size; the entry count is derived from it.
+    assert btc["max_size"] == 0.05
+    assert btc["max_increments"] == 10.0
     # Unparseable numerics collapse to 0 (entry will fail closed on base_size).
     assert assets["BADUSDT"]["base_size"] == 0.0
     assert assets["BADUSDT"]["side"] == "ALL"
+
+
+def test_the_cap_column_is_a_position_size_not_an_entry_count():
+    """The live regression: LTCUSDT is base_size 14, max size 42 — a 3-deep
+    stack. Read as a count it meant '42 entries' and the cap never fired, which
+    is how an account reached a 4th increment against an intended max of 3."""
+    payload = {"success": True, "assets": [
+        {"ticker": "LTCUSDT", "base_size": 14, "max_increments": 42, "side": "LONG", "enabled": True},
+        {"ticker": "ALGOUSDT", "base_size": 5000, "max_increments": 15000, "side": "ALL", "enabled": True},
+        {"ticker": "FETUSDT", "base_size": 120, "max_increments": 360, "side": "SHORT", "enabled": True},
+    ]}
+    with patch.object(assets_api.engine_client, "get_json", return_value=payload):
+        assets_api.invalidate_assets_cache()
+        assets = assets_api.fetch_assets(force=True)
+
+    assert [assets[t]["max_increments"] for t in ("LTCUSDT", "ALGOUSDT", "FETUSDT")] == [3.0, 3.0, 3.0]
+    assert [assets[t]["max_size"] for t in ("LTCUSDT", "ALGOUSDT", "FETUSDT")] == [42.0, 15000.0, 360.0]
+
+
+def test_increment_cap_edges():
+    assert assets_api._increment_cap(0, 14) == 0.0        # no max size => no cap
+    assert assets_api._increment_cap(42, 0) == 0.0        # no base size => cannot derive
+    # A max size below one base size means ONE entry, never "unlimited".
+    assert assets_api._increment_cap(5, 14) == 1.0
+    assert assets_api._increment_cap(14, 14) == 1.0

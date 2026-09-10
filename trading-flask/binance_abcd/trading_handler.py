@@ -9,15 +9,23 @@ accounts hit the testnet) and returns a dict the webhook aggregates.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Dict, Optional
 
 from binance_abcd.binance_api import (
     BinanceAPI,
+    error_summary,
     invalidate_position_mode,
     is_position_mode_verified,
     mark_position_mode_verified,
 )
-from binance_abcd.hooks import POSITION_MODE
+from binance_abcd.hooks import (
+    EXIT_RETRY_ATTEMPTS,
+    EXIT_RETRY_SECONDS,
+    FILL_SUMMARY_ATTEMPTS,
+    FILL_SUMMARY_RETRY_SECONDS,
+    POSITION_MODE,
+)
 
 log = logging.getLogger(__name__)
 
@@ -73,12 +81,37 @@ def get_order_fill_summary(api: BinanceAPI, symbol: str, order_id: Any) -> tuple
 
     One close can produce several fills; summing all of them is required or the
     PnL under-reports. Called deferred, off the close path.
+
+    RETRIED, because Binance answers this query with an empty list for a second
+    or two after the order fills — the trade exists, the index does not carry it
+    yet. One attempt is why closes reached Telegram with no `PnL:` and no
+    `Exit Price:` line at all: not an error, just nothing to report, so both
+    lines were omitted rather than published as a guess. The waiting happens
+    inside the exit batch's TELEGRAM_PNL_WAIT_SECONDS watchdog, so the message
+    still goes out on time — keep the worst case (the sum of the backoffs)
+    comfortably under it.
     """
     try:
-        trades = api.get_user_trades(symbol, order_id=int(order_id), limit=50)
+        oid = int(order_id)
     except (TypeError, ValueError):
         return None, None
+
+    trades: Optional[list] = None
+    for attempt in range(1, max(1, FILL_SUMMARY_ATTEMPTS) + 1):
+        trades = api.get_user_trades(symbol, order_id=oid, limit=50)
+        if trades:
+            break
+        if attempt < FILL_SUMMARY_ATTEMPTS:
+            time.sleep(FILL_SUMMARY_RETRY_SECONDS * attempt)
     if not trades:
+        # Not fatal: the row is still written (with NULLs) and the
+        # past-positions poller backfills it from /fapi/v1/income later. Only
+        # the Telegram message, which is sent once and never edited, loses out.
+        log.warning(
+            "[Binance] no fills returned for %s order %s after %d attempt(s) — "
+            "PnL will be backfilled by the poller, not published",
+            symbol, oid, max(1, FILL_SUMMARY_ATTEMPTS),
+        )
         return None, None
     pnl = 0.0
     notional = 0.0
@@ -138,16 +171,21 @@ def _order_failed(result: Any) -> bool:
 
 
 def _failure_dict(result: Any, ticker: str) -> Dict[str, Any]:
+    """Normalized failure. `transient` is the one field callers act on: it marks
+    a request that failed on the way (timeout, 408/-1007, 5xx) rather than an
+    order the exchange refused, and only those are worth re-attempting."""
     if isinstance(result, dict):
         return {
             "result": None,
-            "error": result.get("message", "Unknown error"),
+            "error": error_summary(result),
             "binance_response": result.get("response", ""),
             "symbol": ticker,
             "http_status": result.get("http_status"),
             "rate_limited": bool(result.get("rate_limited")),
+            "transient": bool(result.get("transient")),
         }
-    return {"result": None, "error": "No response", "binance_response": "", "symbol": ticker}
+    # No dict at all — an answer we cannot classify is unknown, not a refusal.
+    return {"result": None, "error": "No response", "binance_response": "", "symbol": ticker, "transient": True}
 
 
 def handle_entry(api: BinanceAPI, ticker: str, side: str, quantity: float, price: Optional[float]) -> Optional[Dict[str, Any]]:
@@ -167,6 +205,19 @@ def handle_entry(api: BinanceAPI, ticker: str, side: str, quantity: float, price
 def handle_exit(api: BinanceAPI, ticker: str, position_side: str, price: Optional[float]) -> Optional[Dict[str, Any]]:
     """EXIT_LONG / EXIT_SHORT — reduce-only close of one side.
 
+    Re-attempted up to EXIT_RETRY_ATTEMPTS times while the failure is TRANSIENT
+    (a timeout, a 5xx, or Binance's 408/-1007 "execution status unknown" — the
+    demo-fapi testnet answers that under load). Waiting the retry queue's 60s
+    for a close is a long time to hold a position the strategy has exited, and
+    the queue stays the backstop for whatever this loop cannot fix.
+
+    Two properties make re-placing a close safe, and both must survive any edit
+    here: every attempt RE-READS positionRisk, so an unconfirmed order that
+    actually landed is seen as a flat side and closes nothing twice; and only a
+    transient failure is repeated — a rejection (bad precision, min notional,
+    position-mode mismatch) is an answer, and asking again just burns weight
+    while a human waits to be told.
+
     realized_pnl is intentionally NOT fetched here: the caller defers the
     userTrades read (get_order_fill_summary) off the close path.
     """
@@ -177,34 +228,65 @@ def handle_exit(api: BinanceAPI, ticker: str, position_side: str, price: Optiona
     if pm_err is not None:
         return pm_err
 
-    risk = position_risk_map(api, sym)
-    if risk is None:
-        return {"result": None, "error": "could not read positions", "binance_response": "", "symbol": ticker}
-
-    if want_hedge():
-        amt, entry_price = risk.get(position_side, (0.0, None))
-    else:
-        amt, entry_price = risk.get("BOTH", (0.0, None))
-
-    # SHORT positionAmt is negative on Binance; 0 = flat.
-    open_for_side = amt > 0 if position_side == "LONG" else amt < 0
-    if not open_for_side:
-        log.warning("[Binance] EXIT_%s ignored — no %s position for %s", position_side, position_side, ticker)
-        return {"status": f"no {position_side.lower()} position to close"}
-
-    size = round(abs(amt), 8)
-    close_side = "SELL" if position_side == "LONG" else "BUY"
-    result = _place_market_order_retry(api, sym, close_side, size, reduce_only=True)
-    if _order_failed(result):
-        log.error("[Binance] EXIT_%s failed for %s", position_side, ticker)
-        return _failure_dict(result, ticker)
-    log.info("[Binance] EXIT_%s closed %s %s", position_side, size, ticker)
-    return {
-        "result": result,
-        "symbol": ticker,
-        "closed_quantity": size,
-        "side": position_side,
-        "price": price,
-        "entry_price": entry_price,
-        "realized_pnl": None,
+    attempts = max(1, EXIT_RETRY_ATTEMPTS)
+    failure: Dict[str, Any] = {
+        "result": None, "error": "exit not attempted", "binance_response": "",
+        "symbol": ticker, "transient": True,
     }
+
+    for attempt in range(1, attempts + 1):
+        if attempt > 1:
+            # Held in the fan-out worker on purpose: the close is the work this
+            # worker exists for. Keep the budget small (EXIT_RETRY_ATTEMPTS).
+            time.sleep(EXIT_RETRY_SECONDS * (attempt - 1))
+
+        risk = position_risk_map(api, sym)
+        if risk is None:
+            failure = {
+                "result": None, "error": "could not read positions",
+                "binance_response": "", "symbol": ticker, "transient": True,
+            }
+            log.warning("[Binance] EXIT_%s %s: positions unreadable (attempt %d/%d)",
+                        position_side, sym, attempt, attempts)
+            continue
+
+        if want_hedge():
+            amt, entry_price = risk.get(position_side, (0.0, None))
+        else:
+            amt, entry_price = risk.get("BOTH", (0.0, None))
+
+        # SHORT positionAmt is negative on Binance; 0 = flat.
+        open_for_side = amt > 0 if position_side == "LONG" else amt < 0
+        if not open_for_side:
+            if attempt > 1:
+                # The previous attempt's unconfirmed order did reach the book —
+                # exactly what re-reading before re-placing is here to catch.
+                log.info("[Binance] EXIT_%s %s already flat on attempt %d — the "
+                         "unconfirmed close had filled", position_side, sym, attempt)
+            else:
+                log.warning("[Binance] EXIT_%s ignored — no %s position for %s",
+                            position_side, position_side, ticker)
+            return {"status": f"no {position_side.lower()} position to close"}
+
+        size = round(abs(amt), 8)
+        close_side = "SELL" if position_side == "LONG" else "BUY"
+        result = _place_market_order_retry(api, sym, close_side, size, reduce_only=True)
+        if not _order_failed(result):
+            log.info("[Binance] EXIT_%s closed %s %s", position_side, size, ticker)
+            return {
+                "result": result,
+                "symbol": ticker,
+                "closed_quantity": size,
+                "side": position_side,
+                "price": price,
+                "entry_price": entry_price,
+                "realized_pnl": None,
+            }
+
+        failure = _failure_dict(result, ticker)
+        log.error("[Binance] EXIT_%s failed for %s (attempt %d/%d): %s",
+                  position_side, ticker, attempt, attempts, failure["error"])
+        if not failure.get("transient"):
+            return failure
+
+    return failure

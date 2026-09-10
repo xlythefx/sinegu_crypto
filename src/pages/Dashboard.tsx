@@ -9,6 +9,7 @@ import CommissionsCard from '../components/dashboard/CommissionsCard'
 import DailyPnlCalendar from '../components/dashboard/DailyPnlCalendar'
 import PnlBreakdownCard from '../components/dashboard/PnlBreakdownCard'
 import AssetStrip from '../components/dashboard/AssetStrip'
+import KeyBlockedGate from '../components/dashboard/KeyBlockedGate'
 import { useApiData } from '../hooks/useApiData'
 import { useSessionUser } from '../hooks/useSessionUser'
 import { getDashboardSummary } from '../services/dashboard'
@@ -24,6 +25,9 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout title="Trading Dashboard">
+      {/* An account the exchange is refusing takes no trades — say so here,
+          on the page people actually open, not only in settings. */}
+      <KeyBlockedGate />
       {data ? (
         <>
           <EquityHeroCard

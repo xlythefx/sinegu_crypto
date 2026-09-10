@@ -55,9 +55,21 @@ def fetch_and_save() -> dict | None:
         return None
 
     payload = []
+    skipped = 0
     for account in accounts:
         api = BinanceAPI(account["api_key"], account["secret_key"], base_url=account_futures_base_url(account))
         positions = api.get_positions_v3()
+        if positions is None:
+            # SKIP, never sync an empty list on a failed read. The sync is a
+            # full replace per api_key, so sending [] here would delete this
+            # account's live positions from the DB — and the entry-side stack
+            # cap counts open size from exactly those rows, so it would then
+            # read 0 open and let a position stack past its limit. Leaving the
+            # rows untouched keeps them merely stale, which the next successful
+            # tick corrects. Same rule as the balance poller.
+            log.warning("[positions] read failed for %s — leaving its rows alone", account.get("name"))
+            skipped += 1
+            continue
         rows = [row for row in (_to_row(p) for p in positions) if row]
         payload.append({
             "api_key": account["api_key"],
@@ -66,7 +78,12 @@ def fetch_and_save() -> dict | None:
         })
 
     if not payload:
+        if skipped:
+            log.warning("[positions] every account read failed (%d) — nothing synced", skipped)
         return None
     result = engine_client.post_json("positions/sync", {"accounts": payload})
-    log.info("[positions] synced %d account(s)", len(payload))
+    log.info(
+        "[positions] synced %d account(s)%s",
+        len(payload), f", {skipped} skipped on read failure" if skipped else "",
+    )
     return result
