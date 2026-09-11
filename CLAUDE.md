@@ -798,6 +798,31 @@ When it grows into a full dashboard, migrate to `features/<domain>/` folders
 - **Only push to `main` when explicitly prompted.** Committing locally is fine
   whenever it makes sense, but never `git push` (to `main` or otherwise) unless
   the user asks for it in that message.
+- **Auto-commit to `main` after every large chain of work** (2026-09-11). When a
+  task lands as a coherent unit — a feature, a migration plus its ingest rule
+  plus its tests, a deploy that changed prod behaviour — commit it on `main`
+  without being asked, in BOTH repos if both moved (`sinegutrade-api` is
+  `https://github.com/xlythefx/sinegu_crypto_api.git`). Stage only the files that
+  chain touched; other people's uncommitted work in the tree stays out of the
+  commit. The point is a rollback line: every prod-affecting change must be one
+  `git revert` (or `migrate:rollback --step=1`) away from undone. Small
+  mid-chain edits do not need their own commit.
+- **Name a commit for what CHANGED, judged from the diff, not for what was
+  asked.** Imperative subject line ≤ 72 chars that a reader can act on from
+  `git log` alone — the behaviour and its boundary, not the file list:
+  `Restore gross realized_pnl before 2026-09-11; net closes only from the cutoff on`,
+  not `Update TradingFee and migration`. Never `Sync working tree`, `fixes`,
+  `wip`. Body = why (the incident, the request, the trade-off accepted), one
+  short paragraph; the diff already says what. A commit that touches a number
+  someone has been shown (P&L basis, track record, invoicing inputs) says so in
+  the subject.
+- **Tag the two sides of a reversible decision** when a change restates data
+  someone has already reported on, so "which version is the truth" is a
+  `git checkout <tag>` rather than an archaeology session. Pair convention:
+  `<topic>-<before>` / `<topic>-<after>`, same names in both repos. Existing
+  pair: `pnl-net-history` (all history net of fees, LTC +545.66) and
+  `pnl-gross-history` (history gross, new closes net, LTC +1,384.41) — the API
+  tag's message carries the DB rollback command.
 
 ## .claude setup
 
