@@ -3,10 +3,18 @@ import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, Pencil, Trash2, X } from 'lucide-react'
 import { displaySymbol } from '../../lib/chart'
 import { fmtDateTime, fmtMediumDate, fmtNum, fmtSignedMoney } from '../../lib/format'
+import { useTapUnlock } from '../../hooks/useTapUnlock'
 import type { DayPnl, DayTrade } from '../../types/dashboard'
 
 /** Trades shown per page — a busy day can close 30+, which is unreadable in one list. */
 const PAGE_SIZE = 5
+
+/** The edit / delete icons are hidden even for accounts allowed to use them,
+ *  and appear only after the ticker label is tapped this many times inside
+ *  the window — an easter egg, so a closed-trade row (permanent, and read by
+ *  invoicing and the public track record) is never one stray click away. */
+const UNLOCK_TAPS = 8
+const UNLOCK_WINDOW_MS = 3000
 
 const pageBtn =
   'inline-flex items-center gap-1 h-8 px-3 rounded-btn border border-border bg-surface2 text-[12px] font-semibold text-text cursor-pointer transition-colors hover:enabled:border-accent hover:enabled:text-accent disabled:opacity-40 disabled:cursor-not-allowed'
@@ -20,9 +28,11 @@ interface DayTradesModalProps {
   date: string | null
   day: DayPnl | null
   onClose: () => void
-  /** Admin-only: show per-trade edit / delete. Both handlers are required
+  /** Admin-only: allow per-trade edit / delete. Both handlers are required
    *  with it — the icons appear here, inside the day's list, because a single
-   *  trade is the only thing they can act on (a calendar cell is a whole day). */
+   *  trade is the only thing they can act on (a calendar cell is a whole day).
+   *  Allowed is not shown: the icons stay hidden until the tap gesture
+   *  ({@link UNLOCK_TAPS}) unlocks them, and re-lock when the popup closes. */
   canManage?: boolean
   onEditTrade?: (trade: DayTrade) => void
   onDeleteTrade?: (trade: DayTrade) => void
@@ -39,6 +49,9 @@ export default function DayTradesModal({
   onDeleteTrade,
 }: DayTradesModalProps) {
   const [page, setPage] = useState(0)
+  // Re-locks on close and on switching day: `date` is the popup's identity.
+  const { unlocked, tap } = useTapUnlock(UNLOCK_TAPS, UNLOCK_WINDOW_MS, date)
+  const showManage = canManage && unlocked
 
   useEffect(() => {
     if (!date) return
@@ -109,7 +122,12 @@ export default function DayTradesModal({
                 key={t.id ?? `${t.symbol}-${start + i}`}
               >
                 <div className="flex items-center gap-[9px] flex-wrap">
-                  <span className="font-bold text-[14px]">
+                  {/* The tap target. No affordance on purpose; select-none so
+                      a burst of clicks does not highlight the text. */}
+                  <span
+                    className="font-bold text-[14px] select-none"
+                    onClick={canManage ? tap : undefined}
+                  >
                     {displaySymbol(t.symbol)}
                   </span>
                   <span
@@ -139,8 +157,8 @@ export default function DayTradesModal({
                       {fmtSignedMoney(t.realized_pnl)}
                     </span>
                   </div>
-                  {canManage && (
-                    <div className="flex items-center gap-1.5 pl-2.5 border-l border-hair">
+                  {showManage && (
+                    <div className="flex items-center gap-1.5 pl-2.5 border-l border-hair animate-[fadeup_0.35s_ease-out]">
                       <button
                         type="button"
                         className={rowBtn}

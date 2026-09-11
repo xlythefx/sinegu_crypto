@@ -432,6 +432,13 @@ dashboard (`DailyPnlCalendar` → `DayTradesModal`) for admin/master/developer
 accounts, gated on `canSeeAdmin` — the client twin of `EnsureAdmin::ROLES`.
 The icons live on a TRADE inside the day's popup, never on a calendar cell: a
 cell is a whole day, and edit/delete address one `binance_pastpositions` row.
+**They are hidden even for those roles, and unlock only by tapping a trade's
+ticker label 8 times within 3 seconds** (`hooks/useTapUnlock.ts`, constants in
+`DayTradesModal`) — an easter egg, requested 2026-09-11 so the master's own
+dashboard never shows a delete button on a permanent row. The unlock lives as
+long as the popup: closing it or switching day re-locks. The role gate is
+unchanged (`canManage` only makes the gesture live), and the server-side
+admin middleware is still the real enforcement.
 `UserStatsService::dailyPnlDays` therefore returns `id` and `exit_price` (a row
 the editor cannot name is a row it cannot correct); the write is still
 `/admin/past-positions/{id}` behind the admin middleware. `PositionEditModal`
@@ -817,7 +824,20 @@ When it grows into a full dashboard, migrate to `features/<domain>/` folders
 - Ticker / order book / chart / stats are static prototype data only until an endpoint
   exists; connect them to the API as soon as one does.
 
-**`binance_pastpositions.realized_pnl` is NET of exchange commission** (2026-09-09).
+**`binance_pastpositions.realized_pnl` is NET of exchange commission for closes
+from `TradingFee::NET_SINCE` (2026-09-11 00:00 UTC) on, and GROSS before it.**
+The netting was built 2026-09-09 and applied to all of history; two days later
+the historical rows were put BACK to gross (migration
+`2026_09_11_000001_restore_gross_pnl_before_net_cutoff`) because the figures
+had already been reported on and the restatement (LTC +1,384 → +546) read as
+invalid data. The compromise is dated, not undone: **the column is deliberately
+MIXED across the cutoff**, `exchange_fee IS NULL` is the row-level marker of a
+gross figure in either era, `TradingFee::applyTo` refuses to net a close dated
+before the cutoff (so a late-discovered old trade lands gross too), and any
+total spanning the boundary — the by-asset chart, September 2026's monthly
+P&L and its invoice, the public track record — is neither basis. Do not
+"fix" the old rows back to net and do not net the new ones out; both were
+decided.
 Binance's `realizedPnl` on a fill — what the engine reads and posts — is GROSS:
 `(exit − entry) × qty`, before commission and funding. Binance's own Position
 History screen shows the same trade NET, so every screen we owned published a
@@ -846,18 +866,13 @@ and invoices billed 20% of money the customer never received.
   fills; with no exit price there is no fee to estimate, so `exchange_fee` stays
   null and that row's P&L stays gross until the poller backfills both together.
   A zero fee and an unknown fee bill differently.
-- **The migration rewrote history on purpose** — the mismatch is on trades that
-  already happened, so netting only new rows would leave every past trade still
-  disagreeing with the exchange. Already-issued invoices do NOT move (they store
-  their own `realized_pnl` snapshot) and neither does the HWM (measured on
-  exchange-reported equity, not on this column); only invoices generated from
-  here on bill the new basis. Invoice-scenario rows (`SBXINV-…`) are excluded:
-  they are seeded straight into the table with hand-derived figures and never
-  pass through the netting ingest.
-- **The published track record moved with it**, since `PublicStatsController`
-  reads the same column. That is the intended direction — a customer can now
-  reproduce the published percentage from their own Binance account — but it did
-  revise numbers already shown.
+- **Neither migration touched issued invoices** (they store their own
+  `realized_pnl` snapshot) nor the HWM (measured on exchange-reported equity,
+  not on this column). Invoice-scenario rows (`SBXINV-…`) are excluded from
+  both: they are seeded straight into the table with hand-derived figures and
+  never pass through the netting ingest.
+- **The published track record follows the column**, since `PublicStatsController`
+  reads it — so it, too, is gross before the cutoff and net after.
 
 **Timestamps are UTC in the DB and rendered in the READER's zone**
 (`fmtDateTime`, `lib/format.ts`). The API runs on `'timezone' => 'UTC'`, but a

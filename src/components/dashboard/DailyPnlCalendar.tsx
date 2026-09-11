@@ -84,6 +84,8 @@ export default function DailyPnlCalendar({ balance }: DailyPnlCalendarProps) {
   const { data: days, reload } = useApiData(getDashboardDailyPnl)
   // Same predicate as the sidebar's admin button and as EnsureAdmin::ROLES on
   // the server — the icons are cosmetic, the /admin/* endpoints do the gating.
+  // Being allowed only makes the popup's tap gesture live; the icons
+  // themselves stay hidden until it fires (see DayTradesModal).
   const canManage = canSeeAdmin(getUser()?.type)
   const [editTrade, setEditTrade] = useState<DayTrade | null>(null)
   const [pendingEdit, setPendingEdit] = useState<PositionEditPayload | null>(null)
