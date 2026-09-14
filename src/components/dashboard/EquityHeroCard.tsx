@@ -9,7 +9,8 @@ import {
   fmtSigned,
   fmtShortDate,
 } from '../../lib/format'
-import type { EquityPoint } from '../../types/dashboard'
+import type { EquityPoint, FeeSummary } from '../../types/dashboard'
+import PnlBreakdown from '../ui/PnlBreakdown'
 
 const VB_W = 1200
 const VB_H = 190
@@ -31,8 +32,16 @@ interface Mark {
   xFrac: number
   yFrac: number
   date: string
+  /** Before fees — what the line is drawn from. */
   equity: number
+  /** After fees — what the exchange would report at that point. */
+  equityNet: number
   delta: number
+}
+
+/** The before-fees level of a point; an older single-point response has none. */
+function grossOf(point: EquityPoint): number {
+  return point.equity_gross ?? point.equity
 }
 
 /** Event time for a curve point: the API's ISO timestamp when it sends one,
@@ -57,22 +66,32 @@ function PnlStat({
   value,
   pct,
   negative = false,
+  breakdown,
 }: {
   label: string
   value: string
   pct: string
   negative?: boolean
+  /** Before/after-fees figures behind the value — wraps it in the hover. */
+  breakdown?: { gross: number; net: number; feesSince: string | null }
 }) {
   const tone = negative ? 'text-red' : 'text-green'
+  const number = (
+    <span className={`font-mono text-[15px] font-extrabold ${tone}`}>{value}</span>
+  )
   return (
     <div className="flex flex-col gap-[3px]">
       <span className="text-[10px] font-extrabold tracking-[0.6px] text-faint uppercase">
         {label}
       </span>
       <div className="flex items-baseline gap-[7px] flex-wrap">
-        <span className={`font-mono text-[15px] font-extrabold ${tone}`}>
-          {value}
-        </span>
+        {breakdown ? (
+          <PnlBreakdown gross={breakdown.gross} net={breakdown.net} feesSince={breakdown.feesSince}>
+            {number}
+          </PnlBreakdown>
+        ) : (
+          number
+        )}
         <span className={`font-mono text-[11px] font-bold ${tone}`}>{pct}</span>
       </div>
     </div>
@@ -81,9 +100,14 @@ function PnlStat({
 
 interface EquityHeroCardProps {
   equity: number
+  /** After fees. */
   realizedPnl: number
+  /** Before fees — the headline. */
+  realizedPnlGross: number
   unrealizedPnl: number
   totalPnl: number
+  totalPnlGross: number
+  fees: FeeSummary
   pctBase: number
   curve: EquityPoint[]
   /** false = no exchange connected: swaps the LIVE pill and chart for a
@@ -92,16 +116,24 @@ interface EquityHeroCardProps {
 }
 
 /** Equity hero: ACCOUNT EQUITY label + LIVE pill, big mono balance, the
- *  realized/unrealized/total split, range tabs and the area chart. */
+ *  realized/unrealized/total split, range tabs and the area chart.
+ *
+ *  The split and the line are BEFORE exchange fees — the strategy's result;
+ *  hovering a figure or a point shows what landed after fees. The big balance
+ *  is the exchange's own number and stays as it is. */
 export default function EquityHeroCard({
   equity,
   realizedPnl,
+  realizedPnlGross,
   unrealizedPnl,
   totalPnl,
+  totalPnlGross,
+  fees,
   pctBase,
   curve,
   connected = true,
 }: EquityHeroCardProps) {
+  const feesSince = fees.trades_without_fee > 0 ? fees.since : null
   const [range, setRange] = useState<RangeKey>('All')
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
   const plotRef = useRef<HTMLDivElement>(null)
@@ -121,7 +153,7 @@ export default function EquityHeroCard({
       const before = curve.filter((p) => p.date < iso)
       if (before.length > 0) points = [before[before.length - 1], ...points]
     }
-    const values = points.map((p) => p.equity)
+    const values = points.map(grossOf)
     if (values.length === 0)
       return { path: '', axisLabels: [] as string[], marks: [] as Mark[] }
 
@@ -168,10 +200,11 @@ export default function EquityHeroCard({
       xFrac: p.x / VB_W,
       yFrac: p.y / VB_H,
       date: points[p.index].date,
-      equity: points[p.index].equity,
+      equity: grossOf(points[p.index]),
+      equityNet: points[p.index].equity,
       /** Change since the start of the visible range — what the range tabs are
        *  for; the absolute equity alone answers a different question. */
-      delta: points[p.index].equity - values[0],
+      delta: grossOf(points[p.index]) - values[0],
     }))
 
     return {
@@ -231,10 +264,11 @@ export default function EquityHeroCard({
           {connected && (
             <div className="flex gap-[26px] mt-stack flex-wrap">
               <PnlStat
-                label="Realized P&L"
-                value={fmtSigned(realizedPnl)}
-                pct={fmtPctOf(realizedPnl, pctBase)}
-                negative={realizedPnl < 0}
+                label="Realized P&L · before fees"
+                value={fmtSigned(realizedPnlGross)}
+                pct={fmtPctOf(realizedPnlGross, pctBase)}
+                negative={realizedPnlGross < 0}
+                breakdown={{ gross: realizedPnlGross, net: realizedPnl, feesSince }}
               />
               <PnlStat
                 label="Unrealized P&L"
@@ -243,10 +277,11 @@ export default function EquityHeroCard({
                 negative={unrealizedPnl < 0}
               />
               <PnlStat
-                label="Total P&L"
-                value={fmtSigned(totalPnl)}
-                pct={fmtPctOf(totalPnl, pctBase)}
-                negative={totalPnl < 0}
+                label="Total P&L · before fees"
+                value={fmtSigned(totalPnlGross)}
+                pct={fmtPctOf(totalPnlGross, pctBase)}
+                negative={totalPnlGross < 0}
+                breakdown={{ gross: totalPnlGross, net: totalPnl, feesSince }}
               />
             </div>
           )}
@@ -367,7 +402,7 @@ export default function EquityHeroCard({
                 }}
               >
                 <div className="font-mono text-[10.5px] tracking-[0.4px] text-faint whitespace-nowrap">
-                  {fmtMediumDate(hovered.date)}
+                  {fmtMediumDate(hovered.date)} · before fees
                 </div>
                 <div className="font-mono text-[15px] font-extrabold whitespace-nowrap">
                   ${fmtNum(hovered.equity)}
@@ -378,6 +413,15 @@ export default function EquityHeroCard({
                   }`}
                 >
                   {fmtSigned(hovered.delta)} since {range === 'All' ? 'start' : range}
+                </div>
+                {/* What the exchange would show at that point: the same walk
+                    with the fees to date taken out. Equal lines mean no fee
+                    on record up to that day. */}
+                <div className="mt-1.5 border-t border-hair pt-1.5 font-mono text-[10.5px] text-faint whitespace-nowrap">
+                  <span>After fees ${fmtNum(hovered.equityNet)}</span>
+                  {hovered.equity !== hovered.equityNet && (
+                    <span> · fees to date −${fmtNum(hovered.equity - hovered.equityNet)}</span>
+                  )}
                 </div>
               </div>
             </>

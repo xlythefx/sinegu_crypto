@@ -2,6 +2,7 @@ import { Target } from 'lucide-react'
 import { displaySymbol, seriesColor } from '../../lib/chart'
 import { fmtSignedMoney } from '../../lib/format'
 import type { SymbolStat } from '../../types/analytics'
+import PnlBreakdown from '../ui/PnlBreakdown'
 
 const R = 80
 const CIRCUMFERENCE = 2 * Math.PI * R
@@ -21,6 +22,7 @@ export default function PositionDistributionCard({
     trades: s.trades,
     pct: totalTrades > 0 ? (s.trades / totalTrades) * 100 : 0,
     pnl: s.realized_pnl,
+    pnlNet: s.realized_pnl_net,
   }))
 
   let offset = 0
@@ -40,7 +42,7 @@ export default function PositionDistributionCard({
             Position Distribution by Asset
           </div>
           <div className="text-[12px] text-muted mt-px">
-            Distribution of trades by ticker symbol
+            Distribution of trades by ticker symbol · P&L before fees
           </div>
         </div>
       </div>
@@ -110,11 +112,13 @@ export default function PositionDistributionCard({
                   {s.trades} trades · {s.pct.toFixed(1)}%
                 </span>
               </div>
-              <span
-                className={`font-mono text-[12px] font-bold flex-none ${s.pnl < 0 ? 'text-red' : 'text-green'}`}
-              >
-                {fmtSignedMoney(s.pnl)}
-              </span>
+              <PnlBreakdown gross={s.pnl} net={s.pnlNet} heading={s.name} className="flex-none">
+                <span
+                  className={`font-mono text-[12px] font-bold ${s.pnl < 0 ? 'text-red' : 'text-green'}`}
+                >
+                  {fmtSignedMoney(s.pnl)}
+                </span>
+              </PnlBreakdown>
             </div>
           ))}
         </div>

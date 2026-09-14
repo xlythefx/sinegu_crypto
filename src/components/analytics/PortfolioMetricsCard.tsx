@@ -6,16 +6,22 @@ import type { RiskStats, TradeQuality } from '../../types/analytics'
 interface PortfolioMetricsCardProps {
   quality: TradeQuality
   risk: RiskStats
+  /** Before fees. */
   totalReturnAbs: number
+  totalReturnAbsNet: number
   totalReturnPct: number | null
+  feesSince: string | null
 }
 
-/** "Portfolio Performance Metrics" — overall trading statistics tiles. */
+/** "Portfolio Performance Metrics" — overall trading statistics tiles, all
+ *  before exchange fees; the P&L tile shows the after-fees figure on hover. */
 export default function PortfolioMetricsCard({
   quality,
   risk,
   totalReturnAbs,
+  totalReturnAbsNet,
   totalReturnPct,
+  feesSince,
 }: PortfolioMetricsCardProps) {
   const totalTrades = quality.wins + quality.losses
 
@@ -62,11 +68,12 @@ export default function PortfolioMetricsCard({
           }
         />
         <MetricTile
-          label="Total P&L"
+          label="Total P&L · before fees"
           value={fmtSignedMoney(totalReturnAbs)}
           tone={totalReturnAbs < 0 ? 'neg' : 'pos'}
           sub={totalReturnPct === null ? undefined : fmtSignedPct(totalReturnPct)}
           subTone={totalReturnPct !== null && totalReturnPct < 0 ? 'neg' : 'pos'}
+          breakdown={{ gross: totalReturnAbs, net: totalReturnAbsNet, feesSince }}
         />
         <MetricTile
           label="Max Consecutive Winning Days"

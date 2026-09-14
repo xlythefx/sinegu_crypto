@@ -14,6 +14,7 @@ import PositionEditModal, {
   type PositionEditPayload,
 } from '../admin/positions/PositionEditModal'
 import ConfirmModal from '../ui/ConfirmModal'
+import PnlBreakdown from '../ui/PnlBreakdown'
 import type { DayPnl, DayTrade } from '../../types/dashboard'
 
 const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
@@ -291,11 +292,28 @@ export default function DailyPnlCalendar({ balance }: DailyPnlCalendarProps) {
               disabled={!c.data}
             >
               <span className="text-[11px] font-bold text-faint">{c.day}</span>
-              <span
-                className={`font-mono text-[11.5px] font-bold max-[900px]:text-[9.5px] ${pnl > 0 ? 'text-green' : pnl < 0 ? 'text-red' : 'text-faint'}`}
-              >
-                {display(pnl)}
-              </span>
+              {/* A cell is what LANDED that day (after fees); hovering it shows
+                  what the strategy made before fees. hoverOnly: the tap is
+                  already the popup's, and the popup's header repeats this. */}
+              {c.data ? (
+                <PnlBreakdown
+                  hoverOnly
+                  gross={c.data.total_gross}
+                  net={c.data.total}
+                  heading={fmtMediumDate(c.iso)}
+                  note={c.data.fees === 0 ? 'No exchange fee on record for this day.' : undefined}
+                >
+                  <span
+                    className={`font-mono text-[11.5px] font-bold max-[900px]:text-[9.5px] ${pnl > 0 ? 'text-green' : pnl < 0 ? 'text-red' : 'text-faint'}`}
+                  >
+                    {display(pnl)}
+                  </span>
+                </PnlBreakdown>
+              ) : (
+                <span className="font-mono text-[11.5px] font-bold max-[900px]:text-[9.5px] text-faint">
+                  {display(pnl)}
+                </span>
+              )}
               {count > 0 && (
                 <span className="absolute top-[5px] right-[5px] min-w-[15px] h-[15px] px-1 inline-flex items-center justify-center rounded-pill bg-surface border border-border font-mono text-[9px] font-bold text-muted">
                   {count}

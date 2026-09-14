@@ -1,21 +1,35 @@
-/** Payload of GET /api/analytics. */
+/**
+ * Payload of GET /api/analytics.
+ *
+ * BASIS: every P&L figure is BEFORE exchange fees (the strategy's result);
+ * each carries its after-fees twin (`*_net`) for the hover breakdown, and
+ * `fees` is the cost of trading as its own number. See `FeeSummary`.
+ */
+
+import type { FeeSummary } from './dashboard'
 
 export interface DayExtreme {
   date: string
+  /** Before fees. */
   pnl: number
+  pnl_net: number
 }
 
 export type Weekday = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun'
 
 export interface DayOfWeekStat {
   pnl: number
+  pnl_net: number
   trades: number
 }
 
 export interface MonthlyStat {
   /** 'YYYY-MM', ascending. */
   month: string
+  /** Before fees. */
   pnl: number
+  pnl_net: number
+  fees: number
   trades: number
   win_rate: number
 }
@@ -23,7 +37,10 @@ export interface MonthlyStat {
 export interface SymbolStat {
   symbol: string
   trades: number
+  /** Before fees. */
   realized_pnl: number
+  realized_pnl_net: number
+  fees: number
 }
 
 export interface ExchangeStat {
@@ -80,7 +97,9 @@ export interface RiskStats {
 export interface ReturnOnDeposit {
   /** null when nothing has been deposited yet. */
   pct: number | null
+  /** Before fees. */
   realized: number
+  realized_net: number
   deposits: number
   trades: number
 }
@@ -100,17 +119,24 @@ export interface Analytics {
   baseline: number
   current_capital: number
   total_unrealized: number
+  /** Before fees. */
   total_realized: number
+  total_realized_net: number
+  fees: FeeSummary
   total_return_abs: number
+  total_return_abs_net: number
   total_return_pct: number | null
   return_on_deposit: ReturnOnDeposit
   filters: AnalyticsFilterMeta
   trading_days: number
   avg_daily_pnl: number | null
+  avg_daily_pnl_net: number | null
   best_day: DayExtreme | null
   worst_day: DayExtreme | null
-  /** Realized P&L per day keyed by 'YYYY-MM-DD', ascending. */
+  /** Realized P&L per day keyed by 'YYYY-MM-DD', ascending — before fees… */
   daily_pnl: Record<string, number>
+  /** …and after. */
+  daily_pnl_net: Record<string, number>
   day_of_week: Record<Weekday, DayOfWeekStat>
   monthly: MonthlyStat[]
   by_symbol: SymbolStat[]

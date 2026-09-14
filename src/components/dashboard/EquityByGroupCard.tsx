@@ -61,6 +61,8 @@ export default function EquityByGroupCard({
       name: group === 'asset' ? displaySymbol(s.id) : s.id,
       color: seriesColor(s.id, i),
       total: s.total,
+      totalNet: s.total_net,
+      fees: s.fees,
       trades: s.trades,
       winRate: s.win_rate,
       profitFactor: s.profit_factor,
@@ -150,7 +152,7 @@ export default function EquityByGroupCard({
               Equity by {group === 'asset' ? 'Asset' : 'Strategy'}
             </div>
             <div className="text-[12px] text-muted mt-px">
-              Cumulative P&L contribution · All
+              Cumulative P&L contribution · before fees
             </div>
           </div>
         </div>
@@ -305,9 +307,18 @@ export default function EquityByGroupCard({
               </div>
               <div className="flex flex-col gap-[7px]">
                 <TipRow
-                  label="Total P&L"
+                  label="Before fees"
                   value={fmtSigned(selected.total)}
                   tone={selected.total < 0 ? 'text-red' : 'text-green'}
+                />
+                <TipRow
+                  label="Exchange fees"
+                  value={selected.fees === 0 ? '0.00' : fmtSigned(-selected.fees)}
+                />
+                <TipRow
+                  label="After fees"
+                  value={fmtSigned(selected.totalNet)}
+                  tone={selected.totalNet < 0 ? 'text-red' : 'text-green'}
                 />
                 <TipRow label="Trades" value={String(selected.trades)} />
                 <TipRow

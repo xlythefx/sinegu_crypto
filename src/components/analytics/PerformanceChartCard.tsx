@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState, type PointerEvent } from 'react'
 import { LineChart, MoreVertical } from 'lucide-react'
 import {
   fmtMediumDate,
@@ -8,6 +8,7 @@ import {
   fmtSignedMoney,
   fmtSignedPct,
 } from '../../lib/format'
+import PnlBreakdown from '../ui/PnlBreakdown'
 
 type Tab = 'cumulative' | 'daily' | 'range'
 type Period = 'Daily' | 'Weekly' | 'Monthly' | 'All Time'
@@ -29,13 +30,19 @@ const PAD_BOTTOM = 16
 
 interface Bucket {
   key: string
+  /** Before fees. */
   pnl: number
+  /** After fees. */
+  pnlNet: number
 }
 
-/** Aggregate ascending [date, pnl] entries into period buckets. */
-function bucketize(entries: [string, number][], period: Period): Bucket[] {
+/** One day's figures, before and after fees. */
+type Entry = [date: string, pnl: number, pnlNet: number]
+
+/** Aggregate ascending entries into period buckets. */
+function bucketize(entries: Entry[], period: Period): Bucket[] {
   const buckets: Bucket[] = []
-  for (const [date, pnl] of entries) {
+  for (const [date, pnl, pnlNet] of entries) {
     let key = date
     if (period === 'Monthly') {
       key = date.slice(0, 7)
@@ -46,10 +53,25 @@ function bucketize(entries: [string, number][], period: Period): Bucket[] {
       key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     }
     const last = buckets[buckets.length - 1]
-    if (last && last.key === key) last.pnl += pnl
-    else buckets.push({ key, pnl })
+    if (last && last.key === key) {
+      last.pnl += pnl
+      last.pnlNet += pnlNet
+    } else buckets.push({ key, pnl, pnlNet })
   }
   return buckets
+}
+
+/** A hoverable point: where it sits (fractions of the plot box) and what to say. */
+interface Mark {
+  xFrac: number
+  yFrac: number
+  label: string
+  /** Cumulative level before / after fees (cumulative tab). */
+  cum: number
+  cumNet: number
+  /** The bucket's own P&L before / after fees; null on the seed point. */
+  pnl: number | null
+  pnlNet: number | null
 }
 
 function bucketLabel(key: string, period: Period): string {
@@ -73,28 +95,36 @@ function axisLabels(buckets: Bucket[], period: Period, count = 6): string[] {
 }
 
 interface PerformanceChartCardProps {
-  /** Realized P&L per day keyed by 'YYYY-MM-DD', ascending. */
+  /** Realized P&L per day keyed by 'YYYY-MM-DD', ascending — before fees… */
   dailyPnl: Record<string, number>
+  /** …and after, same keys. */
+  dailyPnlNet: Record<string, number>
   baseline: number
+  /** Set when some of the days carry no fee on record. */
+  feesSince: string | null
 }
 
 /** "Performance Analytics" — cumulative / daily P&L charts plus a date-range
- *  summary, with a time-period filter menu. */
+ *  summary, with a time-period filter menu. Drawn BEFORE exchange fees;
+ *  hovering a point reads out the after-fees figure beside it. */
 export default function PerformanceChartCard({
   dailyPnl,
+  dailyPnlNet,
   baseline,
+  feesSince,
 }: PerformanceChartCardProps) {
   const [tab, setTab] = useState<Tab>('cumulative')
   const [period, setPeriod] = useState<Period>('Daily')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null)
+  const plotRef = useRef<HTMLDivElement>(null)
 
   const entries = useMemo(
     () =>
-      Object.entries(dailyPnl).sort(([a], [b]) => a.localeCompare(b)) as [
-        string,
-        number,
-      ][],
-    [dailyPnl],
+      Object.entries(dailyPnl)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, pnl]): Entry => [date, pnl, dailyPnlNet[date] ?? pnl]),
+    [dailyPnl, dailyPnlNet],
   )
 
   const [fromDate, setFromDate] = useState(() => {
@@ -115,12 +145,21 @@ export default function PerformanceChartCard({
     // Seed the cumulative curve so windowed views stay continuous
     const skipped = all.length - windowed.length
     let seed = baseline
-    for (let i = 0; i < skipped; i++) seed += all[i].pnl
+    let seedNet = baseline
+    for (let i = 0; i < skipped; i++) {
+      seed += all[i].pnl
+      seedNet += all[i].pnlNet
+    }
 
-    // ----- cumulative series -----
+    // ----- cumulative series (before fees drawn; after fees carried) -----
     let acc = seed
+    let accNet = seedNet
     const series = [seed, ...windowed.map((b) => (acc += b.pnl))]
-    if (series.length === 1) series.push(seed) // flat line when no data
+    const seriesNet = [seedNet, ...windowed.map((b) => (accNet += b.pnlNet))]
+    if (series.length === 1) {
+      series.push(seed) // flat line when no data
+      seriesNet.push(seedNet)
+    }
     let min = Math.min(...series)
     let max = Math.max(...series)
     if (min === max) {
@@ -138,9 +177,22 @@ export default function PerformanceChartCard({
       area: `M${points.join(' L')} L${W},${H} L0,${H} Z`,
       baselineY: baseline >= min && baseline <= max ? yCum(baseline) : null,
     }
+    const cumMarks: Mark[] =
+      windowed.length === 0
+        ? []
+        : series.map((v, i) => ({
+            xFrac: (i * step) / W,
+            yFrac: yCum(v) / H,
+            label: i === 0 ? 'Start' : bucketLabel(windowed[i - 1].key, period),
+            cum: v,
+            cumNet: seriesNet[i],
+            pnl: i === 0 ? null : windowed[i - 1].pnl,
+            pnlNet: i === 0 ? null : windowed[i - 1].pnlNet,
+          }))
 
     // ----- daily (per-bucket P&L) series -----
     let daily: { x: number; y: number; pos: boolean }[] = []
+    let dailyMarks: Mark[] = []
     if (windowed.length > 0) {
       const values = windowed.map((b) => b.pnl)
       let dMin = Math.min(...values)
@@ -159,28 +211,128 @@ export default function PerformanceChartCard({
         y: yOf(b.pnl),
         pos: b.pnl >= 0,
       }))
+      dailyMarks = windowed.map((b, i) => ({
+        xFrac: (i * dStep) / W,
+        yFrac: yOf(b.pnl) / H,
+        label: bucketLabel(b.key, period),
+        cum: series[i + 1],
+        cumNet: seriesNet[i + 1],
+        pnl: b.pnl,
+        pnlNet: b.pnlNet,
+      }))
     }
     const dailyLine =
       daily.length > 1
         ? `M${daily.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L')}`
         : ''
 
-    return { cumulative, daily, dailyLine, labels: axisLabels(windowed, period) }
+    return {
+      cumulative,
+      cumMarks,
+      daily,
+      dailyMarks,
+      dailyLine,
+      labels: axisLabels(windowed, period),
+    }
   }, [entries, period, baseline])
 
   const range = useMemo(() => {
     let inRange = 0
+    let inRangeNet = 0
     let upToEnd = 0
-    for (const [date, pnl] of entries) {
+    for (const [date, pnl, pnlNet] of entries) {
       if (date <= toDate) upToEnd += pnl
-      if (date >= fromDate && date <= toDate) inRange += pnl
+      if (date >= fromDate && date <= toDate) {
+        inRange += pnl
+        inRangeNet += pnlNet
+      }
     }
     return {
       realized: inRange,
+      realizedNet: inRangeNet,
       wholeBalance: baseline + upToEnd,
       pct: baseline > 0 ? (inRange / baseline) * 100 : null,
     }
   }, [entries, fromDate, toDate, baseline])
+
+  const marks = tab === 'cumulative' ? view.cumMarks : tab === 'daily' ? view.dailyMarks : []
+  const hovered = hoverIdx !== null ? (marks[hoverIdx] ?? null) : null
+
+  /** Snap to the nearest plotted bucket horizontally — the readout only ever
+   *  quotes figures that actually happened. */
+  const trackPointer = (e: PointerEvent<HTMLDivElement>) => {
+    const rect = plotRef.current?.getBoundingClientRect()
+    if (!rect || rect.width === 0 || marks.length === 0) return
+    const ratio = (e.clientX - rect.left) / rect.width
+    let best = 0
+    let bestGap = Infinity
+    for (let i = 0; i < marks.length; i++) {
+      const gap = Math.abs(marks[i].xFrac - ratio)
+      if (gap < bestGap) {
+        bestGap = gap
+        best = i
+      }
+    }
+    setHoverIdx(best)
+  }
+
+  /** The crosshair + readout shared by the two chart tabs. */
+  const readout = hovered && (
+    <>
+      <span
+        className="pointer-events-none absolute inset-y-0 w-px bg-[var(--accent)] opacity-40"
+        style={{ left: `${hovered.xFrac * 100}%` }}
+      />
+      <span
+        className="pointer-events-none absolute h-[10px] w-[10px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-accent shadow-[0_0_0_4px_var(--glow)]"
+        style={{ left: `${hovered.xFrac * 100}%`, top: `${hovered.yFrac * 100}%` }}
+      />
+      <div
+        className="pointer-events-none absolute top-2 z-10 rounded-card border border-border bg-surface2/97 px-3 py-2 backdrop-blur-sm"
+        style={{
+          left: `${hovered.xFrac * 100}%`,
+          transform: `translateX(${
+            hovered.xFrac > 0.7 ? 'calc(-100% - 12px)' : hovered.xFrac < 0.3 ? '12px' : '-50%'
+          })`,
+        }}
+      >
+        <div className="font-mono text-[10.5px] tracking-[0.4px] text-faint whitespace-nowrap">
+          {hovered.label}
+        </div>
+        {tab === 'cumulative' ? (
+          <>
+            <div className="font-mono text-[15px] font-extrabold whitespace-nowrap">
+              ${fmtNum(hovered.cum)}
+              <span className="ml-1.5 text-[10.5px] font-semibold text-faint">before fees</span>
+            </div>
+            <div className="font-mono text-[11px] text-muted whitespace-nowrap">
+              ${fmtNum(hovered.cumNet)} after fees
+            </div>
+          </>
+        ) : (
+          <>
+            <div
+              className={`font-mono text-[15px] font-extrabold whitespace-nowrap ${
+                (hovered.pnl ?? 0) < 0 ? 'text-red' : 'text-green'
+              }`}
+            >
+              {fmtSignedMoney(hovered.pnl ?? 0)}
+              <span className="ml-1.5 text-[10.5px] font-semibold text-faint">before fees</span>
+            </div>
+            <div className="font-mono text-[11px] text-muted whitespace-nowrap">
+              {fmtSignedMoney(hovered.pnlNet ?? 0)} after fees
+            </div>
+          </>
+        )}
+        {hovered.pnl !== null && hovered.pnlNet !== null && tab === 'cumulative' && (
+          <div className="mt-1 border-t border-hair pt-1 font-mono text-[10.5px] text-faint whitespace-nowrap">
+            {period === 'Daily' ? 'Day' : period === 'Weekly' ? 'Week' : 'Month'}:{' '}
+            {fmtSignedMoney(hovered.pnl)} before · {fmtSignedMoney(hovered.pnlNet)} after
+          </div>
+        )}
+      </div>
+    </>
+  )
 
   return (
     <section
@@ -198,7 +350,7 @@ export default function PerformanceChartCard({
               Performance Analytics
             </div>
             <div className="text-[12px] text-muted mt-px">
-              Profit and loss tracking · {period}
+              Profit and loss tracking · before fees · {period}
             </div>
           </div>
         </div>
@@ -243,7 +395,10 @@ export default function PerformanceChartCard({
             key={key}
             type="button"
             className={`font-body py-[7px] px-[13px] text-[12.5px] rounded-btn border ${tab === key ? 'bg-surface border-border text-text font-bold' : 'border-transparent bg-transparent text-muted font-semibold'}`}
-            onClick={() => setTab(key)}
+            onClick={() => {
+              setTab(key)
+              setHoverIdx(null)
+            }}
           >
             {label}
           </button>
@@ -252,6 +407,12 @@ export default function PerformanceChartCard({
 
       {tab === 'cumulative' && (
         <div>
+          <div
+            ref={plotRef}
+            className="relative touch-pan-y"
+            onPointerMove={trackPointer}
+            onPointerLeave={() => setHoverIdx(null)}
+          >
           <svg
             viewBox={`0 0 ${W} ${H}`}
             preserveAspectRatio="none"
@@ -289,6 +450,8 @@ export default function PerformanceChartCard({
               />
             )}
           </svg>
+          {readout}
+          </div>
           <div className="font-mono text-[10px] text-faint tracking-[0.4px] mt-1.5">
             Deposit amount · ${fmtNum(baseline)}
           </div>
@@ -302,8 +465,15 @@ export default function PerformanceChartCard({
 
       {tab === 'daily' && (
         <div>
+          <div
+            ref={plotRef}
+            className="relative touch-pan-y"
+            onPointerMove={trackPointer}
+            onPointerLeave={() => setHoverIdx(null)}
+          >
           <svg
             viewBox={`0 0 ${W} ${H}`}
+            preserveAspectRatio="none"
             className="w-full h-[240px] block max-[640px]:h-[200px]"
           >
             <g stroke="var(--hair)" strokeWidth="1">
@@ -334,6 +504,8 @@ export default function PerformanceChartCard({
               />
             ))}
           </svg>
+          {readout}
+          </div>
           <div className="flex gap-stack mt-2 text-[11px] font-semibold text-muted [&>span]:inline-flex [&>span]:items-center [&>span]:gap-1.5">
             <span>
               <i className="w-2 h-2 rounded-full inline-block bg-green" /> Winning
@@ -401,8 +573,16 @@ export default function PerformanceChartCard({
               <div
                 className={`font-mono text-[24px] font-extrabold tracking-[-0.6px] mt-1.5 mb-1 ${range.realized < 0 ? 'text-red' : 'text-green'}`}
               >
-                {fmtSignedMoney(range.realized)}
+                <PnlBreakdown
+                  gross={range.realized}
+                  net={range.realizedNet}
+                  feesSince={feesSince}
+                  heading={`${fmtMediumDate(fromDate)} — ${fmtMediumDate(toDate)}`}
+                >
+                  {fmtSignedMoney(range.realized)}
+                </PnlBreakdown>
               </div>
+              <div className="text-[11px] text-muted font-semibold">Before fees</div>
             </div>
             <div className="border border-hair bg-surface2 rounded-rail py-4 px-[18px]">
               <span className="text-[10.5px] font-extrabold tracking-[0.5px] text-faint uppercase">

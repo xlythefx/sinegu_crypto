@@ -1,18 +1,24 @@
 import { fmtSignedMoney } from '../../lib/format'
-import type { DashboardMetrics } from '../../types/dashboard'
+import type { DashboardMetrics, FeeSummary } from '../../types/dashboard'
+import PnlBreakdown from '../ui/PnlBreakdown'
 
 interface MetricsRailProps {
   metrics: DashboardMetrics
+  fees?: FeeSummary
 }
 
-/** The 6-cell metrics rail: Net P&L · Win Rate · Profit Factor · Expectancy ·
- *  Max Drawdown · Sharpe, with hairline dividers. */
-export default function MetricsRail({ metrics }: MetricsRailProps) {
+/** The 6-cell metrics rail: P&L · Win Rate · Profit Factor · Expectancy ·
+ *  Max Drawdown · Sharpe, with hairline dividers. Every figure is the
+ *  strategy's result BEFORE exchange fees; the P&L cell shows the after-fees
+ *  figure on hover. */
+export default function MetricsRail({ metrics, fees }: MetricsRailProps) {
+  const feesSince = fees && fees.trades_without_fee > 0 ? fees.since : null
   const cells = [
     {
-      label: 'Net P&L',
-      value: fmtSignedMoney(metrics.net_pnl, 0),
-      tone: metrics.net_pnl >= 0 ? 'pos' : 'neg',
+      label: 'P&L before fees',
+      value: fmtSignedMoney(metrics.gross_pnl, 0),
+      tone: metrics.gross_pnl >= 0 ? 'pos' : 'neg',
+      breakdown: { gross: metrics.gross_pnl, net: metrics.net_pnl },
     },
     {
       label: 'Win Rate',
@@ -55,11 +61,21 @@ export default function MetricsRail({ metrics }: MetricsRailProps) {
           <span className="text-[10.5px] font-bold tracking-[0.4px] text-faint uppercase">
             {c.label}
           </span>
-          <span
-            className={`font-mono text-[17px] font-extrabold${c.tone === 'pos' ? ' text-green' : c.tone === 'neg' ? ' text-red' : ''}`}
-          >
-            {c.value}
-          </span>
+          {'breakdown' in c && c.breakdown ? (
+            <PnlBreakdown gross={c.breakdown.gross} net={c.breakdown.net} feesSince={feesSince}>
+              <span
+                className={`font-mono text-[17px] font-extrabold${c.tone === 'pos' ? ' text-green' : c.tone === 'neg' ? ' text-red' : ''}`}
+              >
+                {c.value}
+              </span>
+            </PnlBreakdown>
+          ) : (
+            <span
+              className={`font-mono text-[17px] font-extrabold${c.tone === 'pos' ? ' text-green' : c.tone === 'neg' ? ' text-red' : ''}`}
+            >
+              {c.value}
+            </span>
+          )}
         </div>
       ))}
     </div>

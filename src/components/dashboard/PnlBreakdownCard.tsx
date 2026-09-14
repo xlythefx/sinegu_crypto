@@ -1,16 +1,23 @@
 import { Activity } from 'lucide-react'
 import { fmtPctOf, fmtSignedMoney } from '../../lib/format'
-import type { PnlBreakdown } from '../../types/dashboard'
+import type { PnlBreakdown as PnlPeriods } from '../../types/dashboard'
+import PnlBreakdown from '../ui/PnlBreakdown'
 
 interface PnlBreakdownCardProps {
-  breakdown: PnlBreakdown
+  /** Before fees. */
+  breakdown: PnlPeriods
+  /** After fees, same keys. */
+  net: PnlPeriods
   pctBase: number
 }
 
-/** Sits beside the calendar: Daily / Weekly / Monthly realized P&L,
- *  each as amount + percentage. */
+/** Sits beside the calendar: Daily / Weekly / Monthly realized P&L before
+ *  exchange fees, each as amount + percentage; hover a figure for what
+ *  landed after fees. These are recent windows, all inside the fee ledger's
+ *  era, so no "fees recorded from…" caveat is needed here. */
 export default function PnlBreakdownCard({
   breakdown,
+  net,
   pctBase,
 }: PnlBreakdownCardProps) {
   const monthLabel = new Date().toLocaleDateString('en-US', {
@@ -18,9 +25,9 @@ export default function PnlBreakdownCard({
     year: 'numeric',
   })
   const rows = [
-    { label: 'Daily', value: breakdown.daily },
-    { label: 'Weekly', value: breakdown.weekly },
-    { label: 'Monthly', value: breakdown.monthly },
+    { label: 'Daily', value: breakdown.daily, net: net.daily },
+    { label: 'Weekly', value: breakdown.weekly, net: net.weekly },
+    { label: 'Monthly', value: breakdown.monthly, net: net.monthly },
   ]
   return (
     <section
@@ -37,7 +44,7 @@ export default function PnlBreakdownCard({
             P&L Breakdown
           </div>
           <div className="text-[12px] text-muted mt-px">
-            Realized · {monthLabel}
+            Realized · before fees · {monthLabel}
           </div>
         </div>
       </div>
@@ -51,11 +58,13 @@ export default function PnlBreakdownCard({
               {r.label} P&L
             </span>
             <div className="flex flex-col items-end gap-0.5">
-              <span
-                className={`font-mono text-[15px] font-extrabold ${r.value < 0 ? 'text-red' : 'text-green'}`}
-              >
-                {fmtSignedMoney(r.value)}
-              </span>
+              <PnlBreakdown gross={r.value} net={r.net} heading={`${r.label} · realized`}>
+                <span
+                  className={`font-mono text-[15px] font-extrabold ${r.value < 0 ? 'text-red' : 'text-green'}`}
+                >
+                  {fmtSignedMoney(r.value)}
+                </span>
+              </PnlBreakdown>
               <span
                 className={`font-mono text-[11px] font-bold ${r.value < 0 ? 'text-red' : 'text-green'}`}
               >

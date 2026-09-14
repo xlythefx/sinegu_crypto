@@ -125,18 +125,23 @@ export default function Analytics() {
             <AnalyticsKpis
               totalReturnPct={data.total_return_pct}
               totalReturnAbs={data.total_return_abs}
+              totalReturnAbsNet={data.total_return_abs_net}
               returnOnDeposit={data.return_on_deposit}
               filtered={data.filters.filtered}
               avgDailyPnl={data.avg_daily_pnl}
+              avgDailyPnlNet={data.avg_daily_pnl_net}
               tradingDays={data.trading_days}
               bestDay={data.best_day}
               worstDay={data.worst_day}
+              fees={data.fees}
             />
 
             <div className="grid grid-cols-[1.25fr_1fr] gap-stack items-stretch max-[1100px]:grid-cols-1">
               <PerformanceChartCard
                 dailyPnl={data.daily_pnl}
+                dailyPnlNet={data.daily_pnl_net}
                 baseline={data.baseline}
+                feesSince={data.fees.trades_without_fee > 0 ? data.fees.since : null}
               />
               <PositionDistributionCard bySymbol={data.by_symbol} />
             </div>
@@ -145,7 +150,9 @@ export default function Analytics() {
               quality={data.quality}
               risk={data.risk}
               totalReturnAbs={data.total_return_abs}
+              totalReturnAbsNet={data.total_return_abs_net}
               totalReturnPct={data.total_return_pct}
+              feesSince={data.fees.trades_without_fee > 0 ? data.fees.since : null}
             />
             <TradeQualityCard quality={data.quality} />
             <RiskMetricsCard

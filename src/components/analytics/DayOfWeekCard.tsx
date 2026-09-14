@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { CalendarDays } from 'lucide-react'
 import { fmtSignedMoney } from '../../lib/format'
 import type { DayOfWeekStat, Weekday } from '../../types/analytics'
+import BarReadout from './BarReadout'
 
 const WEEKDAYS: Weekday[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -16,11 +18,15 @@ interface DayOfWeekCardProps {
   dayOfWeek: Record<Weekday, DayOfWeekStat>
 }
 
-/** "Performance by Day of Week" — signed bar chart, best/worst summary. */
+/** "Performance by Day of Week" — signed bar chart, best/worst summary.
+ *  Bars are BEFORE exchange fees; hover one for the after-fees figure. */
 export default function DayOfWeekCard({ dayOfWeek }: DayOfWeekCardProps) {
+  const [hover, setHover] = useState<number | null>(null)
+
   const days = WEEKDAYS.map((day) => ({
     day,
     pnl: dayOfWeek[day]?.pnl ?? 0,
+    pnlNet: dayOfWeek[day]?.pnl_net ?? 0,
     trades: dayOfWeek[day]?.trades ?? 0,
   }))
   const hasData = days.some((d) => d.trades > 0)
@@ -33,6 +39,9 @@ export default function DayOfWeekCard({ dayOfWeek }: DayOfWeekCardProps) {
 
   const best = days.reduce((a, b) => (b.pnl > a.pnl ? b : a), days[0])
   const worst = days.reduce((a, b) => (b.pnl < a.pnl ? b : a), days[0])
+
+  const hovered = hover !== null && days[hover].trades > 0 ? days[hover] : null
+  const hoverX = hover !== null ? (hover * SLOT + SLOT / 2) / W : 0
 
   return (
     <section
@@ -50,7 +59,7 @@ export default function DayOfWeekCard({ dayOfWeek }: DayOfWeekCardProps) {
               Performance by Day of Week
             </div>
             <div className="text-[12px] text-muted mt-px">
-              Identify which weekdays drive your edge
+              Identify which weekdays drive your edge · before fees
             </div>
           </div>
         </div>
@@ -80,58 +89,75 @@ export default function DayOfWeekCard({ dayOfWeek }: DayOfWeekCardProps) {
         </div>
       </div>
 
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[250px] block">
-        <g stroke="var(--hair)" strokeWidth="1">
-          <line x1="0" y1={TOP} x2={W} y2={TOP} />
-          <line x1="0" y1={(TOP + zeroY) / 2} x2={W} y2={(TOP + zeroY) / 2} />
-        </g>
-        <line
-          x1="0"
-          y1={zeroY}
-          x2={W}
-          y2={zeroY}
-          stroke="var(--muted)"
-          strokeWidth="1"
-          strokeDasharray="4 4"
-        />
-        {days.map((d, i) => {
-          const x = i * SLOT + (SLOT - BAR_W) / 2
-          const y = d.pnl >= 0 ? yOf(d.pnl) : zeroY
-          const h = Math.abs(yOf(d.pnl) - zeroY)
-          const pos = d.pnl >= 0
-          return (
-            <g key={d.day}>
-              <rect
-                x={x}
-                y={y}
-                width={BAR_W}
-                height={Math.max(h, 2)}
-                rx="5"
-                fill={pos ? 'var(--green)' : 'var(--red)'}
-                opacity=".85"
-              />
-              {d.trades > 0 && (
+      <div className="relative" onPointerLeave={() => setHover(null)}>
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[250px] block">
+          <g stroke="var(--hair)" strokeWidth="1">
+            <line x1="0" y1={TOP} x2={W} y2={TOP} />
+            <line x1="0" y1={(TOP + zeroY) / 2} x2={W} y2={(TOP + zeroY) / 2} />
+          </g>
+          <line
+            x1="0"
+            y1={zeroY}
+            x2={W}
+            y2={zeroY}
+            stroke="var(--muted)"
+            strokeWidth="1"
+            strokeDasharray="4 4"
+          />
+          {days.map((d, i) => {
+            const x = i * SLOT + (SLOT - BAR_W) / 2
+            const y = d.pnl >= 0 ? yOf(d.pnl) : zeroY
+            const h = Math.abs(yOf(d.pnl) - zeroY)
+            const pos = d.pnl >= 0
+            return (
+              <g
+                key={d.day}
+                onPointerEnter={() => setHover(i)}
+                className={d.trades > 0 ? 'cursor-help' : undefined}
+              >
+                <rect x={i * SLOT} y={0} width={SLOT} height={H} fill="transparent" />
+                <rect
+                  x={x}
+                  y={y}
+                  width={BAR_W}
+                  height={Math.max(h, 2)}
+                  rx="5"
+                  fill={pos ? 'var(--green)' : 'var(--red)'}
+                  opacity={hover === null || hover === i ? 0.85 : 0.35}
+                  className="transition-opacity duration-150"
+                />
+                {d.trades > 0 && (
+                  <text
+                    x={x + BAR_W / 2}
+                    y={pos ? y - 8 : y + h + 14}
+                    textAnchor="middle"
+                    className={`font-mono text-[11px] font-bold ${pos ? 'fill-green' : 'fill-red'}`}
+                  >
+                    {fmtSignedMoney(d.pnl, 0)}
+                  </text>
+                )}
                 <text
                   x={x + BAR_W / 2}
-                  y={pos ? y - 8 : y + h + 14}
+                  y={H - 10}
                   textAnchor="middle"
-                  className={`font-mono text-[11px] font-bold ${pos ? 'fill-green' : 'fill-red'}`}
+                  className="font-mono text-[11px] font-semibold fill-faint tracking-[0.5px]"
                 >
-                  {fmtSignedMoney(d.pnl, 0)}
+                  {d.day}
                 </text>
-              )}
-              <text
-                x={x + BAR_W / 2}
-                y={H - 10}
-                textAnchor="middle"
-                className="font-mono text-[11px] font-semibold fill-faint tracking-[0.5px]"
-              >
-                {d.day}
-              </text>
-            </g>
-          )
-        })}
-      </svg>
+              </g>
+            )
+          })}
+        </svg>
+
+        {hovered && (
+          <BarReadout
+            xFrac={hoverX}
+            title={`${hovered.day} · ${hovered.trades} trade${hovered.trades === 1 ? '' : 's'}`}
+            gross={hovered.pnl}
+            net={hovered.pnlNet}
+          />
+        )}
+      </div>
     </section>
   )
 }

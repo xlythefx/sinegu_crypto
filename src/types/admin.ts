@@ -63,9 +63,11 @@ export interface DailyPnlTrade {
   closed_at: string
 }
 
-/** One day's aggregate + its trades. */
+/** One day's aggregate + its trades (after fees; before fees beside it). */
 export interface DailyPnlDay {
   total: number
+  total_gross: number
+  fees: number
   wins: number
   losses: number
   trades: DailyPnlTrade[]

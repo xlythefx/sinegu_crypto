@@ -1,16 +1,21 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { PiggyBank, TrendingUp } from 'lucide-react'
 import { fmtMoney, fmtSignedMoney, fmtSignedPct } from '../../lib/format'
 import type { ReturnOnDeposit } from '../../types/analytics'
+import PnlBreakdown from '../ui/PnlBreakdown'
 
 type Face = 'total' | 'deposit'
 
 interface ReturnFlipCardProps {
   totalReturnPct: number | null
+  /** Before fees. */
   totalReturnAbs: number
+  totalReturnAbsNet: number
   returnOnDeposit: ReturnOnDeposit
   /** True when a symbol / strategy chip is active. */
   filtered: boolean
+  /** Set when some trades in the totals carry no fee on record. */
+  feesSince: string | null
 }
 
 const CARD =
@@ -27,7 +32,7 @@ interface FaceProps {
   value: string
   negative: boolean
   barPct: number
-  hint: string
+  hint: ReactNode
   note: string
   icon: typeof TrendingUp
   onFlip: () => void
@@ -128,8 +133,10 @@ function CardFace({
 export default function ReturnFlipCard({
   totalReturnPct,
   totalReturnAbs,
+  totalReturnAbsNet,
   returnOnDeposit,
   filtered,
+  feesSince,
 }: ReturnFlipCardProps) {
   const [face, setFace] = useState<Face>('total')
   const flip = () => setFace((f) => (f === 'total' ? 'deposit' : 'total'))
@@ -155,9 +162,14 @@ export default function ReturnFlipCard({
             }
             negative={(totalReturnPct ?? totalReturnAbs) < 0}
             barPct={bar(totalReturnPct)}
-            hint={`${fmtSignedMoney(totalReturnAbs)} ${
-              filtered ? 'on the selection' : 'absolute return'
-            }`}
+            hint={
+              <>
+                <PnlBreakdown gross={totalReturnAbs} net={totalReturnAbsNet} feesSince={feesSince}>
+                  {fmtSignedMoney(totalReturnAbs)}
+                </PnlBreakdown>{' '}
+                {filtered ? 'on the selection' : 'absolute return'} · before fees
+              </>
+            }
             note={
               filtered
                 ? 'Realized only · open positions excluded'
@@ -183,9 +195,20 @@ export default function ReturnFlipCard({
             negative={(returnOnDeposit.pct ?? returnOnDeposit.realized) < 0}
             barPct={bar(returnOnDeposit.pct)}
             hint={
-              returnOnDeposit.deposits > 0
-                ? `${fmtSignedMoney(returnOnDeposit.realized)} on ${fmtMoney(returnOnDeposit.deposits)} deposited`
-                : 'No deposits on record yet'
+              returnOnDeposit.deposits > 0 ? (
+                <>
+                  <PnlBreakdown
+                    gross={returnOnDeposit.realized}
+                    net={returnOnDeposit.realized_net}
+                    feesSince={feesSince}
+                  >
+                    {fmtSignedMoney(returnOnDeposit.realized)}
+                  </PnlBreakdown>{' '}
+                  on {fmtMoney(returnOnDeposit.deposits)} deposited · before fees
+                </>
+              ) : (
+                'No deposits on record yet'
+              )
             }
             note={`All-time · ${returnOnDeposit.trades.toLocaleString('en-US')} closed trades`}
             icon={PiggyBank}

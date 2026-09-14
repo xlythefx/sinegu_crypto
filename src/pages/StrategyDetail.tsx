@@ -21,8 +21,10 @@ import {
   pastPositionsToStrategyTrades,
 } from '../lib/strategyDetail'
 import { fmtMediumDate, fmtMoney, fmtSignedMoney } from '../lib/format'
-import { displaySymbol, linePath } from '../lib/chart'
+import { displaySymbol } from '../lib/chart'
 import type { PastPosition } from '../types/dashboard'
+import EquityCurveCard from '../components/admin/strategy-detail/EquityCurveCard'
+import PnlBreakdown from '../components/ui/PnlBreakdown'
 
 const DOW = [
   { i: 1, label: 'Mon' },
@@ -34,8 +36,6 @@ const DOW = [
   { i: 0, label: 'Sun' },
 ]
 const PAGE_SIZE = 10
-const CURVE_W = 620
-const CURVE_H = 220
 
 // Shared class strings (migrated from .dcard / .sd-* primitives).
 const CARD = 'rounded-card border border-border bg-surface p-card'
@@ -170,27 +170,6 @@ export default function StrategyDetail() {
     return rows
   }, [scopedRows, excluded, search, sortKey, sortDesc])
 
-  // Equity curve geometry (0-seeded cumulative series). Must run before the
-  // 401 early return — hooks can't be conditional.
-  const curve = useMemo(() => {
-    const values = [0, ...detail.equitySeries.map((p) => p.cumulative)]
-    if (values.length < 2) return null
-    const min = Math.min(...values)
-    const max = Math.max(...values)
-    const line = linePath(values, CURVE_W, CURVE_H, 12, min, max)
-    const zeroY =
-      0 >= min && 0 <= max
-        ? CURVE_H -
-          12 -
-          ((0 - min) / (max - min || 1)) * (CURVE_H - 24)
-        : null
-    return {
-      line,
-      area: `${line} L${CURVE_W},${CURVE_H} L0,${CURVE_H} Z`,
-      zeroY,
-    }
-  }, [detail.equitySeries])
-
   if (error instanceof ApiError && error.status === 401) {
     return <Navigate to="/auth" replace />
   }
@@ -268,11 +247,13 @@ export default function StrategyDetail() {
               }`}
             >
               <span className="text-[9.5px] font-extrabold tracking-[0.5px] text-faint uppercase">
-                Total P&L
+                Total P&L · before fees
               </span>
-              <span className="text-[16px] font-extrabold font-mono">
-                {fmtSignedMoney(detail.totalPnl)}
-              </span>
+              <PnlBreakdown gross={detail.totalPnl} net={detail.totalPnlNet} heading={detail.key}>
+                <span className="text-[16px] font-extrabold font-mono">
+                  {fmtSignedMoney(detail.totalPnl)}
+                </span>
+              </PnlBreakdown>
             </span>
             <span className="flex flex-col gap-0.5 py-[9px] px-[15px] rounded-row border border-border bg-surface">
               <span className="text-[9.5px] font-extrabold tracking-[0.5px] text-faint uppercase">
@@ -384,10 +365,14 @@ export default function StrategyDetail() {
             >
               <MetricTile
                 icon={<TrendingUp size={13} />}
-                label="Total P&L"
+                label="Total P&L · before fees"
                 value={fmtSignedMoney(detail.totalPnl)}
                 tone={detail.totalPnl >= 0 ? 'pos' : 'neg'}
-                sub={`Gross win +${fmtMoney(detail.grossWin).slice(1)}`}
+                sub={
+                  detail.fees !== 0
+                    ? `${fmtSignedMoney(detail.totalPnlNet)} after fees`
+                    : `Gross win +${fmtMoney(detail.grossWin).slice(1)}`
+                }
               />
               <MetricTile
                 icon={<Percent size={13} />}
@@ -444,50 +429,21 @@ export default function StrategyDetail() {
               className="grid grid-cols-[1.6fr_1fr] gap-stack items-stretch max-[900px]:grid-cols-1"
               data-aos="fade-up"
             >
-              <section className={CARD}>
-                <div className={TITLE_ROW}>
-                  <div>
-                    <div className={CARD_TITLE}>Equity Curve</div>
-                    <div className={CARD_SUB}>Cumulative realized P&L over time</div>
+              {/* Before fees, with the after-fees figure on hover — the same
+                  card the admin strategy detail draws. */}
+              {detail.equitySeries.length > 0 ? (
+                <EquityCurveCard equitySeries={detail.equitySeries} />
+              ) : (
+                <section className={CARD}>
+                  <div className={TITLE_ROW}>
+                    <div>
+                      <div className={CARD_TITLE}>Equity Curve</div>
+                      <div className={CARD_SUB}>Cumulative realized P&L over time</div>
+                    </div>
                   </div>
-                </div>
-                {curve ? (
-                  <svg
-                    viewBox={`0 0 ${CURVE_W} ${CURVE_H}`}
-                    preserveAspectRatio="none"
-                    className="w-full h-[220px] block"
-                  >
-                    <defs>
-                      <linearGradient id="sdFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="var(--accent)" stopOpacity=".28" />
-                        <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
-                      </linearGradient>
-                    </defs>
-                    <path d={curve.area} fill="url(#sdFill)" />
-                    <path
-                      d={curve.line}
-                      fill="none"
-                      stroke="var(--accent)"
-                      strokeWidth="2"
-                      strokeLinejoin="round"
-                      strokeLinecap="round"
-                    />
-                    {curve.zeroY !== null && (
-                      <line
-                        x1="0"
-                        y1={curve.zeroY}
-                        x2={CURVE_W}
-                        y2={curve.zeroY}
-                        stroke="var(--muted)"
-                        strokeWidth="1"
-                        strokeDasharray="5 4"
-                      />
-                    )}
-                  </svg>
-                ) : (
                   <p className={MUTED}>Not enough trades to plot a curve.</p>
-                )}
-              </section>
+                </section>
+              )}
 
               <section className={`${CARD} flex flex-col`}>
                 <div className={TITLE_ROW}>

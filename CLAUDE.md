@@ -965,6 +965,35 @@ admin-only (Admin → Trading Positions has a Fee column).
   `git revert` + `migrate:rollback --step=2` (re-estimates `actual` rows, drops
   the receipts table and `fee_source`), then frontend.
 
+**The trading dashboard and Performance Analytics lead with P&L BEFORE
+exchange fees (2026-09-15)** — "how did the strategy do" — and every money
+figure carries its after-fees twin so the UI can show the three-line hover
+*Before fees / Exchange fees / After fees* (`components/ui/PnlBreakdown.tsx`,
+portaled to `<body>` because the rail clips overflow and every AOS card is a
+transform; `hoverOnly` for figures inside a button or link, whose tap has its
+own job). The rule per surface:
+- **Dashboard + Analytics + strategy pages: before fees is the big number**,
+  the equity curves are drawn before fees (`equity_gross` = the anchored
+  curve plus cumulative fees, so it ends at balance + fees), and the ratio
+  stats (win rate, PF, expectancy, drawdown, Sharpe) are computed on that
+  basis too — one basis per page, or the drawdown would not match the curve
+  above it. Analytics has an **Exchange Fees** KPI card of its own.
+- **The calendar keeps AFTER fees on the cell** — a day is what landed — with
+  before fees on hover and in the day popup's header.
+- **Positions page and admin user detail keep `realized_pnl` / `total_pnl`
+  (after fees)**: a total beside a list of net trades must sum to them.
+The switch is server-side, once: `UserStatsService::withFeeBasis()` stamps
+every row with `pnl_gross` / `pnl_net` / `pnl_fee` / `fee_known`, and
+`feeSummary()` returns `{total, trades_with_fee, trades_without_fee, since}`.
+Payload convention: the gross figure keeps the plain key, its twin is `*_net`
+(`realized_pnl` / `total_pnl` are the exception — they stayed net and gained
+`*_gross`, for the readers above). Pre-cutoff rows carry no fee, so before ==
+after for them; `trades_without_fee > 0` is what makes the hover print "fees
+are recorded from Sep 11, 2026" rather than a $0 that reads as free trading.
+Strategy math is client-side (`lib/strategyStats.ts`: `tradePnl` /
+`tradePnlNet` / `tradeFee`), fed `exchange_fee` by `/admin/strategies` and
+`pastPositionsToStrategyTrades`. The public track record is untouched.
+
 **Timestamps are UTC in the DB and rendered in the READER's zone**
 (`fmtDateTime`, `lib/format.ts`). The API runs on `'timezone' => 'UTC'`, but a
 bare `"2026-09-09 04:30:22"` has no zone designator and JS reads a zoneless

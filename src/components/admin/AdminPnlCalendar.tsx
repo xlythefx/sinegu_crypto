@@ -249,13 +249,23 @@ export default function AdminPnlCalendar({
                   <div className="text-[12.5px] text-muted mt-0.5">
                     {selectedDay.trades.length} trade
                     {selectedDay.trades.length === 1 ? '' : 's'} ·{' '}
-                    {selectedDay.wins}W / {selectedDay.losses}L · net{' '}
+                    {selectedDay.wins}W / {selectedDay.losses}L ·{' '}
+                    {selectedDay.fees !== 0 ? 'after fees' : 'net'}{' '}
                     <span
                       className={`font-mono ${selectedDay.total < 0 ? 'text-red' : 'text-green'}`}
                     >
                       {fmtSignedMoney(selectedDay.total)}
                     </span>
                   </div>
+                  {selectedDay.fees !== 0 && (
+                    <div className="text-[11.5px] text-faint mt-0.5 font-mono">
+                      before fees{' '}
+                      <span className={selectedDay.total_gross < 0 ? 'text-red' : 'text-green'}>
+                        {fmtSignedMoney(selectedDay.total_gross)}
+                      </span>
+                      {' · '}exchange fees {fmtSignedMoney(-selectedDay.fees)}
+                    </div>
+                  )}
                 </div>
                 <button
                   type="button"

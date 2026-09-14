@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import { Info } from 'lucide-react'
+import PnlBreakdown from '../ui/PnlBreakdown'
 
 export type Tone = 'pos' | 'neg' | 'accent' | ''
 
@@ -19,6 +20,8 @@ interface MetricTileProps {
   icon?: LucideIcon
   iconTone?: Tone
   tooltip?: string
+  /** A before-fees money value: wraps it in the before / fees / after hover. */
+  breakdown?: { gross: number; net: number; feesSince?: string | null }
 }
 
 /** Small stat tile used across the analytics metric cards:
@@ -32,6 +35,7 @@ export default function MetricTile({
   icon: Icon,
   iconTone = 'accent',
   tooltip,
+  breakdown,
 }: MetricTileProps) {
   return (
     <div className="bg-surface2 border border-hair rounded-row py-[13px] px-[14px] flex flex-col gap-[5px]">
@@ -58,7 +62,13 @@ export default function MetricTile({
       <div
         className={`font-mono text-[17px] font-extrabold tracking-[-0.2px]${tone ? ` ${toneText[tone]}` : ''}`}
       >
-        {value}
+        {breakdown ? (
+          <PnlBreakdown gross={breakdown.gross} net={breakdown.net} feesSince={breakdown.feesSince}>
+            {value}
+          </PnlBreakdown>
+        ) : (
+          value
+        )}
       </div>
       {sub && (
         <div

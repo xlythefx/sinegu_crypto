@@ -1,13 +1,14 @@
 import { displaySymbol, seriesColor } from '../../lib/chart'
 import { fmtSigned } from '../../lib/format'
 import type { GroupSeries } from '../../types/dashboard'
+import PnlBreakdown from '../ui/PnlBreakdown'
 
 interface AssetStripProps {
   assets: GroupSeries[]
 }
 
-/** Bottom strip of compact per-asset cards: dot+symbol, signed total,
- *  Win%/PF/trades, and a contribution bar. */
+/** Bottom strip of compact per-asset cards: dot+symbol, signed total before
+ *  fees (hover for after), Win%/PF/trades, and a contribution bar. */
 export default function AssetStrip({ assets }: AssetStripProps) {
   if (assets.length === 0) return null
   const maxAbs = Math.max(1, ...assets.map((a) => Math.abs(a.total)))
@@ -29,11 +30,13 @@ export default function AssetStrip({ assets }: AssetStripProps) {
                 />
                 {displaySymbol(a.id)}
               </div>
-              <span
-                className={`font-mono text-[13px] font-extrabold ${negative ? 'text-red' : 'text-green'}`}
-              >
-                {fmtSigned(a.total)}
-              </span>
+              <PnlBreakdown gross={a.total} net={a.total_net} heading={displaySymbol(a.id)}>
+                <span
+                  className={`font-mono text-[13px] font-extrabold ${negative ? 'text-red' : 'text-green'}`}
+                >
+                  {fmtSigned(a.total)}
+                </span>
+              </PnlBreakdown>
             </div>
             <div className="flex gap-3.5 text-[10.5px] text-muted">
               <span>

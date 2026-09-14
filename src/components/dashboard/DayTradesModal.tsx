@@ -93,13 +93,25 @@ export default function DayTradesModal({
             </div>
             <div className="text-[12.5px] text-muted mt-[3px]">
               {day.trades.length} trade{day.trades.length === 1 ? '' : 's'} ·{' '}
-              {day.wins}W / {day.losses}L · net{' '}
+              {day.wins}W / {day.losses}L · {day.fees !== 0 ? 'after fees' : 'net'}{' '}
               <span
                 className={`font-mono ${day.total < 0 ? 'text-red' : 'text-green'}`}
               >
                 {fmtSignedMoney(day.total)}
               </span>
             </div>
+            {/* The day the strategy had, before the exchange took its cut —
+                the same three lines the calendar cell shows on hover, here
+                for the tap that opened this on a phone. */}
+            {day.fees !== 0 && (
+              <div className="text-[11.5px] text-faint mt-[3px] font-mono">
+                before fees{' '}
+                <span className={day.total_gross < 0 ? 'text-red' : 'text-green'}>
+                  {fmtSignedMoney(day.total_gross)}
+                </span>
+                {' · '}exchange fees {fmtSignedMoney(-day.fees)}
+              </div>
+            )}
           </div>
           <button
             type="button"

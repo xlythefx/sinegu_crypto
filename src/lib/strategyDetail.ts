@@ -5,6 +5,7 @@
 import type { PastPosition } from '../types/dashboard'
 import {
   computeStrategyStats,
+  tradePnl,
   type StrategyStats,
   type StrategyTrade,
 } from './strategyStats'
@@ -67,6 +68,7 @@ export function pastPositionsToStrategyTrades(
       strategy: (r.strategy ?? '').trim() || 'Manual',
       symbol: r.symbol,
       realized_pnl: r.realized_pnl ?? 0,
+      exchange_fee: r.exchange_fee,
       closed_at: r.closed_at,
     }))
     .sort((a, b) => a.closed_at.localeCompare(b.closed_at))
@@ -114,7 +116,7 @@ export function computeStrategyDetail(
   const monthMap = new Map<string, MonthBucket>()
 
   for (const t of trades) {
-    const pnl = Number(t.realized_pnl) || 0
+    const pnl = tradePnl(t)
     const win = pnl >= 0
     bestTrade = Math.max(bestTrade, pnl)
     worstTrade = Math.min(worstTrade, pnl)

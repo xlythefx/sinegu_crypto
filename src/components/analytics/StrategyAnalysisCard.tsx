@@ -11,6 +11,7 @@ import {
 } from '../../lib/strategyStats'
 import { fmtSignedMoney } from '../../lib/format'
 import { linePath } from '../../lib/chart'
+import PnlBreakdown from '../ui/PnlBreakdown'
 
 const NO_EXCLUDE = new Set<string>()
 
@@ -82,7 +83,7 @@ export default function StrategyAnalysisCard() {
             Strategy Analysis
           </div>
           <div className="text-[12px] text-muted mt-px">
-            How each of your trading strategies is performing
+            How each of your trading strategies is performing · before fees
           </div>
         </div>
       </div>
@@ -142,11 +143,20 @@ export default function StrategyAnalysisCard() {
                 </div>
                 <Sparkline stats={s} />
                 <div className="flex flex-col items-end gap-1 flex-none">
-                  <span
-                    className={`font-mono text-[15px] font-extrabold ${s.totalPnl < 0 ? 'text-red' : 'text-green'}`}
-                  >
-                    {fmtSignedMoney(s.totalPnl)}
-                  </span>
+                  {/* The row is a link, so the hover is mouse-only; the
+                      after-fees line beneath is what a phone reads. */}
+                  <PnlBreakdown hoverOnly gross={s.totalPnl} net={s.totalPnlNet} heading={s.key}>
+                    <span
+                      className={`font-mono text-[15px] font-extrabold ${s.totalPnl < 0 ? 'text-red' : 'text-green'}`}
+                    >
+                      {fmtSignedMoney(s.totalPnl)}
+                    </span>
+                  </PnlBreakdown>
+                  {s.fees !== 0 && (
+                    <span className="font-mono text-[10.5px] text-faint whitespace-nowrap">
+                      {fmtSignedMoney(s.totalPnlNet)} after fees
+                    </span>
+                  )}
                   <span className="inline-flex items-center gap-1 text-[11px] font-bold text-accent">
                     Details <ArrowRight size={13} />
                   </span>

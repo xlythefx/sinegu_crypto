@@ -33,15 +33,18 @@ export default function Dashboard() {
           <EquityHeroCard
             equity={data.equity}
             realizedPnl={data.realized_pnl}
+            realizedPnlGross={data.realized_pnl_gross}
             unrealizedPnl={data.unrealized_pnl}
             totalPnl={data.total_pnl}
+            totalPnlGross={data.total_pnl_gross}
+            fees={data.fees}
             pctBase={data.pct_base}
             curve={data.equity_curve}
             // Only an explicit false shows the empty state — undefined means a
             // stale stored session and must render the normal connected card.
             connected={sessionUser?.has_exchange_account !== false}
           />
-          <MetricsRail metrics={data.metrics} />
+          <MetricsRail metrics={data.metrics} fees={data.fees} />
 
           <div className="flex gap-stack mb-stack flex-wrap">
             <EquityByGroupCard
@@ -62,6 +65,7 @@ export default function Dashboard() {
             <div className="w-[344px] max-w-[344px] grow basis-[300px] flex flex-col gap-stack max-[900px]:max-w-none max-[900px]:w-full">
               <PnlBreakdownCard
                 breakdown={data.pnl_breakdown}
+                net={data.pnl_breakdown_net}
                 pctBase={data.pct_base}
               />
             </div>
