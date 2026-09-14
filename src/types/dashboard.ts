@@ -93,6 +93,19 @@ export interface AssetPerformanceData {
   assets: AssetPerformanceRow[]
 }
 
+/**
+ * Where a closed trade's `exchange_fee` came from.
+ *  - `null`        nothing was taken out of `realized_pnl` (a gross row —
+ *                  closed before the net-of-fees cutoff, or fee still unknown)
+ *  - `'estimated'` the API's flat-rate estimate; the exchange's receipts have
+ *                  not been matched yet (minutes, normally), or cannot be
+ *  - `'actual'`    commission + funding summed from the exchange's receipts
+ *  - `'manual'`    an admin typed the P&L by hand; automatic updates stop
+ * Customers see only the amount and an "est." tag while `'estimated'`; the
+ * other words are admin-only.
+ */
+export type FeeSource = 'estimated' | 'actual' | 'manual' | null
+
 /** One closed trade within a calendar day (from /dashboard/daily-pnl). */
 export interface DayTrade {
   /** `binance_pastpositions.id` — names the row for an admin correction. */
@@ -101,6 +114,9 @@ export interface DayTrade {
   position_side: string
   position_amt: number
   realized_pnl: number
+  /** Already deducted from `realized_pnl`; null on a gross row. */
+  exchange_fee: number | null
+  fee_source: FeeSource
   exit_price: number | null
   side: string
   strategy: string | null
@@ -143,8 +159,10 @@ export interface PastPosition {
   exit_price: string | null
   /** NET of `exchange_fee` — the figure Binance's own Position History shows. */
   realized_pnl: string | null
-  /** Estimated round-trip commission already deducted from `realized_pnl`. */
+  /** Commission + funding already deducted from `realized_pnl`; an estimate
+   *  until `fee_source` is `'actual'`. */
   exchange_fee: string | null
+  fee_source: FeeSource
   side: string
   order_id: number | null
   closed_at: string

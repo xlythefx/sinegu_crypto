@@ -11,9 +11,13 @@
  *  renders one body and the view only decides how many ids each line owns. */
 
 import type { AdminOpenPosition, AdminPastTrade } from '../types/admin'
+import type { FeeSource } from '../types/dashboard'
 import { displaySymbol } from './chart'
 
 export type PositionView = 'grouped' | 'rows'
+
+/** A merged line's fee source: the one value its rows share, or `mixed`. */
+export type RowFeeSource = FeeSource | 'mixed'
 
 /** Every filter the toolbar owns. `all` means "no filter on this facet". */
 export interface PositionFilters {
@@ -60,6 +64,11 @@ export interface PositionRow {
   symbol: string
   price: number
   pnl: number
+  /** Closed trades only: exchange fee already out of `pnl` (summed on a
+   *  merged line; null when no row carries one). Open positions: null. */
+  fee: number | null
+  /** Closed trades only; `mixed` when a merged line's rows disagree. */
+  feeSource: RowFeeSource
   /** LONG / SHORT / BUY / SELL — per-row only; a merge can span both. */
   side: string | null
   /** Position size — per-row only, for the same reason. */
@@ -145,6 +154,8 @@ export function buildPositionRows(
         symbol: p.symbol,
         price: p.price,
         pnl: p.unrealized_pnl,
+        fee: null,
+        feeSource: null,
         side: p.position_side || null,
         qty: p.position_amt,
         strategy: null,
@@ -177,6 +188,8 @@ export function buildPositionRows(
         price: 0,
         priceSum: p.price,
         pnl: p.unrealized_pnl,
+        fee: null,
+        feeSource: null,
         side: null,
         qty: p.position_amt,
         strategy: null,
@@ -188,6 +201,17 @@ export function buildPositionRows(
   return Array.from(map.values())
     .map(({ priceSum, ...g }) => ({ ...g, price: priceSum / g.count }))
     .sort(byAccountThenSymbol)
+}
+
+/** Sum of the fees a merged line's rows carry; null when none does. */
+function sumFees(a: number | null, b: number | null): number | null {
+  if (a === null) return b
+  if (b === null) return a
+  return a + b
+}
+
+function mergeFeeSource(a: RowFeeSource, b: FeeSource): RowFeeSource {
+  return a === b ? a : 'mixed'
 }
 
 /** Closed trades → table rows, newest close first. */
@@ -208,6 +232,8 @@ export function buildTradeRows(
         symbol: t.symbol,
         price: t.price,
         pnl: t.realized_pnl,
+        fee: t.exchange_fee,
+        feeSource: t.fee_source,
         side: t.side || null,
         qty: t.position_amt,
         strategy: t.strategy,
@@ -228,6 +254,8 @@ export function buildTradeRows(
       g.ids.push(t.id)
       g.count += 1
       g.pnl += t.realized_pnl
+      g.fee = sumFees(g.fee, t.exchange_fee)
+      g.feeSource = mergeFeeSource(g.feeSource, t.fee_source)
       g.priceSum += t.price
       g.qty = (g.qty ?? 0) + t.position_amt
       if (t.strategy) g.strategies.add(t.strategy)
@@ -245,6 +273,8 @@ export function buildTradeRows(
         price: 0,
         priceSum: t.price,
         pnl: t.realized_pnl,
+        fee: t.exchange_fee,
+        feeSource: t.fee_source,
         side: null,
         qty: t.position_amt,
         strategy: null,

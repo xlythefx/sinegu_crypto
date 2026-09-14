@@ -912,6 +912,59 @@ and invoices billed 20% of money the customer never received.
 - **The published track record follows the column**, since `PublicStatsController`
   reads it — so it, too, is gross before the cutoff and net after.
 
+**The estimate is the starting point, not the final word (2026-09-14).** The
+engine now ships the exchange's own fee RECEIPTS and the API replaces the
+estimate with them per close: `exchange_fee` = entry commission + exit
+commission + funding attributed to the position, and
+`binance_pastpositions.fee_source` says which figure a row holds — `NULL`
+(gross row), `estimated`, `actual`, or `manual` (an admin typed the P&L;
+`AdminController::updatePastPosition` stamps it, and nothing automatic
+touches that row again). Customers see the amount plus an `est.` pill only
+while `estimated` (`components/positions/FeeLine.tsx`); the other words are
+admin-only (Admin → Trading Positions has a Fee column).
+- **Receipts are their own table, `exchange_fee_receipts`** — one append-only
+  row per charge: every userTrades FILL (its `commission`/`commissionAsset`,
+  qty, side, `positionSide`, `realizedPnl`; `ref` = the fill id, which is
+  PER SYMBOL, hence `symbol` in the unique key) and every FUNDING_FEE income
+  row (`ref` = `tranId`). `amount > 0` is money OUT; funding is stored
+  negated so a credit is negative and a trade's fee is a plain sum. `asset`
+  is stored as reported and never assumed.
+- **Entry fills are captured at ENTRY time.** The past-positions poller's
+  income call is now unfiltered (REALIZED_PNL + COMMISSION + FUNDING_FEE, the
+  same weight-30 request), with a second watermark `out/last_fees_sync.json`.
+  A COMMISSION row is what puts a symbol on the fee fetch list, so an entry's
+  fills reach the ledger hours before its close — the closes flow alone only
+  ever reads fills since the LAST close and would never see them. Every fill
+  is shipped, even at zero commission: its quantity is what the replay needs.
+  Seed lookback `BINANCE_ABCD_FEES_LOOKBACK_HOURS` (168; userTrades goes no
+  further back, the cursor is clamped). The fee mark holds whenever any
+  userTrades read for the account failed — a receipt skipped once is skipped
+  forever. Closes payload and endpoint are byte-identical to before.
+- **Attribution is a replay, in Laravel, pure** (`FeeAttribution`, keyed on
+  `(symbol, position_side)` — the engine runs HEDGE mode, `BOTH` is a
+  fallback by net sign). Entry fills pile into the open bucket, funding
+  charged while it is open attaches to it, the closing order takes the
+  bucket (pro-rata on a partial close). Three refusals, never guesses:
+  `entry_missing` (position predates the ledger, or a webhook row with
+  `order_id = 0`), `entry_qty_short`, `non_usdt` (BNB fee discount — summing
+  BNB and USDT is not a fee). A refused close stays `estimated`;
+  `php artisan fees:reconcile --dry-run` prints the reason, the row does not
+  store it.
+- **The rebase keeps `gross = realized_pnl + exchange_fee`** (`FeeRebase`):
+  gross is recovered from the row, the actual fee comes off it. Never
+  touched: pre-cutoff rows (still gross by decision), `is_sandbox`,
+  `SBXINV-%`, `manual`, `realized_pnl IS NULL`, `order_id = 0`. An `actual`
+  row is never downgraded; a late funding receipt moves it again. Runs
+  synchronously in `POST /engine/{exchange}/fees` for the posted pairs, and a
+  rebase failure never fails that request (a 500 would make the engine
+  re-send the same rows into the same exception every tick); daily
+  `fees:reconcile` at 00:30 UTC is the safety net. Issued invoices keep their
+  snapshot; post-cutoff figures customers have seen move by cents plus funding
+  — tags `fees-estimated` / `fees-actual` in both repos mark the two sides.
+- **Rollback**: engine `git revert` (the API tolerates silence), then API
+  `git revert` + `migrate:rollback --step=2` (re-estimates `actual` rows, drops
+  the receipts table and `fee_source`), then frontend.
+
 **Timestamps are UTC in the DB and rendered in the READER's zone**
 (`fmtDateTime`, `lib/format.ts`). The API runs on `'timezone' => 'UTC'`, but a
 bare `"2026-09-09 04:30:22"` has no zone designator and JS reads a zoneless

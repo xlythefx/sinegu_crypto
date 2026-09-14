@@ -37,6 +37,7 @@ export function toClosedRow(t: AdminPastTrade, pctBase: number): ClosedTrade {
     pnl: t.realized_pnl,
     pnlPct: pctBase > 0 ? (t.realized_pnl / pctBase) * 100 : 0,
     fee: t.exchange_fee,
+    feeSource: t.fee_source,
     positions: 1,
     closedAt: fmtDateTime(t.closed_at),
   }

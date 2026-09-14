@@ -1,7 +1,8 @@
 import { Pencil, Trash2 } from 'lucide-react'
 import { displaySymbol } from '../../../lib/chart'
 import { fmtDateTime, fmtMoney, fmtQty, fmtSignedMoney } from '../../../lib/format'
-import type { PositionRow, PositionView } from '../../../lib/adminPositionRows'
+import type { PositionRow, PositionView, RowFeeSource } from '../../../lib/adminPositionRows'
+import { Pill } from '../../ui/Pill'
 
 // shared table primitives (mirrors the user Positions tables)
 const TH_BASE =
@@ -66,6 +67,37 @@ function PnlCell({ pnl, balance }: { pnl: number; balance: number }) {
   )
 }
 
+/** Exchange fee already out of the P&L, with where it came from. The label is
+ *  what the admin reads to know whether a figure can still move: `est.` and
+ *  `manual` are pills (pending / hand-typed), `actual` and `mixed` plain. */
+function FeeCell({ fee, source }: { fee: number | null; source: RowFeeSource }) {
+  if (fee === null) {
+    return <span className="text-faint">—</span>
+  }
+  const credit = fee < 0
+  return (
+    <div className="inline-flex flex-col items-end gap-px">
+      <span className="text-[12.5px] font-mono">
+        {credit ? '−' : ''}
+        {fmtMoney(Math.abs(fee))}
+      </span>
+      {source === 'estimated' && (
+        <Pill tone="muted" size="xs" title="Estimated until the exchange's receipts are matched">
+          est.
+        </Pill>
+      )}
+      {source === 'manual' && (
+        <Pill tone="accent" size="xs" title="P&L typed by an admin; automatic fee updates stopped">
+          manual
+        </Pill>
+      )}
+      {(source === 'actual' || source === 'mixed') && (
+        <span className="text-[10px] text-faint uppercase tracking-[0.05em]">{source}</span>
+      )}
+    </div>
+  )
+}
+
 /** Merged-count pill; only emphasized when it actually merges >1 row. */
 function CountPill({ count }: { count: number }) {
   return (
@@ -99,7 +131,7 @@ export default function PositionsTable({
   onDelete,
 }: Props) {
   const closed = tab === 'closed'
-  const cols = closed ? 9 : 7
+  const cols = closed ? 10 : 7
   // Editing writes to ONE database row, so a merged line has no single target.
   const canEdit = view === 'rows'
 
@@ -114,6 +146,7 @@ export default function PositionsTable({
             {closed && <th className={TH}>Strategy</th>}
             <th className={TH_R}>Price</th>
             <th className={TH_R}>{closed ? 'P&L' : 'Unrealized P&L'}</th>
+            {closed && <th className={`${TH_R} max-[900px]:hidden`}>Fee</th>}
             <th className={TH_C}>{view === 'rows' ? 'ID' : 'Count'}</th>
             {closed && <th className={TH_R}>Closed At</th>}
             <th className={TH_R}>Actions</th>
@@ -154,6 +187,11 @@ export default function PositionsTable({
                 <td className={TD_R}>
                   <PnlCell pnl={r.pnl} balance={r.accountBalance} />
                 </td>
+                {closed && (
+                  <td className={`${TD_R} max-[900px]:hidden`}>
+                    <FeeCell fee={r.fee} source={r.feeSource} />
+                  </td>
+                )}
                 <td className={TD_C}>
                   {view === 'rows' ? (
                     <span className="font-mono text-[12px] text-faint">

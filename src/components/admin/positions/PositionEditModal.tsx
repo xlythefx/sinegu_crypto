@@ -2,7 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, Lock } from 'lucide-react'
 import { displaySymbol } from '../../../lib/chart'
-import type { PositionRow } from '../../../lib/adminPositionRows'
+import { fmtMoney } from '../../../lib/format'
+import type { PositionRow, RowFeeSource } from '../../../lib/adminPositionRows'
 import type { AdminPastTradeUpdate, AdminPositionUpdate } from '../../../types/admin'
 
 /* ---- shared class strings (same vocabulary as ApiKeyEditModal) ---- */
@@ -51,6 +52,20 @@ function num(v: string): number | null {
   if (v.trim() === '') return null
   const n = Number(v)
   return Number.isFinite(n) ? n : null
+}
+
+/** The adjective an admin reads beside the fee on record. */
+function feeSourceWord(source: RowFeeSource): string {
+  switch (source) {
+    case 'estimated':
+      return 'estimated'
+    case 'actual':
+      return 'exchange-confirmed'
+    case 'manual':
+      return 'hand-entered'
+    default:
+      return ''
+  }
 }
 
 /**
@@ -272,7 +287,11 @@ export default function PositionEditModal({
               value={pnl}
               onChange={(e) => setPnl(e.target.value)}
             />
-            <small className={FIELD_HINT}>In USDT, as stored.</small>
+            <small className={FIELD_HINT}>
+              {trade && row.fee !== null
+                ? `In USDT, net of the ${fmtMoney(Math.abs(row.fee))} ${feeSourceWord(row.feeSource)} fee on record. Saving a different P&L marks this trade manual and stops automatic fee updates.`
+                : 'In USDT, as stored.'}
+            </small>
           </label>
 
           {trade && (

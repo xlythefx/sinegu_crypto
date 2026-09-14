@@ -5,6 +5,7 @@ import { displaySymbol } from '../../lib/chart'
 import { fmtDateTime, fmtMediumDate, fmtNum, fmtSignedMoney } from '../../lib/format'
 import { useTapUnlock } from '../../hooks/useTapUnlock'
 import type { DayPnl, DayTrade } from '../../types/dashboard'
+import FeeLine from '../positions/FeeLine'
 
 /** Trades shown per page — a busy day can close 30+, which is unreadable in one list. */
 const PAGE_SIZE = 5
@@ -156,6 +157,7 @@ export default function DayTradesModal({
                     >
                       {fmtSignedMoney(t.realized_pnl)}
                     </span>
+                    <FeeLine fee={t.exchange_fee} source={t.fee_source} align="end" />
                   </div>
                   {showManage && (
                     <div className="flex items-center gap-1.5 pl-2.5 border-l border-hair animate-[fadeup_0.35s_ease-out]">

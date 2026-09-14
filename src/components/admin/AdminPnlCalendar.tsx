@@ -11,6 +11,7 @@ import { getAdminDailyPnl } from '../../services/admin'
 import { displaySymbol } from '../../lib/chart'
 import { fmtMediumDate, fmtSignedMoney } from '../../lib/format'
 import type { DailyPnlDay, DailyPnlMap } from '../../types/admin'
+import FeeLine from '../positions/FeeLine'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -293,11 +294,14 @@ export default function AdminPnlCalendar({
                           </span>
                         )}
                       </div>
-                      <span
-                        className={`font-mono text-[13.5px] font-extrabold shrink-0 ${t.realized_pnl < 0 ? 'text-red' : 'text-green'}`}
-                      >
-                        {fmtSignedMoney(t.realized_pnl)}
-                      </span>
+                      <div className="flex flex-col items-end gap-[3px] shrink-0">
+                        <span
+                          className={`font-mono text-[13.5px] font-extrabold ${t.realized_pnl < 0 ? 'text-red' : 'text-green'}`}
+                        >
+                          {fmtSignedMoney(t.realized_pnl)}
+                        </span>
+                        <FeeLine fee={t.exchange_fee} source={t.fee_source} align="end" />
+                      </div>
                     </div>
                   )
                 })}

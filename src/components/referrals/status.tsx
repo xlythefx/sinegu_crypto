@@ -1,32 +1,16 @@
-import type { ReactNode } from 'react'
 import type {
   ExchangeBreakdown,
   MemberStatus,
   PaymentReleaseStatus,
   PayoutStatus,
 } from '../../types/referrals'
+import { Pill, type PillTone as Tone } from '../ui/Pill'
 
 /**
  * Status pills for the referrals feature. All labels come from server-derived
  * statuses — nothing here computes money or state, it only renders it.
- * Pill idiom + color-mix token backgrounds match AdminInvoiceHistory.
+ * The pill itself lives in `components/ui/Pill.tsx`.
  */
-
-const PILL =
-  'inline-block text-[10px] font-bold uppercase tracking-[0.05em] py-[3px] px-[9px] rounded-pill whitespace-nowrap'
-
-const TONE = {
-  green: 'bg-[color-mix(in_srgb,var(--green)_16%,transparent)] text-green',
-  accent: 'bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-accent',
-  red: 'bg-[color-mix(in_srgb,var(--red)_16%,transparent)] text-red',
-  muted: 'bg-[color-mix(in_srgb,var(--muted)_14%,transparent)] text-muted',
-} as const
-
-type Tone = keyof typeof TONE
-
-function Pill({ tone, children }: { tone: Tone; children: ReactNode }) {
-  return <span className={`${PILL} ${TONE[tone]}`}>{children}</span>
-}
 
 /** Plain em-dash used where a pill would be noise (no status at all). */
 function Dash() {

@@ -70,6 +70,8 @@ function toEditableRow(t: DayTrade): PositionRow {
     symbol: t.symbol,
     price: t.exit_price ?? 0,
     pnl: t.realized_pnl,
+    fee: t.exchange_fee,
+    feeSource: t.fee_source,
     side: t.side,
     qty: t.position_amt,
     strategy: t.strategy,

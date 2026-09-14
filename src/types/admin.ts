@@ -1,4 +1,5 @@
 import type { AssetSide } from './assets'
+import type { FeeSource } from './dashboard'
 import type { ApiInvoice } from '../lib/billing'
 
 // Single source of truth — admin tables render the same roles the session
@@ -53,6 +54,9 @@ export interface DailyPnlTrade {
   position_side: string
   position_amt: number
   realized_pnl: number
+  /** Already deducted from `realized_pnl`; null on a gross row. */
+  exchange_fee: number | null
+  fee_source: FeeSource
   exit_price: number | null
   side: string
   strategy: string | null
@@ -94,8 +98,9 @@ export interface AdminPastTrade {
   price: number
   /** NET of `exchange_fee` — matches the trade in the exchange's own app. */
   realized_pnl: number
-  /** Exchange commission already deducted; null when it could not be estimated. */
+  /** Commission + funding already deducted; null on a gross row. */
   exchange_fee: number | null
+  fee_source: FeeSource
   side: string
   strategy: string | null
   closed_at: string

@@ -47,6 +47,19 @@ def _isolate_report_state(tmp_path, monkeypatch):
     monkeypatch.setattr(reports, "STATE_FILE", tmp_path / "report_state.json")
 
 
+@pytest.fixture(autouse=True)
+def _isolate_watermarks(tmp_path, monkeypatch):
+    """Keep poller tests from reading or advancing the real out/last_*_sync.json —
+    a test that stamped a fresh closes or fee watermark would make the live
+    poller skip everything older on its next tick."""
+    import binance_abcd.fee_receipts as fee_receipts
+    import binance_abcd.fetch_past_positions as fetch_past_positions
+
+    monkeypatch.setattr(fetch_past_positions, "WATERMARK_FILE", tmp_path / "last_income_sync.json")
+    monkeypatch.setattr(fetch_past_positions, "FEES_WATERMARK_FILE", tmp_path / "last_fees_sync.json")
+    monkeypatch.setattr(fee_receipts, "FEES_WATERMARK_FILE", tmp_path / "last_fees_sync.json")
+
+
 @pytest.fixture()
 def app():
     from binance_abcd.main import create_app

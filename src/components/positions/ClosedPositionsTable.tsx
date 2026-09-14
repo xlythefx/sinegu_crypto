@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import FeeLine from './FeeLine'
 import type { ClosedTrade } from './types'
 
 export const ITEMS_PER_PAGE = 10
@@ -78,14 +79,7 @@ export default function ClosedPositionsTable({
                         {positive ? '+' : '−'}
                         {Math.abs(t.pnlPct).toFixed(2)}%
                       </span>
-                      {/* Why this figure is smaller than the raw trade profit:
-                          the exchange's commission is already out of it, which
-                          is what makes the row agree with the Binance app. */}
-                      {t.fee !== null && (
-                        <span className="text-[10.5px] text-faint font-mono pt-0.5">
-                          net of ${t.fee.toFixed(2)} fees
-                        </span>
-                      )}
+                      <FeeLine fee={t.fee} source={t.feeSource} />
                     </div>
                   </td>
                   {/* fixed-width numeral so the "Position(s)" label starts at the
@@ -112,8 +106,9 @@ export default function ClosedPositionsTable({
             Showing {start + 1}–{Math.min(start + ITEMS_PER_PAGE, trades.length)}{' '}
             of {trades.length}
             <span className="block pt-1">
-              P&amp;L is shown after estimated exchange fees, matching your
-              exchange account.
+              P&amp;L is shown after exchange fees (commission and funding),
+              matching your exchange account. Fees marked est. are estimated
+              until the exchange&apos;s receipts are matched.
             </span>
           </span>
           {totalPages > 1 && (

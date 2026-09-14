@@ -102,6 +102,13 @@ TRANSFERS_LOOKBACK_DAYS = _env_int("TRANSFERS_LOOKBACK_DAYS", 3)
 # backfill safety net; nothing time-critical waits on it.
 PAST_POSITIONS_FETCH_INTERVAL = _env_float("PAST_POSITIONS_FETCH_INTERVAL", 180.0)
 INCOME_LOOKBACK_HOURS = _env_int("INCOME_LOOKBACK_HOURS", 24)
+# First-run seed for the fee-receipts ledger (the same poller, the same income
+# call — see fee_receipts.py). Wide enough to catch the ENTRY fills of positions
+# still open when the ledger starts: a close whose entry fills predate the
+# ledger can never be confirmed and stays on the estimated fee. Later ticks use
+# the fee watermark. Binance serves userTrades for 7 days back at most, so
+# anything above 168 buys nothing for fills (funding rows go further).
+FEES_LOOKBACK_HOURS = _env_int("FEES_LOOKBACK_HOURS", 168)
 # Closes younger than this are deferred so Binance can index userTrades.
 PAST_POSITIONS_INDEXING_LAG_SECONDS = _env_float("PAST_POSITIONS_INDEXING_LAG_SECONDS", 120.0)
 # Pollers start this many seconds apart so their ticks don't pile onto the same

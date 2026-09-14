@@ -34,6 +34,7 @@ export function toClosedTrade(p: PastPosition, pctBase: number): ClosedTrade {
     pnl,
     pnlPct: pctBase > 0 ? (pnl / pctBase) * 100 : 0,
     fee: p.exchange_fee === null ? null : num(p.exchange_fee),
+    feeSource: p.fee_source,
     positions: 1,
     closedAt: fmtDateTime(p.closed_at),
   }
