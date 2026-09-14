@@ -469,9 +469,10 @@ def _asset_ranking(assets: list) -> list[str]:
     """The day's assets, best first, one line each — EVERY symbol traded, not
     just the podium; a ranking that hides the losers is not a ranking.
 
-    Medals go to the top three only while they are in profit. A gold medal on a
-    loss reads as a joke, so on a red day the list is plainly numbered and the
-    medals simply are not awarded that day.
+    Medals go to the top three BY RANK, profit or not: the podium says who did
+    best that day, and the signed percent beside it says whether best was good.
+    (Awarding them only in profit was tried on 2026-09-14 and read as a missing
+    medal, not as a statement.)
     """
     ranked: list[tuple[str, float, int]] = []
     for asset in assets:
@@ -489,7 +490,7 @@ def _asset_ranking(assets: list) -> list[str]:
 
     lines = []
     for rank, (symbol, share, trades) in enumerate(ranked, start=1):
-        badge = _MEDALS[rank - 1] if rank <= len(_MEDALS) and share > 0 else f"{rank}."
+        badge = _MEDALS[rank - 1] if rank <= len(_MEDALS) else f"{rank}."
         count = f" · {trades} trade{'s' if trades != 1 else ''}" if trades else ""
         lines.append(f"{badge} {_esc(symbol)} {_fmt_pct(share)}{count}")
     return lines

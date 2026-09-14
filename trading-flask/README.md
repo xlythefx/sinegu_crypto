@@ -195,8 +195,8 @@ Rules worth keeping:
 - **The daily recap ranks every asset traded**, from the `assets` list each
   series point carries (per symbol: its share of the day's return, measured on
   the same capital as the day's `pct`, so the shares add up to it). 🥇🥈🥉 for
-  the top three *only while in profit* — a red day is plainly numbered — and
-  everything below the podium numbered too. Daily only: across several days the
+  the top three *by rank, profit or not* — the signed percent beside the medal
+  says how it went — and everything below the podium numbered. Daily only: across several days the
   shares are summed while the return is chained, and a leaderboard that does
   not add up to the line above it is a question in the channel. There is no
   all-time line; a recap is the period it names and nothing else.

@@ -233,26 +233,24 @@ def test_daily_message_ranks_every_asset_with_medals_for_the_podium(sent):
     assert "4. SOLUSDT -0.300% · 1 trade" in text
 
 
-def test_a_losing_asset_earns_no_medal_whatever_its_rank(sent):
+def test_medals_follow_rank_even_on_a_loss(sent):
+    """The podium is who did best, not who made money: a losing second place is
+    still 🥈, with the signed percent saying how it went."""
     notify.notify_report("daily", reports.summarize(SERIES, "2026-09-06", "2026-09-06"))
     (text,) = sent
     assert "🥇 LTCUSDT +1.600% · 1 trade" in text
-    assert "2. ETHUSDT -0.600% · 1 trade" in text
-    assert "🥈" not in text
+    assert "🥈 ETHUSDT -0.600% · 1 trade" in text
 
 
-def test_a_red_day_awards_no_medals_at_all(sent):
-    """Ranked first on a red day is still a loss; a gold medal on it is a joke."""
+def test_a_red_day_still_has_its_podium(sent):
     red = [{"date": "2026-09-08", "pct": -1.0, "cumulative": 13.0, "trades": 2, "assets": [
         {"symbol": "LTCUSDT", "pct": -0.4, "trades": 1},
         {"symbol": "BTCUSDT", "pct": -0.6, "trades": 1},
     ]}]
     notify.notify_report("daily", reports.summarize(red, "2026-09-08", "2026-09-08"))
     (text,) = sent
-    assert "1. LTCUSDT -0.400% · 1 trade" in text
-    assert "2. BTCUSDT -0.600% · 1 trade" in text
-    for medal in ("🥇", "🥈", "🥉"):
-        assert medal not in text
+    assert "🥇 LTCUSDT -0.400% · 1 trade" in text
+    assert "🥈 BTCUSDT -0.600% · 1 trade" in text
 
 
 def test_weekly_message_adds_the_day_breakdown(sent):

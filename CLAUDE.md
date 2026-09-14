@@ -612,9 +612,10 @@ for the overlay's `position: fixed` and trap it inside.
     `notify._asset_ranking`, 2026-09-14) from the `assets` list each series
     point carries: per symbol, its realized P&L over the SAME capital as the
     day's `pct`, so the shares add up to the day's return. 🥇🥈🥉 for the top
-    three **only while in profit** (a gold medal on a loss is a joke; a red
-    day is plainly numbered), everything below the podium numbered — a ranking
-    that hides the losers is not a ranking. **Daily only, by design**: across
+    three **by rank, profit or not** (the podium says who did best; the signed
+    percent beside it says whether best was good — medals-only-in-profit was
+    tried and read as a missing bronze), everything below the podium numbered —
+    a ranking that hides the losers is not a ranking. **Daily only, by design**: across
     several days the shares are SUMMED while the period return is chained, and
     a leaderboard that does not add up to the line above it is a question in
     the channel. **No all-time / return-on-capital line** — removed the same
