@@ -1,5 +1,17 @@
 /** Types for the unauthenticated marketing endpoints (`/api/public/*`). */
 
+/**
+ * One symbol's share of a trading day's return — the day's assets ranked, best
+ * first. `pct` is measured on the same capital as the day's own `pct`, so the
+ * shares of one day add up to it. Tickers are public already (every entry is
+ * announced by ticker); this is still percentages and counts only.
+ */
+export interface TrackRecordAsset {
+  symbol: string
+  pct: number
+  trades: number
+}
+
 /** One trading day of the master account's verified record. */
 export interface TrackRecordPoint {
   /** YYYY-MM-DD */
@@ -16,6 +28,8 @@ export interface TrackRecordPoint {
    */
   roc?: number | null
   trades: number
+  /** The day's symbols, best first. Absent on a payload predating the field. */
+  assets?: TrackRecordAsset[]
 }
 
 /**

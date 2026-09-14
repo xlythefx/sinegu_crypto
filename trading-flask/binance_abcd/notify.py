@@ -433,6 +433,9 @@ _REPORT_META = {
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
+# Podium for the daily asset ranking, in rank order.
+_MEDALS = ("🥇", "🥈", "🥉")
+
 
 def _parse_iso_day(value: Any) -> Optional[tuple]:
     """('2026-09-06') -> (2026, 9, 6); None for anything else."""
@@ -462,6 +465,36 @@ def _fmt_day_range(start: Any, end: Any) -> str:
     return f"{head} - {ld} {_MONTHS[lm - 1]} {ly}"
 
 
+def _asset_ranking(assets: list) -> list[str]:
+    """The day's assets, best first, one line each — EVERY symbol traded, not
+    just the podium; a ranking that hides the losers is not a ranking.
+
+    Medals go to the top three only while they are in profit. A gold medal on a
+    loss reads as a joke, so on a red day the list is plainly numbered and the
+    medals simply are not awarded that day.
+    """
+    ranked: list[tuple[str, float, int]] = []
+    for asset in assets:
+        if not isinstance(asset, dict):
+            continue
+        try:
+            share = float(asset.get("pct"))
+        except (TypeError, ValueError):
+            continue
+        try:
+            trades = int(asset.get("trades") or 0)
+        except (TypeError, ValueError):
+            trades = 0
+        ranked.append((str(asset.get("symbol") or "?"), share, trades))
+
+    lines = []
+    for rank, (symbol, share, trades) in enumerate(ranked, start=1):
+        badge = _MEDALS[rank - 1] if rank <= len(_MEDALS) and share > 0 else f"{rank}."
+        count = f" · {trades} trade{'s' if trades != 1 else ''}" if trades else ""
+        lines.append(f"{badge} {_esc(symbol)} {_fmt_pct(share)}{count}")
+    return lines
+
+
 def notify_report(kind: str, summary: dict) -> None:
     """A scheduled daily/weekly/monthly recap for the PUBLIC channel.
 
@@ -470,7 +503,13 @@ def notify_report(kind: str, summary: dict) -> None:
     ``/api/public/track-record``, which is world-readable already — so there is
     no balance, no USD amount, no account count and no name available to print
     even by mistake. What ships is a percentage return, counts of TRADES and
-    trading days, and the all-time figure as of the end of the period.
+    trading days, and — on the daily only — the day's assets ranked by their
+    share of that return. Tickers are already public on every entry and exit.
+
+    The ranking is daily-only because a symbol's share is exact within one day
+    and merely SUMMED across several, while the period return is chained; a
+    leaderboard that does not add up to the line above it is a question in the
+    channel (see ``reports.rank_assets``).
 
     A window with no priced day says so ("No trades closed") rather than
     publishing "+0.000%": a quiet week and a flat week are different claims, and
@@ -497,16 +536,12 @@ def notify_report(kind: str, summary: dict) -> None:
         # best and the worst are both just the return already printed above.
         if kind != "daily" and best is not None and summary.get("trading_days", 0) > 1:
             lines.append(f"Best day: {_fmt_pct(best)} · Worst day: {_fmt_pct(worst)}")
+        if kind == "daily":
+            ranking = _asset_ranking(summary.get("assets") or [])
+            if ranking:
+                lines += ["", "<b>Assets traded</b>", *ranking]
     else:
         lines.append("No trades closed.")
-
-    all_time = summary.get("all_time_pct")
-    if all_time is not None:
-        # Named, not just "All-time": this is the return on capital committed,
-        # and the landing chart shows a compounded figure that is a different
-        # number. An unlabelled percent beside a differently-measured one on the
-        # site reads as the two disagreeing.
-        lines.append(f"Return on capital: {_fmt_pct(all_time)}")
 
     _send("\n".join(lines))
 

@@ -257,22 +257,6 @@ def summarize(series: list, start: str, end: str) -> dict:
         count = _as_float(point.get("trades"))
         trades += int(count) if count else 0
 
-    # All-time as of the END of the window, never as of today — a monthly recap
-    # posted late must still read as it would have on the day it covers.
-    #
-    # `roc` (return on capital committed), not `cumulative` (the compounded
-    # figure the landing chart builds to). The two answer different questions and
-    # diverge sharply when capital arrived unevenly, so the channel and the site
-    # each state which one they are showing rather than printing a bare percent.
-    # Falls back to `cumulative` only for a payload predating `roc`, so an engine
-    # newer than the API still posts a number instead of dropping the line.
-    prior = [p for p in points if str(p["date"]) <= end]
-    all_time = None
-    if prior:
-        all_time = _as_float(prior[-1].get("roc"))
-        if all_time is None:
-            all_time = _as_float(prior[-1].get("cumulative"))
-
     return {
         "start": start,
         "end": end,
@@ -283,8 +267,38 @@ def summarize(series: list, start: str, end: str) -> dict:
         "trades": trades,
         "best_pct": max(percents) if percents else None,
         "worst_pct": min(percents) if percents else None,
-        "all_time_pct": all_time,
+        "assets": rank_assets(window),
     }
+
+
+def rank_assets(window: list) -> list[dict]:
+    """The window's symbols ranked by their share of its return, best first.
+
+    Every series point carries `assets`: each symbol's realized P&L over the
+    SAME capital the day's own `pct` is measured on, so within one day the
+    shares add up to the day's return exactly. Across several days they are
+    SUMMED here, not chained — a symbol has no capital of its own to compound —
+    so on a multi-day window the ranking is an attribution that does not
+    reconcile to the chained period return. That is why ``notify_report``
+    publishes it on the daily recap only.
+
+    Empty, never None, on a payload predating the field: an engine newer than
+    the API posts the recap without the ranking rather than not at all.
+    """
+    by_symbol: dict[str, dict] = {}
+    for point in window:
+        for asset in point.get("assets") or []:
+            if not isinstance(asset, dict):
+                continue
+            symbol = str(asset.get("symbol") or "").strip()
+            share = _as_float(asset.get("pct"))
+            if not symbol or share is None:
+                continue
+            entry = by_symbol.setdefault(symbol, {"symbol": symbol, "pct": 0.0, "trades": 0})
+            entry["pct"] += share
+            count = _as_float(asset.get("trades"))
+            entry["trades"] += int(count) if count else 0
+    return sorted(by_symbol.values(), key=lambda a: (-a["pct"], a["symbol"]))
 
 
 # --- Track record source ----------------------------------------------------------

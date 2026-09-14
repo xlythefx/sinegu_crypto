@@ -170,7 +170,8 @@ skipped — a typo in a recap time must never stop the engine trading.
 and that is the whole design:
 
 - **It cannot leak.** The channel is world-readable, so a recap may carry
-  percentages and counts of *trades* only. Building it from an endpoint that is
+  percentages, counts of *trades* and tickers only (a ticker is already public
+  on every entry the channel announces). Building it from an endpoint that is
   already public makes that structural instead of something a future edit has to
   remember — there is no balance or account count in the payload to print by
   mistake. A test asserts none of those words appears in any rendered report.
@@ -191,6 +192,14 @@ Rules worth keeping:
 - **The period return is chained, not summed**, identical to how the endpoint
   computes its own total — so it is time-weighted and a mid-week deposit cannot
   inflate it.
+- **The daily recap ranks every asset traded**, from the `assets` list each
+  series point carries (per symbol: its share of the day's return, measured on
+  the same capital as the day's `pct`, so the shares add up to it). 🥇🥈🥉 for
+  the top three *only while in profit* — a red day is plainly numbered — and
+  everything below the podium numbered too. Daily only: across several days the
+  shares are summed while the return is chained, and a leaderboard that does
+  not add up to the line above it is a question in the channel. There is no
+  all-time line; a recap is the period it names and nothing else.
 - **A failed fetch is not "no trades".** `fetch_track_record()` returns `None`
   on failure and the period stays unmarked, so the next tick retries it — the
   same empty-vs-unavailable rule the pollers follow. `available: false` (nothing

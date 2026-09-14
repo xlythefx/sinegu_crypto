@@ -593,7 +593,8 @@ for the overlay's `position: fixed` and trap it inside.
   the PUBLIC channel (`BINANCE_ABCD_REPORT_*`, mirrored to prod).
   **They are built from `GET /api/public/track-record`, never from a fresh
   query**, and that is the whole design. It cannot leak — the channel is
-  world-readable, so a recap may carry percentages and TRADE counts only, and
+  world-readable, so a recap may carry percentages, TRADE counts and tickers
+  only (a ticker is already public on every entry the channel announces), and
   sourcing it from an already-public endpoint makes that structural rather than
   remembered (there is no balance or account count in the payload to print by
   mistake; a test asserts it). And it cannot disagree with the landing page,
@@ -607,6 +608,17 @@ for the overlay's `position: fixed` and trap it inside.
     backfill.
   - **Chained, not summed** — same time-weighted math as the endpoint's own
     total, so a mid-period deposit cannot inflate it.
+  - **The DAILY recap ranks every asset traded** (`reports.rank_assets` +
+    `notify._asset_ranking`, 2026-09-14) from the `assets` list each series
+    point carries: per symbol, its realized P&L over the SAME capital as the
+    day's `pct`, so the shares add up to the day's return. 🥇🥈🥉 for the top
+    three **only while in profit** (a gold medal on a loss is a joke; a red
+    day is plainly numbered), everything below the podium numbered — a ranking
+    that hides the losers is not a ranking. **Daily only, by design**: across
+    several days the shares are SUMMED while the period return is chained, and
+    a leaderboard that does not add up to the line above it is a question in
+    the channel. **No all-time / return-on-capital line** — removed the same
+    day; a recap is the period it names and nothing else.
   - **A failed fetch is not "no trades"** — `None` leaves the period unmarked
     and the next tick retries it, the same empty-vs-unavailable rule the pollers
     follow. `available: false` is an answer and is marked done.

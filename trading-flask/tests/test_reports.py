@@ -125,15 +125,30 @@ def test_monthly_on_the_first_covers_the_whole_month():
 
 # --- Summarising the series ---------------------------------------------------
 
-# `roc` is deliberately DIFFERENT from `cumulative` on every point: they are two
-# measures of the same history (return on capital committed vs the compounded
-# curve), and a recap that quoted the wrong one would still look plausible if the
-# fixture let them coincide.
+# Each day's `assets` add up to its `pct` and `trades`, exactly as the endpoint
+# builds them. The days are shaped to exercise the podium: a three-way green
+# day, a four-asset day with a loser in fourth, a red day where a loser ranks
+# above a winner's absence, and a two-asset day with one loss.
 SERIES = [
-    {"date": "2026-09-03", "pct": 5.0, "cumulative": 5.0, "roc": 4.0, "trades": 4},
-    {"date": "2026-09-04", "pct": 10.0, "cumulative": 15.5, "roc": 12.0, "trades": 6},
-    {"date": "2026-09-05", "pct": -2.0, "cumulative": 13.19, "roc": 10.5, "trades": 3},
-    {"date": "2026-09-06", "pct": 1.0, "cumulative": 14.32, "roc": 11.4, "trades": 2},
+    {"date": "2026-09-03", "pct": 5.0, "cumulative": 5.0, "trades": 4, "assets": [
+        {"symbol": "BTCUSDT", "pct": 3.0, "trades": 2},
+        {"symbol": "ETHUSDT", "pct": 1.5, "trades": 1},
+        {"symbol": "SOLUSDT", "pct": 0.5, "trades": 1},
+    ]},
+    {"date": "2026-09-04", "pct": 10.0, "cumulative": 15.5, "trades": 6, "assets": [
+        {"symbol": "LTCUSDT", "pct": 7.5, "trades": 3},
+        {"symbol": "BTCUSDT", "pct": 2.5, "trades": 1},
+        {"symbol": "ETHUSDT", "pct": 0.3, "trades": 1},
+        {"symbol": "SOLUSDT", "pct": -0.3, "trades": 1},
+    ]},
+    {"date": "2026-09-05", "pct": -2.0, "cumulative": 13.19, "trades": 3, "assets": [
+        {"symbol": "ETHUSDT", "pct": 0.5, "trades": 1},
+        {"symbol": "LTCUSDT", "pct": -2.5, "trades": 2},
+    ]},
+    {"date": "2026-09-06", "pct": 1.0, "cumulative": 14.32, "trades": 2, "assets": [
+        {"symbol": "LTCUSDT", "pct": 1.6, "trades": 1},
+        {"symbol": "ETHUSDT", "pct": -0.6, "trades": 1},
+    ]},
 ]
 
 
@@ -149,17 +164,30 @@ def test_period_return_is_chained_not_summed():
     assert summary["worst_pct"] == -2.0
 
 
-def test_all_time_is_taken_as_of_the_window_end_not_today():
-    """A recap posted late still reads as it would have on the day it covers."""
+def test_a_days_assets_are_ranked_best_first_and_add_up_to_its_return():
     summary = reports.summarize(SERIES, "2026-09-04", "2026-09-04")
-    assert summary["all_time_pct"] == 12.0  # roc on the 4th, not the 15.5 curve
+    assert [a["symbol"] for a in summary["assets"]] == ["LTCUSDT", "BTCUSDT", "ETHUSDT", "SOLUSDT"]
+    assert sum(a["pct"] for a in summary["assets"]) == pytest.approx(summary["return_pct"])
+    assert sum(a["trades"] for a in summary["assets"]) == summary["trades"]
 
 
-def test_all_time_falls_back_to_the_curve_on_an_older_payload():
-    """An engine newer than the API must still post a number, not drop the line."""
-    legacy = [{k: v for k, v in p.items() if k != "roc"} for p in SERIES]
+def test_a_multi_day_window_sums_each_symbols_shares():
+    """Attribution, not compounding: LTC is 7.5 − 2.5 + 1.6 over the three days,
+    and the order is decided on those sums, not on any single day."""
+    summary = reports.summarize(SERIES, "2026-09-04", "2026-09-06")
+    ranked = {a["symbol"]: a for a in summary["assets"]}
+    assert [a["symbol"] for a in summary["assets"]] == ["LTCUSDT", "BTCUSDT", "ETHUSDT", "SOLUSDT"]
+    assert ranked["LTCUSDT"]["pct"] == pytest.approx(6.6)
+    assert ranked["LTCUSDT"]["trades"] == 6
+    assert ranked["ETHUSDT"]["pct"] == pytest.approx(0.2)  # 0.3 + 0.5 − 0.6
+
+
+def test_a_payload_without_assets_still_summarizes():
+    """An engine newer than the API posts the recap without the ranking."""
+    legacy = [{k: v for k, v in p.items() if k != "assets"} for p in SERIES]
     summary = reports.summarize(legacy, "2026-09-04", "2026-09-04")
-    assert summary["all_time_pct"] == 15.5
+    assert summary["assets"] == []
+    assert summary["return_pct"] == pytest.approx(10.0)
 
 
 def test_an_empty_window_is_none_not_zero():
@@ -167,8 +195,7 @@ def test_an_empty_window_is_none_not_zero():
     assert summary["return_pct"] is None
     assert summary["trading_days"] == 0
     assert summary["trades"] == 0
-    # All-time still known — it is the last point at or before the window end.
-    assert summary["all_time_pct"] == 11.4
+    assert summary["assets"] == []
 
 
 def test_unparseable_points_are_skipped_not_crashed():
@@ -185,12 +212,47 @@ def test_daily_message_carries_only_percentages_and_trade_counts(sent):
     assert "Daily Report — 6 Sep 2026" in text
     assert "Return: <b>+1.000%</b>" in text
     assert "Trades closed: 2" in text
-    # Named, not a bare "All-time": the landing chart publishes the compounded
-    # figure, which is a different number from this one.
-    assert "Return on capital: +11.400%" in text
     # A single day has no spread to report, and never a count of accounts.
     assert "Best day" not in text
     assert "Trading days" not in text
+    # No running total of any kind — dropped 2026-09-14. The recap is the period
+    # it names and nothing else.
+    assert "All-time" not in text
+    assert "Return on capital" not in text
+
+
+def test_daily_message_ranks_every_asset_with_medals_for_the_podium(sent):
+    notify.notify_report("daily", reports.summarize(SERIES, "2026-09-04", "2026-09-04"))
+    (text,) = sent
+    assert "<b>Assets traded</b>" in text
+    assert "🥇 LTCUSDT +7.500% · 3 trades" in text
+    assert "🥈 BTCUSDT +2.500% · 1 trade" in text
+    assert "🥉 ETHUSDT +0.300% · 1 trade" in text
+    # Fourth place is still listed — it is a ranking of everything traded — but
+    # off the podium it is plainly numbered.
+    assert "4. SOLUSDT -0.300% · 1 trade" in text
+
+
+def test_a_losing_asset_earns_no_medal_whatever_its_rank(sent):
+    notify.notify_report("daily", reports.summarize(SERIES, "2026-09-06", "2026-09-06"))
+    (text,) = sent
+    assert "🥇 LTCUSDT +1.600% · 1 trade" in text
+    assert "2. ETHUSDT -0.600% · 1 trade" in text
+    assert "🥈" not in text
+
+
+def test_a_red_day_awards_no_medals_at_all(sent):
+    """Ranked first on a red day is still a loss; a gold medal on it is a joke."""
+    red = [{"date": "2026-09-08", "pct": -1.0, "cumulative": 13.0, "trades": 2, "assets": [
+        {"symbol": "LTCUSDT", "pct": -0.4, "trades": 1},
+        {"symbol": "BTCUSDT", "pct": -0.6, "trades": 1},
+    ]}]
+    notify.notify_report("daily", reports.summarize(red, "2026-09-08", "2026-09-08"))
+    (text,) = sent
+    assert "1. LTCUSDT -0.400% · 1 trade" in text
+    assert "2. BTCUSDT -0.600% · 1 trade" in text
+    for medal in ("🥇", "🥈", "🥉"):
+        assert medal not in text
 
 
 def test_weekly_message_adds_the_day_breakdown(sent):
@@ -200,6 +262,9 @@ def test_weekly_message_adds_the_day_breakdown(sent):
     assert "Trading days: 4 (3 up / 1 down)" in text
     assert "Best day: +10.000% · Worst day: -2.000%" in text
     assert "Trades closed: 15" in text
+    # The ranking is exact within a day and only summed across several, while
+    # the return above it is chained — so it stays off the weekly and monthly.
+    assert "Assets traded" not in text
 
 
 def test_monthly_message_names_a_partial_month_range(sent):
@@ -221,7 +286,9 @@ def test_no_report_ever_names_an_account_or_an_amount(sent):
     for kind in ("daily", "weekly", "monthly"):
         notify.notify_report(kind, reports.summarize(SERIES, "2026-09-03", "2026-09-06"))
     blob = "\n".join(sent)
-    for forbidden in ("USDT", "$", "account", "uni_id", "balance"):
+    # A ticker ends in USDT (LTCUSDT) and is public on every entry already; an
+    # AMOUNT is a number followed by the unit, which is what the space catches.
+    for forbidden in (" USDT", "$", "account", "uni_id", "balance"):
         assert forbidden not in blob
 
 
