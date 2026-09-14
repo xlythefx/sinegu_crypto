@@ -502,7 +502,11 @@ def notify_report(kind: str, summary: dict) -> None:
 
     all_time = summary.get("all_time_pct")
     if all_time is not None:
-        lines.append(f"All-time: {_fmt_pct(all_time)}")
+        # Named, not just "All-time": this is the return on capital committed,
+        # and the landing chart shows a compounded figure that is a different
+        # number. An unlabelled percent beside a differently-measured one on the
+        # site reads as the two disagreeing.
+        lines.append(f"Return on capital: {_fmt_pct(all_time)}")
 
     _send("\n".join(lines))
 

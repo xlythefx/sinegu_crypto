@@ -61,7 +61,11 @@ export default function Performance() {
           numbers we're paid on.
         </p>
       </div>
-      <div className="grid grid-cols-5 gap-3.5 mb-5 max-[1100px]:grid-cols-3 max-[900px]:grid-cols-2 max-[560px]:grid-cols-1">
+      {/* Six cards, and every breakpoint divides into six exactly (6 / 3 / 2 / 1)
+          so none is ever orphaned alone on a trailing row. The step down happens
+          at 1200px rather than 1100 because six columns of a 26px figure get
+          cramped before three columns do. */}
+      <div className="grid grid-cols-6 gap-3.5 mb-5 max-[1200px]:grid-cols-3 max-[900px]:grid-cols-2 max-[560px]:grid-cols-1">
         {cards.map((card) => (
           <div
             className="bg-surface border border-border rounded-card p-card"

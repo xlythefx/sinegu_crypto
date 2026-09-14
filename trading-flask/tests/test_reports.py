@@ -125,11 +125,15 @@ def test_monthly_on_the_first_covers_the_whole_month():
 
 # --- Summarising the series ---------------------------------------------------
 
+# `roc` is deliberately DIFFERENT from `cumulative` on every point: they are two
+# measures of the same history (return on capital committed vs the compounded
+# curve), and a recap that quoted the wrong one would still look plausible if the
+# fixture let them coincide.
 SERIES = [
-    {"date": "2026-09-03", "pct": 5.0, "cumulative": 5.0, "trades": 4},
-    {"date": "2026-09-04", "pct": 10.0, "cumulative": 15.5, "trades": 6},
-    {"date": "2026-09-05", "pct": -2.0, "cumulative": 13.19, "trades": 3},
-    {"date": "2026-09-06", "pct": 1.0, "cumulative": 14.32, "trades": 2},
+    {"date": "2026-09-03", "pct": 5.0, "cumulative": 5.0, "roc": 4.0, "trades": 4},
+    {"date": "2026-09-04", "pct": 10.0, "cumulative": 15.5, "roc": 12.0, "trades": 6},
+    {"date": "2026-09-05", "pct": -2.0, "cumulative": 13.19, "roc": 10.5, "trades": 3},
+    {"date": "2026-09-06", "pct": 1.0, "cumulative": 14.32, "roc": 11.4, "trades": 2},
 ]
 
 
@@ -148,6 +152,13 @@ def test_period_return_is_chained_not_summed():
 def test_all_time_is_taken_as_of_the_window_end_not_today():
     """A recap posted late still reads as it would have on the day it covers."""
     summary = reports.summarize(SERIES, "2026-09-04", "2026-09-04")
+    assert summary["all_time_pct"] == 12.0  # roc on the 4th, not the 15.5 curve
+
+
+def test_all_time_falls_back_to_the_curve_on_an_older_payload():
+    """An engine newer than the API must still post a number, not drop the line."""
+    legacy = [{k: v for k, v in p.items() if k != "roc"} for p in SERIES]
+    summary = reports.summarize(legacy, "2026-09-04", "2026-09-04")
     assert summary["all_time_pct"] == 15.5
 
 
@@ -157,7 +168,7 @@ def test_an_empty_window_is_none_not_zero():
     assert summary["trading_days"] == 0
     assert summary["trades"] == 0
     # All-time still known — it is the last point at or before the window end.
-    assert summary["all_time_pct"] == 14.32
+    assert summary["all_time_pct"] == 11.4
 
 
 def test_unparseable_points_are_skipped_not_crashed():
@@ -174,7 +185,9 @@ def test_daily_message_carries_only_percentages_and_trade_counts(sent):
     assert "Daily Report — 6 Sep 2026" in text
     assert "Return: <b>+1.000%</b>" in text
     assert "Trades closed: 2" in text
-    assert "All-time: +14.320%" in text
+    # Named, not a bare "All-time": the landing chart publishes the compounded
+    # figure, which is a different number from this one.
+    assert "Return on capital: +11.400%" in text
     # A single day has no spread to report, and never a count of accounts.
     assert "Best day" not in text
     assert "Trading days" not in text

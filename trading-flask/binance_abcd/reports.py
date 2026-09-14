@@ -259,8 +259,19 @@ def summarize(series: list, start: str, end: str) -> dict:
 
     # All-time as of the END of the window, never as of today — a monthly recap
     # posted late must still read as it would have on the day it covers.
+    #
+    # `roc` (return on capital committed), not `cumulative` (the compounded
+    # figure the landing chart builds to). The two answer different questions and
+    # diverge sharply when capital arrived unevenly, so the channel and the site
+    # each state which one they are showing rather than printing a bare percent.
+    # Falls back to `cumulative` only for a payload predating `roc`, so an engine
+    # newer than the API still posts a number instead of dropping the line.
     prior = [p for p in points if str(p["date"]) <= end]
-    all_time = _as_float(prior[-1].get("cumulative")) if prior else None
+    all_time = None
+    if prior:
+        all_time = _as_float(prior[-1].get("roc"))
+        if all_time is None:
+            all_time = _as_float(prior[-1].get("cumulative"))
 
     return {
         "start": start,

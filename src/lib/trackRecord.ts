@@ -56,6 +56,16 @@ const pct = (value: number | null | undefined, dp: number): string =>
 export function statCards(stats: TrackRecordStats | null): StatCard[] {
   return [
     {
+      // Return on capital committed — NOT the chart's compounded curve, which
+      // answers a different question and reads lower here because most of the
+      // capital arrived after the early losing months. The hint names the base
+      // so the two are never mistaken for one figure disagreeing with itself.
+      label: 'Return on Capital',
+      value: pct(stats?.return_on_capital_pct, 2),
+      tone: toneOf(stats?.return_on_capital_pct),
+      hint: 'On capital invested',
+    },
+    {
       label: 'Win Rate',
       value: stats?.win_rate == null ? DASH : `${stats.win_rate.toFixed(1)}%`,
       tone: 'accent',
