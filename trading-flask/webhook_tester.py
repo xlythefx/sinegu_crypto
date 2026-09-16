@@ -49,7 +49,7 @@ class TesterApp:
         self.root = tk.Tk()
         self.root.title("BINANCE_ABCD — webhook tester")
         self.root.configure(bg=BG)
-        self.root.geometry("640x640")
+        self.root.geometry("640x680")
         self.root.minsize(560, 560)
 
         style = ttk.Style(self.root)
@@ -88,6 +88,9 @@ class TesterApp:
         self.leverage_var = tk.StringVar()
         self.strategy_var = tk.StringVar(value="Manual-Test")
         self.targets_var = tk.StringVar()
+        # Restricts the fan-out to some venues (CSV: binance, mexc). Empty =
+        # every venue the engine has enabled — what a TradingView alert does.
+        self.exchanges_var = tk.StringVar()
         self.secret_var = tk.StringVar(value=DEFAULT_SECRET)
 
         rows = [
@@ -97,6 +100,7 @@ class TesterApp:
             ("Leverage (optional)", tk.Entry(body, textvariable=self.leverage_var, bg=FIELD_BG, fg=FG, insertbackground=FG)),
             ("Strategy (optional)", tk.Entry(body, textvariable=self.strategy_var, bg=FIELD_BG, fg=FG, insertbackground=FG)),
             ("target_uni_ids CSV (optional)", tk.Entry(body, textvariable=self.targets_var, bg=FIELD_BG, fg=FG, insertbackground=FG)),
+            ("exchanges CSV (optional)", tk.Entry(body, textvariable=self.exchanges_var, bg=FIELD_BG, fg=FG, insertbackground=FG)),
             ("Secret", tk.Entry(body, textvariable=self.secret_var, show="*", bg=FIELD_BG, fg=FG, insertbackground=FG)),
         ]
         for offset, (label, widget) in enumerate(rows, start=2):
@@ -116,7 +120,7 @@ class TesterApp:
             font=("Segoe UI", 11, "bold"),
             pady=8,
         )
-        self.send_button.grid(row=9, column=0, columnspan=2, sticky="ew", pady=(12, 8))
+        self.send_button.grid(row=10, column=0, columnspan=2, sticky="ew", pady=(12, 8))
 
         # Response pane ------------------------------------------------------
         self.output = tk.Text(
@@ -130,8 +134,8 @@ class TesterApp:
             state="disabled",
             wrap="word",
         )
-        self.output.grid(row=10, column=0, columnspan=2, sticky="nsew")
-        body.rowconfigure(10, weight=1)
+        self.output.grid(row=11, column=0, columnspan=2, sticky="nsew")
+        body.rowconfigure(11, weight=1)
 
         self._update_prod_banner()
 
@@ -168,6 +172,8 @@ class TesterApp:
             payload["strategy"] = self.strategy_var.get().strip()
         if self.targets_var.get().strip():
             payload["target_uni_ids"] = self.targets_var.get().strip()
+        if self.exchanges_var.get().strip():
+            payload["exchanges"] = self.exchanges_var.get().strip().lower()
         return payload
 
     def send(self) -> None:

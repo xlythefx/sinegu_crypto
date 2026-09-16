@@ -31,6 +31,11 @@ because Binance indexes userTrades with a small delay. A failed income read
 skips the account and holds both marks; a failed userTrades read holds the FEE
 mark for the account — a receipt skipped once would be skipped forever, since
 the next tick starts past it — while the closes flow behaves as before.
+
+BINANCE ONLY. Both flows hang off Binance's /fapi/v1/income index; MEXC has no
+equivalent, so its closes and receipts are read from its own order and deal
+history by fetch_mexc_history and posted to /engine/mexc/. The two pollers
+share nothing beyond the watermark file helpers in fee_receipts.
 """
 
 from __future__ import annotations
@@ -180,7 +185,10 @@ def _reconstruct_closes(trades: list[dict], symbol: str) -> list[dict]:
 
 
 def fetch_and_save() -> dict | None:
-    accounts = fetch_accounts()
+    # Binance only: this flow is built on Binance's income + userTrades index.
+    # MEXC closes and receipts come from fetch_mexc_history, which reads MEXC's
+    # own order/deal history and posts to /engine/mexc/.
+    accounts = fetch_accounts(exchange="binance")
     if not accounts:
         log.info("[past-positions] no accounts")
         return None

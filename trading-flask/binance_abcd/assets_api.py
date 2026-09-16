@@ -1,9 +1,14 @@
-"""Enabled tradeable assets from sinegutrade-api, TTL-cached.
+"""Enabled tradeable assets from sinegutrade-api, TTL-cached per exchange.
 
 Asset rows carry the sizing config: base_size (one increment), the stack cap,
 and side (ALL | LONG | SHORT — which entry directions are allowed). Entries
 FAIL CLOSED: no asset row, or a disabled one, means the entry is rejected.
 Exits never consult assets.
+
+Assets are PER EXCHANGE: each venue's rows carry its own ``assets.broker``
+label (Binance / MEXC — see exchanges.SPECS) and are fetched from its own
+route, so a ticker enabled on Binance says nothing about MEXC. ``base_size`` is
+in COINS on every exchange; the MEXC adapter converts to contracts at the edge.
 
 **The `max_increments` COLUMN is a max position SIZE, not a count.** The name is
 inherited from the mother schema, whose own migration comments it as "Max
@@ -24,47 +29,56 @@ numbers, so the two can never be confused again.
 from __future__ import annotations
 
 import logging
+import threading
 
-from binance_abcd import engine_client
+from binance_abcd import engine_client, exchanges
 from binance_abcd.cache import TTLCache
-from binance_abcd.hooks import ASSETS_CACHE_TTL
+from binance_abcd.hooks import ASSETS_CACHE_TTL, ENGINE_EXCHANGE
 
 log = logging.getLogger(__name__)
 
-ASSETS_BROKER = "Binance"
+ASSETS_BROKER = exchanges.spec(ENGINE_EXCHANGE).assets_broker
+
+_caches: dict[str, TTLCache] = {}
+_caches_lock = threading.Lock()
 
 
-def _load_assets() -> dict[str, dict] | None:
-    data = engine_client.get_json("assets", params={"broker": ASSETS_BROKER})
-    if data is None:
-        return None
-    assets = data.get("assets")
-    if not isinstance(assets, list):
-        log.warning("assets payload malformed: %.200s", data)
-        return None
+def _loader(exchange: str):
+    broker = exchanges.spec(exchange).assets_broker
 
-    by_ticker: dict[str, dict] = {}
-    for asset in assets:
-        ticker = str(asset.get("ticker", "")).upper()
-        if not ticker or not asset.get("enabled"):
-            continue
-        try:
-            base_size = float(asset.get("base_size") or 0)
-        except (TypeError, ValueError):
-            base_size = 0.0
-        # The column is a max position SIZE in contract units (see module docs).
-        try:
-            max_size = float(asset.get("max_increments") or 0)
-        except (TypeError, ValueError):
-            max_size = 0.0
-        by_ticker[ticker] = {
-            "ticker": ticker,
-            "base_size": base_size,
-            "max_size": max_size,
-            "max_increments": _increment_cap(max_size, base_size),
-            "side": str(asset.get("side") or "ALL").upper(),
-        }
-    return by_ticker
+    def _load_assets() -> dict[str, dict] | None:
+        data = engine_client.get_json("assets", params={"broker": broker}, exchange=exchange)
+        if data is None:
+            return None
+        assets = data.get("assets")
+        if not isinstance(assets, list):
+            log.warning("[%s] assets payload malformed: %.200s", exchange, data)
+            return None
+
+        by_ticker: dict[str, dict] = {}
+        for asset in assets:
+            ticker = str(asset.get("ticker", "")).upper()
+            if not ticker or not asset.get("enabled"):
+                continue
+            try:
+                base_size = float(asset.get("base_size") or 0)
+            except (TypeError, ValueError):
+                base_size = 0.0
+            # The column is a max position SIZE in contract units (see module docs).
+            try:
+                max_size = float(asset.get("max_increments") or 0)
+            except (TypeError, ValueError):
+                max_size = 0.0
+            by_ticker[ticker] = {
+                "ticker": ticker,
+                "base_size": base_size,
+                "max_size": max_size,
+                "max_increments": _increment_cap(max_size, base_size),
+                "side": str(asset.get("side") or "ALL").upper(),
+            }
+        return by_ticker
+
+    return _load_assets
 
 
 def _increment_cap(max_size: float, base_size: float) -> float:
@@ -84,21 +98,32 @@ def _increment_cap(max_size: float, base_size: float) -> float:
     return float(max(1, round(max_size / base_size)))
 
 
-_cache = TTLCache(ASSETS_CACHE_TTL, _load_assets)
+def _cache_for(exchange: str) -> TTLCache:
+    cache = _caches.get(exchange)
+    if cache is None:
+        with _caches_lock:
+            cache = _caches.get(exchange)
+            if cache is None:
+                cache = TTLCache(ASSETS_CACHE_TTL, _loader(exchange))
+                _caches[exchange] = cache
+    return cache
 
 
-def fetch_assets(force: bool = False) -> dict[str, dict]:
-    """Enabled assets keyed by upper-case ticker. Empty dict if never fetched."""
-    return _cache.get(force=force) or {}
+def fetch_assets(force: bool = False, exchange: str = ENGINE_EXCHANGE) -> dict[str, dict]:
+    """Enabled assets keyed by upper-case ticker, for one exchange. Empty dict if never fetched."""
+    return _cache_for(exchange).get(force=force) or {}
 
 
-def get_asset(ticker: str) -> dict | None:
-    return fetch_assets().get(ticker.upper())
+def get_asset(ticker: str, exchange: str = ENGINE_EXCHANGE) -> dict | None:
+    return fetch_assets(exchange=exchange).get(ticker.upper())
 
 
-def assets_cache_age() -> float | None:
-    return _cache.age()
+def assets_cache_age(exchange: str = ENGINE_EXCHANGE) -> float | None:
+    return _cache_for(exchange).age()
 
 
 def invalidate_assets_cache() -> None:
-    _cache.invalidate()
+    """Drop every exchange's list — an asset write pings this without saying
+    which broker's row changed."""
+    for cache in list(_caches.values()):
+        cache.invalidate()

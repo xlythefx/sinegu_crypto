@@ -16,19 +16,19 @@ import time
 from flask import Flask, jsonify
 
 from binance_abcd import hooks, notify
-from binance_abcd.accounts_api import accounts_cache_age, account_futures_base_url, fetch_accounts
+from binance_abcd.accounts_api import accounts_cache_age, fetch_accounts
 from binance_abcd.assets_api import assets_cache_age, fetch_assets
 from binance_abcd.binance_api import (
-    BinanceAPI,
     mark_position_mode_verified,
     rate_limited_until,
     set_rate_limit_alert_hook,
 )
+from binance_abcd.exchange_api import mode_key, want_hedge
+from binance_abcd.exchanges import client_for, enabled as enabled_exchanges, exchange_of, label, tradeable
 from binance_abcd.reports import reports_status, start_reporter
 from binance_abcd.retry_queue import queue_depth, start_retry_queue
 from binance_abcd.routes.admin import admin_bp
 from binance_abcd.routes.webhook import metrics_snapshot, webhook_bp
-from binance_abcd.trading_handler import want_hedge
 
 log = logging.getLogger(__name__)
 
@@ -54,6 +54,10 @@ def create_app() -> Flask:
             "service": hooks.SERVICE_NAME,
             "accounts_cache_age": accounts_cache_age(),
             "assets_cache_age": assets_cache_age(),
+            "exchanges": {
+                ex: {"accounts_cache_age": accounts_cache_age(ex), "assets_cache_age": assets_cache_age(ex)}
+                for ex in enabled_exchanges()
+            },
             "metrics": metrics_snapshot(),
             "retry_queue_depth": queue_depth(),
             "rate_limited_until": rate_limited_until() or None,
@@ -68,35 +72,43 @@ def _mask(key: str) -> str:
     return f"{key[:6]}...{key[-4:]}" if len(key) > 12 else "***"
 
 
-def startup_checks() -> tuple[int, int]:
+def startup_checks() -> tuple[dict[str, int], dict[str, int]]:
     """Print accounts/assets, sync position mode per account (seeds the
-    verified cache so the trade path never re-checks). Returns the
-    (account, asset) counts for the Telegram startup ping."""
+    verified cache so the trade path never re-checks). Returns the per-venue
+    (accounts, assets) counts, keyed by label, for the Telegram startup ping."""
     accounts = fetch_accounts(force=True)
-    log.info("accounts enabled for trading: %d", len(accounts))
+    log.info("accounts enabled for trading: %d (%s)", len(accounts), ", ".join(enabled_exchanges()))
+    account_counts: dict[str, int] = {label(ex): 0 for ex in enabled_exchanges()}
     for account in accounts:
+        untradeable = tradeable(account)
+        if not untradeable:
+            account_counts[label(exchange_of(account))] += 1
         log.info(
-            "  %-24s %s balance=%-10s %s",
+            "  %-8s %-24s %s balance=%-10s %s",
+            label(exchange_of(account)),
             account.get("name"),
             _mask(account.get("api_key", "")),
             account.get("balance"),
-            "DEMO/testnet" if account.get("demo") else "LIVE",
+            f"SKIPPED ({untradeable})" if untradeable else ("DEMO/testnet" if account.get("demo") else "LIVE"),
         )
 
     if hooks.SYNC_POSITION_MODE_ON_STARTUP:
         for account in accounts:
-            api = BinanceAPI(
-                account["api_key"], account["secret_key"], base_url=account_futures_base_url(account)
-            )
+            if tradeable(account):
+                continue
+            api = client_for(account)
             ok, err = api.ensure_position_mode_matches(want_hedge())
             if ok:
-                mark_position_mode_verified(account["api_key"])
+                mark_position_mode_verified(mode_key(api))
             else:
                 log.warning("position mode NOT aligned for %s: %s", account.get("name"), err)
 
-    assets = fetch_assets(force=True)
-    log.info("assets enabled: %s", ", ".join(sorted(assets)) or "(none)")
-    return len(accounts), len(assets)
+    asset_counts: dict[str, int] = {}
+    for ex in enabled_exchanges():
+        assets = fetch_assets(force=True, exchange=ex)
+        asset_counts[label(ex)] = len(assets)
+        log.info("[%s] assets enabled: %s", ex, ", ".join(sorted(assets)) or "(none)")
+    return account_counts, asset_counts
 
 
 def _poller_loop(name: str, fetch_fn, interval: float, start_delay: float = 0.0) -> None:
@@ -143,6 +155,12 @@ def start_pollers() -> None:
         ("transfers", transfers, hooks.TRANSFERS_FETCH_INTERVAL),
         ("past-positions", past_positions, hooks.PAST_POSITIONS_FETCH_INTERVAL),
     ]
+    if "mexc" in enabled_exchanges():
+        # MEXC's closes + fee receipts come from its own order/deal history —
+        # a separate loop, started only when the venue is switched on.
+        from binance_abcd.fetch_mexc_history import fetch_and_save as mexc_history
+
+        jobs.append(("mexc-history", mexc_history, hooks.MEXC_HISTORY_FETCH_INTERVAL))
     for index, (name, fn, interval) in enumerate(jobs):
         threading.Thread(
             target=_poller_loop,
@@ -164,9 +182,12 @@ def main() -> None:
 
     set_rate_limit_alert_hook(_on_rate_limit)
 
-    log.info("starting %s on port %s (webhook %s)", hooks.SERVICE_NAME, hooks.FLASK_PORT, hooks.WEBHOOK_PATH)
-    account_count, asset_count = startup_checks()
-    notify.notify_startup(account_count, asset_count)
+    log.info(
+        "starting %s on port %s (webhook %s, exchanges %s)",
+        hooks.SERVICE_NAME, hooks.FLASK_PORT, hooks.WEBHOOK_PATH, ",".join(enabled_exchanges()),
+    )
+    account_counts, asset_counts = startup_checks()
+    notify.notify_startup(account_counts, asset_counts)
     start_retry_queue(_shutdown)
     start_reporter(_shutdown)
     if hooks.RUN_POLLERS:

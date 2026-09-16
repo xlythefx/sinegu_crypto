@@ -18,6 +18,12 @@ os.environ.setdefault("BINANCE_ABCD_ENGINE_API_BASE", "http://engine.test/api")
 os.environ.setdefault("BINANCE_ABCD_RUN_POLLERS", "false")
 os.environ.setdefault("BINANCE_ABCD_RETRY_ENABLED", "true")
 os.environ.setdefault("BINANCE_ABCD_RETRY_INTERVAL_SECONDS", "0.05")
+# Binance only by default — the pre-MEXC suite must see exactly the engine it
+# always did. Multi-exchange tests flip hooks.EXCHANGES with monkeypatch.
+os.environ.setdefault("BINANCE_ABCD_EXCHANGES", "binance")
+# No fallback leverage: a MEXC entry with none from the signal or the account
+# must be refused, and a test that wants a default sets it explicitly.
+os.environ.setdefault("BINANCE_ABCD_MEXC_DEFAULT_LEVERAGE", "0")
 # Telegram OFF for the whole suite. hooks.py load_dotenv()s the real .env, so
 # without these the fan-out tests would post to the live channel. Setting them
 # here wins: load_dotenv runs with override=False. test_notify.py re-enables
@@ -53,11 +59,28 @@ def _isolate_watermarks(tmp_path, monkeypatch):
     a test that stamped a fresh closes or fee watermark would make the live
     poller skip everything older on its next tick."""
     import binance_abcd.fee_receipts as fee_receipts
+    import binance_abcd.fetch_mexc_history as fetch_mexc_history
     import binance_abcd.fetch_past_positions as fetch_past_positions
 
     monkeypatch.setattr(fetch_past_positions, "WATERMARK_FILE", tmp_path / "last_income_sync.json")
     monkeypatch.setattr(fetch_past_positions, "FEES_WATERMARK_FILE", tmp_path / "last_fees_sync.json")
     monkeypatch.setattr(fee_receipts, "FEES_WATERMARK_FILE", tmp_path / "last_fees_sync.json")
+    monkeypatch.setattr(fetch_mexc_history, "WATERMARK_FILE", tmp_path / "last_mexc_closes_sync.json")
+    monkeypatch.setattr(fetch_mexc_history, "FEES_WATERMARK_FILE", tmp_path / "last_mexc_fees_sync.json")
+
+
+@pytest.fixture(autouse=True)
+def _reset_exchange_state():
+    """Per-test amnesia for module-level MEXC caches and the key-status dedupe,
+    so one test's contract map or blocked-key memory never leaks into the next."""
+    import binance_abcd.key_status as key_status
+    import binance_abcd.mexc_api as mexc_api
+
+    key_status.reset()
+    mexc_api.reset_caches()
+    yield
+    key_status.reset()
+    mexc_api.reset_caches()
 
 
 @pytest.fixture()

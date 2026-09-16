@@ -32,10 +32,11 @@ class _FakeBinance:
 
 def _run(client, payload=None):
     _FakeBinance.seen = []
+    import binance_abcd.exchanges as exchanges
     import binance_abcd.fetch_balances as fb
 
     with patch.object(fb, "fetch_accounts", return_value=list(ACCOUNTS)), \
-            patch.object(fb, "BinanceAPI", _FakeBinance), \
+            patch.object(exchanges, "BinanceAPI", _FakeBinance), \
             patch.object(fb.engine_client, "post_json", return_value={"success": True}) as posted:
         response = client.post(
             "/admin/refresh-balances",

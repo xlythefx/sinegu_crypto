@@ -175,10 +175,17 @@ def error_summary(result: Any) -> str:
     if not isinstance(result, dict):
         return "No response"
     parsed = _parse_binance_error_body(str(result.get("response") or ""))
-    if parsed and parsed.get("msg"):
+    # Binance bodies say `msg`; MEXC bodies (same envelope shape) say `message`.
+    text = (parsed.get("msg") or parsed.get("message")) if parsed else None
+    if parsed and text:
         code = parsed.get("code")
         prefix = f"{code} " if isinstance(code, int) else ""
-        return f"{prefix}{parsed['msg']}".strip()[:300]
+        return f"{prefix}{text}".strip()[:300]
+    # An adapter that already classified the venue's answer stamps `code` on
+    # the result itself (MEXC business errors arrive on HTTP 200).
+    code = result.get("code")
+    if isinstance(code, int) and result.get("message"):
+        return f"{code} {result['message']}".strip()[:300]
     return str(result.get("message") or "Unknown error")[:300]
 
 

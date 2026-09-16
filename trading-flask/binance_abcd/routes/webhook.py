@@ -2,10 +2,12 @@
 
 Fast-ACK design: the request handler only validates (secret, action, ticker)
 and enqueues a job on the dispatch pool, answering TradingView in milliseconds.
-The job resolves the asset + accounts, then fans out one task per account on
-the shared account pool (the global in-flight ceiling). Per-(api_key, symbol)
-locks serialize overlapping signals for the same account; retryable failures
-go to the retry queue keyed by uni_id.
+The job runs PER EXCHANGE — each enabled venue resolves its own asset row and
+its own accounts — then fans out one task per account on the shared account
+pool (the global in-flight ceiling). Per-(exchange, api_key, symbol) locks
+serialize overlapping signals for the same account; retryable failures go to
+the retry queue keyed by exchange + uni_id. One alert is sent to TradingView's
+one webhook; every exchange sees every signal.
 """
 
 from __future__ import annotations
@@ -18,14 +20,16 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 from flask import Blueprint, jsonify, request
 
 from binance_abcd import engine_client, notify, symbol_locks
-from binance_abcd.accounts_api import account_futures_base_url, fetch_accounts
+from binance_abcd.accounts_api import fetch_accounts
 from binance_abcd.assets_api import get_asset
-from binance_abcd.binance_api import BinanceAPI
+from binance_abcd.exchange_api import ExchangeClient
+from binance_abcd.exchanges import client_for, exchange_of, label, labels, tradeable
+from binance_abcd.exchanges import enabled as enabled_exchanges
 from binance_abcd.hooks import (
     BOOKKEEPING_WORKERS,
     COARSE_STEP_TICKERS,
@@ -52,6 +56,8 @@ webhook_bp = Blueprint("abcd_webhook", __name__)
 
 VALID_ACTIONS = ("BUY", "SELL", "EXIT_LONG", "EXIT_SHORT")
 ENTRY_ACTIONS = ("BUY", "SELL")
+# Ticker prefixes TradingView adds when the chart is on that venue.
+_TICKER_PREFIXES = ("BINANCE:", "MEXC:")
 
 _DISPATCH_EXECUTOR = ThreadPoolExecutor(max_workers=DISPATCH_WORKERS, thread_name_prefix="dispatch")
 _ACCOUNT_EXECUTOR = ThreadPoolExecutor(max_workers=FANOUT_WORKERS, thread_name_prefix="account")
@@ -63,9 +69,10 @@ _BOOKKEEPING_EXECUTOR = ThreadPoolExecutor(max_workers=BOOKKEEPING_WORKERS, thre
 TRADES_LOG = OUT_DIR / "webhook_trades.log"
 _TRADES_LOG_LOCK = threading.Lock()
 
-# Last leverage applied per (api_key, symbol) -> (leverage, epoch). Saves one
-# POST /fapi/v1/leverage per account per signal when the value hasn't changed.
-_LEVERAGE_APPLIED: dict[tuple[str, str], tuple[int, float]] = {}
+# Last leverage applied per (exchange, api_key, symbol) -> (leverage, epoch).
+# Saves one POST /fapi/v1/leverage per account per signal when the value
+# hasn't changed.
+_LEVERAGE_APPLIED: dict[tuple[str, str, str], tuple[int, float]] = {}
 _LEVERAGE_LOCK = threading.Lock()
 
 _metrics_lock = threading.Lock()
@@ -158,11 +165,18 @@ def _parse_leverage(raw: Any) -> Optional[int]:
     return max(1, min(125, lev))
 
 
-def _maybe_set_leverage(api: BinanceAPI, symbol: str, leverage: Optional[int]) -> None:
-    """set_leverage only when the cached last-applied value differs."""
+def _maybe_set_leverage(api: ExchangeClient, symbol: str, leverage: Optional[int]) -> None:
+    """set_leverage only when the cached last-applied value differs.
+
+    A venue that takes leverage ON the order (MEXC) has nothing to cache: the
+    adapter just remembers the value for the entry it is about to place.
+    """
     if leverage is None:
         return
-    key = (api.api_key, symbol.upper())
+    if api.LEVERAGE_PER_ORDER:
+        api.set_leverage(symbol, leverage)
+        return
+    key = (api.exchange, api.api_key, symbol.upper())
     now = time.time()
     with _LEVERAGE_LOCK:
         cached = _LEVERAGE_APPLIED.get(key)
@@ -170,7 +184,7 @@ def _maybe_set_leverage(api: BinanceAPI, symbol: str, leverage: Optional[int]) -
             return
     result = api.set_leverage(symbol, leverage)
     if isinstance(result, dict) and result.get("_error"):
-        log.warning("[Binance] set_leverage %sx %s failed: %.200s", leverage, symbol, result.get("response"))
+        log.warning("[%s] set_leverage %sx %s failed: %.200s", api.exchange, leverage, symbol, result.get("response"))
         return
     with _LEVERAGE_LOCK:
         _LEVERAGE_APPLIED[key] = (leverage, now)
@@ -189,13 +203,36 @@ def _normalize_target_uni_ids(raw: Any) -> Optional[set[str]]:
     return ids or None
 
 
+def _normalize_exchanges(raw: Any) -> tuple[Optional[list[str]], Optional[str]]:
+    """Payload `exchanges` (CSV or list) -> (subset of the enabled exchanges,
+    error). None means "every enabled exchange". A name that is unknown or not
+    enabled on this box is an error, not a silent no-op: an admin restricting a
+    manual trade to one venue must be told when that venue is not there."""
+    if raw in (None, "", []):
+        return None, None
+    if isinstance(raw, str):
+        names = [part.strip().lower() for part in raw.split(",") if part.strip()]
+    elif isinstance(raw, (list, tuple)):
+        names = [str(part).strip().lower() for part in raw if str(part).strip()]
+    else:
+        return None, "exchanges must be a list or comma-separated string"
+    if not names:
+        return None, None
+    live = enabled_exchanges()
+    unknown = [n for n in names if n not in live]
+    if unknown:
+        return None, f"unknown or disabled exchange: {', '.join(unknown)} (enabled: {', '.join(live)})"
+    return list(dict.fromkeys(names)), None
+
+
 # --- Stack cap (batched, DB-first) --------------------------------------------
 
-def _fetch_open_amounts(symbol: str, position_side: str) -> Optional[dict[str, float]]:
-    """One engine-API call: api_key -> abs(open amount) for symbol+side.
-    None when the backend is unreachable (callers fall back to Binance)."""
+def _fetch_open_amounts(symbol: str, position_side: str, exchange: str) -> Optional[dict[str, float]]:
+    """One engine-API call: api_key -> abs(open amount) for symbol+side on one
+    exchange. None when the backend is unreachable (callers fall back to the
+    venue's own read)."""
     data = engine_client.get_json(
-        "positions/check", params={"symbol": symbol.upper(), "position_side": position_side}
+        "positions/check", params={"symbol": symbol.upper(), "position_side": position_side}, exchange=exchange
     )
     if data is None:
         return None
@@ -206,28 +243,6 @@ def _fetch_open_amounts(symbol: str, position_side: str) -> Optional[dict[str, f
         except (KeyError, TypeError, ValueError):
             continue
     return amounts
-
-
-def _binance_open_amount(api: BinanceAPI, symbol: str, position_side: str) -> Optional[float]:
-    """Fallback when the engine API is down: read the side's size from Binance.
-
-    None means the read FAILED, 0.0 means the side is genuinely flat. The stack
-    cap is enforced off this number, so answering 0.0 for an account we could
-    not read is precisely how a cap stops firing without anyone noticing.
-    """
-    try:
-        positions = api.get_positions_v3(symbol)
-    except Exception:  # noqa: BLE001
-        return None
-    if positions is None:
-        return None
-    for p in positions:
-        if (p.get("positionSide") or "BOTH").upper() == position_side:
-            try:
-                return abs(float(p.get("positionAmt") or 0))
-            except (TypeError, ValueError):
-                return None
-    return 0.0
 
 
 # --- Bookkeeping helpers ------------------------------------------------------
@@ -242,18 +257,21 @@ def _upsert_position_api(account: dict, symbol: str, position_side: str, amount:
     }
     if entry_price is not None:
         payload["entry_price"] = entry_price
-    engine_client.post_json("positions/upsert", payload)
+    engine_client.post_json("positions/upsert", payload, exchange=exchange_of(account))
 
 
 def _store_open_strategy(account: dict, symbol: str, position_side: str, strategy: str) -> None:
     engine_client.post_json(
         "open-strategies",
         {"api_key": account["api_key"], "symbol": symbol, "position_side": position_side, "strategy": strategy},
+        exchange=exchange_of(account),
     )
 
 
 def _recover_strategy(account: dict, symbol: str, position_side: str) -> Optional[str]:
-    data = engine_client.get_json("open-strategies", params={"api_key": account["api_key"], "symbol": symbol})
+    data = engine_client.get_json(
+        "open-strategies", params={"api_key": account["api_key"], "symbol": symbol}, exchange=exchange_of(account)
+    )
     if not data:
         return None
     for row in data.get("open_strategies", []):
@@ -266,6 +284,7 @@ def _consume_strategy(account: dict, symbol: str, position_side: str) -> None:
     engine_client.delete_json(
         "open-strategies",
         {"api_key": account["api_key"], "symbol": symbol, "position_side": position_side},
+        exchange=exchange_of(account),
     )
 
 
@@ -314,7 +333,7 @@ def _closed_increments(
 
 def _deferred_close_bookkeeping(
     account: dict,
-    api: BinanceAPI,
+    api: ExchangeClient,
     symbol: str,
     position_side: str,
     closed_qty: float,
@@ -325,8 +344,8 @@ def _deferred_close_bookkeeping(
     increments_closed: Optional[int] = None,
     max_increments: Optional[int] = None,
 ) -> None:
-    """After a close: fill summary from userTrades -> past-position row + strategy consume.
-    Runs on the account pool, off the close path; the poller safety-net catches misses.
+    """After a close: fill summary from the venue -> past-position row + strategy consume.
+    Runs on the bookkeeping pool, off the close path; the poller safety-net catches misses.
 
     Also reports this account's realized PnL into the signal's Telegram exit
     batch — in a `finally` so a bookkeeping failure still releases the message
@@ -360,6 +379,7 @@ def _deferred_close_bookkeeping(
                     }
                 ]
             },
+            exchange=exchange_of(account),
         )
         _consume_strategy(account, symbol, position_side)
     except Exception:  # noqa: BLE001 - bookkeeping must never bubble into the pool
@@ -387,16 +407,20 @@ def _append_trade_log(entry: dict) -> None:
         log.exception("could not append %s", TRADES_LOG)
 
 
-def _post_trade_log(summary: dict) -> None:
-    """Fire the aggregate row at the engine API from the account pool."""
-    _ACCOUNT_EXECUTOR.submit(engine_client.post_json, "trade-logs", summary)
+def _post_trade_log(summary: dict, exchange: str) -> None:
+    """Fire one exchange's aggregate row at that exchange's trade-logs endpoint,
+    from the account pool. `exchange` is the route segment; the row itself
+    does not carry it (the API stamps it from the route)."""
+    payload = {k: v for k, v in summary.items() if k != "exchange"}
+    _ACCOUNT_EXECUTOR.submit(engine_client.post_json, "trade-logs", payload, exchange=exchange)
 
 
 # --- Per-account execution ----------------------------------------------------
 
 def _avg_fill_price(order_result: Any) -> Optional[float]:
     """The order's real executed price. Binance can answer avgPrice '0.00' on a
-    filled market order, so a non-positive value is reported as unknown."""
+    filled market order (and MEXC's create response carries no price at all),
+    so a non-positive or missing value is reported as unknown."""
     if not isinstance(order_result, dict):
         return None
     try:
@@ -409,34 +433,33 @@ def _avg_fill_price(order_result: Any) -> Optional[float]:
 def _position_entry_price(
     accounts: list, results: list, symbol: str, position_side: str
 ) -> Optional[float]:
-    """The open position's entryPrice, read ONCE for a whole entry fan-out.
+    """The open position's entry price, read ONCE for a whole entry fan-out.
 
     Binance answers ``avgPrice`` "0.00" often enough on a filled MARKET order
     that the public alert would otherwise publish TradingView's signal price
     instead of the executed one — or, when the signal carried no price at all
     (the admin manual-trade console sends none), no ``Entry Price:`` line
-    whatsoever. positionRisk carries the true post-fill entryPrice, which is
-    the same fallback ``binance-flask`` reads for its master account.
+    whatsoever. The position read carries the true post-fill entry price,
+    which is the same fallback ``binance-flask`` reads for its master account.
 
     Read once per SIGNAL, not once per account: the channel publishes a single
     price and this is a weight-5 call, so spending it per account would put the
-    poller budget behind a decoration. It is the entryPrice of the whole open
+    poller budget behind a decoration. It is the entry price of the whole open
     position, so on a stacked entry it is the blended average rather than this
     fill alone — which is why it is consulted only when no account reported a
     real avgPrice. Fail-soft: None on any read error, and the caller keeps the
-    signal price.
+    signal price. With several exchanges, the first account that filled on any
+    of them answers for all — the venues trade the same market.
     """
-    by_uni = {a.get("uni_id"): a for a in accounts}
+    by_key = {(exchange_of(a), a.get("uni_id")): a for a in accounts}
     account = next(
-        (by_uni[r["uni_id"]] for r in results
-         if r.get("status") == "filled" and by_uni.get(r.get("uni_id"))),
+        (by_key[(r.get("exchange", "binance"), r["uni_id"])] for r in results
+         if r.get("status") == "filled" and by_key.get((r.get("exchange", "binance"), r.get("uni_id")))),
         None,
     )
     if account is None:
         return None
-    api = BinanceAPI(
-        account["api_key"], account["secret_key"], base_url=account_futures_base_url(account)
-    )
+    api = client_for(account)
     risk = position_risk_map(api, symbol)
     if not risk:  # None = unreadable, {} = flat — neither is a price
         return None
@@ -462,19 +485,31 @@ def _run_account(
     """Execute one signal on one account. Returns a result dict with
     status: filled | skipped | failed (+ retryable flag on failures)."""
     name = account.get("name") or account.get("api_key", "")[:8]
-    base = {"account": name, "uni_id": account.get("uni_id"), "status": "failed", "retryable": False}
+    exchange = exchange_of(account)
+    base = {
+        "account": name, "uni_id": account.get("uni_id"), "exchange": exchange,
+        "status": "failed", "retryable": False,
+    }
     is_entry = action in ENTRY_ACTIONS
     symbol = ticker.upper()
 
-    api = BinanceAPI(account["api_key"], account["secret_key"], base_url=account_futures_base_url(account))
+    # The one gate that applies to EXITS too: a row that can never be traded
+    # on its venue (a MEXC account flagged demo — there is no MEXC testnet).
+    # Nothing was ever opened through us on it, so there is nothing to close.
+    untradeable = tradeable(account)
+    if untradeable:
+        _bump("accounts_skipped")
+        return base | {"status": "skipped", "reason": untradeable}
 
-    lock = symbol_locks.lock_for(account["api_key"], symbol)
+    api = client_for(account)
+
+    lock = symbol_locks.lock_for(account["api_key"], symbol, exchange)
     with lock:
         if is_entry:
             # The exchange itself refuses these credentials from our server
-            # (Binance -2015: key invalid, our IP not allow-listed, or a
-            # permission missing). Opening would burn an API call to be told
-            # no, and the account has a disconnect deadline running.
+            # (Binance -2015 / MEXC 406: key invalid, our IP not allow-listed,
+            # or a permission missing). Opening would burn an API call to be
+            # told no, and the account has a disconnect deadline running.
             #
             # Entry-only, like every other gate here: an EXIT still tries. If
             # the user has since fixed their whitelist the exit goes through
@@ -532,7 +567,7 @@ def _run_account(
                 _bump("accounts_skipped")
                 return base | {"status": "skipped", "reason": "size too small", "sizing": sizing}
 
-            # Stack cap in whole increments: DB-first (batched), Binance fallback.
+            # Stack cap in whole increments: DB-first (batched), venue fallback.
             #
             # Measured in THIS ACCOUNT'S entry size (`quantity`), not the raw
             # base_size — so max_increments means "how many entries may stack",
@@ -552,13 +587,13 @@ def _run_account(
             # DB read covers the whole fan-out in one call, so the depth is free
             # even for an asset with no cap — and recording it makes an entry's
             # position in the stack explainable from the trade_logs row alone.
-            # The per-account Binance fallback is NOT spent just to decorate a
+            # The per-account venue fallback is NOT spent just to decorate a
             # Telegram line: without the batch, only a real cap justifies it.
             current = None
             if open_amounts is not None:
                 current = open_amounts.get(account["api_key"], 0.0)
             elif max_increments > 0:
-                current = _binance_open_amount(api, symbol, position_side)
+                current = api.open_amount(symbol, position_side)
 
             stacks_now = None
             if current is not None:
@@ -602,8 +637,8 @@ def _run_account(
 
             # The order's real executed price beats TradingView's `close` for the
             # snapshot: `price` is what the strategy saw, not what we paid. Still
-            # only a hint — the positions poller overwrites it with Binance's own
-            # entryPrice on the next tick.
+            # only a hint — the positions poller overwrites it with the venue's
+            # own entry price on the next tick.
             fill_price = _avg_fill_price(result.get("result"))
             new_amount = (open_amounts or {}).get(account["api_key"], 0.0) + quantity
             _upsert_position_api(account, symbol, position_side, new_amount, fill_price or price)
@@ -665,7 +700,49 @@ def _run_account(
         }
 
 
-# --- Job (one signal, all accounts) -------------------------------------------
+# --- Job (one signal, all accounts, every exchange) ---------------------------
+
+def _plan_exchange(
+    exchange: str,
+    action: str,
+    symbol: str,
+    uni_filter: Optional[set[str]],
+) -> dict:
+    """What one exchange will do with the signal.
+
+    ``{"reject": reason}`` when an entry fails this venue's asset gate,
+    ``{"empty": True}`` when it has no eligible accounts, otherwise the asset,
+    the accounts and the batched open-amounts read. Each venue is planned on
+    its own so a ticker not configured on MEXC cannot stop Binance trading it.
+    """
+    is_entry = action in ENTRY_ACTIONS
+    asset = get_asset(symbol, exchange)
+    if is_entry:
+        # FAIL CLOSED: entries need an enabled asset row with a base size.
+        if asset is None:
+            return {"reject": "asset_not_configured"}
+        if not asset.get("base_size"):
+            return {"reject": "asset_misconfigured_base_size"}
+        # Directional gate from the asset's side column (ALL | LONG | SHORT).
+        allowed = asset.get("side", "ALL")
+        wanted = "LONG" if action == "BUY" else "SHORT"
+        if allowed not in ("ALL", wanted):
+            return {"reject": f"side_{allowed}_blocks_{action}"}
+
+    accounts = fetch_accounts(exchange=exchange)
+    if uni_filter is not None:
+        accounts = [a for a in accounts if a.get("uni_id") in uni_filter]
+    if not accounts:
+        return {"empty": True}
+
+    open_amounts = None
+    if is_entry:
+        position_side = "LONG" if action == "BUY" else "SHORT"
+        open_amounts = _fetch_open_amounts(symbol, position_side, exchange)  # one batched call
+        if open_amounts is None:
+            log.warning("[%s] engine positions/check unavailable — per-account venue fallback", exchange)
+    return {"asset": asset, "accounts": accounts, "open_amounts": open_amounts}
+
 
 def _process_trade_job(
     action: str,
@@ -676,8 +753,17 @@ def _process_trade_job(
     target_uni_ids: Optional[set[str]] = None,
     is_retry: bool = False,
     announce: bool = True,
+    exchanges: Optional[Sequence[str]] = None,
+    targets: Optional[dict[str, set[str]]] = None,
 ) -> dict:
-    """Runs on the dispatch pool. Fans the signal out to every account.
+    """Runs on the dispatch pool. Fans the signal out to every account on every
+    exchange it applies to, and returns the MERGED summary.
+
+    `exchanges` narrows a live signal to a subset of the enabled venues (the
+    admin manual-trade console); `targets` is the retry queue's
+    {exchange: uni_ids} — a user with accounts on two venues is only ever
+    replayed on the one that failed. `target_uni_ids` is the payload's flat
+    user filter and applies on every venue.
 
     `announce` is whether THIS run owes the public channel a message. A live run
     always does; a retry does only when the live run published nothing (every
@@ -688,40 +774,38 @@ def _process_trade_job(
     started = time.time()
     symbol = ticker.upper()
     is_entry = action in ENTRY_ACTIONS
+    position_side = "LONG" if action in ("BUY", "EXIT_LONG") else "SHORT"
 
-    asset = get_asset(symbol)
-    if is_entry:
-        # FAIL CLOSED: entries need an enabled asset row with a base size.
-        if asset is None:
-            summary = _reject_summary(action, symbol, price, strategy, leverage, "asset_not_configured")
-            _finish_job(summary, [], started)
-            return summary
-        if not asset.get("base_size"):
-            summary = _reject_summary(action, symbol, price, strategy, leverage, "asset_misconfigured_base_size")
-            _finish_job(summary, [], started)
-            return summary
-        # Directional gate from the asset's side column (ALL | LONG | SHORT).
-        allowed = asset.get("side", "ALL")
-        wanted = "LONG" if action == "BUY" else "SHORT"
-        if allowed not in ("ALL", wanted):
-            summary = _reject_summary(action, symbol, price, strategy, leverage, f"side_{allowed}_blocks_{action}")
-            _finish_job(summary, [], started)
-            return summary
+    live = enabled_exchanges()
+    if targets:
+        run = [ex for ex in live if ex in targets]
+    else:
+        run = [ex for ex in live if not exchanges or ex in exchanges]
+    if not run:
+        run = list(live)
 
-    accounts = fetch_accounts()
-    if target_uni_ids is not None:
-        accounts = [a for a in accounts if a.get("uni_id") in target_uni_ids]
-    if not accounts:
-        summary = _reject_summary(action, symbol, price, strategy, leverage, "no_accounts")
-        _finish_job(summary, [], started)
-        return summary
+    plans = {
+        ex: _plan_exchange(ex, action, symbol, targets.get(ex) if targets else target_uni_ids)
+        for ex in run
+    }
+    runnable = {ex: plan for ex, plan in plans.items() if "accounts" in plan}
 
-    open_amounts = None
-    if is_entry:
-        position_side = "LONG" if action == "BUY" else "SHORT"
-        open_amounts = _fetch_open_amounts(symbol, position_side)  # one batched call
-        if open_amounts is None:
-            log.warning("engine positions/check unavailable — per-account Binance fallback")
+    if not runnable:
+        # Nothing ran anywhere: every venue rejected the entry or had no
+        # accounts. One alert for the whole signal, one rejected row per venue.
+        reasons = {ex: plans[ex].get("reject", "no_accounts") for ex in run}
+        distinct = sorted(set(reasons.values()))
+        reason_text = distinct[0] if len(distinct) == 1 else "; ".join(
+            f"{label(ex)}: {reason}" for ex, reason in reasons.items()
+        )
+        log.warning("signal rejected: %s %s (%s)", action, symbol, reason_text)
+        notify.notify_rejected(action, symbol, reason_text, label=labels(run))
+        per_exchange = [
+            _reject_summary(action, symbol, price, strategy, leverage, reasons[ex], ex) for ex in run
+        ]
+        merged = _merge_summaries(action, symbol, price, strategy, leverage, per_exchange, is_retry=is_retry)
+        _finish_job(merged, per_exchange, started)
+        return merged
 
     # Exits announce once, with realized PnL — opened BEFORE the fan-out so no
     # account's deferred bookkeeping can report into a batch that doesn't exist
@@ -731,13 +815,14 @@ def _process_trade_job(
     if not is_entry and announce:
         exit_batch_id = notify.open_exit_batch(action, symbol, price=price)
 
-    futures = {
-        _ACCOUNT_EXECUTOR.submit(
-            _run_account, account, action, symbol, price, leverage, strategy, asset,
-            open_amounts, exit_batch_id,
-        ): account
-        for account in accounts
-    }
+    futures = {}
+    for ex, plan in runnable.items():
+        for account in plan["accounts"]:
+            future = _ACCOUNT_EXECUTOR.submit(
+                _run_account, account, action, symbol, price, leverage, strategy, plan["asset"],
+                plan["open_amounts"], exit_batch_id,
+            )
+            futures[future] = account
     results = []
     for future in as_completed(futures):
         account = futures[future]
@@ -749,6 +834,7 @@ def _process_trade_job(
             results.append({
                 "account": account.get("name"),
                 "uni_id": account.get("uni_id"),
+                "exchange": exchange_of(account),
                 "status": "failed",
                 "error": f"crash: {exc}",
                 "retryable": False,
@@ -761,36 +847,69 @@ def _process_trade_job(
     # The retry decision is made BEFORE the alert, because it decides what the
     # alert says: a red "MANUAL ACTION REQUIRED" for a timeout the queue clears
     # 60s later is how a real alert learns to be ignored.
-    retrying_ids: set[str] = set()
+    retrying: dict[str, set[str]] = {}
     if RETRY_ENABLED and not is_retry:
-        retrying_ids = {
-            r["uni_id"] for r in results
-            if r["status"] == "failed" and r.get("retryable") and r.get("uni_id")
-        }
-        if retrying_ids:
+        for r in results:
+            if r["status"] == "failed" and r.get("retryable") and r.get("uni_id"):
+                retrying.setdefault(r.get("exchange", "binance"), set()).add(r["uni_id"])
+        if retrying:
             from binance_abcd.retry_queue import enqueue_retry  # local import: avoid cycle
 
             enqueue_retry(
-                action, symbol, price, leverage, strategy, sorted(retrying_ids),
+                action, symbol, price, leverage, strategy, retrying,
                 # Nothing filled -> this run published nothing, so the retry
                 # inherits the message.
                 announce=(filled == 0),
             )
 
     # What the channel prints beside an entry, best source first: a real
-    # avgPrice from any account that filled, then the position's own entryPrice
-    # (one extra read, only when Binance withheld every avgPrice), and the
-    # signal price last — which for a manual trade does not exist at all.
+    # avgPrice from any account that filled, then the position's own entry
+    # price (one extra read, only when the venue withheld every avgPrice), and
+    # the signal price last — which for a manual trade does not exist at all.
     fill_price = _mean_fill_price(results)
     if is_entry and announce and not is_retry and filled and fill_price is None:
-        fill_price = _position_entry_price(accounts, results, symbol, position_side)
+        all_accounts = [a for plan in runnable.values() for a in plan["accounts"]]
+        fill_price = _position_entry_price(all_accounts, results, symbol, position_side)
 
+    filled_on = [ex for ex in runnable if any(r.get("exchange") == ex and r["status"] == "filled" for r in results)]
     _notify_job(action, symbol, price, results,
                 filled=filled, failed=failed, skipped=skipped,
                 exit_batch_id=exit_batch_id, is_retry=is_retry,
-                retrying_ids=retrying_ids, fill_price=fill_price)
+                retrying=retrying, fill_price=fill_price,
+                venue_label=labels(filled_on or list(runnable)),
+                name_venues=len(live) > 1)
 
-    summary = {
+    per_exchange = []
+    for ex in run:
+        if ex in runnable:
+            per_exchange.append(_exchange_summary(
+                action, symbol, price, strategy, leverage, ex, is_retry,
+                [r for r in results if r.get("exchange") == ex],
+                target_count=len(runnable[ex]["accounts"]),
+            ))
+        elif "reject" in plans[ex]:
+            # This venue refused the entry while another traded it: its Signal
+            # Log still records why, but nobody is paged for it.
+            log.warning("[%s] signal rejected: %s %s (%s)", ex, action, symbol, plans[ex]["reject"])
+            per_exchange.append(_reject_summary(action, symbol, price, strategy, leverage, plans[ex]["reject"], ex))
+        # A venue with no eligible accounts while another ran is skipped
+        # silently — enabling MEXC before its first account exists must not
+        # write a rejected row per signal.
+
+    merged = _merge_summaries(action, symbol, price, strategy, leverage, per_exchange, is_retry=is_retry)
+    _finish_job(merged, per_exchange, started)
+    return merged
+
+
+def _exchange_summary(
+    action: str, symbol: str, price, strategy, leverage, exchange: str, is_retry: bool,
+    results: list, *, target_count: int,
+) -> dict:
+    """One venue's trade-logs row — today's exact shape plus `exchange`."""
+    filled = sum(1 for r in results if r["status"] == "filled")
+    failed = sum(1 for r in results if r["status"] == "failed")
+    skipped = sum(1 for r in results if r["status"] == "skipped")
+    return {
         "action": action,
         "ticker": symbol,
         "success": filled > 0 and failed == 0,
@@ -798,15 +917,39 @@ def _process_trade_job(
         "strategy": strategy,
         "leverage": leverage,
         "category": "retry" if is_retry else "signal",
-        "target_count": len(accounts),
+        "target_count": target_count,
         "filled": filled,
         "failed": failed,
         "skipped": skipped,
         "details": results,
         "ts": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+        "exchange": exchange,
     }
-    _finish_job(summary, results, started)
-    return summary
+
+
+def _merge_summaries(action: str, symbol: str, price, strategy, leverage, per_exchange: list, *, is_retry: bool) -> dict:
+    """The whole signal as one dict — what the retry queue and the local JSONL
+    read. Counts are summed, `details` concatenated (every row carries its
+    `exchange`), `category` is rejected only when NO venue ran it."""
+    ran = [s for s in per_exchange if s["category"] != "rejected"]
+    filled = sum(s["filled"] for s in per_exchange)
+    failed = sum(s["failed"] for s in per_exchange)
+    return {
+        "action": action,
+        "ticker": symbol,
+        "success": filled > 0 and failed == 0,
+        "price": price,
+        "strategy": strategy,
+        "leverage": leverage,
+        "category": ("retry" if is_retry else "signal") if ran else "rejected",
+        "target_count": sum(s["target_count"] for s in per_exchange),
+        "filled": filled,
+        "failed": failed,
+        "skipped": sum(s["skipped"] for s in per_exchange),
+        "details": [row for s in per_exchange for row in s["details"]],
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+        "exchanges": [s["exchange"] for s in per_exchange],
+    }
 
 
 def _mean_fill_price(results: list) -> Optional[float]:
@@ -839,6 +982,15 @@ def _published_increment(results: list) -> tuple[Optional[int], Optional[int]]:
     return winner, (caps[0] if caps else None)
 
 
+def _account_label(row: dict, name_venues: bool) -> str:
+    """'Live One (MEXC)' when more than one venue is enabled, else the bare name —
+    admin alerts name accounts, and two venues can hold the same account name."""
+    name = row.get("account")
+    if not name_venues:
+        return name
+    return f"{name} ({label(row.get('exchange', 'binance'))})"
+
+
 def _notify_job(
     action: str,
     symbol: str,
@@ -850,8 +1002,10 @@ def _notify_job(
     skipped: int,
     exit_batch_id: Optional[str],
     is_retry: bool,
-    retrying_ids: set[str],
+    retrying: dict[str, set[str]],
     fill_price: Optional[float] = None,
+    venue_label: Optional[str] = None,
+    name_venues: bool = False,
 ) -> None:
     """Telegram fan-out for one finished job. Never raises — a notification
     problem must not fail the trade job that already executed."""
@@ -859,7 +1013,7 @@ def _notify_job(
         if exit_batch_id:
             # Releases the exit message once every closed account reports its PnL
             # (or discards it when nothing actually closed).
-            notify.seal_exit_batch(exit_batch_id, expected=filled)
+            notify.seal_exit_batch(exit_batch_id, expected=filled, label=venue_label)
         elif action in ENTRY_ACTIONS and not is_retry:
             increment, max_increments = _published_increment(results)
             notify.notify_entry(
@@ -867,40 +1021,45 @@ def _notify_job(
                 fill_price=fill_price if fill_price is not None else _mean_fill_price(results),
                 price=price,
                 filled=filled, increment=increment, max_increments=max_increments,
+                label=venue_label,
             )
             # Accounts already at their cap: an add that placed nothing. Admin
             # only, and live runs only — a retry re-walks the same accounts and
             # would repeat the note every 60s.
             notify.notify_max_increments(
                 action, symbol,
-                [(r.get("account"), r.get("increment"), r.get("max_increments"))
+                [(_account_label(r, name_venues), r.get("increment"), r.get("max_increments"))
                  for r in results if r.get("reason") == "maxed sizing"],
             )
         if failed and not is_retry:
             # Two audiences, one fan-out: what the engine is about to re-place
-            # itself, and what will stay broken until someone opens Binance.
+            # itself, and what will stay broken until someone opens the exchange.
             # Sending both under one red headline is what made the real one
             # unreadable. Retry runs stay silent entirely — the queue reports
             # the ending, once, when there is one.
             failures = [r for r in results if r["status"] == "failed"]
+
+            def _queued(r: dict) -> bool:
+                return r.get("uni_id") in retrying.get(r.get("exchange", "binance"), set())
+
             notify.notify_account_failures(
                 action, symbol,
-                [(r.get("account"), r.get("error") or "unknown") for r in failures
-                 if r.get("uni_id") not in retrying_ids],
+                [(_account_label(r, name_venues), r.get("error") or "unknown") for r in failures
+                 if not _queued(r)],
             )
             notify.notify_account_failures(
                 action, symbol,
-                [(r.get("account"), r.get("error") or "unknown") for r in failures
-                 if r.get("uni_id") in retrying_ids],
+                [(_account_label(r, name_venues), r.get("error") or "unknown") for r in failures
+                 if _queued(r)],
                 retrying=True,
             )
     except Exception:  # noqa: BLE001
         log.exception("telegram notification failed for %s %s", action, symbol)
 
 
-def _reject_summary(action: str, symbol: str, price, strategy, leverage, reason: str) -> dict:
-    log.warning("signal rejected: %s %s (%s)", action, symbol, reason)
-    notify.notify_rejected(action, symbol, reason)
+def _reject_summary(action: str, symbol: str, price, strategy, leverage, reason: str, exchange: str) -> dict:
+    """One venue's rejected trade-logs row. Pure — the caller decides whether
+    the rejection is worth an alert (only when NO venue ran the signal)."""
     return {
         "action": action,
         "ticker": symbol,
@@ -913,19 +1072,23 @@ def _reject_summary(action: str, symbol: str, price, strategy, leverage, reason:
         "filled": 0,
         "failed": 0,
         "skipped": 0,
-        "details": [{"reason": reason}],
+        "details": [{"reason": reason, "exchange": exchange}],
         "ts": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+        "exchange": exchange,
     }
 
 
-def _finish_job(summary: dict, results: list, started: float) -> None:
+def _finish_job(merged: dict, per_exchange: list, started: float) -> None:
+    """One JSONL line for the whole signal; one trade-logs POST per venue."""
     _bump("jobs_done")
-    summary_local = summary | {"elapsed_s": round(time.time() - started, 3)}
+    summary_local = merged | {"elapsed_s": round(time.time() - started, 3)}
     _append_trade_log(summary_local)
-    _post_trade_log({k: v for k, v in summary.items()})
+    for summary in per_exchange:
+        _post_trade_log(summary, summary["exchange"])
     log.info(
-        "job done: %s %s -> filled=%s failed=%s skipped=%s in %.2fs",
-        summary["action"], summary["ticker"], summary["filled"], summary["failed"], summary["skipped"],
+        "job done: %s %s [%s] -> filled=%s failed=%s skipped=%s in %.2fs",
+        merged["action"], merged["ticker"], ",".join(merged.get("exchanges") or []),
+        merged["filled"], merged["failed"], merged["skipped"],
         time.time() - started,
     )
 
@@ -952,8 +1115,10 @@ def binance_abcd_webhook():
 
     action = str(data.get("action") or "").upper().strip()
     raw_ticker = str(data.get("symbol") or data.get("ticker") or "").strip()
-    if raw_ticker.upper().startswith("BINANCE:"):
-        raw_ticker = raw_ticker[len("BINANCE:"):]
+    for prefix in _TICKER_PREFIXES:
+        if raw_ticker.upper().startswith(prefix):
+            raw_ticker = raw_ticker[len(prefix):]
+            break
     ticker = raw_ticker.upper()
 
     if action not in VALID_ACTIONS:
@@ -962,6 +1127,11 @@ def binance_abcd_webhook():
     if not ticker:
         _bump("rejected")
         return jsonify({"error": "missing symbol/ticker"}), 400
+
+    exchanges, exchanges_error = _normalize_exchanges(data.get("exchanges"))
+    if exchanges_error:
+        _bump("rejected")
+        return jsonify({"error": exchanges_error}), 400
 
     price: Optional[float] = None
     raw_price = data.get("price", data.get("close"))
@@ -975,9 +1145,15 @@ def binance_abcd_webhook():
     strategy = (str(data.get("strategy")).strip() or None) if data.get("strategy") else None
     target_uni_ids = _normalize_target_uni_ids(data.get("target_uni_ids"))
 
-    _DISPATCH_EXECUTOR.submit(
-        _process_trade_job, action, ticker, price, leverage, strategy, target_uni_ids
-    )
+    if exchanges:
+        _DISPATCH_EXECUTOR.submit(
+            _process_trade_job, action, ticker, price, leverage, strategy, target_uni_ids,
+            exchanges=exchanges,
+        )
+    else:
+        _DISPATCH_EXECUTOR.submit(
+            _process_trade_job, action, ticker, price, leverage, strategy, target_uni_ids
+        )
     _bump("jobs_dispatched")
 
     response = {
@@ -985,6 +1161,7 @@ def binance_abcd_webhook():
         "queued": True,
         "action": action,
         "ticker": ticker,
+        "exchanges": exchanges or list(enabled_exchanges()),
     }
     if price is not None:
         response["price"] = price

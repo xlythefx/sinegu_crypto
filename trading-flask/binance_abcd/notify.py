@@ -53,6 +53,8 @@ _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="tg-notify")
 
 # Exchange shown on every public signal header. Several bots publish into one
 # channel, so the header has to name which exchange actually executed the trade.
+# The default; a fan-out that filled on several venues passes its own label
+# ("Binance + MEXC") through the `label` kwargs below.
 BROKER_LABEL = "Binance"
 
 # (emoji, label) per webhook action, worded as what the engine actually does.
@@ -110,11 +112,11 @@ def _increment_line(increment: Any, max_increments: Any, label: str = "Increment
     return f"{label} ({count}/{limit})" if limit > 0 else f"{label} (#{count})"
 
 
-def _header(action: str, ticker: str, default_emoji: str = "📈") -> str:
+def _header(action: str, ticker: str, default_emoji: str = "📈", label: Optional[str] = None) -> str:
     """The one headline every public signal opens with: what was done, to which
-    ticker, on which exchange."""
-    emoji, label = _ACTION_LABEL.get(action.upper(), (default_emoji, action))
-    return f"{emoji} <b>{label} — {_esc(ticker)} · {_esc(BROKER_LABEL)}</b>"
+    ticker, on which exchange(s)."""
+    emoji, action_label = _ACTION_LABEL.get(action.upper(), (default_emoji, action))
+    return f"{emoji} <b>{action_label} — {_esc(ticker)} · {_esc(label or BROKER_LABEL)}</b>"
 
 
 def _modal(values: list) -> Any:
@@ -178,20 +180,37 @@ def _send_admin(text: str) -> None:
 
 # --- Public: lifecycle --------------------------------------------------------
 
-def notify_startup(account_count: Optional[int] = None, asset_count: Optional[int] = None) -> None:
+def _count_line(emoji: str, noun: str, count: Any, suffix: str) -> Optional[str]:
+    """'👤 3 accounts tradeable (Binance 2 · MEXC 1)' — a plain int reads as
+    before; a {label: count} dict adds the per-venue split."""
+    if count is None:
+        return None
+    if isinstance(count, dict):
+        total = sum(count.values())
+        split = " · ".join(f"{_esc(name)} {n}" for name, n in count.items())
+        tail = f" ({split})" if len(count) > 1 else ""
+    else:
+        total = int(count)
+        tail = ""
+    return f"{emoji} {total} {noun}{'' if total == 1 else 's'} {suffix}{tail}"
+
+
+def notify_startup(account_count: Any = None, asset_count: Any = None) -> None:
     """The engine came up — a deploy, a manual restart, or a crash systemd
     recovered (the unit is ``Restart=always``, so this fires on every one).
 
     Goes to the ADMIN chat, not the public channel, for two reasons: it is an
     ops event nobody following the trades needs, and the counts it carries are
     account data, which by this module's own rule never goes somewhere the
-    whole internet can read.
+    whole internet can read. Counts may be ints or {venue label: int}.
     """
     lines = ["♻️ <b>BINANCE_ABCD engine restarted</b>", "✅ Online and ready"]
-    if account_count is not None:
-        lines.append(f"👤 {account_count} account{'' if account_count == 1 else 's'} tradeable")
-    if asset_count is not None:
-        lines.append(f"🎯 {asset_count} asset{'' if asset_count == 1 else 's'} enabled")
+    for line in (
+        _count_line("👤", "account", account_count, "tradeable"),
+        _count_line("🎯", "asset", asset_count, "enabled"),
+    ):
+        if line:
+            lines.append(line)
     _send_admin("\n".join(lines))
 
 
@@ -206,6 +225,7 @@ def notify_entry(
     filled: int = 0,
     increment: Any = None,
     max_increments: Any = None,
+    label: Optional[str] = None,
 ) -> None:
     """One public message per BUY/SELL signal. Suppressed when nothing filled —
     an all-skipped fan-out (maxed sizing, size too small) is not news.
@@ -214,10 +234,10 @@ def notify_entry(
     executed price. Leverage, strategy and ACCOUNT COUNTS are deliberately NOT
     published — how many customers filled is business information, and the
     channel is public. Operational counts live in the trade log and the admin
-    channel instead."""
+    channel instead. `label` names the venue(s) that filled."""
     if filled <= 0:
         return
-    lines = [_header(action, ticker)]
+    lines = [_header(action, ticker, label=label)]
 
     depth = _increment_line(increment, max_increments)
     if depth:
@@ -234,9 +254,9 @@ def notify_entry(
 class _ExitBatch:
     """One EXIT signal's pending Telegram message, collecting per-account PnL."""
 
-    __slots__ = ("action", "ticker", "price", "reports", "sealed", "expected", "timer")
+    __slots__ = ("action", "ticker", "price", "reports", "sealed", "expected", "timer", "label")
 
-    def __init__(self, action: str, ticker: str, price: Any) -> None:
+    def __init__(self, action: str, ticker: str, price: Any, label: Optional[str] = None) -> None:
         self.action = action
         self.ticker = ticker
         self.price = price
@@ -244,19 +264,22 @@ class _ExitBatch:
         self.sealed = False
         self.expected = 0
         self.timer: Optional[threading.Timer] = None
+        # Venue label for the header; the fan-out sets it at seal time, once it
+        # knows which venues actually closed something.
+        self.label = label
 
 
 _batches: dict[str, _ExitBatch] = {}
 _batch_lock = threading.Lock()
 
 
-def open_exit_batch(action: str, ticker: str, *, price: Any = None) -> Optional[str]:
+def open_exit_batch(action: str, ticker: str, *, price: Any = None, label: Optional[str] = None) -> Optional[str]:
     """Start collecting an exit's per-account PnL. Call BEFORE the fan-out so no
     report can arrive before the batch exists. None when notifications are off."""
     if not _enabled():
         return None
     batch_id = uuid.uuid4().hex
-    batch = _ExitBatch(action, ticker, price)
+    batch = _ExitBatch(action, ticker, price, label)
     with _batch_lock:
         _batches[batch_id] = batch
     timer = threading.Timer(hooks.TELEGRAM_PNL_WAIT_SECONDS, _flush_exit_batch, args=(batch_id,))
@@ -301,9 +324,11 @@ def report_exit_fill(
         _flush_exit_batch(batch_id)
 
 
-def seal_exit_batch(batch_id: Optional[str], *, expected: int) -> None:
+def seal_exit_batch(batch_id: Optional[str], *, expected: int, label: Optional[str] = None) -> None:
     """Declare how many accounts will report. Discards the batch (no message)
-    when nothing actually closed; flushes immediately if all reports are in."""
+    when nothing actually closed; flushes immediately if all reports are in.
+    `label` (the venues that closed) overrides whatever the batch was opened
+    with — it is only known once the fan-out has run."""
     if not batch_id:
         return
     with _batch_lock:
@@ -312,6 +337,8 @@ def seal_exit_batch(batch_id: Optional[str], *, expected: int) -> None:
             return
         batch.sealed = True
         batch.expected = expected
+        if label:
+            batch.label = label
         if expected <= 0:
             _batches.pop(batch_id, None)
             if batch.timer:
@@ -399,7 +426,7 @@ def _flush_exit_batch(batch_id: str) -> None:
     if batch.timer:
         batch.timer.cancel()
 
-    lines = [_header(batch.action, batch.ticker, default_emoji="🏁")]
+    lines = [_header(batch.action, batch.ticker, default_emoji="🏁", label=batch.label)]
 
     # How deep the stack was that just closed — the mirror of the entry line.
     depth = _increment_line(
@@ -549,10 +576,12 @@ def notify_report(kind: str, summary: dict) -> None:
 
 # --- Admin: operational alerts ------------------------------------------------
 
-def notify_rejected(action: str, ticker: str, reason: str) -> None:
-    """A signal never reached the fan-out (asset not configured, side gate, no accounts)."""
+def notify_rejected(action: str, ticker: str, reason: str, label: Optional[str] = None) -> None:
+    """A signal never reached the fan-out on ANY venue (asset not configured,
+    side gate, no accounts). `label` names the venue(s) it was rejected on."""
+    venue = f" · {_esc(label)}" if label else ""
     _send_admin(
-        f"⚠️ <b>Signal rejected</b> — {_esc(action)} {_esc(ticker)}\n"
+        f"⚠️ <b>Signal rejected</b> — {_esc(action)} {_esc(ticker)}{venue}\n"
         f"Reason: <code>{_esc(reason)}</code> — no order placed."
     )
 

@@ -6,6 +6,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 import binance_abcd.routes.webhook as webhook
+import binance_abcd.exchanges as exchanges
 
 
 def test_summary_counts_and_success_flag(fake_accounts, fake_assets):
@@ -24,11 +25,11 @@ def test_summary_counts_and_success_flag(fake_accounts, fake_assets):
     posted = []
     with (
         patch.object(webhook, "fetch_accounts", return_value=fake_accounts),
-        patch.object(webhook, "get_asset", side_effect=lambda t: fake_assets.get(t.upper())),
-        patch.object(webhook, "BinanceAPI", side_effect=_fake_api),
+        patch.object(webhook, "get_asset", side_effect=lambda t, *a, **k: fake_assets.get(t.upper())),
+        patch.object(exchanges, "BinanceAPI", side_effect=_fake_api),
         patch.object(webhook, "handle_entry", side_effect=entry),
         patch.object(webhook.engine_client, "get_json", return_value={"success": True, "positions": []}),
-        patch.object(webhook.engine_client, "post_json", side_effect=lambda p, payload: posted.append((p, payload)) or {"success": True}),
+        patch.object(webhook.engine_client, "post_json", side_effect=lambda p, payload, **kw: posted.append((p, payload)) or {"success": True}),
     ):
         summary = webhook._process_trade_job("BUY", "BTCUSDT", 60000.0, 20, "VWMA", is_retry=False)
 
@@ -57,7 +58,7 @@ def test_local_jsonl_log_is_appended(fake_accounts, fake_assets, tmp_path):
     with (
         patch.object(webhook, "TRADES_LOG", log_file),
         patch.object(webhook, "fetch_accounts", return_value=[]),
-        patch.object(webhook, "get_asset", side_effect=lambda t: fake_assets.get(t.upper())),
+        patch.object(webhook, "get_asset", side_effect=lambda t, *a, **k: fake_assets.get(t.upper())),
         patch.object(webhook.engine_client, "post_json", return_value={"success": True}),
     ):
         webhook._process_trade_job("BUY", "BTCUSDT", None, None, None)
@@ -75,7 +76,7 @@ def test_rejected_signal_posts_rejection_log(fake_accounts, fake_assets):
     with (
         patch.object(webhook, "fetch_accounts", return_value=fake_accounts),
         patch.object(webhook, "get_asset", return_value=None),
-        patch.object(webhook.engine_client, "post_json", side_effect=lambda p, payload: posted.append((p, payload)) or {"success": True}),
+        patch.object(webhook.engine_client, "post_json", side_effect=lambda p, payload, **kw: posted.append((p, payload)) or {"success": True}),
     ):
         summary = webhook._process_trade_job("BUY", "NOPEUSDT", None, None, None)
 

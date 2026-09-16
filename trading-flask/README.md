@@ -51,11 +51,65 @@ which fails fast before any order exists. An entry whose execution status is
 unknown is never replayed — that is how one signal becomes two positions.
 
 **Who may trade is decided by the backend, not here.** `GET
-/api/engine/binance/accounts` returns only accounts that are enabled, not
+/api/engine/{exchange}/accounts` returns only accounts that are enabled, not
 soft-deleted, not sandbox, and whose owner isn't suspended. The billing gate
 is `php artisan engine:mark-overdue` (scheduled daily): past-due invoices flip
 `binance_accounts.enabled=0`, payment (`InvoiceService::settle`) flips it back.
 The engine caches the list for 90s, so a cutoff lands within minutes.
+
+## Exchanges
+
+One process trades every venue listed in `BINANCE_ABCD_EXCHANGES` (CSV;
+default `binance`, add `mexc` to switch MEXC on). **One webhook, every
+venue**: a signal is planned per exchange — its own `assets` row (by
+`assets.broker`: `Binance` / `MEXC`), its own accounts from
+`/engine/{exchange}/accounts`, its own batched `positions/check` — then fanned
+out to all of them at once. Every bookkeeping write goes back to the venue the
+account came from (`/engine/{exchange}/positions/upsert`, `past-positions/sync`,
+`fees`, `key-status`, …) and each venue gets its own `trade_logs` row. Telegram
+gets one merged message whose header names the venues that filled
+(`Binance + MEXC`).
+
+The core (`trading_handler`, the webhook fan-out, the pollers) never sees a
+venue's field names. It talks to an `ExchangeClient` (`exchange_api.py`) in one
+vocabulary — tickers, **coins**, LONG/SHORT, SHORT negative, `None` for a failed
+read and `[]` for an empty one — and `exchanges.client_for(account)` hands it
+the right adapter: `binance_adapter.BinanceAdapter` over the untouched
+`BinanceAPI`, or `mexc_adapter.MexcAdapter` over `mexc_api.MexcFuturesAPI`.
+Adding a venue is one adapter plus its tests; nothing in the fan-out changes.
+
+MEXC particulars, all absorbed in the adapter:
+
+- **Contracts, not coins.** `assets.base_size` stays in coins on every venue;
+  the adapter divides by the contract's `contractSize` on the way out
+  (`coins_to_vol`: floor to `volScale`, refuse under `minVol`) and multiplies
+  back on every read, so `position_amt`, the stack cap and the closed-increment
+  count mean the same thing on MEXC as on Binance.
+- **Leverage travels on the order** (`LEVERAGE_PER_ORDER`): MEXC requires it
+  when opening and rejects a value that differs from an existing position's
+  (7004), so a stacked entry reuses the position's own leverage / margin mode /
+  `positionId`; a fresh one takes the signal's, then the account's own setting
+  for the contract, then `MEXC_DEFAULT_LEVERAGE` — or is refused.
+- **Business errors arrive as HTTP 200 with `success:false`.** The client
+  judges the envelope: 500/501/513/9999 → transient, 510/2037 → rate-limited
+  (no process-wide gate — MEXC limits are per key), 604/801 → maintenance (a
+  rejection: 604 is also what a key not whitelisted for API trading gets),
+  401/402/406/602/701–704 → credential → the same `key_status` flow as Binance
+  `-2015`, on `/engine/mexc/key-status`.
+- **No testnet.** A MEXC row flagged `demo` is refused for entries **and**
+  exits (`no testnet on mexc`) and never polled — nothing was ever opened
+  through us on it, and its only host is the real one.
+- **Closes and fee receipts** come from `fetch_mexc_history` (own poller,
+  `MEXC_HISTORY_FETCH_INTERVAL`, own watermarks
+  `out/last_mexc_{closes,fees}_sync.json`): `history_orders` (filled, all
+  contracts) → per-contract `order_deals` → `funding_records` (both position
+  types). Closing sides 2/4 become past-position rows; every deal, entries
+  included, becomes a fill receipt.
+
+Rolling MEXC out: deploy with `EXCHANGES=binance` (the deploy script does not
+mirror that key — see `MIRRORED_ENGINE_ENV_KEYS`), run the real-key smoke
+checks (`python mexc_smoke.py`, credentials from the environment only), then set `BINANCE_ABCD_EXCHANGES=binance,mexc` on
+the box once the first `mexc_accounts` row exists.
 
 ## Setup
 
@@ -241,12 +295,12 @@ python engine_launcher.py            # or: Tkinter start/stop GUI with live log 
 ## Test trades
 
 ```bash
-python -m pytest tests/ -q     # 42 tests, no network
+python -m pytest tests/ -q     # 305 tests, no network
 python webhook_tester.py       # Tkinter GUI — local or prod target
 ```
 
 The GUI builds the exact TradingView payload (`secret, action, symbol, price,
-leverage, strategy, target_uni_ids`) and shows the raw response. A red banner
+leverage, strategy, target_uni_ids, exchanges`) and shows the raw response. A red banner
 warns when the target isn't localhost — **live accounts mean real trades**.
 Safe path: connect an account with `demo=1` (Binance futures *testnet* keys
 from https://testnet.binancefuture.com) — the engine routes it to
@@ -257,13 +311,21 @@ from https://testnet.binancefuture.com) — the engine routes it to
 ```json
 {"secret": "...", "action": "BUY|SELL|EXIT_LONG|EXIT_SHORT",
  "symbol": "BTCUSDT", "price": "60000", "leverage": "25",
- "strategy": "VWMA-Reversion", "target_uni_ids": "uuid1,uuid2"}
+ "strategy": "VWMA-Reversion", "target_uni_ids": "uuid1,uuid2",
+ "exchanges": "mexc"}
 ```
 
-Entries **fail closed**: the ticker must be an enabled `assets` row with a
-`base_size`; the asset's `side` column (ALL|LONG|SHORT) gates direction; the
-stack cap is `max_increments`. **Exits skip every gate and always close what
-exists** — a position must stay closable whatever an account's state.
+`symbol` may carry a `BINANCE:` or `MEXC:` chart prefix (stripped).
+`exchanges` (CSV or list) is optional and restricts the fan-out to a subset of
+the enabled venues — for the admin manual-trade console, never for a
+TradingView alert; a venue that is unknown or not enabled on the box is a 400,
+not a silent no-op. The ACK echoes the venues the signal will run on.
+
+Entries **fail closed**: the ticker must be an enabled `assets` row (for that
+venue's `broker`) with a `base_size`; the asset's `side` column
+(ALL|LONG|SHORT) gates direction; the stack cap is `max_increments`. **Exits
+skip every gate and always close what exists** — a position must stay closable
+whatever an account's state.
 
 **A failed read is never "nothing there."** `get_positions_v3` and
 `get_user_trades` return `None` when the request fails and `[]` only when the

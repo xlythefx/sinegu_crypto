@@ -329,7 +329,43 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   `X-Engine-Secret` header). Who may trade is decided THERE: accounts endpoint
   filters enabled + non-sandbox + non-suspended owners; `php artisan
   engine:mark-overdue` (scheduled daily) disables accounts with past-due
-  invoices; `InvoiceService::settle` re-enables on payment.
+  invoices; `InvoiceService::settle` re-enables on payment. `{exchange}` is
+  resolved to its own four tables by `App\Services\Exchanges\ExchangeSchema`
+  (`binance` and `mexc` today; `bybit` still answers 400) — the ONE map from
+  an exchange name to `{x}_accounts/positions/pastpositions/transactions`,
+  its asset broker label and its taker fee rate. `BinanceAccount` and
+  `MexcAccount` share the abstract `ExchangeAccount`.
+- **Exchanges (2026-09-16): one process, one webhook, every venue in
+  `BINANCE_ABCD_EXCHANGES`** (CSV, default `binance`; add `mexc` to turn MEXC
+  on — deliberately NOT mirrored to prod by the deploy script, because
+  enabling a venue for customers is a decision made on the box after the
+  real-key smoke checks in `trading-flask/mexc_smoke.py`). A signal is planned
+  PER exchange (its own `assets` row by `assets.broker`, its own accounts,
+  its own `positions/check`), fanned out to all at once, every write routed
+  back to `/engine/{account.exchange}/…`, one `trade_logs` row per venue, one
+  merged Telegram message labelled with the venues that filled. The core
+  (`trading_handler`, the fan-out, the pollers) speaks ONE vocabulary —
+  tickers, **coins**, LONG/SHORT with SHORT negative, `None` = failed read —
+  through the `ExchangeClient` protocol (`exchange_api.py`);
+  `exchanges.client_for(account)` picks `BinanceAdapter` (over the untouched
+  `BinanceAPI`) or `MexcAdapter` (over `mexc_api.MexcFuturesAPI`). Retries
+  are keyed `{exchange: uni_ids}` so a user with accounts on both venues is
+  only replayed where it failed. MEXC rules that live in the adapter: sizes
+  are CONTRACTS on the wire (`coins_to_vol`: ÷ `contractSize`, floor to
+  `volScale`, refuse < `minVol`; × back on every read); leverage goes ON the
+  order (a stacked entry reuses the position's own leverage/openType/
+  positionId — 7004 otherwise; a fresh one takes the signal's, then the
+  account's setting, then `MEXC_DEFAULT_LEVERAGE`, else refused); business
+  errors are HTTP 200 + `success:false`, judged by code (510/2037 rate limit,
+  604/801 maintenance = rejection, 401/402/406/602/701–704 credential →
+  `key_status` on `/engine/mexc/key-status`); **there is no MEXC testnet**, so
+  a `mexc` row with `demo=1` is refused for entries AND exits and never
+  polled. Closes + fee receipts come from `fetch_mexc_history` (history_orders
+  → order_deals → funding_records, own watermarks). Still unverified against
+  a live key — see the smoke script's docstring: whether `order/create`
+  answers 604 for a non-whitelisted key, the sign/basis of deal `profit`
+  (`mexc_adapter.DEAL_PROFIT_IS_NET`) and `funding`, and the history
+  endpoints' time-param spelling (`mexc_api.HISTORY_START_PARAM`).
 - **Cache freshness is PUSHED, never polled — and the engine is never
   restarted for a data change.** The engine TTL-caches its account and asset
   lists (90 s, `binance_abcd/cache.py`); Laravel's `App\Services\EngineCache`

@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import binance_abcd.routes.webhook as webhook
+import binance_abcd.exchanges as exchanges
 
 
 def _entry_ok(api, symbol, side, quantity, price):
@@ -29,8 +30,8 @@ def _run_job(fake_accounts, fake_assets, action="BUY", ticker="BTCUSDT", entry=N
 
     with (
         patch.object(webhook, "fetch_accounts", return_value=fake_accounts),
-        patch.object(webhook, "get_asset", side_effect=lambda t: fake_assets.get(t.upper())),
-        patch.object(webhook, "BinanceAPI", side_effect=_fake_api),
+        patch.object(webhook, "get_asset", side_effect=lambda t, *a, **k: fake_assets.get(t.upper())),
+        patch.object(exchanges, "BinanceAPI", side_effect=_fake_api),
         patch.object(webhook, "handle_entry", side_effect=entry or _entry_ok) as entry_mock,
         patch.object(
             webhook, "handle_exit",
@@ -114,8 +115,8 @@ def test_stack_cap_skips_maxed_account(fake_accounts, fake_assets):
     ]}
     with (
         patch.object(webhook, "fetch_accounts", return_value=fake_accounts),
-        patch.object(webhook, "get_asset", side_effect=lambda t: fake_assets.get(t.upper())),
-        patch.object(webhook, "BinanceAPI", MagicMock()),
+        patch.object(webhook, "get_asset", side_effect=lambda t, *a, **k: fake_assets.get(t.upper())),
+        patch.object(exchanges, "BinanceAPI", MagicMock()),
         patch.object(webhook, "handle_entry", side_effect=_entry_ok) as entry_mock,
         patch.object(webhook.engine_client, "get_json", return_value=open_positions),
         patch.object(webhook.engine_client, "post_json", return_value={"success": True}),
@@ -226,8 +227,8 @@ def test_maxed_sizing_skip_records_the_stack_state(fake_accounts, fake_assets):
     ]}
     with (
         patch.object(webhook, "fetch_accounts", return_value=fake_accounts),
-        patch.object(webhook, "get_asset", side_effect=lambda t: fake_assets.get(t.upper())),
-        patch.object(webhook, "BinanceAPI", MagicMock()),
+        patch.object(webhook, "get_asset", side_effect=lambda t, *a, **k: fake_assets.get(t.upper())),
+        patch.object(exchanges, "BinanceAPI", MagicMock()),
         patch.object(webhook, "handle_entry", side_effect=_entry_ok),
         patch.object(webhook.engine_client, "get_json", return_value=open_positions),
         patch.object(webhook.engine_client, "post_json", return_value={"success": True}),
@@ -306,8 +307,8 @@ def test_the_stack_cap_scales_with_the_account(fake_accounts, fake_assets):
     ]}
     with (
         patch.object(webhook, "fetch_accounts", return_value=fake_accounts[:1]),
-        patch.object(webhook, "get_asset", side_effect=lambda t: fake_assets.get(t.upper())),
-        patch.object(webhook, "BinanceAPI", MagicMock()),
+        patch.object(webhook, "get_asset", side_effect=lambda t, *a, **k: fake_assets.get(t.upper())),
+        patch.object(exchanges, "BinanceAPI", MagicMock()),
         patch.object(webhook, "handle_entry", side_effect=_entry_ok) as entry_mock,
         patch.object(webhook.engine_client, "get_json", return_value=open_positions),
         patch.object(webhook.engine_client, "post_json", return_value={"success": True}),
@@ -328,8 +329,8 @@ def test_a_scaled_account_still_hits_its_own_cap(fake_accounts, fake_assets):
     ]}
     with (
         patch.object(webhook, "fetch_accounts", return_value=fake_accounts[:1]),
-        patch.object(webhook, "get_asset", side_effect=lambda t: fake_assets.get(t.upper())),
-        patch.object(webhook, "BinanceAPI", MagicMock()),
+        patch.object(webhook, "get_asset", side_effect=lambda t, *a, **k: fake_assets.get(t.upper())),
+        patch.object(exchanges, "BinanceAPI", MagicMock()),
         patch.object(webhook, "handle_entry", side_effect=_entry_ok),
         patch.object(webhook.engine_client, "get_json", return_value=open_positions),
         patch.object(webhook.engine_client, "post_json", return_value={"success": True}),
@@ -355,8 +356,8 @@ def test_a_fill_carries_the_stack_depth_it_reached(fake_accounts, fake_assets):
     ]}
     with (
         patch.object(webhook, "fetch_accounts", return_value=fake_accounts[:1]),
-        patch.object(webhook, "get_asset", side_effect=lambda t: fake_assets.get(t.upper())),
-        patch.object(webhook, "BinanceAPI", MagicMock()),
+        patch.object(webhook, "get_asset", side_effect=lambda t, *a, **k: fake_assets.get(t.upper())),
+        patch.object(exchanges, "BinanceAPI", MagicMock()),
         patch.object(webhook, "handle_entry", side_effect=_entry_ok),
         patch.object(webhook.engine_client, "get_json", return_value=open_positions),
         patch.object(webhook.engine_client, "post_json", return_value={"success": True}),
@@ -377,8 +378,8 @@ def test_depth_is_recorded_even_when_the_asset_has_no_cap(fake_accounts, fake_as
     ]}
     with (
         patch.object(webhook, "fetch_accounts", return_value=fake_accounts[:1]),
-        patch.object(webhook, "get_asset", side_effect=lambda t: fake_assets.get(t.upper())),
-        patch.object(webhook, "BinanceAPI", MagicMock()),
+        patch.object(webhook, "get_asset", side_effect=lambda t, *a, **k: fake_assets.get(t.upper())),
+        patch.object(exchanges, "BinanceAPI", MagicMock()),
         patch.object(webhook, "handle_entry", side_effect=_entry_ok),
         patch.object(webhook.engine_client, "get_json", return_value=open_positions),
         patch.object(webhook.engine_client, "post_json", return_value={"success": True}),
@@ -444,8 +445,8 @@ def test_the_cap_scales_with_the_balance_but_the_entry_COUNT_does_not(
         }]}
         with (
             patch.object(webhook, "fetch_accounts", return_value=fake_accounts[:1]),
-            patch.object(webhook, "get_asset", side_effect=lambda t: fake_assets.get(t.upper())),
-            patch.object(webhook, "BinanceAPI", MagicMock()),
+            patch.object(webhook, "get_asset", side_effect=lambda t, *a, **k: fake_assets.get(t.upper())),
+            patch.object(exchanges, "BinanceAPI", MagicMock()),
             patch.object(webhook, "handle_entry", side_effect=_entry_ok),
             patch.object(webhook.engine_client, "get_json", return_value=positions),
             patch.object(webhook.engine_client, "post_json", return_value={"success": True}),

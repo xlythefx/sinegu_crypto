@@ -19,7 +19,9 @@ import binance_abcd.retry_queue as retry_queue
 import binance_abcd.routes.webhook as webhook
 import binance_abcd.trading_handler as trading_handler
 from binance_abcd import notify
+from binance_abcd.binance_adapter import BinanceAdapter
 from binance_abcd.binance_api import BinanceAPI, error_summary
+import binance_abcd.exchanges as exchanges
 
 # Binance ships -1007 as HTTP 408. The body is the half that matters: the order
 # may have executed, which is why the close is re-read before it is re-placed.
@@ -75,7 +77,7 @@ def _api(positions: list, orders: list) -> MagicMock:
 
 def _exit(api: MagicMock):
     with patch.object(trading_handler, "ensure_position_mode", return_value=None):
-        return trading_handler.handle_exit(api, "LTCUSDT", "LONG", 100.0)
+        return trading_handler.handle_exit(BinanceAdapter(api), "LTCUSDT", "LONG", 100.0)
 
 
 # --- The transport verdict: failed on the way vs refused ----------------------
@@ -167,8 +169,8 @@ def _run_exit_job(fake_accounts, fake_assets, exit_result):
     returns (summary, notify_account_failures mock)."""
     with (
         patch.object(webhook, "fetch_accounts", return_value=fake_accounts),
-        patch.object(webhook, "get_asset", side_effect=lambda t: fake_assets.get(t.upper())),
-        patch.object(webhook, "BinanceAPI", side_effect=lambda *a, **kw: MagicMock()),
+        patch.object(webhook, "get_asset", side_effect=lambda t, *a, **k: fake_assets.get(t.upper())),
+        patch.object(exchanges, "BinanceAPI", side_effect=lambda *a, **kw: MagicMock()),
         patch.object(webhook, "handle_exit", side_effect=lambda api, t, ps, p: dict(exit_result)),
         patch.object(webhook.engine_client, "get_json", return_value={"success": True, "positions": []}),
         patch.object(webhook.engine_client, "post_json", return_value={"success": True}),
@@ -221,8 +223,8 @@ def test_a_retried_exit_still_reaches_the_channel(fake_accounts, fake_assets):
     nowhere."""
     with (
         patch.object(webhook, "fetch_accounts", return_value=fake_accounts[:1]),
-        patch.object(webhook, "get_asset", side_effect=lambda t: fake_assets.get(t.upper())),
-        patch.object(webhook, "BinanceAPI", side_effect=lambda *a, **kw: MagicMock()),
+        patch.object(webhook, "get_asset", side_effect=lambda t, *a, **k: fake_assets.get(t.upper())),
+        patch.object(exchanges, "BinanceAPI", side_effect=lambda *a, **kw: MagicMock()),
         patch.object(webhook, "handle_exit",
                      side_effect=lambda api, t, ps, p: {"result": {"orderId": 3}, "closed_quantity": 0.5,
                                                         "entry_price": 100.0}),
@@ -239,8 +241,8 @@ def test_a_retried_exit_still_reaches_the_channel(fake_accounts, fake_assets):
 def test_a_retry_never_announces_a_signal_the_live_run_already_published(fake_accounts, fake_assets):
     with (
         patch.object(webhook, "fetch_accounts", return_value=fake_accounts[:1]),
-        patch.object(webhook, "get_asset", side_effect=lambda t: fake_assets.get(t.upper())),
-        patch.object(webhook, "BinanceAPI", side_effect=lambda *a, **kw: MagicMock()),
+        patch.object(webhook, "get_asset", side_effect=lambda t, *a, **k: fake_assets.get(t.upper())),
+        patch.object(exchanges, "BinanceAPI", side_effect=lambda *a, **kw: MagicMock()),
         patch.object(webhook, "handle_exit",
                      side_effect=lambda api, t, ps, p: {"result": {"orderId": 3}, "closed_quantity": 0.5,
                                                         "entry_price": 100.0}),
@@ -257,7 +259,7 @@ def test_a_retry_never_announces_a_signal_the_live_run_already_published(fake_ac
 # --- The ending: the queue is the only thing that can declare it manual -------
 
 def test_exhausting_the_retries_raises_the_red_alert():
-    retry_queue.enqueue_retry("EXIT_LONG", "LTCUSDT", None, None, None, ["u1"])
+    retry_queue.enqueue_retry("EXIT_LONG", "LTCUSDT", None, None, None, {"binance": ["u1"]})
     job = retry_queue._QUEUE.pop(0)
     job.attempts = retry_queue.RETRY_MAX_ATTEMPTS - 1
 
@@ -276,7 +278,7 @@ def test_exhausting_the_retries_raises_the_red_alert():
 def test_a_retry_that_comes_back_rejected_is_reported_not_dropped():
     """It stops being retryable, so it leaves the queue — and used to leave in
     silence, with the position still open."""
-    retry_queue.enqueue_retry("EXIT_LONG", "LTCUSDT", None, None, None, ["u1"])
+    retry_queue.enqueue_retry("EXIT_LONG", "LTCUSDT", None, None, None, {"binance": ["u1"]})
     job = retry_queue._QUEUE.pop(0)
 
     summary = {"details": [{"uni_id": "u1", "status": "failed", "retryable": False}]}
@@ -292,7 +294,7 @@ def test_a_retry_that_comes_back_rejected_is_reported_not_dropped():
 
 
 def test_announce_is_cleared_once_a_run_fills():
-    retry_queue.enqueue_retry("EXIT_LONG", "LTCUSDT", None, None, None, ["u1", "u2"], announce=True)
+    retry_queue.enqueue_retry("EXIT_LONG", "LTCUSDT", None, None, None, {"binance": ["u1", "u2"]}, announce=True)
     job = retry_queue._QUEUE.pop(0)
 
     summary = {"details": [

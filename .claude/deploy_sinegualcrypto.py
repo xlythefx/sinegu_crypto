@@ -1320,6 +1320,11 @@ MIRRORED_ENGINE_ENV_KEYS = (
     "BINANCE_ABCD_REPORT_DAILY_AT",
     "BINANCE_ABCD_REPORT_WEEKLY_AT",
     "BINANCE_ABCD_REPORT_MONTHLY_AT",
+    # MEXC trading rules — how a NEW position is margined and what leverage an
+    # entry falls back to. Product decisions like the recap timetable: prod
+    # opening cross-margin positions while local opens isolated is a mistake.
+    "BINANCE_ABCD_MEXC_OPEN_TYPE",
+    "BINANCE_ABCD_MEXC_DEFAULT_LEVERAGE",
 )
 
 # Deliberately NOT mirrored — these describe the BOX, not the product, and
@@ -1327,6 +1332,13 @@ MIRRORED_ENGINE_ENV_KEYS = (
 #   BINANCE_ABCD_ENGINE_API_BASE   local points at WAMP, prod at nginx :80
 #   BINANCE_ABCD_ENGINE_SECRET     must match prod api/.env, not the dev one
 #   BINANCE_ABCD_FLASK_PORT / _RUN_POLLERS / _SYNC_POSITION_MODE_ON_STARTUP
+#   BINANCE_ABCD_EXCHANGES         which venues prod TRADES. Turning MEXC on for
+#                                  real customers is a decision someone makes on
+#                                  the box (after the real-key smoke checks), not
+#                                  a side effect of a local .env that has it on
+#                                  for development.
+#   BINANCE_ABCD_MEXC_RECV_WINDOW  clock tolerance — a property of the box's NTP
+#   BINANCE_ABCD_MEXC_API_BASE     the default is right everywhere
 
 
 def _sync_mirrored_engine_env(ssh) -> None:

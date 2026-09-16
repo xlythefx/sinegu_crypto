@@ -15,6 +15,8 @@ import pytest
 import binance_abcd.fetch_positions as fetch_positions
 import binance_abcd.routes.webhook as webhook
 import binance_abcd.trading_handler as trading_handler
+import binance_abcd.exchanges as exchanges
+from binance_abcd.binance_adapter import BinanceAdapter
 from binance_abcd.binance_api import BinanceAPI
 
 
@@ -63,7 +65,7 @@ def test_failed_position_read_is_skipped_never_synced_as_empty():
 
     with (
         patch.object(fetch_positions, "fetch_accounts", return_value=[_account()]),
-        patch.object(fetch_positions, "BinanceAPI", return_value=api),
+        patch.object(exchanges, "BinanceAPI", return_value=api),
         patch.object(fetch_positions.engine_client, "post_json") as post,
     ):
         assert fetch_positions.fetch_and_save() is None
@@ -82,7 +84,7 @@ def test_one_failed_read_does_not_block_the_accounts_that_answered():
     with (
         patch.object(fetch_positions, "fetch_accounts",
                      return_value=[_account("Good", "k-good"), _account("Bad", "k-bad")]),
-        patch.object(fetch_positions, "BinanceAPI", side_effect=lambda *a, **kw: next(apis)),
+        patch.object(exchanges, "BinanceAPI", side_effect=lambda *a, **kw: next(apis)),
         patch.object(fetch_positions.engine_client, "post_json", return_value={"success": True}) as post,
     ):
         fetch_positions.fetch_and_save()
@@ -99,7 +101,7 @@ def test_a_genuinely_flat_account_still_syncs_empty():
 
     with (
         patch.object(fetch_positions, "fetch_accounts", return_value=[_account()]),
-        patch.object(fetch_positions, "BinanceAPI", return_value=api),
+        patch.object(exchanges, "BinanceAPI", return_value=api),
         patch.object(fetch_positions.engine_client, "post_json", return_value={"success": True}) as post,
     ):
         fetch_positions.fetch_and_save()
@@ -112,7 +114,7 @@ def test_a_genuinely_flat_account_still_syncs_empty():
 def test_open_amount_read_failure_is_none_not_zero():
     api = MagicMock()
     api.get_positions_v3.return_value = None
-    assert webhook._binance_open_amount(api, "BTCUSDT", "LONG") is None
+    assert BinanceAdapter(api).open_amount("BTCUSDT", "LONG") is None
 
 
 def test_open_amount_is_zero_when_the_side_is_genuinely_flat():
@@ -120,7 +122,7 @@ def test_open_amount_is_zero_when_the_side_is_genuinely_flat():
     api.get_positions_v3.return_value = [
         {"symbol": "BTCUSDT", "positionAmt": "0.5", "positionSide": "SHORT"}
     ]
-    assert webhook._binance_open_amount(api, "BTCUSDT", "LONG") == 0.0
+    assert BinanceAdapter(api).open_amount("BTCUSDT", "LONG") == 0.0
 
 
 def test_entry_skips_when_a_cap_is_set_but_the_depth_cannot_be_read(fake_assets):
@@ -134,7 +136,7 @@ def test_entry_skips_when_a_cap_is_set_but_the_depth_cannot_be_read(fake_assets)
     api.get_positions_v3.return_value = None  # both sources unavailable
 
     with (
-        patch.object(webhook, "BinanceAPI", return_value=api),
+        patch.object(exchanges, "BinanceAPI", return_value=api),
         patch.object(webhook, "handle_entry") as entry,
     ):
         result = webhook._run_account(
@@ -160,7 +162,7 @@ def test_fill_summary_retries_until_binance_indexes_the_fill(monkeypatch):
         [{"price": "100", "qty": "2", "realizedPnl": "5"}],
     ]
 
-    pnl, exit_price = trading_handler.get_order_fill_summary(api, "BTCUSDT", 7)
+    pnl, exit_price = trading_handler.get_order_fill_summary(BinanceAdapter(api), "BTCUSDT", 7)
 
     assert api.get_user_trades.call_count == 3
     assert pnl == pytest.approx(5.0)
@@ -174,7 +176,7 @@ def test_fill_summary_gives_up_quietly_after_the_last_attempt(monkeypatch):
     api = MagicMock()
     api.get_user_trades.return_value = []
 
-    assert trading_handler.get_order_fill_summary(api, "BTCUSDT", 7) == (None, None)
+    assert trading_handler.get_order_fill_summary(BinanceAdapter(api), "BTCUSDT", 7) == (None, None)
     assert api.get_user_trades.call_count == 2
 
 
@@ -183,7 +185,7 @@ def test_fill_summary_does_not_retry_when_it_succeeds_first_time(monkeypatch):
     api = MagicMock()
     api.get_user_trades.return_value = [{"price": "10", "qty": "1", "realizedPnl": "-1"}]
 
-    trading_handler.get_order_fill_summary(api, "BTCUSDT", 7)
+    trading_handler.get_order_fill_summary(BinanceAdapter(api), "BTCUSDT", 7)
     assert api.get_user_trades.call_count == 1
 
 

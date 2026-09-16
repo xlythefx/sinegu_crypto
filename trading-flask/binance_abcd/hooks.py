@@ -61,13 +61,55 @@ WEBHOOK_SECRET = _env_str("WEBHOOK_SECRET")
 ENGINE_API_BASE = _env_str("ENGINE_API_BASE", "http://127.0.0.1:8000/api").rstrip("/")
 ENGINE_SECRET = _env_str("ENGINE_SECRET")
 ENGINE_API_TIMEOUT = _env_float("ENGINE_API_TIMEOUT", 10.0)
-ENGINE_EXCHANGE = "binance"  # route segment: /engine/binance/...
+ENGINE_EXCHANGE = "binance"  # default route segment: /engine/binance/...
+
+# --- Exchanges ----------------------------------------------------------------
+# Which exchanges this process trades and polls, as a CSV of route segments.
+# `binance` alone leaves every code path exactly as it was before MEXC existed;
+# adding `mexc` is what switches the second exchange on. Deliberately NOT
+# mirrored to prod by the deploy script — enabling an exchange there is a
+# decision someone makes on the box, not a side effect of a local .env.
+KNOWN_EXCHANGES = ("binance", "mexc")
+EXCHANGES = tuple(dict.fromkeys(
+    e.strip().lower() for e in _env_str("EXCHANGES", "binance").split(",") if e.strip()
+))
+if not EXCHANGES:
+    raise RuntimeError(f"{_PREFIX}EXCHANGES is empty — list at least one of {', '.join(KNOWN_EXCHANGES)}")
+for _exchange in EXCHANGES:
+    if _exchange not in KNOWN_EXCHANGES:
+        raise RuntimeError(
+            f"{_PREFIX}EXCHANGES names unknown exchange '{_exchange}' (known: {', '.join(KNOWN_EXCHANGES)})"
+        )
 
 # --- Binance futures ----------------------------------------------------------
 BINANCE_API_BASE = _env_str("BINANCE_API_BASE", "https://fapi.binance.com").rstrip("/")
 # Accounts flagged demo=1 route here instead (Binance futures testnet).
 BINANCE_TESTNET_API_BASE = _env_str("TESTNET_API_BASE", "https://demo-fapi.binance.com").rstrip("/")
 API_TIMEOUT = _env_float("API_TIMEOUT", 15.0)
+
+# --- MEXC USDT-M futures ------------------------------------------------------
+# One host: MEXC has NO futures testnet, so a MEXC account flagged demo=1 is
+# refused outright rather than routed anywhere (exchanges.tradeable).
+MEXC_API_BASE = _env_str("MEXC_API_BASE", "https://api.mexc.com").rstrip("/")
+# Seconds of clock skew MEXC tolerates on Request-Time (server default 10, max
+# 60, above 30 not recommended). Sent as the Recv-Window header when > 0.
+MEXC_RECV_WINDOW = _env_int("MEXC_RECV_WINDOW", 20)
+# Margin mode for NEW positions: 1 isolated, 2 cross. An existing position's
+# own openType is reused when stacking onto it.
+MEXC_OPEN_TYPE = _env_int("MEXC_OPEN_TYPE", 1)
+# MEXC requires `leverage` on every opening order. The signal's leverage wins,
+# then the account's own setting for the contract; this is the last resort.
+# 0 = no fallback: an entry with no leverage from either source is refused.
+MEXC_DEFAULT_LEVERAGE = _env_int("MEXC_DEFAULT_LEVERAGE", 0)
+# Contract specs (contractSize, volScale, minVol) change rarely; one public
+# call fills the whole map.
+MEXC_CONTRACTS_CACHE_TTL = _env_float("MEXC_CONTRACTS_CACHE_TTL", 3600.0)
+# Fair price is shared across every account holding the same symbol in one
+# positions tick — a few seconds of cache turns N calls into one.
+MEXC_FAIR_PRICE_CACHE_TTL = _env_float("MEXC_FAIR_PRICE_CACHE_TTL", 15.0)
+# Closed trades + fee receipts for MEXC accounts (fetch_mexc_history), the
+# MEXC twin of PAST_POSITIONS_FETCH_INTERVAL.
+MEXC_HISTORY_FETCH_INTERVAL = _env_float("MEXC_HISTORY_FETCH_INTERVAL", 180.0)
 
 # hedge (dual-side) or oneway; verified per account at startup, cached after.
 POSITION_MODE = _env_str("POSITION_MODE", "hedge").strip().lower()
@@ -201,9 +243,11 @@ def engine_headers() -> dict[str, str]:
     return {"X-Engine-Secret": ENGINE_SECRET, "Accept": "application/json"}
 
 
-def engine_url(path: str) -> str:
-    """Absolute URL for an engine endpoint path like 'accounts'."""
-    return f"{ENGINE_API_BASE}/engine/{ENGINE_EXCHANGE}/{path.lstrip('/')}"
+def engine_url(path: str, exchange: str | None = None) -> str:
+    """Absolute URL for an engine endpoint path like 'accounts', under the
+    given exchange's route segment (/engine/{exchange}/...). Defaults to
+    Binance so every pre-MEXC caller keeps its URL."""
+    return f"{ENGINE_API_BASE}/engine/{exchange or ENGINE_EXCHANGE}/{path.lstrip('/')}"
 
 
 def public_url(path: str) -> str:
