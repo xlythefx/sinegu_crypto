@@ -40,7 +40,7 @@ from binance_abcd.hooks import (
     OUT_DIR,
     REFERENCE_BALANCE,
     RETRY_ENABLED,
-    WEBHOOK_PATH,
+    WEBHOOK_PATHS,
     WEBHOOK_SECRET,
 )
 from binance_abcd.trading_handler import (
@@ -1093,10 +1093,13 @@ def _finish_job(merged: dict, per_exchange: list, started: float) -> None:
     )
 
 
-# --- The route ----------------------------------------------------------------
+# --- The routes: one public path per venue -----------------------------------
 
-@webhook_bp.route(WEBHOOK_PATH, methods=["POST"])
-def binance_abcd_webhook():
+def _handle_webhook(exchange: str):
+    """The trade path for ONE venue. The path a TradingView alert posts to is
+    what decides which exchange's accounts the signal trades — so each venue
+    gets its own alert(s), nothing in the payload names it, and an alert can
+    never fan out to a venue its author did not point it at."""
     _bump("received")
 
     data = request.get_json(silent=True)
@@ -1113,6 +1116,12 @@ def binance_abcd_webhook():
         _bump("rejected")
         return jsonify({"error": "Unauthorized"}), 403
 
+    # After the secret gate, so an unauthenticated probe learns nothing about
+    # which venues this box runs.
+    if exchange not in enabled_exchanges():
+        _bump("rejected")
+        return jsonify({"error": f"{exchange} is not enabled on this engine (BINANCE_ABCD_EXCHANGES)"}), 400
+
     action = str(data.get("action") or "").upper().strip()
     raw_ticker = str(data.get("symbol") or data.get("ticker") or "").strip()
     for prefix in _TICKER_PREFIXES:
@@ -1128,10 +1137,16 @@ def binance_abcd_webhook():
         _bump("rejected")
         return jsonify({"error": "missing symbol/ticker"}), 400
 
-    exchanges, exchanges_error = _normalize_exchanges(data.get("exchanges"))
+    # A payload may still name the venue (the admin console does); it just has
+    # to agree with the path it was posted to. A mismatch is a misconfigured
+    # alert, and trading the wrong venue silently is the worst answer to that.
+    named, exchanges_error = _normalize_exchanges(data.get("exchanges"))
     if exchanges_error:
         _bump("rejected")
         return jsonify({"error": exchanges_error}), 400
+    if named and named != [exchange]:
+        _bump("rejected")
+        return jsonify({"error": f"this webhook trades {exchange} only (payload named {', '.join(named)})"}), 400
 
     price: Optional[float] = None
     raw_price = data.get("price", data.get("close"))
@@ -1145,15 +1160,10 @@ def binance_abcd_webhook():
     strategy = (str(data.get("strategy")).strip() or None) if data.get("strategy") else None
     target_uni_ids = _normalize_target_uni_ids(data.get("target_uni_ids"))
 
-    if exchanges:
-        _DISPATCH_EXECUTOR.submit(
-            _process_trade_job, action, ticker, price, leverage, strategy, target_uni_ids,
-            exchanges=exchanges,
-        )
-    else:
-        _DISPATCH_EXECUTOR.submit(
-            _process_trade_job, action, ticker, price, leverage, strategy, target_uni_ids
-        )
+    _DISPATCH_EXECUTOR.submit(
+        _process_trade_job, action, ticker, price, leverage, strategy, target_uni_ids,
+        exchanges=[exchange],
+    )
     _bump("jobs_dispatched")
 
     response = {
@@ -1161,7 +1171,8 @@ def binance_abcd_webhook():
         "queued": True,
         "action": action,
         "ticker": ticker,
-        "exchanges": exchanges or list(enabled_exchanges()),
+        "exchange": exchange,
+        "exchanges": [exchange],
     }
     if price is not None:
         response["price"] = price
@@ -1170,3 +1181,24 @@ def binance_abcd_webhook():
     if leverage is not None:
         response["leverage"] = leverage
     return jsonify(response), 200
+
+
+def _register_webhooks() -> None:
+    """One Flask endpoint per venue, at that venue's path. Every known path is
+    registered even when the venue is off, so a disabled venue answers a clear
+    400 rather than nginx's 404 — the two look identical from TradingView."""
+    for venue, path in WEBHOOK_PATHS.items():
+        webhook_bp.add_url_rule(
+            path,
+            endpoint=f"{venue}_abcd_webhook",
+            view_func=(lambda v: (lambda: _handle_webhook(v)))(venue),
+            methods=["POST"],
+        )
+
+
+_register_webhooks()
+
+
+def binance_abcd_webhook():
+    """Kept for callers that import the original view by name."""
+    return _handle_webhook("binance")

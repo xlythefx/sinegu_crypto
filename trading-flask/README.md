@@ -15,7 +15,8 @@ pool executes the trades in the background.
 ## Architecture
 
 ```
-TradingView ──POST──> /binance_abcd_webhook  (validate + enqueue, 200 in ~2ms)
+TradingView ──POST──> /{venue}_abcd_webhook  (validate + enqueue, 200 in ~2ms)
+                       binance_abcd_webhook → Binance accounts, mexc_abcd_webhook → MEXC
                             │ dispatch pool (8)
                             ▼
                      _process_trade_job ── one batched positions/check call
@@ -60,15 +61,19 @@ The engine caches the list for 90s, so a cutoff lands within minutes.
 ## Exchanges
 
 One process trades every venue listed in `BINANCE_ABCD_EXCHANGES` (CSV;
-default `binance`, add `mexc` to switch MEXC on). **One webhook, every
-venue**: a signal is planned per exchange — its own `assets` row (by
-`assets.broker`: `Binance` / `MEXC`), its own accounts from
-`/engine/{exchange}/accounts`, its own batched `positions/check` — then fanned
-out to all of them at once. Every bookkeeping write goes back to the venue the
-account came from (`/engine/{exchange}/positions/upsert`, `past-positions/sync`,
-`fees`, `key-status`, …) and each venue gets its own `trade_logs` row. Telegram
-gets one merged message whose header names the venues that filled
-(`Binance + MEXC`).
+default `binance`, add `mexc` to switch MEXC on). **One webhook path per
+venue** (`hooks.WEBHOOK_PATHS`): `/binance_abcd_webhook` trades Binance
+accounts, `/mexc_abcd_webhook` trades MEXC accounts, so each venue has its own
+TradingView alert(s) and the path — not the payload — decides where a signal
+goes. A payload `exchanges` field is accepted only when it agrees with the
+path; a venue not in `EXCHANGES` answers 400 on its path (after the secret
+gate). The job resolves that venue's `assets` row (by `assets.broker`:
+`Binance` / `MEXC`), its accounts from `/engine/{exchange}/accounts` and its
+batched `positions/check`, then fans out. Every bookkeeping write goes back to
+the venue the account came from (`/engine/{exchange}/positions/upsert`,
+`past-positions/sync`, `fees`, `key-status`, …) and each venue gets its own
+`trade_logs` row and its own Telegram header label. nginx proxies exactly the
+paths in the deploy script's `ENGINE_WEBHOOK_PATHS`.
 
 The core (`trading_handler`, the webhook fan-out, the pollers) never sees a
 venue's field names. It talks to an `ExchangeClient` (`exchange_api.py`) in one
@@ -322,10 +327,10 @@ from https://testnet.binancefuture.com) — the engine routes it to
 ```
 
 `symbol` may carry a `BINANCE:` or `MEXC:` chart prefix (stripped).
-`exchanges` (CSV or list) is optional and restricts the fan-out to a subset of
-the enabled venues — for the admin manual-trade console, never for a
-TradingView alert; a venue that is unknown or not enabled on the box is a 400,
-not a silent no-op. The ACK echoes the venues the signal will run on.
+The URL path decides the venue (`/binance_abcd_webhook`, `/mexc_abcd_webhook`).
+`exchanges` (CSV or list) is optional and must agree with the path — the admin
+manual-trade console sends it as a guard; a mismatch, an unknown venue or one
+not enabled on the box is a 400, not a silent no-op. The ACK echoes the venue.
 
 Entries **fail closed**: the ticker must be an enabled `assets` row (for that
 venue's `broker`) with a `base_size`; the asset's `side` column
@@ -396,7 +401,7 @@ Both decisions are recorded per account in the signal's `trade_logs` row
 `/var/www/sinegualerts/engine`, builds the venv, generates the server-side `.env`
 once (webhook secret shared with the local `.env`, `ENGINE_SECRET` shared with
 `api/.env`), installs the `sinegualerts-engine` systemd unit, and rewrites the
-nginx vhost: `location = /binance_abcd_webhook` proxied to `127.0.0.1:5010`,
+nginx vhost: `location = /binance_abcd_webhook` and `location = /mexc_abcd_webhook` proxied to `127.0.0.1:5010`,
 `/api/engine/` restricted to localhost (it serves plaintext account secrets).
 TradingView posts to `https://pixel-alpha.com/binance_abcd_webhook` (the old
 `http://2.24.139.176/...` still answers — the bare IP is not redirected, and the

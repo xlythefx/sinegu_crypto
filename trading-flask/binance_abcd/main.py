@@ -183,8 +183,9 @@ def main() -> None:
     set_rate_limit_alert_hook(_on_rate_limit)
 
     log.info(
-        "starting %s on port %s (webhook %s, exchanges %s)",
-        hooks.SERVICE_NAME, hooks.FLASK_PORT, hooks.WEBHOOK_PATH, ",".join(enabled_exchanges()),
+        "starting %s on port %s (exchanges %s; webhooks %s)",
+        hooks.SERVICE_NAME, hooks.FLASK_PORT, ",".join(enabled_exchanges()),
+        ", ".join(f"{ex}={hooks.WEBHOOK_PATHS[ex]}" for ex in enabled_exchanges()),
     )
     account_counts, asset_counts = startup_checks()
     notify.notify_startup(account_counts, asset_counts)

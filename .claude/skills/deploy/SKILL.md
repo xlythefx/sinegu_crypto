@@ -64,7 +64,8 @@ key auth is set up (recommended — then disable password auth in sshd).
 ├── api/                  Laravel sinegutrade-api — nginx /api -> api/public via php8.3-fpm
 ├── engine/               trading-flask binance_abcd — systemd `sinegualerts-engine`,
 │                         waitress on 127.0.0.1:5010; nginx proxies ONLY
-│                         /binance_abcd_webhook (health/admin stay local-only)
+│                         /binance_abcd_webhook + /mexc_abcd_webhook — one path per
+│                         venue (health/admin stay local-only)
 └── _backups/<ts>/        dashboard/api/engine tar.gz + api.env + engine.env (newest 10 kept)
 ```
 
@@ -86,7 +87,7 @@ Four things about this setup are load-bearing:
   critically, it is what the trading engine talks to — `BINANCE_ABCD_ENGINE_API_BASE`
   is `http://127.0.0.1/api`. A blanket http→https redirect would 301 every engine
   call and cut the loop. Only the **domain's** `:80` block redirects, and even it
-  exempts `/binance_abcd_webhook` (a 301 on a POST may drop the body) and
+  exempts the engine webhook paths (a 301 on a POST may drop the body) and
   `/.well-known/acme-challenge/` (renewals arrive over :80).
 - **`certonly --webroot`, never `--nginx`.** The nginx plugin rewrites the vhost to
   insert its own `:443` block, and `deploy-nginx` rewrites that file from a template

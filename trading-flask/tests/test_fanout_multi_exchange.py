@@ -300,21 +300,45 @@ def test_symbol_locks_do_not_collide_across_venues():
 
 # --- The route -----------------------------------------------------------------------------
 
-def test_the_route_accepts_an_exchanges_field_and_rejects_unknown_venues(client):
-    payload = {"secret": "test-webhook-secret", "action": "BUY", "symbol": "MEXC:btcusdt", "exchanges": "mexc"}
+def test_each_venue_has_its_own_webhook_path(client):
+    payload = {"secret": "test-webhook-secret", "action": "BUY", "symbol": "MEXC:btcusdt"}
     with patch.object(webhook._DISPATCH_EXECUTOR, "submit") as submit:
-        response = client.post("/binance_abcd_webhook", json=payload)
+        response = client.post("/mexc_abcd_webhook", json=payload)
     assert response.status_code == 200
     body = response.get_json()
-    assert body["ticker"] == "BTCUSDT" and body["exchanges"] == ["mexc"]
+    assert body["ticker"] == "BTCUSDT" and body["exchange"] == "mexc" and body["exchanges"] == ["mexc"]
     assert submit.call_args.kwargs == {"exchanges": ["mexc"]}
 
     with patch.object(webhook._DISPATCH_EXECUTOR, "submit") as submit:
-        response = client.post("/binance_abcd_webhook", json=payload | {"exchanges": ["bybit"]})
-    assert response.status_code == 400 and "bybit" in response.get_json()["error"]
+        response = client.post("/binance_abcd_webhook", json=payload)
+    assert response.get_json()["exchanges"] == ["binance"]
+    assert submit.call_args.kwargs == {"exchanges": ["binance"]}
+
+
+def test_a_payload_naming_another_venue_than_its_path_is_refused(client):
+    payload = {"secret": "test-webhook-secret", "action": "BUY", "symbol": "BTCUSDT", "exchanges": "mexc"}
+    with patch.object(webhook._DISPATCH_EXECUTOR, "submit") as submit:
+        response = client.post("/binance_abcd_webhook", json=payload)
+    assert response.status_code == 400 and "binance only" in response.get_json()["error"]
     submit.assert_not_called()
 
     with patch.object(webhook._DISPATCH_EXECUTOR, "submit") as submit:
-        response = client.post("/binance_abcd_webhook", json={k: v for k, v in payload.items() if k != "exchanges"})
-    assert response.get_json()["exchanges"] == ["binance", "mexc"]
-    assert submit.call_args.kwargs == {}
+        response = client.post("/mexc_abcd_webhook", json=payload)   # agrees with the path
+    assert response.status_code == 200
+    submit.assert_called_once()
+
+    with patch.object(webhook._DISPATCH_EXECUTOR, "submit") as submit:
+        response = client.post("/mexc_abcd_webhook", json=payload | {"exchanges": ["bybit"]})
+    assert response.status_code == 400 and "bybit" in response.get_json()["error"]
+    submit.assert_not_called()
+
+
+def test_a_disabled_venues_webhook_answers_400_after_the_secret_gate(client, monkeypatch):
+    monkeypatch.setattr(hooks, "EXCHANGES", ("binance",))
+    payload = {"secret": "test-webhook-secret", "action": "BUY", "symbol": "BTCUSDT"}
+    with patch.object(webhook._DISPATCH_EXECUTOR, "submit") as submit:
+        response = client.post("/mexc_abcd_webhook", json=payload)
+    assert response.status_code == 400 and "not enabled" in response.get_json()["error"]
+    submit.assert_not_called()
+    # Without the secret the answer is the same 403 as anywhere else — no venue leak.
+    assert client.post("/mexc_abcd_webhook", json={"action": "BUY", "symbol": "BTCUSDT"}).status_code == 403

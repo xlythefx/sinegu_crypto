@@ -51,7 +51,15 @@ def _env_bool(name: str, default: bool) -> bool:
 
 # --- Service identity ---------------------------------------------------------
 SERVICE_NAME = "binance-abcd"
-WEBHOOK_PATH = "/binance_abcd_webhook"
+# One public webhook PER VENUE: the path a TradingView alert posts to decides
+# which exchange's accounts the signal trades, so each venue gets its own
+# alert(s) and nothing in the payload has to name it. nginx proxies exactly
+# these paths (deploy script) — adding a venue here means adding it there.
+WEBHOOK_PATHS = {
+    "binance": "/binance_abcd_webhook",
+    "mexc": "/mexc_abcd_webhook",
+}
+WEBHOOK_PATH = WEBHOOK_PATHS["binance"]  # the original path; launcher/tester default
 FLASK_PORT = _env_int("FLASK_PORT", 5010)
 
 # TradingView -> webhook shared secret. Required; compared with hmac.compare_digest.

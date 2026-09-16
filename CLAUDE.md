@@ -313,9 +313,10 @@ trading engine in `trading-flask/` (package `binance_abcd/` — freshly written 
 this product; NOT a copy of the read-only reference projects above, and not the
 old vendored snapshot either, which remains recoverable at commit `2e6e884`).
 
-- **What it does:** TradingView posts to `POST /binance_abcd_webhook` (port 5010);
-  the webhook fast-ACKs (~2 ms) and a bounded worker pool fans the signal out to
-  every tradeable account. Pollers push balances/positions/past-positions/
+- **What it does:** TradingView posts to `POST /binance_abcd_webhook` or
+  `POST /mexc_abcd_webhook` (port 5010) — **one path per venue, the path decides
+  which exchange's accounts trade**; the webhook fast-ACKs (~2 ms) and a bounded
+  worker pool fans the signal out to every tradeable account on that venue. Pollers push balances/positions/past-positions/
   transfers back into `sinegu_crypto`. Full docs in `trading-flask/README.md`.
 - **Signal log:** every processed signal appends one row to the unified
   `trade_logs` table (exchange discriminator, same pattern as `invoices`) via
@@ -344,15 +345,21 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   an exchange name to `{x}_accounts/positions/pastpositions/transactions`,
   its asset broker label and its taker fee rate. `BinanceAccount` and
   `MexcAccount` share the abstract `ExchangeAccount`.
-- **Exchanges (2026-09-16): one process, one webhook, every venue in
-  `BINANCE_ABCD_EXCHANGES`** (CSV, default `binance`; add `mexc` to turn MEXC
-  on — deliberately NOT mirrored to prod by the deploy script, because
-  enabling a venue for customers is a decision made on the box after the
-  real-key smoke checks in `trading-flask/mexc_smoke.py`). A signal is planned
-  PER exchange (its own `assets` row by `assets.broker`, its own accounts,
-  its own `positions/check`), fanned out to all at once, every write routed
-  back to `/engine/{account.exchange}/…`, one `trade_logs` row per venue, one
-  merged Telegram message labelled with the venues that filled. The core
+- **Exchanges (2026-09-16): one process, one WEBHOOK PATH PER VENUE, every
+  venue in `BINANCE_ABCD_EXCHANGES`** (CSV, default `binance`; add `mexc` to
+  turn MEXC on — deliberately NOT mirrored to prod by the deploy script,
+  because enabling a venue for customers is a decision made on the box; prod
+  has had it on since 2026-09-17). `hooks.WEBHOOK_PATHS` maps
+  `binance → /binance_abcd_webhook`, `mexc → /mexc_abcd_webhook`; the path a
+  TradingView alert posts to is what decides which exchange's accounts the
+  signal trades, so each venue has its own alert(s) and a payload `exchanges`
+  field is accepted only when it agrees with the path (a disabled venue's
+  path answers 400 after the secret gate). nginx proxies exactly those paths
+  (`ENGINE_WEBHOOK_PATHS` in the deploy script — adding a venue means adding it
+  there too, or nginx 404s it before the engine sees it). The job resolves
+  that venue's `assets` row (by `assets.broker`), its accounts and its
+  `positions/check`, every write routed back to `/engine/{account.exchange}/…`,
+  one `trade_logs` row per venue, one Telegram message labelled with the venue. The core
   (`trading_handler`, the fan-out, the pollers) speaks ONE vocabulary —
   tickers, **coins**, LONG/SHORT with SHORT negative, `None` = failed read —
   through the `ExchangeClient` protocol (`exchange_api.py`);
@@ -727,10 +734,17 @@ for the overlay's `position: fixed` and trap it inside.
 
 ### TradingView alert setup
 
-Paste this into a TradingView alert's **Message** box. Webhook URL: prod is
-**`https://pixel-alpha.com/binance_abcd_webhook`** (nginx proxies that one path to
-waitress on 127.0.0.1:5010; `/health` and `/admin/*` stay local-only), locally
-`http://127.0.0.1:5010/binance_abcd_webhook`. The older
+Paste this into a TradingView alert's **Message** box. **One webhook URL per
+exchange — the URL decides which venue's accounts trade**, so a strategy that
+should run on both needs one alert per URL with the same message:
+
+| Venue | Prod webhook URL | Local |
+|---|---|---|
+| Binance | **`https://pixel-alpha.com/binance_abcd_webhook`** | `http://127.0.0.1:5010/binance_abcd_webhook` |
+| MEXC | **`https://pixel-alpha.com/mexc_abcd_webhook`** | `http://127.0.0.1:5010/mexc_abcd_webhook` |
+
+Same secret on both (one engine). nginx proxies exactly these paths to
+waitress on 127.0.0.1:5010; `/health` and `/admin/*` stay local-only. The older
 `http://2.24.139.176/binance_abcd_webhook` still works — the bare IP is not
 redirected — so existing alerts keep firing; move them to https when convenient.
 The engine authenticates on the `secret` field alone — there is no signature header.

@@ -473,14 +473,10 @@ location @laravel {
     fastcgi_read_timeout 120;
 }
 
-# ---- trading engine webhook (waitress on 127.0.0.1:5010) ----
-# ONLY the webhook path is public; /health and /admin/* stay local-only.
-location = /binance_abcd_webhook {
-    proxy_pass http://127.0.0.1:5010;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_read_timeout 30;
-}
+# ---- trading engine webhooks (waitress on 127.0.0.1:5010) ----
+# ONLY the webhook paths are public — one per venue, the path decides which
+# exchange's accounts a signal trades; /health and /admin/* stay local-only.
+__ENGINE_WEBHOOK_LOCATIONS__
 
 # React SPA fallback.
 #
@@ -512,6 +508,34 @@ gzip on;
 gzip_types text/css application/javascript application/json image/svg+xml;
 gzip_min_length 1024;
 """
+
+# One public webhook path per venue (must match trading-flask/binance_abcd/hooks.py
+# WEBHOOK_PATHS). nginx proxies exactly these to waitress; a venue added to the
+# engine without a line here answers 404 from nginx, never reaching the engine.
+ENGINE_WEBHOOK_PATHS = ("/binance_abcd_webhook", "/mexc_abcd_webhook")
+
+
+def _engine_webhook_locations(indent: int = 0) -> str:
+    """The `location = <path>` blocks proxying the engine webhooks, one per
+    venue. Plain text either way it is used — interpolated into the vhost
+    f-string as a VALUE, so its braces are never re-parsed."""
+    pad = " " * indent
+    lb, rb = "{", "}"
+    lines = [
+        "location = {path} {lb}",
+        "    proxy_pass http://127.0.0.1:5010;",
+        "    proxy_set_header Host $host;",
+        "    proxy_set_header X-Real-IP $remote_addr;",
+        "    proxy_read_timeout 30;",
+        "{rb}",
+    ]
+    newline = chr(10)
+    blocks = [
+        newline.join(pad + line.format(path=path, lb=lb, rb=rb) for line in lines)
+        for path in ENGINE_WEBHOOK_PATHS
+    ]
+    return (newline * 2).join(blocks)
+
 
 # Served from the dashboard root on :80 for BOTH issuance and every renewal, so
 # certbot never has to stop nginx or edit this vhost. Kept out of the redirect
@@ -552,13 +576,8 @@ server {{
 
 {NGINX_ACME_LOCATION}
     # POSTs are not redirected — a 301 on a POST is allowed to drop the body, and
-    # this path is a live TradingView webhook. Serve it here instead of bouncing.
-    location = /binance_abcd_webhook {{
-        proxy_pass http://127.0.0.1:5010;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_read_timeout 30;
-    }}
+    # these paths are live TradingView webhooks. Serve them here instead of bouncing.
+{_engine_webhook_locations(indent=4)}
 
     location / {{
         return 301 https://{DOMAIN}$request_uri;
@@ -716,7 +735,7 @@ def do_deploy_nginx(ssh) -> None:
     sh(ssh, "mkdir -p /etc/nginx/snippets /etc/nginx/conf.d")
     with _current(ssh).open_sftp() as sftp:
         with sftp.open(NGINX_SNIPPET_PATH, "w") as f:
-            f.write(NGINX_APP_SNIPPET)
+            f.write(NGINX_APP_SNIPPET.replace("__ENGINE_WEBHOOK_LOCATIONS__", _engine_webhook_locations()))
         with sftp.open("/etc/nginx/sites-available/sinegualerts", "w") as f:
             f.write(_nginx_vhost(tls))
     sh(ssh, "rm -f /etc/nginx/sites-enabled/default && "
@@ -1734,12 +1753,13 @@ def do_verify_engine(ssh) -> None:
     _, out, _ = sh(ssh, "sleep 3; curl -s -m 8 http://127.0.0.1:5010/health | head -c 300", check=False)
     log(f"  /health: {out.strip()[:300] or '(no response yet)'}")
 
-    log("  public webhook gate (empty POST should be rejected, not 404) ...")
-    _, out, _ = sh(ssh, "curl -s -m 8 -o /dev/null -w '%{http_code}' -X POST "
-                        "-H 'Content-Type: application/json' -d '{}' "
-                        "http://127.0.0.1/binance_abcd_webhook", check=False)
-    code = out.strip()
-    log(f"    -> {code} {'OK (secret gate)' if code == '403' else '<-- expected 403'}")
+    log("  public webhook gates (empty POST should be rejected, not 404) ...")
+    for path in ENGINE_WEBHOOK_PATHS:
+        _, out, _ = sh(ssh, "curl -s -m 8 -o /dev/null -w '%{http_code}' -X POST "
+                            "-H 'Content-Type: application/json' -d '{}' "
+                            f"http://127.0.0.1{path}", check=False)
+        code = out.strip()
+        log(f"    {path} -> {code} {'OK (secret gate)' if code == '403' else '<-- expected 403'}")
 
     log("  engine -> Laravel auth (accounts endpoint with engine secret) ...")
     _, out, _ = sh(ssh, f"S=$(grep -E '^BINANCE_ABCD_ENGINE_SECRET=' {REMOTE_ENGINE}/.env | cut -d= -f2-); "
