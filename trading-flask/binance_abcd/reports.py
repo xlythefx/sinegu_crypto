@@ -28,12 +28,17 @@ about what the public channel is allowed to say.
 
 Two details worth keeping:
 
-* **Windows are UTC dates, because the series is.** ``closed_at`` is written in
-  UTC by ``fetch_past_positions`` and Laravel runs on UTC, so a "day" in the
-  series is a UTC day. A report always covers whole, COMPLETED UTC days — never
-  the one in progress — so a figure is never revised after it is published.
-  At the default 11:30 Asia/Manila (03:30 UTC) the day just ended 3.5 hours
-  earlier, which is comfortably past the past-positions poller's backfill.
+* **Windows are calendar days in the SERIES' timezone, ending TODAY.** The
+  endpoint buckets its days in a configured reporting zone (Asia/Manila on
+  prod) and says which in ``payload["timezone"]``; the window is cut in that
+  same calendar, so "16 Sep" in the channel is the same set of trades as
+  "16 Sep" on the landing page. The daily is the local day the schedule fires
+  in — a recap at 23:30 is "today", which is what the audience asked for —
+  the weekly is the seven days ending today, the monthly runs from the 1st.
+  The trade-off is stated, not hidden: a close AFTER the firing time lands on
+  the site and in the weekly/monthly, but no daily ever names it. Fire as late
+  in the day as the past-positions backfill (~3 min) and the endpoint's 5-min
+  cache allow; ``23:55`` is about the latest that is still honest.
 * **The period return is CHAINED, not summed** — identical to how the endpoint
   computes its own total. It is therefore a time-weighted return: a deposit
   landing mid-week cannot inflate it, because each day's return was already
@@ -198,19 +203,34 @@ def next_fire(schedule: Schedule, now: datetime) -> Optional[datetime]:
 
 # --- Window + summary -------------------------------------------------------------
 
-def period_window(schedule: Schedule, fire_utc: datetime) -> tuple[str, str]:
-    """The inclusive UTC date range a firing covers, as ISO strings.
+def series_timezone(payload: dict):
+    """The tzinfo the track record's days are bucketed in, from its own
+    ``timezone`` field. UTC when the field is missing (an API older than this
+    engine) or names a zone this box cannot resolve — the same calendar the
+    endpoint used before it published one, so the window still lines up."""
+    name = str(payload.get("timezone") or "").strip()
+    if not name:
+        return timezone.utc
+    try:
+        from zoneinfo import ZoneInfo
 
-    It always ends on the last COMPLETED UTC day — the day containing `fire_utc`
-    is still in progress, and a published percentage must never be revised.
+        return ZoneInfo(name)
+    except Exception as exc:  # noqa: BLE001 - includes ZoneInfoNotFoundError
+        log.warning("[reports] series timezone %r unusable (%s) — assuming UTC", name, exc)
+        return timezone.utc
 
-    The consequence for a ``monthly last`` schedule is deliberate and visible in
-    the message: firing on the last day of the month at 11:30 Manila is 03:30
-    UTC that same day, so the month's final ~20 hours fall outside the window
-    and the recap reads e.g. "1 - 29 Sep". Move the schedule to ``1 HH:MM`` to
-    report whole calendar months instead.
+
+def period_window(schedule: Schedule, fire: datetime, tzinfo=timezone.utc) -> tuple[str, str]:
+    """The inclusive date range a firing covers, as ISO strings, in the
+    calendar the series is bucketed in (`tzinfo`, from :func:`series_timezone`).
+
+    Every window ends on the day the schedule fires in — TODAY, locally. The
+    daily is that one day; the weekly is the seven days ending on it; the
+    monthly runs from the 1st to it, so ``monthly last`` covers the whole
+    calendar month and reads "1 - 30 Sep". A ``monthly <1-28>`` schedule is
+    therefore month-to-date, not the previous month.
     """
-    end = fire_utc.date() - timedelta(days=1)
+    end = fire.astimezone(tzinfo).date()
     if schedule.kind == "daily":
         start = end
     elif schedule.kind == "weekly":
@@ -369,7 +389,7 @@ def _publish(schedule: Schedule, fire: datetime) -> bool:
         log.info("[reports] %s skipped — no track record published yet", schedule.kind)
         return True
 
-    start, end = period_window(schedule, fire.astimezone(timezone.utc))
+    start, end = period_window(schedule, fire, series_timezone(payload))
     summary = summarize(payload.get("series") or [], start, end)
     notify.notify_report(schedule.kind, summary)
     log.info(

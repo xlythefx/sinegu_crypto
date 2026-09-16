@@ -640,7 +640,7 @@ for the overlay's `position: fixed` and trap it inside.
   it — the same approximation `stacks_now` carries, and why it is rounded.
 - **Scheduled recaps** (`binance_abcd/reports.py`, 2026-09-07) are the ONE thing
   the engine posts because a clock ticked rather than because a signal fired:
-  **daily 11:30, weekly Friday 11:30, monthly last-day 11:30 — Asia/Manila**, to
+  **daily 23:55, weekly Friday 23:55, monthly last-day 23:55 — Asia/Manila**, to
   the PUBLIC channel (`BINANCE_ABCD_REPORT_*`, mirrored to prod).
   **They are built from `GET /api/public/track-record`, never from a fresh
   query**, and that is the whole design. It cannot leak — the channel is
@@ -653,10 +653,21 @@ for the overlay's `position: fixed` and trap it inside.
   site and the channel would publish two different track records for the same
   month. So `reports.py` touches neither Binance nor the DB: it slices the daily
   series and chains it, and `notify.notify_report` owns what the channel may say.
-  - **Windows are whole COMPLETED UTC days** (the series is keyed by a UTC
-    `closed_at`) — a published percentage is never revised. 11:30 Manila is
-    03:30 UTC, so the reported day ended 3.5h earlier, past the past-positions
-    backfill.
+  - **Days are MANILA calendar days, and every recap ends on TODAY** (2026-09-16;
+    until then the series was UTC days and each recap covered the *previous*
+    one, so the "daily" posted at 23:30 Manila described a day that had ended
+    at 08:00 that morning). The API buckets the track record in
+    `services.track_record.timezone` (`TRACK_RECORD_TIMEZONE`, default
+    Asia/Manila) and publishes it as `payload.timezone`; `reports.py` cuts its
+    window in THAT calendar (`series_timezone`, UTC fallback for an older API),
+    never in `REPORT_TIMEZONE`, so the channel's "16 Sep" and the landing
+    chart's "16 Sep" are the same trades by construction. The daily is the
+    local day it fires in, the weekly the 7 days ending today, the monthly the
+    1st → today (so `last` is the whole month; `<1-28>` is month-to-date). The
+    stated trade-off: a close AFTER the firing time is on the site and in the
+    weekly/monthly but in no daily — hence 23:55, the latest the ~3-min
+    past-positions backfill and the endpoint's 5-min cache allow. A published
+    percentage is still never reposted or revised.
   - **Chained, not summed** — same time-weighted math as the endpoint's own
     total, so a mid-period deposit cannot inflate it.
   - **The DAILY recap ranks every asset traded** (`reports.rank_assets` +
@@ -677,10 +688,6 @@ for the overlay's `position: fixed` and trap it inside.
   - **First run seeds `out/report_state.json` silently** so a deploy does not
     fire all three at once; a missed recap catches up only within
     `REPORT_CATCHUP_HOURS` (12), then is dropped.
-  - **`monthly last` deliberately stops one day short** — firing on the final
-    day at 11:30 Manila is 03:30 UTC that day, so the month's last ~20h are
-    outside the window and the heading says `1 - 29 Sep 2026`. Use
-    `REPORT_MONTHLY_AT=1 11:30` for whole calendar months.
   - `tzdata` is in `requirements.txt` because Windows has no tz database; an
     unusable timezone disables reports and alerts admin, never stops the engine.
 - **Config:** env-driven, prefix `BINANCE_ABCD_*` — committed `.env.example`,
@@ -1051,9 +1058,12 @@ bare `"2026-09-09 04:30:22"` has no zone designator and JS reads a zoneless
 datetime as LOCAL — so UTC digits were printed unchanged and labelled as local
 time, putting a trade seven hours from where the exchange app showed it. The
 helper appends `Z` only when the string carries no zone of its own. **Day
-GROUPING is still UTC server-side** (the P&L calendar, invoice months, the track
-record's daily buckets), so a trade closing near midnight UTC can list under a
-different date than the calendar cell it counts toward.
+GROUPING is still UTC server-side** (the P&L calendar, invoice months), so a
+trade closing near midnight UTC can list under a different date than the
+calendar cell it counts toward. The one exception is the **public track
+record**, whose days are Asia/Manila calendar days since 2026-09-16
+(`services.track_record.timezone`) because the Telegram recaps slice it into
+"today".
 
 **The dashboard equity curve separates SHAPE from LEVEL**
 (`UserStatsService::buildDailyEquityCurve`, pure and unit-tested in

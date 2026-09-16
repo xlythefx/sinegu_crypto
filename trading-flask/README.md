@@ -212,9 +212,15 @@ a daily, weekly and monthly recap to the **public** channel.
 
 | Report | Default | Covers |
 |---|---|---|
-| Daily | `11:30` Asia/Manila | the previous UTC day |
-| Weekly | `fri 11:30` | the 7 UTC days ending on the previous one |
-| Monthly | `last 11:30` | the 1st of the month through the previous UTC day |
+| Daily | `23:55` Asia/Manila | today (the local day it fires in) |
+| Weekly | `fri 23:55` | the 7 days ending today |
+| Monthly | `last 23:55` | the 1st of the month through today — the whole month |
+
+"Day" means a calendar day in the timezone the API buckets the track record in
+(`TRACK_RECORD_TIMEZONE`, Asia/Manila on prod), which the payload publishes as
+`timezone`; the window is cut in that same calendar. Before 2026-09-16 the
+series was UTC days and each recap covered the *previous* one, so the "daily"
+posted at 23:30 Manila described a day that had ended at 08:00 that morning.
 
 Config is `BINANCE_ABCD_REPORT_*` (see `.env.example`); an empty `*_AT` disables
 that one report, and a malformed one is logged + alerted to the admin chat and
@@ -239,10 +245,12 @@ decision about what the channel is allowed to say.
 
 Rules worth keeping:
 
-- **Windows are whole, completed UTC days** — the series is keyed by a UTC
-  `closed_at`, and a published percentage must never be revised later. At 11:30
-  Manila (03:30 UTC) the day being reported ended 3.5 hours earlier, comfortably
-  past the past-positions poller's backfill.
+- **Windows end on the day they fire in, and the fire time decides how much of
+  it is in.** A close after the firing time reaches the site and the
+  weekly/monthly, but no daily ever names it — so fire as late as the
+  past-positions backfill (~3 min) and the endpoint's 5-minute cache allow;
+  `23:55` is about the latest that is still honest. A published percentage is
+  never reposted or revised.
 - **The period return is chained, not summed**, identical to how the endpoint
   computes its own total — so it is time-weighted and a mid-week deposit cannot
   inflate it.
@@ -264,10 +272,8 @@ Rules worth keeping:
 - **A missed recap catches up, but only for `REPORT_CATCHUP_HOURS` (12).** Past
   that it is dropped and marked done — a Tuesday recap arriving Thursday is
   worse than none.
-- **`monthly last` deliberately stops a day short.** Firing on the final day at
-  11:30 Manila is 03:30 UTC *that day*, so the month's last ~20 hours are outside
-  the window and the heading says so (`1 - 29 Sep 2026`). Set
-  `BINANCE_ABCD_REPORT_MONTHLY_AT=1 11:30` to report whole calendar months.
+- **`monthly last` is the whole calendar month** (`1 - 30 Sep 2026`); a
+  `monthly <1-28>` schedule is month-to-date on that day, not the previous month.
 - `zoneinfo` has no tz database on Windows, hence `tzdata` in `requirements.txt`.
   An unusable timezone disables reports and alerts the admin chat; it never
   stops the engine.

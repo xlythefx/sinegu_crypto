@@ -100,27 +100,35 @@ def test_monthly_last_resolves_per_month_length(schedules):
 
 # --- Windows -----------------------------------------------------------------
 
-def test_windows_end_on_the_last_completed_utc_day(schedules):
+def test_windows_end_on_the_local_day_they_fire_in(schedules):
+    """A 23:30 Manila recap is TODAY's, in Manila days — the series is bucketed
+    in that calendar too (`payload["timezone"]`), so the two agree."""
     daily, weekly, monthly = schedules
-    fire = _now("2026-09-07T11:30").astimezone(timezone.utc)  # 03:30 UTC 2026-09-07
-    assert reports.period_window(daily, fire) == ("2026-09-06", "2026-09-06")
-    assert reports.period_window(weekly, fire) == ("2026-08-31", "2026-09-06")
-    assert reports.period_window(monthly, fire) == ("2026-09-01", "2026-09-06")
+    fire = _now("2026-09-07T23:30")  # 15:30 UTC, still the 7th in Manila
+    assert reports.period_window(daily, fire, MANILA) == ("2026-09-07", "2026-09-07")
+    assert reports.period_window(weekly, fire, MANILA) == ("2026-09-01", "2026-09-07")
+    assert reports.period_window(monthly, fire, MANILA) == ("2026-09-01", "2026-09-07")
 
 
-def test_monthly_on_the_last_day_stops_short_of_it(schedules):
-    """Documented consequence of firing on the last day at 11:30 local: the UTC
-    month is not over yet, so its final day is not in the window."""
+def test_monthly_on_the_last_day_covers_the_whole_month(schedules):
     monthly = schedules[2]
-    fire = _now("2026-09-30T11:30").astimezone(timezone.utc)
-    assert reports.period_window(monthly, fire) == ("2026-09-01", "2026-09-29")
+    assert reports.period_window(monthly, _now("2026-09-30T23:30"), MANILA) == ("2026-09-01", "2026-09-30")
 
 
-def test_monthly_on_the_first_covers_the_whole_month():
-    """The alternative schedule: '1 11:30' reports a complete calendar month."""
-    monthly = reports.parse_schedule("monthly", "1 11:30")
-    fire = _now("2026-10-01T11:30").astimezone(timezone.utc)
-    assert reports.period_window(monthly, fire) == ("2026-09-01", "2026-09-30")
+def test_the_window_is_cut_in_the_series_calendar_not_the_schedule_one(schedules):
+    """The firing instant is one moment; which DATE it is depends on the
+    calendar. 07:00 Manila on the 8th is still 23:00 UTC on the 7th — an API
+    bucketing in UTC would file that recap under the 7th, and so must the
+    window."""
+    daily = schedules[0]
+    assert reports.period_window(daily, _now("2026-09-08T07:00"), MANILA) == ("2026-09-08", "2026-09-08")
+    assert reports.period_window(daily, _now("2026-09-08T07:00"), timezone.utc) == ("2026-09-07", "2026-09-07")
+
+
+def test_series_timezone_comes_from_the_payload_and_falls_back_to_utc():
+    assert str(reports.series_timezone({"timezone": "Asia/Manila"})) == "Asia/Manila"
+    assert reports.series_timezone({}) is timezone.utc                      # older API
+    assert reports.series_timezone({"timezone": "Mars/Olympus_Mons"}) is timezone.utc
 
 
 # --- Summarising the series ---------------------------------------------------
@@ -295,7 +303,7 @@ def test_no_report_ever_names_an_account_or_an_amount(sent):
 @pytest.fixture()
 def track_record(monkeypatch):
     """Serve a canned track record; the list lets a test make it unavailable."""
-    payload = {"success": True, "available": True, "series": SERIES}
+    payload = {"success": True, "available": True, "timezone": "Asia/Manila", "series": SERIES}
     box = {"payload": payload}
     monkeypatch.setattr(reports, "fetch_track_record", lambda: box["payload"])
     return box
