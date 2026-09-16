@@ -94,18 +94,27 @@ page by page ("we slowly do it"). Rules for every ported page:
   (`/dashboard/positions`, from UserAlerts), **Performance Analytics**
   (`/dashboard/analytics`, from UserAnalytics), **Exchange Accounts**
   (`/dashboard/exchanges`, from UserBrokers — live against `/api/exchange/*`;
-  Bybit/MEXC locked "Coming soon". Connecting is its own PAGE, not a modal:
-  `/dashboard/exchanges/connect` (`pages/ConnectExchange.tsx` +
-  `components/exchanges/connect/`), four steps — exchange → **mode (live or
+  **Binance and MEXC connect (2026-09-16), Bybit locked "Coming soon"**. One
+  account per user PER exchange; every row carries `exchange` and every
+  rename/refresh/disconnect goes to `/exchange/{exchange}/accounts/{id}`
+  because ids repeat across the per-exchange tables. Connecting is its own
+  PAGE, not a modal: `/dashboard/exchanges/connect` (`pages/ConnectExchange.tsx`
+  + `components/exchanges/connect/`), four steps — exchange → **mode (live or
   demo)** → keys → review, confirmed through ConfirmModal. The mode step writes
-  `binance_accounts.demo`, which is the ONE choice on the page whose consequence
-  is invisible until a signal fires: the engine picks the API host from it, and
-  the key sets are not interchangeable — a mainnet key on the testnet never
-  trades, a testnet key on mainnet is refused — so the step names the site each
-  key comes from and the review step repeats the verdict. A page rather than a
-  dialog because the user leaves for Binance mid-flow and comes back, and
-  because the instructions belong BESIDE the fields, not stacked above them in
-  520px), **Settings**
+  the account's `demo` flag, which is the ONE choice on the page whose
+  consequence is invisible until a signal fires: the engine picks the API host
+  from it, and the key sets are not interchangeable — a mainnet key on the
+  testnet never trades, a testnet key on mainnet is refused — so the step
+  names the site each key comes from and the review step repeats the verdict.
+  **The step exists only where the venue has a testnet** (`EXCHANGE_META.hasTestnet`):
+  MEXC has none, so its wizard is three steps and the API refuses `demo: true`
+  for it (`DEMO_NOT_AVAILABLE`). Per-venue wording — key URL, the venue's names
+  for the IP setting and the futures permission, its key rules (MEXC keys with
+  no IP bound expire in 90 days; futures API trading needs KYC) — is data in
+  `components/exchanges/exchangeCopy.ts`, shared with the blocked-key modal. A
+  page rather than a dialog because the user leaves for the exchange mid-flow
+  and comes back, and because the instructions belong BESIDE the fields, not
+  stacked above them in 520px), **Settings**
   (`/dashboard/settings`, from UserProfile — account info/password/sign-out wired to
   `/api/user/*`; payment method, crypto wallets, bank wire still static),
   **Admin Dashboard** (`/admin`, from AdminOverview — master account card, 4 stat cards,
