@@ -98,3 +98,13 @@ def test_secret_accepted_from_query_string(client):
         )
     assert response.status_code == 200
     submit.assert_called_once()
+
+
+def test_perpetual_chart_tickers_lose_their_suffix_and_prefix(client):
+    """`{{ticker}}` on a MEXC/Binance perpetual chart is `BTCUSDT.P`; the asset
+    rows and both venues' own symbols are plain `BTCUSDT`."""
+    for raw in ("MEXC:BTCUSDT.P", "btcusdt.p", "BINANCE:BTCUSDT.P", "BTCUSDT"):
+        _, submit = _post(client, {"secret": SECRET, "action": "BUY", "symbol": raw})
+        assert submit.call_args.args[2] == "BTCUSDT", raw
+    assert webhook._normalize_ticker("MEXC:ethusdt.p") == "ETHUSDT"
+    assert webhook._normalize_ticker(None) == ""

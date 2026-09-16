@@ -1095,6 +1095,24 @@ def _finish_job(merged: dict, per_exchange: list, started: float) -> None:
 
 # --- The routes: one public path per venue -----------------------------------
 
+# TradingView names perpetual contracts with a `.P` suffix (`MEXC:BTCUSDT.P`,
+# `BINANCE:BTCUSDT.P`), and `{{ticker}}` carries it. The engine's asset rows
+# and the venues' own symbols never do.
+_PERP_SUFFIX = ".P"
+
+
+def _normalize_ticker(raw: Any) -> str:
+    """``MEXC:btcusdt.p`` -> ``BTCUSDT``: drop the chart's venue prefix and
+    perpetual suffix, upper-case what is left. Empty when nothing was sent."""
+    ticker = str(raw or "").strip().upper()
+    for prefix in _TICKER_PREFIXES:
+        if ticker.startswith(prefix):
+            ticker = ticker[len(prefix):]
+            break
+    if ticker.endswith(_PERP_SUFFIX):
+        ticker = ticker[: -len(_PERP_SUFFIX)]
+    return ticker
+
 def _handle_webhook(exchange: str):
     """The trade path for ONE venue. The path a TradingView alert posts to is
     what decides which exchange's accounts the signal trades — so each venue
@@ -1123,12 +1141,7 @@ def _handle_webhook(exchange: str):
         return jsonify({"error": f"{exchange} is not enabled on this engine (BINANCE_ABCD_EXCHANGES)"}), 400
 
     action = str(data.get("action") or "").upper().strip()
-    raw_ticker = str(data.get("symbol") or data.get("ticker") or "").strip()
-    for prefix in _TICKER_PREFIXES:
-        if raw_ticker.upper().startswith(prefix):
-            raw_ticker = raw_ticker[len(prefix):]
-            break
-    ticker = raw_ticker.upper()
+    ticker = _normalize_ticker(data.get("symbol") or data.get("ticker"))
 
     if action not in VALID_ACTIONS:
         _bump("rejected")
