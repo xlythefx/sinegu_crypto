@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom'
 import { CheckCircle2, LayoutDashboard, Wallet } from 'lucide-react'
 import type { ExchangeAccount } from '../../../types/exchanges'
+import { EXCHANGE_COPY } from '../exchangeCopy'
+import { exchangeOf } from '../meta'
 import { GHOST_BTN, PRIMARY_BTN } from './classes'
 
 interface ConnectedStepProps {
@@ -24,6 +26,7 @@ export default function ConnectedStep({
   account,
   reconnected,
 }: ConnectedStepProps) {
+  const market = EXCHANGE_COPY[exchangeOf(account)].marketName
   return (
     <div className="flex flex-col items-center py-4 text-center">
       <span className="grid h-[68px] w-[68px] place-items-center rounded-[20px] border border-[color-mix(in_srgb,var(--green)_35%,transparent)] bg-[color-mix(in_srgb,var(--green)_12%,transparent)] text-green">
@@ -43,8 +46,8 @@ export default function ConnectedStep({
       )}
       <p className="mt-1.5 max-w-[440px] text-[13px] leading-[1.6] text-muted">
         {account.demo
-          ? 'This account trades the Binance futures testnet with play money — a safe way to watch the strategy work before committing real funds.'
-          : 'The bot will trade this account on Binance futures from the next signal.'}
+          ? `This account trades the ${market} testnet with play money — a safe way to watch the strategy work before committing real funds.`
+          : `The bot will trade this account on ${market} from the next signal.`}
       </p>
 
       <ul className="mt-5 flex w-full max-w-[460px] flex-col gap-2.5 text-left">

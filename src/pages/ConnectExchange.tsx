@@ -21,22 +21,41 @@ import {
   PRIMARY_BTN,
   STEP_FOOTER,
 } from '../components/exchanges/connect/classes'
+import {
+  AVAILABLE_EXCHANGES,
+  EXCHANGE_META,
+  exchangeOf,
+} from '../components/exchanges/meta'
 import { useApiData } from '../hooks/useApiData'
 import {
-  connectBinanceAccount,
+  connectExchangeAccount,
   getExchangeAccountsWithMeta,
-  type ConnectBinanceResult,
+  type ConnectExchangeResult,
 } from '../services/exchanges'
 import { ApiError, getApiErrorMessage } from '../services/api'
 import { updateStoredUser } from '../lib/session'
 import type { ExchangeKind } from '../types/exchanges'
 
-const STEPS: WizardStep[] = [
-  { key: 'exchange', label: 'Exchange', hint: 'Where you trade' },
-  { key: 'mode', label: 'Mode', hint: 'Live or demo' },
-  { key: 'keys', label: 'API keys', hint: 'Trade-only credentials' },
-  { key: 'review', label: 'Review', hint: 'Confirm and connect' },
-]
+type StepKey = 'exchange' | 'mode' | 'keys' | 'review'
+
+const STEP: Record<StepKey, WizardStep> = {
+  exchange: { key: 'exchange', label: 'Exchange', hint: 'Where you trade' },
+  mode: { key: 'mode', label: 'Mode', hint: 'Live or demo' },
+  keys: { key: 'keys', label: 'API keys', hint: 'Trade-only credentials' },
+  review: { key: 'review', label: 'Review', hint: 'Confirm and connect' },
+}
+
+/**
+ * The steps for a given exchange. The live/demo step exists only where the
+ * venue has a futures testnet to route a demo account to; on MEXC there is
+ * none, so asking would offer a choice with one answer.
+ */
+function stepsFor(kind: ExchangeKind | null): WizardStep[] {
+  const hasMode = kind === null || EXCHANGE_META[kind].hasTestnet
+  return hasMode
+    ? [STEP.exchange, STEP.mode, STEP.keys, STEP.review]
+    : [STEP.exchange, STEP.keys, STEP.review]
+}
 
 const EMPTY_FORM: KeysForm = { name: '', api_key: '', secret_key: '' }
 
@@ -45,15 +64,16 @@ const EMPTY_FORM: KeysForm = { name: '', api_key: '', secret_key: '' }
  * modal.
  *
  * A page, not a dialog, because connecting is a multi-app task: the user leaves
- * for Binance to create a key and comes back, often on a phone. A modal made
- * that a trip through a scrollable overlay with the instructions and the fields
- * competing for the same 520px; a route survives the trip, can be linked to
- * from the onboarding strip, and has room to put the instructions BESIDE the
+ * for the exchange to create a key and comes back, often on a phone. A modal
+ * made that a trip through a scrollable overlay with the instructions and the
+ * fields competing for the same 520px; a route survives the trip, can be linked
+ * to from the onboarding strip, and has room to put the instructions BESIDE the
  * fields instead of above them.
  *
  * Step state lives here and the steps stay presentational — the wizard is one
  * form submitted once, so splitting the state across the steps would only
- * scatter it.
+ * scatter it. One account per user PER exchange: a connected venue is locked
+ * in step 1, the others stay open.
  */
 export default function ConnectExchange() {
   const navigate = useNavigate()
@@ -66,14 +86,15 @@ export default function ConnectExchange() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [connected, setConnected] = useState<ConnectBinanceResult | null>(null)
+  const [connected, setConnected] = useState<ConnectExchangeResult | null>(null)
 
   const accounts = data?.accounts ?? []
+  const connectedKinds: ExchangeKind[] = accounts.map(exchangeOf)
+  const openKinds = AVAILABLE_EXCHANGES.filter((k) => !connectedKinds.includes(k))
 
-  // Every stored account is Binance until the bybit_*/mexc_* tables land — at
-  // which point the "already connected" guard below becomes per-exchange and
-  // this is what marks the taken ones in step 1.
-  const connectedKinds: ExchangeKind[] = accounts.length > 0 ? ['binance'] : []
+  const steps = stepsFor(kind)
+  const current: StepKey = (steps[Math.min(stepIndex, steps.length - 1)]?.key ?? 'exchange') as StepKey
+  const label = kind ? EXCHANGE_META[kind].label : 'exchange'
 
   if (error instanceof ApiError && error.status === 401) {
     return <Navigate to="/auth" replace />
@@ -86,10 +107,29 @@ export default function ConnectExchange() {
   }
 
   const canContinue =
-    (stepIndex === 0 && kind !== null) ||
-    (stepIndex === 1 && demo !== null) ||
-    (stepIndex === 2 && filled.name && filled.api_key && filled.secret_key) ||
-    stepIndex === 3
+    (current === 'exchange' && kind !== null) ||
+    (current === 'mode' && demo !== null) ||
+    (current === 'keys' && filled.name && filled.api_key && filled.secret_key) ||
+    current === 'review'
+
+  const goTo = (key: StepKey) => {
+    setSubmitError(null)
+    setStepIndex(Math.max(0, steps.findIndex((s) => s.key === key)))
+  }
+
+  const selectExchange = (k: ExchangeKind) => {
+    setKind(k)
+    setSubmitError(null)
+    if (EXCHANGE_META[k].hasTestnet) {
+      // A venue with a testnet gets the choice; a previous venue's answer is
+      // not carried over — the sites the keys come from differ.
+      setDemo(null)
+      setStepIndex(1) // mode
+    } else {
+      setDemo(false)
+      setStepIndex(1) // keys — stepsFor(k) has no mode step
+    }
+  }
 
   const submit = async () => {
     if (kind === null || demo === null) return
@@ -97,7 +137,7 @@ export default function ConnectExchange() {
     setSubmitting(true)
     setSubmitError(null)
     try {
-      const result = await connectBinanceAccount({
+      const result = await connectExchangeAccount(kind, {
         name: form.name.trim(),
         api_key: form.api_key.trim(),
         secret_key: form.secret_key.trim(),
@@ -109,11 +149,11 @@ export default function ConnectExchange() {
       setConnected(result)
     } catch (err) {
       setSubmitError(
-        getApiErrorMessage(err, 'Failed to connect Binance account.'),
+        getApiErrorMessage(err, `Failed to connect ${label} account.`),
       )
       // A rejected key or a taken name is fixed on the credentials step, so
       // send them back to it rather than leaving the error on a read-only page.
-      if (err instanceof ApiError && err.status === 422) setStepIndex(2)
+      if (err instanceof ApiError && err.status === 422) goTo('keys')
     } finally {
       setSubmitting(false)
     }
@@ -145,8 +185,10 @@ export default function ConnectExchange() {
     )
   }
 
-  // One account per user: the wizard has nothing to offer until they disconnect.
-  if (accounts.length > 0) {
+  // One account per exchange: with every supported venue taken, the wizard
+  // has nothing to offer until they disconnect one.
+  if (openKinds.length === 0) {
+    const names = accounts.map((a) => `${a.name} (${EXCHANGE_META[exchangeOf(a)].label})`)
     return (
       <DashboardLayout title="Connect an exchange">
         <div
@@ -156,12 +198,12 @@ export default function ConnectExchange() {
             <Link2 size={26} />
           </span>
           <h2 className="mt-4 font-display text-[19px] font-extrabold tracking-[-0.02em]">
-            You already have an account connected
+            Every exchange is already connected
           </h2>
           <p className="mx-auto mt-2 max-w-[400px] text-[13px] leading-[1.6] text-muted">
-            You can hold one Binance account at a time — {accounts[0].name} is
-            using the slot. Disconnect it first to connect different keys, or to
-            switch between live and demo.
+            You can hold one account per exchange — {names.join(' and ')}{' '}
+            {names.length === 1 ? 'is' : 'are'} using the slots. Disconnect one
+            first to connect different keys, or to switch between live and demo.
           </p>
           <Link className={`${PRIMARY_BTN} mt-5`} to="/dashboard/exchanges">
             Back to exchange accounts
@@ -186,8 +228,9 @@ export default function ConnectExchange() {
               Connect an exchange
             </h1>
             <p className="mt-0.5 max-w-[520px] text-[13px] leading-[1.55] text-muted">
-              Four short steps. Use trade-only API keys — the bot places and
-              closes positions, and can never withdraw.
+              {steps.length === 3 ? 'Three' : 'Four'} short steps. Use trade-only
+              API keys — the bot places and closes positions, and can never
+              withdraw.
             </p>
           </div>
           <Link
@@ -200,7 +243,7 @@ export default function ConnectExchange() {
         </div>
 
         <StepRail
-          steps={STEPS}
+          steps={steps}
           current={stepIndex}
           onJump={(i) => {
             setSubmitError(null)
@@ -211,32 +254,31 @@ export default function ConnectExchange() {
         {/* Keyed fadeup, not AOS: AOS (once: true) never reveals nodes mounted
             after init, so a step swapped in here would stay at opacity 0. */}
         <div
-          key={STEPS[stepIndex].key}
+          key={current}
           className={`${CARD} animate-[fadeup_0.35s_ease-out]`}
         >
-          {stepIndex === 0 && (
+          {current === 'exchange' && (
             <ExchangeStep
               selected={kind}
               connectedKinds={connectedKinds}
-              onSelect={(k) => {
-                setKind(k)
-                setStepIndex(1)
-              }}
+              onSelect={selectExchange}
             />
           )}
 
-          {stepIndex === 1 && (
+          {current === 'mode' && kind !== null && (
             <ModeStep
+              kind={kind}
               demo={demo}
               onSelect={(value) => {
                 setDemo(value)
-                setStepIndex(2)
+                goTo('keys')
               }}
             />
           )}
 
-          {stepIndex === 2 && (
+          {current === 'keys' && kind !== null && (
             <KeysStep
+              kind={kind}
               demo={demo ?? false}
               form={form}
               onChange={setForm}
@@ -244,7 +286,7 @@ export default function ConnectExchange() {
             />
           )}
 
-          {stepIndex === 3 && kind !== null && demo !== null && (
+          {current === 'review' && kind !== null && demo !== null && (
             <ReviewStep kind={kind} demo={demo} form={form} />
           )}
 
@@ -269,7 +311,7 @@ export default function ConnectExchange() {
               {stepIndex === 0 ? 'Cancel' : 'Back'}
             </button>
 
-            {stepIndex < STEPS.length - 1 ? (
+            {current !== 'review' ? (
               <button
                 type="button"
                 className={PRIMARY_BTN}
@@ -306,8 +348,8 @@ export default function ConnectExchange() {
         title={demo ? 'Connect this demo account?' : 'Connect this live account?'}
         message={
           demo
-            ? 'Orders will be placed on the Binance futures testnet with play money. You can disconnect at any time.'
-            : 'From the next signal the bot will place REAL futures orders using these keys, on your real Binance balance. You can disconnect at any time.'
+            ? `Orders will be placed on the ${label} futures testnet with play money. You can disconnect at any time.`
+            : `From the next signal the bot will place REAL futures orders using these keys, on your real ${label} balance. You can disconnect at any time.`
         }
         confirmLabel={demo ? 'Yes, connect demo' : 'Yes, connect live'}
         cancelLabel="No"

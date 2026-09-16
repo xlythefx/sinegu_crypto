@@ -3,6 +3,7 @@ import { Menu } from 'lucide-react'
 import { useTheme } from '../../theme'
 import { useSessionUser } from '../../hooks/useSessionUser'
 import UserAvatar from '../ui/UserAvatar'
+import { EXCHANGE_META, EXCHANGE_ORDER } from '../exchanges/meta'
 import { ShellContext } from './DashboardShell'
 import {
   TOPBAR,
@@ -19,12 +20,15 @@ import {
 
 export type ExchangeKey = 'all' | 'binance' | 'bybit' | 'mexc'
 
-// Bybit / MEXC are not integrated yet — pills stay visible but disabled.
+// Venues not yet connectable (EXCHANGE_META.available) stay visible but disabled.
 const EXCHANGES: { key: ExchangeKey; label: string; dot: string; soon?: boolean }[] = [
   { key: 'all', label: 'All', dot: 'var(--accent)' },
-  { key: 'binance', label: 'Binance', dot: '#f0b90b' },
-  { key: 'bybit', label: 'Bybit', dot: '#f7a600', soon: true },
-  { key: 'mexc', label: 'MEXC', dot: '#1972e2', soon: true },
+  ...EXCHANGE_ORDER.map((key) => ({
+    key,
+    label: EXCHANGE_META[key].label,
+    dot: EXCHANGE_META[key].color,
+    soon: !EXCHANGE_META[key].available,
+  })),
 ]
 
 /** Page top bar: burger (mobile) left; exchange filter, theme toggle and avatar right. */

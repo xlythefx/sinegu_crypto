@@ -56,7 +56,7 @@ export default function ReviewStep({ kind, demo, form }: ReviewStepProps) {
         </span>
         <div className="min-w-0">
           <p className="text-[14px] font-bold text-text">
-            {demo ? 'Demo — Binance futures testnet' : 'Live — real funds'}
+            {demo ? `Demo — ${meta.label} futures testnet` : 'Live — real funds'}
           </p>
           <p className="mt-0.5 text-[12px] leading-[1.55] text-muted">
             {demo

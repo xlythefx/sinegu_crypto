@@ -1,8 +1,12 @@
 import { Check, FlaskConical, Info, Wallet } from 'lucide-react'
+import type { ExchangeKind } from '../../../types/exchanges'
+import { EXCHANGE_COPY } from '../exchangeCopy'
+import { EXCHANGE_META } from '../meta'
 import { OPTION } from './classes'
 
 interface ModeStepProps {
-  /** true = Binance futures testnet, false = real mainnet trading. */
+  kind: ExchangeKind
+  /** true = the exchange's futures testnet, false = real mainnet trading. */
   demo: boolean | null
   onSelect: (demo: boolean) => void
 }
@@ -23,41 +27,48 @@ interface ModeOption {
  * where the keys come from, whether it is billed — so the columns can be read
  * across rather than each on its own.
  */
-const MODES: ModeOption[] = [
-  {
-    demo: false,
-    icon: Wallet,
-    title: 'Live account',
-    tagline: 'Trades your real Binance futures balance.',
-    points: [
-      'Real funds, real profit and loss',
-      'Keys from binance.com → API Management',
-      'Billed 20% of profit only — never on a losing month',
-    ],
-    accent: true,
-  },
-  {
-    demo: true,
-    icon: FlaskConical,
-    title: 'Demo account',
-    tagline: 'Trades the Binance futures testnet with play money.',
-    points: [
-      'Test funds only — nothing you own is at risk',
-      'Keys from testnet.binancefuture.com (a separate login)',
-      'Never invoiced — results are not real performance',
-    ],
-    accent: false,
-  },
-]
+function modesFor(kind: ExchangeKind): ModeOption[] {
+  const copy = EXCHANGE_COPY[kind]
+  const site = new URL(copy.liveKeysUrl).hostname.replace(/^www\./, '')
+  return [
+    {
+      demo: false,
+      icon: Wallet,
+      title: 'Live account',
+      tagline: `Trades your real ${copy.marketName} balance.`,
+      points: [
+        'Real funds, real profit and loss',
+        `Keys from ${site} → API Management`,
+        'Billed 20% of profit only — never on a losing month',
+      ],
+      accent: true,
+    },
+    {
+      demo: true,
+      icon: FlaskConical,
+      title: 'Demo account',
+      tagline: `Trades the ${copy.marketName} testnet with play money.`,
+      points: [
+        'Test funds only — nothing you own is at risk',
+        `Keys from ${copy.demoSite} (a separate login)`,
+        'Never invoiced — results are not real performance',
+      ],
+      accent: false,
+    },
+  ]
+}
 
 /**
- * Step 2 — live or demo. This writes `binance_accounts.demo`, which the engine
- * reads to pick the API host for every call on this account, so it is not a
- * display preference: the wrong choice fails silently in opposite directions —
- * a live key pointed at the testnet never trades, a testnet key on mainnet is
- * refused — which is why the step names the site each key set comes from.
+ * Step 2 — live or demo. This writes the account's `demo` flag, which the
+ * engine reads to pick the API host for every call on this account, so it is
+ * not a display preference: the wrong choice fails silently in opposite
+ * directions — a live key pointed at the testnet never trades, a testnet key
+ * on mainnet is refused — which is why the step names the site each key set
+ * comes from. Only shown for venues with a testnet (EXCHANGE_META.hasTestnet).
  */
-export default function ModeStep({ demo, onSelect }: ModeStepProps) {
+export default function ModeStep({ kind, demo, onSelect }: ModeStepProps) {
+  const MODES = modesFor(kind)
+  const label = EXCHANGE_META[kind].label
   return (
     <div className="flex flex-col gap-3">
       <div className="grid gap-3 min-[820px]:grid-cols-2">
@@ -129,7 +140,7 @@ export default function ModeStep({ demo, onSelect }: ModeStepProps) {
 
       <p className="flex items-start gap-2 rounded-field border border-border bg-surface2 px-3.5 py-2.5 text-[12px] leading-[1.55] text-muted">
         <Info size={14} className="mt-px flex-none text-accent" />
-        You can hold one Binance account at a time. Starting on demo is fine —
+        You can hold one {label} account at a time. Starting on demo is fine —
         disconnect it whenever you want and connect live keys instead.
       </p>
     </div>

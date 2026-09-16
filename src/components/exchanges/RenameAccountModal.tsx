@@ -72,7 +72,7 @@ export default function RenameAccountModal({
     setError(null)
     setSaving(true)
     try {
-      const updated = await renameExchangeAccount(account.id, trimmed)
+      const updated = await renameExchangeAccount(account, trimmed)
       onRenamed(updated)
       onClose()
     } catch (err) {

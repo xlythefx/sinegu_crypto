@@ -28,9 +28,10 @@ function Mark({ kind, dim }: { kind: ExchangeKind; dim?: boolean }) {
 }
 
 /**
- * Step 1 — which exchange. Bybit and MEXC are listed but locked until their
- * tables land: showing them is the roadmap, hiding them would read as "Binance
- * only, forever".
+ * Step 1 — which exchange. Binance and MEXC connect; Bybit is listed but
+ * locked until its tables land: showing it is the roadmap, hiding it would
+ * read as "never". A venue the user already holds an account on is locked
+ * too — one account per exchange.
  */
 export default function ExchangeStep({
   selected,

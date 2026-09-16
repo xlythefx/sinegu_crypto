@@ -13,7 +13,11 @@ import DataState from '../components/dashboard/DataState'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import ExchangeAccountCard from '../components/exchanges/ExchangeAccountCard'
 import RenameAccountModal from '../components/exchanges/RenameAccountModal'
-import { EXCHANGE_META, EXCHANGE_ORDER } from '../components/exchanges/meta'
+import {
+  EXCHANGE_META,
+  EXCHANGE_ORDER,
+  exchangeOf,
+} from '../components/exchanges/meta'
 import { useApiData } from '../hooks/useApiData'
 import {
   deleteExchangeAccount,
@@ -53,28 +57,26 @@ export default function Exchanges() {
    * reloaded because `useApiData.reload()` flips `loading` back on, which would
    * swap the whole grid for skeletons just to change one number.
    */
-  const [refreshed, setRefreshed] = useState<Record<number, ExchangeAccount>>({})
+  const [refreshed, setRefreshed] = useState<Record<string, ExchangeAccount>>({})
 
-  // Every stored account is Binance for now — Bybit/MEXC land later.
+  // Ids repeat across the per-exchange tables, so the patch map is keyed by
+  // (exchange, id), never by id alone.
   const accounts = useMemo(
-    () => (data?.accounts ?? []).map((a) => refreshed[a.id] ?? a),
+    () => (data?.accounts ?? []).map((a) => refreshed[`${exchangeOf(a)}:${a.id}`] ?? a),
     [data, refreshed],
   )
 
   /** The address a user must allow-list when their key blocks us. */
   const serverIp = data?.serverIp ?? null
 
-  const counts = useMemo<Record<Filter, number>>(
-    () => ({
-      all: accounts.length,
-      binance: accounts.length,
-      bybit: 0,
-      mexc: 0,
-    }),
-    [accounts],
-  )
+  const counts = useMemo<Record<Filter, number>>(() => {
+    const byKind: Record<Filter, number> = { all: accounts.length, binance: 0, bybit: 0, mexc: 0 }
+    for (const account of accounts) byKind[exchangeOf(account)] += 1
+    return byKind
+  }, [accounts])
 
-  const filtered = filter === 'all' || filter === 'binance' ? accounts : []
+  const filtered =
+    filter === 'all' ? accounts : accounts.filter((a) => exchangeOf(a) === filter)
 
   if (error instanceof ApiError && error.status === 401) {
     return <Navigate to="/auth" replace />
@@ -85,10 +87,10 @@ export default function Exchanges() {
     setDisconnecting(true)
     setActionError(null)
     try {
-      await deleteExchangeAccount(disconnectTarget.id)
-      // One account per user, so a disconnect means none remain — sync the
-      // session flag so the onboarding nudges come back instantly.
-      updateStoredUser({ has_exchange_account: false })
+      await deleteExchangeAccount(disconnectTarget)
+      // One account per EXCHANGE, so the onboarding nudges only come back once
+      // the last venue is gone — sync the session flag accordingly.
+      if (accounts.length <= 1) updateStoredUser({ has_exchange_account: false })
       setDisconnectTarget(null)
       reload()
     } catch (err) {
@@ -181,7 +183,7 @@ export default function Exchanges() {
           mounted after init — they'd stay stuck at opacity 0. */}
       <div
         key={`${filter}-${
-          filtered.map((a) => `${a.id}:${a.name}`).join('.') || 'empty'
+          filtered.map((a) => `${exchangeOf(a)}:${a.id}:${a.name}`).join('.') || 'empty'
         }`}
         className="animate-[fadeup_0.35s_ease-out]"
       >
@@ -222,16 +224,19 @@ export default function Exchanges() {
         <div className="grid grid-cols-2 gap-3.5 max-[1000px]:grid-cols-1">
           {filtered.map((account) => (
             <ExchangeAccountCard
-              key={account.id}
+              key={`${exchangeOf(account)}:${account.id}`}
               account={account}
-              exchange="binance"
+              exchange={exchangeOf(account)}
               onRename={(a) => {
                 setActionError(null)
                 setRenameTarget(a)
               }}
               onDisconnect={(a) => setDisconnectTarget(a)}
               onBalanceRefreshed={(fresh) =>
-                setRefreshed((prev) => ({ ...prev, [fresh.id]: fresh }))
+                setRefreshed((prev) => ({
+                  ...prev,
+                  [`${exchangeOf(fresh)}:${fresh.id}`]: fresh,
+                }))
               }
               serverIp={serverIp}
             />

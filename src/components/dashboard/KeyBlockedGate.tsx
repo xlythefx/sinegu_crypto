@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import ConfirmModal from '../ui/ConfirmModal'
 import KeyBlockedModal from '../exchanges/KeyBlockedModal'
+import { exchangeOf } from '../exchanges/meta'
 import {
   deleteExchangeAccount,
   getExchangeAccountsWithMeta,
@@ -47,7 +48,7 @@ export default function KeyBlockedGate() {
   const recheck = useCallback(async () => {
     if (!account) return
     try {
-      const { account: fresh } = await refreshAccountBalance(account.id)
+      const { account: fresh } = await refreshAccountBalance(account)
       setAccount(fresh)
       // Fixed: the exchange answered, so the flag is gone — close and get out
       // of the way rather than making them dismiss a solved problem.
@@ -60,7 +61,7 @@ export default function KeyBlockedGate() {
   const disconnect = useCallback(async () => {
     if (!account) return
     try {
-      await deleteExchangeAccount(account.id)
+      await deleteExchangeAccount(account)
     } finally {
       setConfirmDisconnect(false)
       setOpen(false)
@@ -76,6 +77,7 @@ export default function KeyBlockedGate() {
       <KeyBlockedModal
         open={open && !confirmDisconnect}
         account={account}
+        exchange={exchangeOf(account)}
         serverIp={serverIp}
         onClose={() => setOpen(false)}
         onRecheck={recheck}

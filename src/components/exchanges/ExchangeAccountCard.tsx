@@ -110,7 +110,7 @@ export default function ExchangeAccountCard({
     setSyncing(true)
     setSyncNote(null)
     try {
-      const { account: fresh, retryAfter } = await refreshAccountBalance(account.id)
+      const { account: fresh, retryAfter } = await refreshAccountBalance(account)
       onBalanceRefreshed?.(fresh)
       setCooldown(retryAfter)
       setSyncNote('Updated just now')
@@ -152,7 +152,7 @@ export default function ExchangeAccountCard({
               Not receiving trades
             </span>
             <span className="block text-[11.5px] text-muted">
-              Binance is refusing this API key — tap to fix.
+              {meta.label} is refusing this API key — tap to fix.
             </span>
           </span>
         </button>
@@ -161,6 +161,7 @@ export default function ExchangeAccountCard({
       <KeyBlockedModal
         open={keyModalOpen}
         account={account}
+        exchange={exchange}
         serverIp={serverIp ?? null}
         onClose={() => setKeyModalOpen(false)}
         onRecheck={handleRefresh}

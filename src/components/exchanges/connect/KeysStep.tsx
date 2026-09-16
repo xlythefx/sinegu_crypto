@@ -5,9 +5,13 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
+  Info,
   ShieldCheck,
   TriangleAlert,
 } from 'lucide-react'
+import type { ExchangeKind } from '../../../types/exchanges'
+import { EXCHANGE_COPY } from '../exchangeCopy'
+import { EXCHANGE_META } from '../meta'
 import { INPUT, LABEL } from './classes'
 
 export interface KeysForm {
@@ -17,6 +21,7 @@ export interface KeysForm {
 }
 
 interface KeysStepProps {
+  kind: ExchangeKind
   demo: boolean
   form: KeysForm
   onChange: (form: KeysForm) => void
@@ -24,27 +29,15 @@ interface KeysStepProps {
   serverIp: string | null
 }
 
-const LIVE_STEPS = [
-  'Open Binance → API Management and create a new API key.',
-  'Enable Futures. Leave withdrawals OFF — we never need them, and a key that cannot withdraw cannot lose you funds.',
-  'If you restrict the key by IP, add our server address below. A key locked to your own IP looks connected here but silently takes no trades.',
-  'Copy the API key and secret key into the fields below.',
-]
-
-const DEMO_STEPS = [
-  'Open testnet.binancefuture.com and sign in — it is a separate account from binance.com.',
-  'Open API Key from the account menu and copy the testnet key pair.',
-  'Testnet balances are play money, topped up from the faucet on that site.',
-  'Paste the testnet API key and secret key below.',
-]
-
 /**
  * Step 3 — the credentials, with the instructions that produce them. The
- * instruction list is mode-specific because the two key sets come from
- * different sites: the most common way to fail this step is pasting a
- * binance.com key into a demo account, or the reverse.
+ * instruction list is per exchange AND per mode because the key sets come
+ * from different sites: the most common way to fail this step is pasting a
+ * binance.com key into a demo account, or the reverse — and on MEXC, a key
+ * that was never bound to our IP, which stops working after 90 days.
  */
 export default function KeysStep({
+  kind,
   demo,
   form,
   onChange,
@@ -53,11 +46,12 @@ export default function KeysStep({
   const [showSecret, setShowSecret] = useState(false)
   const [copied, setCopied] = useState(false)
 
+  const copy = EXCHANGE_COPY[kind]
+  const label = EXCHANGE_META[kind].label
   const ip = serverIp ?? null
-  const steps = demo ? DEMO_STEPS : LIVE_STEPS
-  const keyUrl = demo
-    ? 'https://testnet.binancefuture.com'
-    : 'https://www.binance.com/en/my/settings/api-management'
+  const steps = demo ? copy.demoSteps ?? [] : copy.liveSteps
+  const keyUrl = demo ? copy.demoKeysUrl ?? copy.liveKeysUrl : copy.liveKeysUrl
+  const keyLabel = demo ? copy.demoKeysLabel ?? copy.liveKeysLabel : copy.liveKeysLabel
 
   const copyIp = async () => {
     if (!ip) return
@@ -78,7 +72,7 @@ export default function KeysStep({
           <input
             type="text"
             className={INPUT}
-            placeholder={demo ? 'e.g. Testnet' : 'e.g. Main Trading'}
+            placeholder={demo ? 'e.g. Testnet' : `e.g. ${label} Main`}
             value={form.name}
             onChange={(e) => onChange({ ...form, name: e.target.value })}
             maxLength={128}
@@ -94,7 +88,7 @@ export default function KeysStep({
           <input
             type="text"
             className={`${INPUT} font-mono text-[12.5px]`}
-            placeholder={demo ? 'Testnet API key' : 'Binance API key'}
+            placeholder={demo ? 'Testnet API key' : `${label} API key`}
             value={form.api_key}
             onChange={(e) => onChange({ ...form, api_key: e.target.value })}
             maxLength={128}
@@ -109,7 +103,7 @@ export default function KeysStep({
             <input
               type={showSecret ? 'text' : 'password'}
               className={`${INPUT} pr-11 font-mono text-[12.5px]`}
-              placeholder={demo ? 'Testnet secret key' : 'Binance secret key'}
+              placeholder={demo ? 'Testnet secret key' : `${label} secret key`}
               value={form.secret_key}
               onChange={(e) => onChange({ ...form, secret_key: e.target.value })}
               maxLength={128}
@@ -125,10 +119,7 @@ export default function KeysStep({
               {showSecret ? <EyeOff size={15} /> : <Eye size={15} />}
             </button>
           </span>
-          <span className="text-[11.5px] text-faint">
-            Binance shows the secret once, at creation. If you lost it, create a
-            new key rather than guessing.
-          </span>
+          <span className="text-[11.5px] text-faint">{copy.secretHint}</span>
         </label>
 
         <p className="flex items-start gap-2 text-[12px] leading-[1.5] text-muted">
@@ -136,6 +127,13 @@ export default function KeysStep({
           Keys are stored on our server and used only to place and close trades.
           They are never shown back to you and never shared.
         </p>
+
+        {!demo && copy.keyNote && (
+          <p className="flex items-start gap-2 rounded-field border border-border bg-surface2 px-3.5 py-2.5 text-[12px] leading-[1.55] text-muted">
+            <Info size={14} className="mt-px flex-none text-accent" />
+            {copy.keyNote}
+          </p>
+        )}
       </form>
 
       <aside className="flex flex-col gap-3.5 rounded-rail border border-border bg-surface2 p-4">
@@ -154,7 +152,7 @@ export default function KeysStep({
             target="_blank"
             rel="noreferrer noopener"
           >
-            {demo ? 'Open Binance testnet' : 'Open Binance API Management'}
+            {keyLabel}
             <ExternalLink size={12} />
           </a>
         </div>
@@ -178,7 +176,9 @@ export default function KeysStep({
                   </button>
                 </div>
                 <p className="mt-2 text-[11.5px] leading-[1.5] text-faint">
-                  Only needed if you tick “Restrict access to trusted IPs”.
+                  {EXCHANGE_META[kind].hasTestnet
+                    ? `Only needed if you tick “${copy.ipSettingName}”.`
+                    : `Paste it under “${copy.ipSettingName}” — a bound key never expires.`}
                 </p>
               </>
             ) : (

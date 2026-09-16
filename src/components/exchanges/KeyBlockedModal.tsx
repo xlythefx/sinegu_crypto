@@ -12,11 +12,14 @@ import {
   X,
 } from 'lucide-react'
 import { FALLBACK_SERVER_IP } from '../../lib/serverIp'
-import type { ExchangeAccount } from '../../types/exchanges'
+import type { ExchangeAccount, ExchangeKind } from '../../types/exchanges'
+import { EXCHANGE_COPY, isDeadKey } from './exchangeCopy'
+import { EXCHANGE_META } from './meta'
 
 interface KeyBlockedModalProps {
   open: boolean
   account: ExchangeAccount
+  exchange: ExchangeKind
   /** IP the user must allow-list; falls back to the known prod address. */
   serverIp: string | null
   onClose: () => void
@@ -47,6 +50,7 @@ function daysLeft(graceEndsAt: string | null | undefined): number | null {
 export default function KeyBlockedModal({
   open,
   account,
+  exchange,
   serverIp,
   onClose,
   onRecheck,
@@ -57,11 +61,11 @@ export default function KeyBlockedModal({
 
   if (!open) return null
 
+  const label = EXCHANGE_META[exchange].label
+  const copy = EXCHANGE_COPY[exchange]
   const ip = serverIp || FALLBACK_SERVER_IP
   const remaining = daysLeft(account.key_grace_ends_at)
-  const wrongKey = account.key_error_reason === 'BAD_KEY_FORMAT' ||
-    account.key_error_reason === 'UNKNOWN_KEY' ||
-    account.key_error_reason === 'BAD_SIGNATURE'
+  const wrongKey = isDeadKey(exchange, account.key_error_reason)
 
   const copyIp = async () => {
     try {
@@ -103,7 +107,7 @@ export default function KeyBlockedModal({
               {account.name} is not receiving trades
             </h3>
             <p className="mt-1.5 text-[12.5px] text-muted">
-              Binance is refusing this API key from our server.
+              {label} is refusing this API key from our server.
             </p>
           </div>
           <button
@@ -128,18 +132,14 @@ export default function KeyBlockedModal({
 
           {wrongKey ? (
             <section>
-              <p className="text-[13px] leading-[1.6] text-text">
-                The key itself is not valid any more — it may have been deleted or
-                regenerated on Binance. Disconnect this account and connect a fresh
-                trade-only key.
-              </p>
+              <p className="text-[13px] leading-[1.6] text-text">{copy.deadKeyExplanation}</p>
             </section>
           ) : (
             <section>
               <p className="text-[13px] leading-[1.6] text-text">
                 Your API key is restricted to specific IP addresses, and ours is not
-                on the list. Add this address in Binance → API Management → edit the
-                key → <em>Restrict access to trusted IPs</em>:
+                on the list. Add this address in {label} → API Management → edit the
+                key → <em>{copy.ipSettingName}</em>:
               </p>
 
               <div className="mt-3 flex items-center gap-2 rounded-[12px] border border-accent bg-accent-soft px-3 py-2.5">
@@ -157,22 +157,22 @@ export default function KeyBlockedModal({
               </div>
 
               <ol className="mt-3.5 flex list-decimal flex-col gap-1.5 pl-4 text-[12.5px] leading-[1.55] text-muted">
-                <li>Open Binance → API Management and edit this key.</li>
-                <li>Paste the address above into the trusted-IP list and save.</li>
+                <li>Open {label} → API Management and edit this key.</li>
+                <li>Paste the address above into the IP list and save.</li>
                 <li>
-                  Keep <strong className="text-text">Enable Futures</strong> ticked —
-                  the key must be able to trade, never to withdraw.
+                  Keep <strong className="text-text">{copy.permissionName}</strong>{' '}
+                  ticked — the key must be able to trade, never to withdraw.
                 </li>
                 <li>Come back and press “I’ve added it — recheck”.</li>
               </ol>
 
               <a
                 className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-bold text-accent hover:underline"
-                href="https://www.binance.com/en/my/settings/api-management"
+                href={copy.liveKeysUrl}
                 target="_blank"
                 rel="noreferrer noopener"
               >
-                Open Binance API Management <ExternalLink size={12} />
+                {copy.liveKeysLabel} <ExternalLink size={12} />
               </a>
             </section>
           )}
