@@ -500,6 +500,35 @@ def test_closed_increments_has_no_cap_when_the_asset_has_none(fake_assets):
         account, fake_assets["BTCUSDT"], "BTCUSDT", 0.01) == (2, None)
 
 
+def _close_row(increments):
+    """Run the deferred close bookkeeping and return the past-position row it posts."""
+    account = {"api_key": "live-key-1", "uni_id": "u1", "name": "A", "balance": 1000.0, "exchange": "binance"}
+    with (
+        patch.object(webhook, "get_order_fill_summary", return_value=(12.5, 101.0)),
+        patch.object(webhook, "_consume_strategy"),
+        patch.object(webhook.notify, "report_exit_fill"),
+        patch.object(webhook.engine_client, "post_json", return_value={"success": True}) as post,
+    ):
+        webhook._deferred_close_bookkeeping(
+            account, MagicMock(), "BTCUSDT", "LONG", 0.03, 100.0, "strat",
+            {"orderId": 7}, increments_closed=increments, max_increments=3,
+        )
+    (sync,) = [c for c in post.call_args_list if c.args[0] == "past-positions/sync"]
+    return sync.args[1]["rows"][0]
+
+
+def test_the_close_row_carries_the_increments_it_closed():
+    """The same figure the channel prints as `Increments Closed (3/3)` lands on
+    the row, so the public trade count can be increments rather than orders."""
+    assert _close_row(3)["increments_closed"] == 3
+
+
+def test_an_unknown_increment_count_is_omitted_not_sent_as_null():
+    """No asset row → no figure. Leaving the key out lets the API's null-fill
+    keep whatever an earlier sync wrote; sending null would be a value."""
+    assert "increments_closed" not in _close_row(None)
+
+
 # --- The price published beside an entry ---------------------------------------
 
 def _entry_with(avg_price):

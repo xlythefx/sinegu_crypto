@@ -698,6 +698,16 @@ for the overlay's `position: fixed` and trap it inside.
     a leaderboard that does not add up to the line above it is a question in
     the channel. **No all-time / return-on-capital line** — removed the same
     day; a recap is the period it names and nothing else.
+  - **"Trades closed" counts INCREMENTS, not close orders** (2026-09-17). A
+    `binance_pastpositions` row is one close order, and the engine closes a
+    whole stacked position in one order, so `Increment (1/3)…(3/3)` closes as
+    ONE row — the recap said 4 under six announced closes. The close path now
+    writes `increments_closed` (the `Increments Closed (n/cap)` figure) on the
+    row via `past-positions/sync`, and `PublicStatsController` sums
+    `COALESCE(increments_closed, 1)` for every `trades` figure (series, assets,
+    `stats.trades`). NULL = not recorded (history, poller rows) and is never
+    backfilled from `position_amt`: the divisor was that account's scaled entry
+    size at close time and is not recoverable later.
   - **A failed fetch is not "no trades"** — `None` leaves the period unmarked
     and the next tick retries it, the same empty-vs-unavailable rule the pollers
     follow. `available: false` is an answer and is marked done.

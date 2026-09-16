@@ -369,6 +369,11 @@ def _deferred_close_bookkeeping(
                         "symbol": symbol,
                         "position_side": position_side,
                         "position_amt": closed_qty,
+                        # The `Increments Closed (n/cap)` figure, kept on the row
+                        # so the public trade count is increments, not close
+                        # orders. Omitted (not null) when unknown: the API's
+                        # null-fill leaves an earlier value untouched either way.
+                        **({"increments_closed": increments_closed} if increments_closed else {}),
                         "entry_price": entry_price,
                         "exit_price": exit_price,
                         "realized_pnl": realized_pnl,
