@@ -29,6 +29,21 @@ migration (move directories, rewrite the unit, re-point nginx, re-run certbot's
 webroot), not a find-and-replace — and there is no benefit to justify it.
 The domain is already `pixel-alpha.com`.
 
+## Support contacts (the only ones — 2026-09-16)
+
+| Channel | Value |
+|---|---|
+| Email | `support@pixel-alpha.com` |
+| Telegram | `@pixel_alpha_support` → `https://t.me/pixel_alpha_support` |
+
+Both live in **`src/lib/company.ts`** (`COMPANY.email`, `COMPANY.telegram`, plus
+`SUPPORT_EMAIL` / `SUPPORT_TELEGRAM_HANDLE` / `SUPPORT_TELEGRAM_URL`). Any page
+that tells a customer where to write — legal contact sections, footers,
+error/empty states, "need help?" strips — **reads those constants, never
+retypes the address or handle.** The legal renderer already has `email` and
+`telegram` block kinds (`types/legal.ts`) for contact lines. The public
+signals channel (**Voltrax Trades**) is NOT a support contact.
+
 ## Stack
 
 - **Frontend (this repo):** React 19 + TypeScript + Vite (scaffolded with `npm create vite`), `react-router-dom`. Styling is currently **plain CSS with design-token variables** but is **migrating to Tailwind** (see "Styling — migrating to Tailwind" below). Routes: `/` (landing), `/auth` (sign in / register).

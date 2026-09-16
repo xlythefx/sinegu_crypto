@@ -371,6 +371,7 @@ export const TERMS: LegalDocumentContent = {
           text: 'If you have any questions about these Terms and Conditions, please contact us:',
         },
         { kind: 'email', label: 'Email', address: COMPANY.email },
+        { kind: 'telegram', label: 'Telegram', handle: COMPANY.telegram },
       ],
     },
   ],

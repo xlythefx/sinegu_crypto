@@ -1,9 +1,41 @@
 import { useMemo, type ComponentType } from 'react'
-import { AlertTriangle, ArrowUp, Mail, ScrollText, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, Mail, ScrollText, Send, ShieldCheck } from 'lucide-react'
 import { useActiveSection } from '../../hooks/useActiveSection'
+import ScrollToTop from '../ui/ScrollToTop'
 import type { LegalBlock, LegalDocumentContent } from '../../types/legal'
 
 const WRAP = 'max-w-[1280px] mx-auto px-10 max-[560px]:px-5'
+
+/** One contact channel — icon, label, and the address as a real link. Stacked, so several sit as a column. */
+function ContactLine({
+  icon: Icon,
+  label,
+  href,
+  text,
+  external = false,
+}: {
+  icon: ComponentType<{ size?: number; className?: string }>
+  label: string
+  href: string
+  text: string
+  external?: boolean
+}) {
+  return (
+    <div className="mt-3 flex w-fit max-w-full items-center gap-3 rounded-field border border-border bg-surface px-4 py-3">
+      <Icon size={16} className="shrink-0 text-accent" />
+      <span className="font-mono text-[11px] uppercase tracking-widest text-faint">
+        {label}
+      </span>
+      <a
+        href={href}
+        {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+        className="break-all text-[14.5px] font-semibold text-accent hover:underline"
+      >
+        {text}
+      </a>
+    </div>
+  )
+}
 
 function Block({ block }: { block: LegalBlock }) {
   switch (block.kind) {
@@ -39,18 +71,23 @@ function Block({ block }: { block: LegalBlock }) {
 
     case 'email':
       return (
-        <div className="mt-4 inline-flex items-center gap-3 rounded-field border border-border bg-surface px-4 py-3">
-          <Mail size={16} className="text-accent" />
-          <span className="font-mono text-[11px] uppercase tracking-widest text-faint">
-            {block.label}
-          </span>
-          <a
-            href={`mailto:${block.address}`}
-            className="text-[14.5px] font-semibold text-accent hover:underline"
-          >
-            {block.address}
-          </a>
-        </div>
+        <ContactLine
+          icon={Mail}
+          label={block.label}
+          href={`mailto:${block.address}`}
+          text={block.address}
+        />
+      )
+
+    case 'telegram':
+      return (
+        <ContactLine
+          icon={Send}
+          label={block.label}
+          href={`https://t.me/${block.handle}`}
+          text={`@${block.handle}`}
+          external
+        />
       )
 
     default:
@@ -200,19 +237,10 @@ export default function LegalDocument({
               </p>
             </div>
           </div>
-
-          <div className="mt-8">
-            <button
-              type="button"
-              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-              className="inline-flex items-center gap-2 rounded-pill border border-border bg-surface px-4 py-2.5 font-mono text-[11px] uppercase tracking-widest text-muted transition-colors hover:text-text"
-            >
-              <ArrowUp size={14} />
-              Back to top
-            </button>
-          </div>
         </div>
       </div>
+
+      <ScrollToTop />
     </main>
   )
 }

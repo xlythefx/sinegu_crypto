@@ -19,6 +19,8 @@ export type LegalBlock =
   | { kind: 'note'; text: string }
   /** A contact line rendered as a real mailto link. */
   | { kind: 'email'; label: string; address: string }
+  /** A contact line rendered as a t.me link; `handle` is given without the "@". */
+  | { kind: 'telegram'; label: string; handle: string }
 
 export interface LegalSection {
   /** Anchor id — also the `#hash` the table of contents links to. */

@@ -15,7 +15,11 @@ export default function Nav() {
       className={`${CONTAINER} py-5 flex items-center justify-between gap-8 flex-wrap`}
     >
       <div className="flex items-center gap-11 flex-wrap">
-        <div className="flex items-center gap-2.5">
+        <Link
+          to="/"
+          className="flex items-center gap-2.5 text-text! no-underline"
+          aria-label="Pixel Alpha — home"
+        >
           <img
             className="w-6 h-6 object-contain scale-[1.6]"
             src="/assets/logo.png"
@@ -24,7 +28,7 @@ export default function Nav() {
           <span className="font-display font-extrabold text-xl">
             Pixel Alpha
           </span>
-        </div>
+        </Link>
         <div className="flex gap-[26px] text-sm font-medium text-muted whitespace-nowrap">
           <span className="cursor-pointer">Structure</span>
           <span className="cursor-pointer">Exchanges</span>
