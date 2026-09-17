@@ -69,13 +69,17 @@ def test_the_raw_classes_are_the_patch_seam():
     fake.assert_called_once_with("k", "s", base_url=hooks.MEXC_API_BASE)
 
 
-# --- tradeable: no testnet on MEXC ---------------------------------------------
+# --- demo rows route to the venue's testnet -------------------------------------
 
-def test_demo_mexc_rows_are_never_tradeable():
-    assert exchanges.tradeable({"exchange": "mexc", "demo": True}) == "no testnet on mexc"
-    assert exchanges.tradeable({"exchange": "mexc", "demo": False}) is None
-    assert exchanges.tradeable({"exchange": "binance", "demo": True}) is None
-    assert exchanges.tradeable({"demo": True}) is None
+def test_demo_mexc_rows_route_to_the_mexc_testnet_host():
+    live = exchanges.client_for({"api_key": "k", "secret_key": "s", "exchange": "mexc"})
+    demo = exchanges.client_for({"api_key": "k", "secret_key": "s", "exchange": "mexc", "demo": True})
+    assert live.base_url == hooks.MEXC_API_BASE
+    assert demo.base_url == hooks.MEXC_TESTNET_API_BASE
+    assert "testnet" in demo.base_url and "testnet" not in live.base_url
+    # No venue refuses a row today; the gate exists for one that would.
+    for account in ({"exchange": "mexc", "demo": True}, {"exchange": "mexc"}, {"exchange": "binance", "demo": True}, {}):
+        assert exchanges.tradeable(account) is None
 
 
 # --- accounts_api: one load per exchange, rows stamped -------------------------

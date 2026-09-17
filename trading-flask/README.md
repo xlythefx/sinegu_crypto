@@ -101,9 +101,12 @@ MEXC particulars, all absorbed in the adapter:
   rejection: 604 is also what a key not whitelisted for API trading gets),
   401/402/406/602/701–704 → credential → the same `key_status` flow as Binance
   `-2015`, on `/engine/mexc/key-status`.
-- **No testnet.** A MEXC row flagged `demo` is refused for entries **and**
-  exits (`no testnet on mexc`) and never polled — nothing was ever opened
-  through us on it, and its only host is the real one.
+- **Demo = the futures testnet.** A MEXC row flagged `demo` routes to
+  `futures.testnet.mexc.com` (`MEXC_TESTNET_API_BASE`) — same paths, same
+  login, **same API keys** as live, 10,000 test USDT. Learned live 2026-09-17:
+  the testnet authenticates a production key as-is, and it sits behind a CDN
+  so an **IP-bound key is always refused there (406)** — a demo key is created
+  without "Link IP address" (and therefore expires after 90 days).
 - **Closes and fee receipts** come from `fetch_mexc_history` (own poller,
   `MEXC_HISTORY_FETCH_INTERVAL`, own watermarks
   `out/last_mexc_{closes,fees}_sync.json`): `history_orders` (filled, all

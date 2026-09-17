@@ -241,15 +241,17 @@ def test_unknown_contract_sizes_skip_the_account_this_tick():
     assert posts == [] and _marks(fmh.WATERMARK_FILE) == {"mx0k": 5}
 
 
-def test_demo_mexc_accounts_are_not_polled():
+def test_demo_mexc_accounts_are_polled_too():
+    """A demo row's history lives on the testnet host; client_for picks it."""
     with (
         patch.object(fmh, "fetch_accounts", return_value=[ACCOUNT | {"demo": True}]),
         patch.object(fmh, "client_for") as client_for,
         patch.object(fmh.engine_client, "post_json") as post,
     ):
+        client_for.return_value.api = FakeMexc(orders=[])
         fmh.fetch_and_save()
-    client_for.assert_not_called()
-    post.assert_not_called()
+    client_for.assert_called_once()
+    post.assert_not_called()  # nothing to sync, but it was read
 
 
 def test_the_mexc_poller_uses_its_own_watermark_files():

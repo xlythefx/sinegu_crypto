@@ -96,9 +96,15 @@ BINANCE_TESTNET_API_BASE = _env_str("TESTNET_API_BASE", "https://demo-fapi.binan
 API_TIMEOUT = _env_float("API_TIMEOUT", 15.0)
 
 # --- MEXC USDT-M futures ------------------------------------------------------
-# One host: MEXC has NO futures testnet, so a MEXC account flagged demo=1 is
-# refused outright rather than routed anywhere (exchanges.tradeable).
 MEXC_API_BASE = _env_str("MEXC_API_BASE", "https://api.mexc.com").rstrip("/")
+# Accounts flagged demo=1 route here instead: MEXC's futures testnet serves the
+# SAME /api/v1 surface for the same login (10,000 test USDT, separate from the
+# real balance). Two facts learned live on 2026-09-17: the testnet
+# authenticates a production API key as-is (no separate testnet keys), and it
+# sits behind a CDN, so an IP-BOUND key is always refused there with 406 (the
+# whitelist is checked against the whole forwarded chain) — a demo MEXC key
+# must be created without "Link IP address".
+MEXC_TESTNET_API_BASE = _env_str("MEXC_TESTNET_API_BASE", "https://futures.testnet.mexc.com").rstrip("/")
 # Seconds of clock skew MEXC tolerates on Request-Time (server default 10, max
 # 60, above 30 not recommended). Sent as the Recv-Window header when > 0.
 MEXC_RECV_WINDOW = _env_int("MEXC_RECV_WINDOW", 20)

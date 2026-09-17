@@ -19,6 +19,8 @@ export interface ExchangeCopy {
   demoKeysUrl?: string
   demoKeysLabel?: string
   demoSteps?: string[]
+  /** The mode step's one-line answer to "where do demo keys come from". */
+  demoKeysPoint?: string
   /** What the venue calls its IP allow-list setting (quoted to the user). */
   ipSettingName: string
   /** What the venue calls the futures trading permission. */
@@ -47,6 +49,7 @@ export const EXCHANGE_COPY: Record<ExchangeKind, ExchangeCopy> = {
     demoSite: 'testnet.binancefuture.com',
     demoKeysUrl: 'https://testnet.binancefuture.com',
     demoKeysLabel: 'Open Binance testnet',
+    demoKeysPoint: 'Keys from testnet.binancefuture.com (a separate login)',
     demoSteps: [
       'Open testnet.binancefuture.com and sign in — it is a separate account from binance.com.',
       'Open API Key from the account menu and copy the testnet key pair.',
@@ -81,6 +84,16 @@ export const EXCHANGE_COPY: Record<ExchangeKind, ExchangeCopy> = {
       'Under Futures, tick Trade (and Read). Leave Withdraw and Transfer OFF — we never need them.',
       'Bind our server address below under “Link IP address”. A MEXC key with no IP bound expires after 90 days; a key bound only to your own IP looks connected here but silently takes no trades.',
       'Copy the Access Key and Secret Key into the fields below.',
+    ],
+    demoSite: 'futures.testnet.mexc.com',
+    demoKeysUrl: 'https://www.mexc.com/user/openapi',
+    demoKeysLabel: 'Open MEXC API Management',
+    demoKeysPoint: 'Same MEXC login and keys — a key with no IP binding',
+    demoSteps: [
+      'Open futures.testnet.mexc.com and sign in with your normal MEXC account — the testnet holds 10,000 test USDT, separate from your real balance.',
+      'The keys are the same as live: create one on mexc.com → API Management with Futures Trade permission — but leave “Link IP address” EMPTY. The testnet sits behind a CDN and refuses any IP-bound key.',
+      'An unbound key expires after 90 days, which is fine for a demo. Treat it as a live key all the same: it is valid on your real account too — the bot only ever sends a demo account’s orders to the testnet.',
+      'Paste the Access Key and Secret Key below.',
     ],
     ipSettingName: 'Link IP address',
     permissionName: 'Futures — Trade',

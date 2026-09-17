@@ -106,9 +106,9 @@ page by page ("we slowly do it"). Rules for every ported page:
   from it, and the key sets are not interchangeable — a mainnet key on the
   testnet never trades, a testnet key on mainnet is refused — so the step
   names the site each key comes from and the review step repeats the verdict.
-  **The step exists only where the venue has a testnet** (`EXCHANGE_META.hasTestnet`):
-  MEXC has none, so its wizard is three steps and the API refuses `demo: true`
-  for it (`DEMO_NOT_AVAILABLE`). Per-venue wording — key URL, the venue's names
+  **The step exists only where the venue has a testnet** (`EXCHANGE_META.hasTestnet`
+  — both Binance and MEXC do; a venue without one gets a three-step wizard and
+  the API refuses `demo: true` for it, `DEMO_NOT_AVAILABLE`). Per-venue wording — key URL, the venue's names
   for the IP setting and the futures permission, its key rules (MEXC keys with
   no IP bound expire in 90 days; futures API trading needs KYC) — is data in
   `components/exchanges/exchangeCopy.ts`, shared with the blocked-key modal. A
@@ -374,9 +374,12 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   account's setting, then `MEXC_DEFAULT_LEVERAGE`, else refused); business
   errors are HTTP 200 + `success:false`, judged by code (510/2037 rate limit,
   604/801 maintenance = rejection, 401/402/406/602/701–704 credential →
-  `key_status` on `/engine/mexc/key-status`); **there is no MEXC testnet**, so
-  a `mexc` row with `demo=1` is refused for entries AND exits and never
-  polled. Closes + fee receipts come from `fetch_mexc_history` (history_orders
+  `key_status` on `/engine/mexc/key-status`); **`demo=1` routes to MEXC's futures
+  testnet** (`futures.testnet.mexc.com`, `MEXC_TESTNET_API_BASE`) — same
+  login and same API keys as live, 10,000 test USDT; learned live 2026-09-17
+  that it authenticates a production key as-is and, sitting behind a CDN,
+  refuses any IP-BOUND key with 406, so a demo key is created without "Link
+  IP address". Closes + fee receipts come from `fetch_mexc_history` (history_orders
   → order_deals → funding_records, own watermarks). Still unverified against
   a live key — see the smoke script's docstring: whether `order/create`
   answers 604 for a non-whitelisted key, the sign/basis of deal `profit`

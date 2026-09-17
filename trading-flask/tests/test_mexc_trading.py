@@ -274,23 +274,24 @@ def test_fill_summary_adds_the_fee_back_when_profit_is_net(monkeypatch):
     assert pnl == pytest.approx(10.0)
 
 
-# --- The fan-out: demo MEXC rows are refused for entries AND exits -------------------
+# --- The fan-out: demo MEXC rows trade the testnet, live rows mainnet ---------------
 
-def test_run_account_refuses_a_demo_mexc_row_for_entries_and_exits(fake_assets):
+def test_run_account_builds_a_demo_mexc_client_on_the_testnet_host(fake_assets):
     account = {"api_key": "mx0k", "secret_key": "s", "name": "Demo MEXC", "uni_id": "u1",
                "balance": 5000.0, "total_deposit": 5000.0, "demo": True, "exchange": "mexc"}
+    seen = {}
+
+    def entry(api, symbol, side, quantity, price):
+        seen["api"] = api
+        return {"result": {"orderId": 1, "avgPrice": None}, "quantity": quantity}
+
     with (
-        patch.object(webhook, "handle_entry") as entry,
-        patch.object(webhook, "handle_exit") as exit_,
-        patch.object(webhook.engine_client, "post_json") as post,
+        patch.object(webhook, "handle_entry", side_effect=entry),
+        patch.object(webhook.engine_client, "post_json", return_value={"success": True}),
     ):
-        buy = webhook._run_account(account, "BUY", "BTCUSDT", 100.0, 10, None, fake_assets["BTCUSDT"], {})
-        close = webhook._run_account(account, "EXIT_LONG", "BTCUSDT", 100.0, None, None, None, None)
-    assert buy["status"] == "skipped" and buy["reason"] == "no testnet on mexc" and buy["exchange"] == "mexc"
-    assert close["status"] == "skipped" and close["reason"] == "no testnet on mexc"
-    entry.assert_not_called()
-    exit_.assert_not_called()
-    post.assert_not_called()
+        result = webhook._run_account(account, "BUY", "BTCUSDT", 100.0, 10, None, fake_assets["BTCUSDT"], {})
+    assert result["status"] == "filled" and result["exchange"] == "mexc"
+    assert seen["api"].base_url == hooks.MEXC_TESTNET_API_BASE
 
 
 def test_run_account_builds_a_mexc_client_and_reports_its_exchange(fake_assets):

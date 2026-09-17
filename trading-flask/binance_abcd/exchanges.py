@@ -67,24 +67,24 @@ def exchange_of(account: dict) -> str:
 
 
 def base_url_for(account: dict) -> str:
-    """Mainnet, or the Binance testnet base for demo accounts. MEXC has one host."""
+    """Mainnet, or the venue's futures testnet for demo accounts. Both venues
+    have one: demo=1 is the ONLY thing that picks the host, so the flag is
+    never a display preference (see the connect wizard's mode step)."""
+    demo = bool(account.get("demo"))
     if exchange_of(account) == "mexc":
-        return hooks.MEXC_API_BASE
-    return hooks.BINANCE_TESTNET_API_BASE if account.get("demo") else hooks.BINANCE_API_BASE
+        return hooks.MEXC_TESTNET_API_BASE if demo else hooks.MEXC_API_BASE
+    return hooks.BINANCE_TESTNET_API_BASE if demo else hooks.BINANCE_API_BASE
 
 
 def tradeable(account: dict) -> Optional[str]:
     """None when the account may be traded and polled; else the skip reason.
 
-    The one case today: a MEXC row flagged demo. MEXC has no futures testnet,
-    so "demo" cannot mean "play money" there — the only host is the real one.
-    Refused for ENTRIES AND EXITS (unlike every other gate, which is
-    entry-only): nothing was ever opened through us on such a row, so there is
-    no position the always-closable rule protects. The pollers skip it too, so
-    a real balance never shows up on an account the user believes is a demo.
+    A gate that applies to EXITS too (unlike every other gate, which is
+    entry-only) — reserved for a row that can never be traded on its venue at
+    all, where there is no position the always-closable rule protects. No
+    venue needs it today: MEXC's demo rows route to its testnet since
+    2026-09-17. Kept as the one place such a rule would live.
     """
-    if exchange_of(account) == "mexc" and account.get("demo"):
-        return "no testnet on mexc"
     return None
 
 

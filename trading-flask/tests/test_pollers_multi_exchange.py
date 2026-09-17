@@ -44,9 +44,11 @@ class FakeBinance:
 
 class FakeMexc:
     fail = set()
+    hosts: list[str] = []
 
     def __init__(self, api_key, secret_key, base_url=None):
         self.api_key, self.base_url = api_key, base_url
+        FakeMexc.hosts.append(base_url)
 
     def asset(self, currency="USDT"):
         if "asset" in FakeMexc.fail:
@@ -105,8 +107,16 @@ def test_balances_are_posted_per_exchange_with_mexc_wallet_as_equity_minus_unrea
     by_ex = {ex: payload["rows"] for path, ex, payload in posts}
     assert set(by_ex) == {"binance", "mexc"}
     assert by_ex["binance"] == [{"api_key": "b-1", "balance": 1000.0, "unrealized_pnl": 5.0, "initial_deposit": 1000.0}]
-    assert by_ex["mexc"] == [{"api_key": "m-1", "balance": pytest.approx(515.75), "unrealized_pnl": -3.25,
-                              "initial_deposit": pytest.approx(515.75)}]   # the demo row is never polled
+    # The demo row is polled too — against the testnet host (FakeMexc answers either).
+    assert [r["api_key"] for r in by_ex["mexc"]] == ["m-1", "m-9"]
+    assert by_ex["mexc"][0] == {"api_key": "m-1", "balance": pytest.approx(515.75), "unrealized_pnl": -3.25,
+                                "initial_deposit": pytest.approx(515.75)}
+
+
+def test_demo_mexc_rows_are_polled_on_the_testnet_host():
+    FakeMexc.hosts = []
+    _posts(fb, [MEX, MEX_DEMO])
+    assert FakeMexc.hosts == [hooks.MEXC_API_BASE, hooks.MEXC_TESTNET_API_BASE]
 
 
 def test_a_failed_mexc_balance_read_skips_that_account_only():
@@ -136,7 +146,7 @@ def test_positions_are_synced_per_exchange_in_coins_with_derived_mexc_fields():
     assert set(by_ex) == {"binance", "mexc"}
     assert by_ex["binance"][0]["positions"][0]["symbol"] == "ETHUSDT"
     mexc = by_ex["mexc"]
-    assert [a["api_key"] for a in mexc] == ["m-1"]
+    assert [a["api_key"] for a in mexc] == ["m-1", "m-9"]
     row = mexc[0]["positions"][0]
     assert row["symbol"] == "BTCUSDT" and row["position_side"] == "SHORT"
     assert row["position_amt"] == pytest.approx(-0.002)              # 20 contracts × 0.0001, SHORT negative
@@ -170,12 +180,13 @@ def test_transfers_are_posted_per_exchange_with_mexc_ids_and_txids():
     by_ex = {ex: payload["rows"] for path, ex, payload in posts}
     assert by_ex["binance"] == [{"api_key": "b-1", "uni_id": "u1", "type": "DEPOSIT", "amount": 250.0, "tran_id": 11,
                                  "currency": "USDT", "transaction_time": 5, "info": "TRANSFER"}]
-    assert by_ex["mexc"] == [
+    assert by_ex["mexc"][:2] == [
         {"api_key": "m-1", "uni_id": "u2", "type": "DEPOSIT", "amount": 300.0, "tran_id": 501, "currency": "USDT",
          "transaction_time": 9000, "info": "tx-in"},
         {"api_key": "m-1", "uni_id": "u2", "type": "WITHDRAWAL", "amount": 50.0, "tran_id": 502, "currency": "USDT",
          "transaction_time": 9500, "info": "tx-out"},
     ]  # id 400 is older than the window
+    assert {r["api_key"] for r in by_ex["mexc"]} == {"m-1", "m-9"}  # the demo row too
 
 
 def test_a_failed_mexc_transfer_read_sends_nothing_for_that_account():
@@ -187,7 +198,7 @@ def test_a_failed_mexc_transfer_read_sends_nothing_for_that_account():
 
 # --- Startup ---------------------------------------------------------------------------
 
-def test_startup_counts_accounts_per_venue_and_skips_demo_mexc(monkeypatch):
+def test_startup_counts_accounts_per_venue_including_demo_rows(monkeypatch):
     import binance_abcd.main as main
 
     monkeypatch.setattr(hooks, "SYNC_POSITION_MODE_ON_STARTUP", False)
@@ -196,7 +207,7 @@ def test_startup_counts_accounts_per_venue_and_skips_demo_mexc(monkeypatch):
         patch.object(main, "fetch_assets", side_effect=lambda force=False, exchange="binance": {"BTCUSDT": {}} if exchange == "mexc" else {"BTCUSDT": {}, "ETHUSDT": {}}),
     ):
         accounts, assets = main.startup_checks()
-    assert accounts == {"Binance": 1, "MEXC": 1}
+    assert accounts == {"Binance": 1, "MEXC": 2}
     assert assets == {"Binance": 2, "MEXC": 1}
 
 

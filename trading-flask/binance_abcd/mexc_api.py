@@ -1,4 +1,4 @@
-"""MEXC USDT-M futures REST client — the OPEN-API, one host, no testnet.
+"""MEXC USDT-M futures REST client — the OPEN-API (mainnet or the futures testnet).
 
 Re-implemented from MEXC's futures Open API materials (a condensed copy lives
 in the read-only reference project's api-docs/mexc/) for the engine's own
@@ -30,8 +30,10 @@ Two MEXC facts that shape everything below:
   error". `coins_to_vol` is the one place that conversion happens on the way
   out; the adapter multiplies back on every read.
 
-Host: https://api.mexc.com. The older contract.mexc.com answers 403 HTML from
-the edge, not a JSON error.
+Hosts: https://api.mexc.com (live) and https://futures.testnet.mexc.com (the
+futures testnet — same paths, same login, same API keys, 10,000 test USDT;
+refuses IP-bound keys because a CDN sits in front of it). The older
+contract.mexc.com answers 403 HTML from the edge, not a JSON error.
 """
 
 from __future__ import annotations
@@ -180,7 +182,8 @@ def reset_caches() -> None:
 
 
 class MexcFuturesAPI:
-    """Signed client for one account. One base_url — there is no testnet."""
+    """Signed client for one account. base_url selects mainnet vs the futures
+    testnet (demo accounts); every cache below is keyed by it."""
 
     def __init__(
         self,

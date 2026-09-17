@@ -8,9 +8,10 @@ export interface ExchangeMeta {
   blurb: string
   /**
    * Whether the venue has a futures TESTNET the engine can route a demo
-   * account to. Without one the wizard skips the live/demo step and the API
-   * refuses `demo: true` — a "demo" row on such a venue could only ever be a
-   * live account wearing the wrong badge.
+   * account to (Binance: testnet.binancefuture.com; MEXC:
+   * futures.testnet.mexc.com). Without one the wizard skips the live/demo
+   * step and the API refuses `demo: true` — a "demo" row on such a venue
+   * could only ever be a live account wearing the wrong badge.
    */
   hasTestnet: boolean
 }
@@ -35,7 +36,7 @@ export const EXCHANGE_META: Record<ExchangeKind, ExchangeMeta> = {
     color: '#1972e2',
     available: true,
     blurb: 'Connect your MEXC futures account with trade-only API keys',
-    hasTestnet: false,
+    hasTestnet: true,
   },
 }
 

@@ -50,7 +50,7 @@ function modesFor(kind: ExchangeKind): ModeOption[] {
       tagline: `Trades the ${copy.marketName} testnet with play money.`,
       points: [
         'Test funds only — nothing you own is at risk',
-        `Keys from ${copy.demoSite} (a separate login)`,
+        copy.demoKeysPoint ?? `Keys from ${copy.demoSite}`,
         'Never invoiced — results are not real performance',
       ],
       accent: false,
