@@ -26,6 +26,14 @@ endpoint's daily series to a window, chains the days in it, and hands a plain
 dict to :func:`binance_abcd.notify.notify_report`, which owns every decision
 about what the public channel is allowed to say.
 
+**One recap per exchange.** The channel labels every entry and exit with its
+venue (`LTCUSDT · Binance`), so the recap is read per venue too: each firing
+fetches ``track-record/{exchange}`` for every exchange in ``EXCHANGES`` and
+posts one message per exchange that has a published record. An exchange the
+master has no real account on answers ``available: false`` and posts nothing
+— a "No trades closed" for a venue nobody trades would be noise. State is
+kept per (kind, exchange), so one venue's failed fetch retries alone.
+
 Two details worth keeping:
 
 * **Windows are calendar days in the SERIES' timezone, ending TODAY.** The
@@ -55,7 +63,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time as dtime, timedelta, timezone
 from typing import Any, Optional
 
-from binance_abcd import hooks, notify
+from binance_abcd import exchanges, hooks, notify
 from binance_abcd.http_client import get_session
 
 log = logging.getLogger(__name__)
@@ -323,14 +331,15 @@ def rank_assets(window: list) -> list[dict]:
 
 # --- Track record source ----------------------------------------------------------
 
-def fetch_track_record() -> Optional[dict]:
-    """The published track record, or None when it could not be read.
+def fetch_track_record(exchange: Optional[str] = None) -> Optional[dict]:
+    """The published track record — one exchange's slice when `exchange` is
+    given, the pooled record otherwise — or None when it could not be read.
 
     None means "unavailable", never "nothing happened" — the caller leaves the
     period unmarked and retries, exactly like the pollers' rule that an empty
     read and a failed read are different answers.
     """
-    url = hooks.public_url("track-record")
+    url = hooks.public_url(f"track-record/{exchange}" if exchange else "track-record")
     try:
         response = get_session().get(
             url, timeout=hooks.ENGINE_API_TIMEOUT, headers={"Accept": "application/json"}
@@ -376,31 +385,55 @@ def _save_state(state: dict) -> None:
 
 # --- Runner -------------------------------------------------------------------------
 
-def _publish(schedule: Schedule, fire: datetime) -> bool:
-    """Post one recap. False means "could not, try again" — the period stays
-    unmarked so the next tick retries it inside the catch-up window."""
-    payload = fetch_track_record()
+def _publish(schedule: Schedule, fire: datetime, exchange: str) -> bool:
+    """Post one exchange's recap. False means "could not, try again" — the
+    period stays unmarked so the next tick retries it inside the catch-up window."""
+    payload = fetch_track_record(exchange)
     if payload is None:
-        log.warning("[reports] %s deferred — track record unavailable", schedule.kind)
+        log.warning("[reports] %s/%s deferred — track record unavailable", schedule.kind, exchange)
         return False
     if not payload.get("available"):
-        # Nothing is published yet (no master account, or no closed trades). Not
-        # a transient failure, so mark it done rather than retrying all window.
-        log.info("[reports] %s skipped — no track record published yet", schedule.kind)
+        # Nothing is published for this exchange yet (the master has no real
+        # account there, or no closed trades). Not a transient failure, so mark
+        # it done rather than retrying all window — and post nothing: a channel
+        # recap for a venue with no record would be noise, not a report.
+        log.info("[reports] %s/%s skipped — no track record published yet", schedule.kind, exchange)
         return True
 
     start, end = period_window(schedule, fire, series_timezone(payload))
     summary = summarize(payload.get("series") or [], start, end)
-    notify.notify_report(schedule.kind, summary)
+    notify.notify_report(schedule.kind, summary, exchange=exchanges.label(exchange))
     log.info(
-        "[reports] posted %s for %s..%s (%s trading days, %s trades)",
-        schedule.kind, start, end, summary["trading_days"], summary["trades"],
+        "[reports] posted %s/%s for %s..%s (%s trading days, %s trades)",
+        schedule.kind, exchange, start, end, summary["trading_days"], summary["trades"],
     )
     return True
 
 
+def _marked(state: dict, kind: str, exchange: str) -> Optional[str]:
+    """The firing day already handled for (kind, exchange). State is
+    ``{kind: {exchange: 'YYYY-MM-DD'}}``; a bare string under `kind` is the
+    pre-per-exchange file and counts for every exchange, so an upgrade neither
+    re-posts nor drops a period."""
+    entry = state.get(kind)
+    if isinstance(entry, dict):
+        return entry.get(exchange)
+    return entry if isinstance(entry, str) else None
+
+
+def _mark(state: dict, kind: str, exchange: str, key: str) -> None:
+    entry = state.get(kind)
+    if not isinstance(entry, dict):
+        # Promote the legacy string: every exchange inherits it, then this one moves on.
+        entry = {name: entry for name in exchanges.enabled()} if isinstance(entry, str) else {}
+        state[kind] = entry
+    entry[exchange] = key
+
+
 def run_once(schedules: list[Schedule], tzinfo, now: Optional[datetime] = None) -> None:
-    """One scheduler tick: post whatever is due and not yet posted."""
+    """One scheduler tick: post whatever is due and not yet posted — one recap
+    per (schedule, exchange), since the channel labels every entry and exit
+    with its venue and the recap has to be readable the same way."""
     now = now or datetime.now(tzinfo)
     # A missing state file is a FIRST RUN, and every period already in the past
     # is seeded as sent without posting. Otherwise the first deploy immediately
@@ -415,28 +448,30 @@ def run_once(schedules: list[Schedule], tzinfo, now: Optional[datetime] = None) 
         if fire is None:
             continue
         key = fire.date().isoformat()
-        if state.get(schedule.kind) == key:
-            continue
 
-        if first_run:
-            log.info("[reports] seeding %s at %s (first run — not posting)", schedule.kind, key)
-            state[schedule.kind] = key
-            changed = True
-            continue
+        for exchange in exchanges.enabled():
+            if _marked(state, schedule.kind, exchange) == key:
+                continue
 
-        late_hours = (now - fire).total_seconds() / 3600
-        if late_hours > hooks.REPORT_CATCHUP_HOURS:
-            log.warning(
-                "[reports] skipping %s %s — %.1fh late (catch-up limit %.1fh)",
-                schedule.kind, key, late_hours, hooks.REPORT_CATCHUP_HOURS,
-            )
-            state[schedule.kind] = key
-            changed = True
-            continue
+            if first_run:
+                log.info("[reports] seeding %s/%s at %s (first run — not posting)", schedule.kind, exchange, key)
+                _mark(state, schedule.kind, exchange, key)
+                changed = True
+                continue
 
-        if _publish(schedule, fire):
-            state[schedule.kind] = key
-            changed = True
+            late_hours = (now - fire).total_seconds() / 3600
+            if late_hours > hooks.REPORT_CATCHUP_HOURS:
+                log.warning(
+                    "[reports] skipping %s/%s %s — %.1fh late (catch-up limit %.1fh)",
+                    schedule.kind, exchange, key, late_hours, hooks.REPORT_CATCHUP_HOURS,
+                )
+                _mark(state, schedule.kind, exchange, key)
+                changed = True
+                continue
+
+            if _publish(schedule, fire, exchange):
+                _mark(state, schedule.kind, exchange, key)
+                changed = True
 
     if changed:
         _save_state(state)

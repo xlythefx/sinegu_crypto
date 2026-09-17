@@ -698,6 +698,20 @@ for the overlay's `position: fixed` and trap it inside.
     a leaderboard that does not add up to the line above it is a question in
     the channel. **No all-time / return-on-capital line** — removed the same
     day; a recap is the period it names and nothing else.
+  - **One recap per EXCHANGE** (2026-09-17). `GET /api/public/track-record`
+    pools every exchange the master trades on into one portfolio (capital and
+    P&L summed across `ExchangeSchema::supported()`, `exchanges: [...]` naming
+    the contributors) and is what the landing page reads;
+    `/api/public/track-record/{exchange}` is one exchange's slice, measured on
+    its OWN capital. `reports.py` fetches the slice for every exchange in
+    `hooks.EXCHANGES` and posts one message per venue (`Daily Report — 16 Sep
+    2026 · Binance`, the label entries and exits already carry). An exchange
+    with `available: false` (no real master account there) posts NOTHING —
+    not "No trades closed" — and is marked done. State is per (kind, exchange)
+    so one venue's failed fetch retries alone; a legacy one-date-per-kind
+    state file counts for every venue. MEXC recaps start the day
+    `BINANCE_ABCD_EXCHANGES` includes `mexc` on prod AND the master has a
+    `mexc_accounts` row.
   - **"Trades closed" counts INCREMENTS, not close orders** (2026-09-17). A
     `binance_pastpositions` row is one close order, and the engine closes a
     whole stacked position in one order, so `Increment (1/3)…(3/3)` closes as

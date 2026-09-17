@@ -302,19 +302,31 @@ def test_no_report_ever_names_an_account_or_an_amount(sent):
 
 @pytest.fixture()
 def track_record(monkeypatch):
-    """Serve a canned track record; the list lets a test make it unavailable."""
+    """Serve a canned track record per exchange; a test can swap either entry
+    (None = the fetch failed) or the whole payload."""
     payload = {"success": True, "available": True, "timezone": "Asia/Manila", "series": SERIES}
-    box = {"payload": payload}
-    monkeypatch.setattr(reports, "fetch_track_record", lambda: box["payload"])
+    box = {"payload": payload, "by_exchange": {}}
+    monkeypatch.setattr(hooks, "EXCHANGES", ("binance",))
+    monkeypatch.setattr(
+        reports, "fetch_track_record",
+        lambda exchange=None: box["by_exchange"].get(exchange, box["payload"]),
+    )
     return box
+
+
+def _state():
+    return json.loads(reports.STATE_FILE.read_text("utf-8"))
 
 
 def test_first_run_seeds_silently(schedules, track_record, sent):
     """A deploy must not immediately fire a daily, a weekly and a monthly."""
     reports.run_once(schedules, MANILA, _now("2026-09-07T12:00"))
     assert sent == []
-    state = json.loads(reports.STATE_FILE.read_text("utf-8"))
-    assert state == {"daily": "2026-09-07", "weekly": "2026-09-04", "monthly": "2026-08-31"}
+    assert _state() == {
+        "daily": {"binance": "2026-09-07"},
+        "weekly": {"binance": "2026-09-04"},
+        "monthly": {"binance": "2026-08-31"},
+    }
 
 
 def test_the_next_due_period_posts_once(schedules, track_record, sent):
@@ -340,8 +352,7 @@ def test_a_stale_report_is_dropped_not_posted_late(schedules, track_record, sent
     assert sent == []
     # ...and it is marked done, so it never posts later either. 09-09's own 11:30
     # has not passed yet at 09:00, so the period marked is 09-08's.
-    state = json.loads(reports.STATE_FILE.read_text("utf-8"))
-    assert state["daily"] == "2026-09-08"
+    assert _state()["daily"]["binance"] == "2026-09-08"
 
 
 def test_an_unavailable_track_record_defers_rather_than_marking_done(schedules, track_record, sent):
@@ -351,7 +362,7 @@ def test_an_unavailable_track_record_defers_rather_than_marking_done(schedules, 
     track_record["payload"] = None  # backend down
     reports.run_once(schedules, MANILA, _now("2026-09-08T11:31"))
     assert sent == []
-    assert json.loads(reports.STATE_FILE.read_text("utf-8"))["daily"] == "2026-09-07"
+    assert _state()["daily"]["binance"] == "2026-09-07"
 
     track_record["payload"] = available  # backend back
     reports.run_once(schedules, MANILA, _now("2026-09-08T11:35"))
@@ -363,7 +374,68 @@ def test_nothing_published_yet_is_skipped_quietly(schedules, track_record, sent)
     track_record["payload"] = {"success": True, "available": False, "series": []}
     reports.run_once(schedules, MANILA, _now("2026-09-08T11:31"))
     assert sent == []
-    assert json.loads(reports.STATE_FILE.read_text("utf-8"))["daily"] == "2026-09-08"
+    assert _state()["daily"]["binance"] == "2026-09-08"
+
+
+# --- One recap per exchange -----------------------------------------------------
+
+def test_each_enabled_exchange_gets_its_own_recap(schedules, track_record, sent, monkeypatch):
+    """The channel labels every entry `· Binance` / `· MEXC`; the recap reads
+    the same way — one message per venue, each from that venue's own slice."""
+    monkeypatch.setattr(hooks, "EXCHANGES", ("binance", "mexc"))
+    mexc_series = [{"date": "2026-09-08", "pct": 2.0, "trades": 1,
+                    "assets": [{"symbol": "ETH_USDT", "pct": 2.0, "trades": 1}]}]
+    track_record["by_exchange"] = {
+        "binance": {"available": True, "timezone": "Asia/Manila",
+                    "series": [{"date": "2026-09-08", "pct": 1.0, "trades": 2, "assets": []}]},
+        "mexc": {"available": True, "timezone": "Asia/Manila", "series": mexc_series},
+    }
+    reports.run_once(schedules, MANILA, _now("2026-09-07T12:00"))   # seed
+    reports.run_once(schedules, MANILA, _now("2026-09-08T11:31"))   # daily due
+    assert len(sent) == 2
+    binance, mexc = sent
+    assert "Daily Report — 8 Sep 2026 · Binance" in binance and "+1.000%" in binance
+    assert "Daily Report — 8 Sep 2026 · MEXC" in mexc and "+2.000%" in mexc and "ETH_USDT" in mexc
+    assert _state()["daily"] == {"binance": "2026-09-08", "mexc": "2026-09-08"}
+
+
+def test_an_exchange_without_a_record_posts_nothing(schedules, track_record, sent, monkeypatch):
+    """The master has no MEXC account yet: no "No trades closed" for it — a
+    recap for a venue nobody trades is noise — and it is marked done."""
+    monkeypatch.setattr(hooks, "EXCHANGES", ("binance", "mexc"))
+    track_record["by_exchange"] = {"mexc": {"available": False, "series": []}}
+    reports.run_once(schedules, MANILA, _now("2026-09-07T12:00"))
+    reports.run_once(schedules, MANILA, _now("2026-09-08T11:31"))
+    assert len(sent) == 1 and "· Binance" in sent[0]
+    assert _state()["daily"]["mexc"] == "2026-09-08"
+
+
+def test_one_exchange_failing_to_fetch_retries_alone(schedules, track_record, sent, monkeypatch):
+    monkeypatch.setattr(hooks, "EXCHANGES", ("binance", "mexc"))
+    track_record["by_exchange"] = {"mexc": None}   # MEXC slice unreadable
+    reports.run_once(schedules, MANILA, _now("2026-09-07T12:00"))
+    reports.run_once(schedules, MANILA, _now("2026-09-08T11:31"))
+    assert len(sent) == 1 and "· Binance" in sent[0]
+    assert _state()["daily"] == {"binance": "2026-09-08", "mexc": "2026-09-07"}
+
+    track_record["by_exchange"] = {}   # back
+    reports.run_once(schedules, MANILA, _now("2026-09-08T11:35"))
+    assert len(sent) == 2 and "· MEXC" in sent[1]   # Binance is NOT re-posted
+
+
+def test_a_legacy_state_file_counts_for_every_exchange(schedules, track_record, sent, monkeypatch):
+    """The pre-per-exchange file held one date per kind. Upgrading must neither
+    re-post the period it names nor drop it."""
+    monkeypatch.setattr(hooks, "EXCHANGES", ("binance", "mexc"))
+    reports.STATE_FILE.write_text(
+        json.dumps({"daily": "2026-09-08", "weekly": "2026-09-04", "monthly": "2026-08-31"}), "utf-8",
+    )
+    reports.run_once(schedules, MANILA, _now("2026-09-08T11:31"))
+    assert sent == []   # already posted, for both
+
+    reports.run_once(schedules, MANILA, _now("2026-09-09T11:31"))
+    assert len(sent) == 2
+    assert _state()["daily"] == {"binance": "2026-09-09", "mexc": "2026-09-09"}
 
 
 def test_reporter_is_off_when_disabled(monkeypatch):
@@ -384,4 +456,4 @@ def test_a_corrupt_state_file_is_treated_as_a_fresh_seed(schedules, track_record
     reports.run_once(schedules, MANILA, _now("2026-09-08T11:31"))
     # The file EXISTS, so this is not a first run — it posts rather than seeding.
     assert len(sent) == 1
-    assert json.loads(reports.STATE_FILE.read_text("utf-8"))["daily"] == "2026-09-08"
+    assert _state()["daily"]["binance"] == "2026-09-08"

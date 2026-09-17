@@ -523,8 +523,10 @@ def _asset_ranking(assets: list) -> list[str]:
     return lines
 
 
-def notify_report(kind: str, summary: dict) -> None:
-    """A scheduled daily/weekly/monthly recap for the PUBLIC channel.
+def notify_report(kind: str, summary: dict, exchange: Optional[str] = None) -> None:
+    """A scheduled daily/weekly/monthly recap for the PUBLIC channel — one per
+    exchange, `exchange` being the venue label the entries and exits already
+    carry ("Binance", "MEXC"), so the recap reads the same way they do.
 
     Same privacy rule as every other public message, and here it is structural
     rather than remembered: `summary` is built by ``reports.py`` out of
@@ -544,8 +546,9 @@ def notify_report(kind: str, summary: dict) -> None:
     staying silent instead would make the bot look broken.
     """
     emoji, label = _REPORT_META.get(kind, ("📊", "Performance Report"))
+    venue = f" · {_esc(exchange)}" if exchange else ""
     lines = [
-        f"{emoji} <b>{label} — {_fmt_day_range(summary.get('start'), summary.get('end'))}</b>",
+        f"{emoji} <b>{label} — {_fmt_day_range(summary.get('start'), summary.get('end'))}{venue}</b>",
         "",
     ]
 

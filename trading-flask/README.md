@@ -221,6 +221,14 @@ a daily, weekly and monthly recap to the **public** channel.
 | Weekly | `fri 23:55` | the 7 days ending today |
 | Monthly | `last 23:55` | the 1st of the month through today — the whole month |
 
+**One message per exchange.** Each firing fetches `track-record/{exchange}` for
+every exchange in `BINANCE_ABCD_EXCHANGES` and posts a recap headed
+`Daily Report — 16 Sep 2026 · Binance` / `· MEXC`, the same venue label every
+entry and exit carries. An exchange the master has no real account on answers
+`available: false` and posts nothing. State (`out/report_state.json`) is per
+(kind, exchange), so one venue's failed fetch retries alone; a pre-per-exchange
+state file is read as covering every venue.
+
 "Day" means a calendar day in the timezone the API buckets the track record in
 (`TRACK_RECORD_TIMEZONE`, Asia/Manila on prod), which the payload publishes as
 `timezone`; the window is cut in that same calendar. Before 2026-09-16 the
