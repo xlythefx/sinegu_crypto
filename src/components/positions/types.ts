@@ -5,8 +5,8 @@ export type ExchangeFilter = 'all' | Exchange
 
 export const EXCHANGES: Exchange[] = ['Binance', 'Bybit', 'MEXC']
 
-/** Only Binance is integrated for now — Bybit / MEXC are disabled in the UI. */
-export const AVAILABLE_EXCHANGES: Exchange[] = ['Binance']
+/** Venues with tables behind them — Bybit stays disabled in the facet. */
+export const AVAILABLE_EXCHANGES: Exchange[] = ['Binance', 'MEXC']
 
 export interface ActivePosition {
   ticker: string

@@ -113,6 +113,9 @@ interface EquityHeroCardProps {
   /** false = no exchange connected: swaps the LIVE pill and chart for a
    *  "connect a broker" empty state. Defaults to true. */
   connected?: boolean
+  /** Under a venue filter, the venue the empty state should name ("No MEXC
+   *  account connected") instead of the generic "connect a broker". */
+  emptyExchangeLabel?: string
 }
 
 /** Equity hero: ACCOUNT EQUITY label + LIVE pill, big mono balance, the
@@ -132,6 +135,7 @@ export default function EquityHeroCard({
   pctBase,
   curve,
   connected = true,
+  emptyExchangeLabel,
 }: EquityHeroCardProps) {
   const feesSince = fees.trades_without_fee > 0 ? fees.since : null
   const [range, setRange] = useState<RangeKey>('All')
@@ -313,18 +317,21 @@ export default function EquityHeroCard({
               <Link2 size={30} />
             </div>
             <h3 className="font-display text-[17px] font-extrabold tracking-[-0.02em]">
-              Connect a broker to start receiving trades
+              {emptyExchangeLabel
+                ? `No ${emptyExchangeLabel} account connected`
+                : 'Connect a broker to start receiving trades'}
             </h3>
             <p className="mx-auto mt-2 mb-5 max-w-[420px] text-[13px] leading-[1.6] text-muted">
-              Live equity, PNL and analytics appear here once an exchange is
-              connected.
+              {emptyExchangeLabel
+                ? `This view shows ${emptyExchangeLabel} only. Connect a ${emptyExchangeLabel} account, or switch the filter back to All.`
+                : 'Live equity, PNL and analytics appear here once an exchange is connected.'}
             </p>
             <Link
               to="/dashboard/exchanges"
               className="mx-auto inline-flex h-[38px] items-center gap-[7px] rounded-pill bg-accent px-4 text-[13px] font-bold text-on-accent shadow-[0_10px_24px_var(--glow)] transition-[filter] hover:brightness-[1.06]"
             >
               <Plus size={15} />
-              Connect an exchange
+              {emptyExchangeLabel ? `Connect ${emptyExchangeLabel}` : 'Connect an exchange'}
             </Link>
           </div>
         </div>

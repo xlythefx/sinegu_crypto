@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useApiData } from '../../hooks/useApiData'
 import { getDashboardDailyPnl } from '../../services/dashboard'
+import type { ExchangeFilter } from '../../context/ExchangeFilterContext'
 import { deleteAdminPastTrade, updateAdminPastTrade } from '../../services/admin'
 import { getApiErrorMessage } from '../../services/api'
 import { canSeeAdmin } from '../../lib/roles'
@@ -28,6 +29,8 @@ type DisplayMode = 'amount' | 'percentage'
 interface DailyPnlCalendarProps {
   /** Equity base used for the % display mode. */
   balance: number
+  /** The top-bar scope — the days come from that venue's tables (or all). */
+  exchange?: ExchangeFilter
 }
 
 interface Cell {
@@ -83,8 +86,14 @@ function toEditableRow(t: DayTrade): PositionRow {
 
 /** Daily P&L calendar — month grid tinted by P&L sign + magnitude, with month
  *  navigation, an Amount/% toggle, and a click-to-open trades modal per day. */
-export default function DailyPnlCalendar({ balance }: DailyPnlCalendarProps) {
-  const { data: days, reload } = useApiData(getDashboardDailyPnl)
+export default function DailyPnlCalendar({
+  balance,
+  exchange = 'all',
+}: DailyPnlCalendarProps) {
+  const { data: days, reload } = useApiData(
+    () => getDashboardDailyPnl(exchange),
+    [exchange],
+  )
   // Same predicate as the sidebar's admin button and as EnsureAdmin::ROLES on
   // the server — the icons are cosmetic, the /admin/* endpoints do the gating.
   // Being allowed only makes the popup's tap gesture live; the icons

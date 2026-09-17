@@ -6,6 +6,7 @@ import DataState from '../components/dashboard/DataState'
 import AssetPerformanceCard from '../components/asset-performance/AssetPerformanceCard'
 import TradableAssetsShowcase from '../components/asset-performance/TradableAssetsShowcase'
 import { useApiData } from '../hooks/useApiData'
+import { useExchangeFilter } from '../context/ExchangeFilterContext'
 import { getAssetPerformance } from '../services/dashboard'
 import { getTradableAssets } from '../services/assets'
 import { ApiError } from '../services/api'
@@ -17,7 +18,12 @@ const PAG_BTN =
   'inline-flex items-center gap-[5px] border border-border bg-surface2 text-text rounded-pill py-2 px-4 text-[12.5px] font-semibold cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed enabled:hover:border-accent'
 
 export default function AssetPerformance() {
-  const { data, loading, error, reload } = useApiData(getAssetPerformance)
+  // Per-asset figures follow the top-bar exchange scope like the dashboard.
+  const { exchange } = useExchangeFilter()
+  const { data, loading, error, reload } = useApiData(
+    () => getAssetPerformance(exchange),
+    [exchange],
+  )
   const catalog = useApiData(getTradableAssets)
 
   const [search, setSearch] = useState('')

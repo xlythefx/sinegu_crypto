@@ -1,4 +1,5 @@
 import { apiFetch } from './api'
+import { exchangeQuery, type ExchangeFilter } from '../context/ExchangeFilterContext'
 import type {
   AssetPerformanceData,
   DailyPnlMap,
@@ -7,9 +8,16 @@ import type {
   PastPosition,
 } from '../types/dashboard'
 
-export async function getDashboardSummary(): Promise<DashboardSummary> {
+// Every read takes the top-bar exchange filter: omitted / 'all' pools every
+// connected exchange, a venue narrows the API's queries to that venue's own
+// tables. The API answers 400 for a venue it has no tables for (Bybit), which
+// the pills never offer.
+
+export async function getDashboardSummary(
+  exchange: ExchangeFilter = 'all',
+): Promise<DashboardSummary> {
   const res = await apiFetch<{ success: boolean; summary: DashboardSummary }>(
-    '/dashboard/summary',
+    `/dashboard/summary${exchangeQuery(exchange)}`,
     { auth: true },
   )
   // PHP serializes an empty keyed collection as [] — normalize to an object
@@ -17,33 +25,43 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   return res.summary
 }
 
-export async function getDashboardDailyPnl(): Promise<DailyPnlMap> {
+export async function getDashboardDailyPnl(
+  exchange: ExchangeFilter = 'all',
+): Promise<DailyPnlMap> {
   const res = await apiFetch<{ success: boolean; days: DailyPnlMap }>(
-    '/dashboard/daily-pnl',
+    `/dashboard/daily-pnl${exchangeQuery(exchange)}`,
     { auth: true },
   )
   // PHP serializes an empty map as [] — normalize to an object
   return Array.isArray(res.days) ? {} : res.days
 }
 
-export async function getAssetPerformance(): Promise<AssetPerformanceData> {
+export async function getAssetPerformance(
+  exchange: ExchangeFilter = 'all',
+): Promise<AssetPerformanceData> {
   const res = await apiFetch<
     { success: boolean } & AssetPerformanceData
-  >('/dashboard/asset-performance', { auth: true })
+  >(`/dashboard/asset-performance${exchangeQuery(exchange)}`, { auth: true })
   return { balance: res.balance, assets: res.assets }
 }
 
-export async function getOpenPositions(): Promise<OpenPosition[]> {
+/** Open positions across every connected exchange (each row says which). */
+export async function getOpenPositions(
+  exchange: ExchangeFilter = 'all',
+): Promise<OpenPosition[]> {
   const res = await apiFetch<{ success: boolean; positions: OpenPosition[] }>(
-    '/binance/positions',
+    `/binance/positions${exchangeQuery(exchange)}`,
     { auth: true },
   )
   return res.positions
 }
 
-export async function getPastPositions(): Promise<PastPosition[]> {
+/** Closed trades across every connected exchange, newest first. */
+export async function getPastPositions(
+  exchange: ExchangeFilter = 'all',
+): Promise<PastPosition[]> {
   const res = await apiFetch<{ success: boolean; positions: PastPosition[] }>(
-    '/binance/past-positions',
+    `/binance/past-positions${exchangeQuery(exchange)}`,
     { auth: true },
   )
   return res.positions

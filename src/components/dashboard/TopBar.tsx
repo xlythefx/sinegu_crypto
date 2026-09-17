@@ -1,7 +1,11 @@
-import { useContext, useState } from 'react'
+import { useContext } from 'react'
 import { Menu } from 'lucide-react'
 import { useTheme } from '../../theme'
 import { useSessionUser } from '../../hooks/useSessionUser'
+import {
+  useExchangeFilter,
+  type ExchangeFilter,
+} from '../../context/ExchangeFilterContext'
 import UserAvatar from '../ui/UserAvatar'
 import { EXCHANGE_META, EXCHANGE_ORDER } from '../exchanges/meta'
 import { ShellContext } from './DashboardShell'
@@ -18,10 +22,11 @@ import {
   THEME_TOGGLE_ICON,
 } from './shellClasses'
 
-export type ExchangeKey = 'all' | 'binance' | 'bybit' | 'mexc'
+/** Kept for older imports — the filter's type now lives with its context. */
+export type ExchangeKey = ExchangeFilter
 
 // Venues not yet connectable (EXCHANGE_META.available) stay visible but disabled.
-const EXCHANGES: { key: ExchangeKey; label: string; dot: string; soon?: boolean }[] = [
+const EXCHANGES: { key: ExchangeFilter; label: string; dot: string; soon?: boolean }[] = [
   { key: 'all', label: 'All', dot: 'var(--accent)' },
   ...EXCHANGE_ORDER.map((key) => ({
     key,
@@ -31,11 +36,15 @@ const EXCHANGES: { key: ExchangeKey; label: string; dot: string; soon?: boolean 
   })),
 ]
 
-/** Page top bar: burger (mobile) left; exchange filter, theme toggle and avatar right. */
+/**
+ * Page top bar: burger (mobile) left; exchange filter, theme toggle and
+ * avatar right. The exchange pills are the page's data scope, not decoration:
+ * they write the shared filter every dashboard read passes to the API.
+ */
 export default function TopBar() {
   const { theme, toggleTheme } = useTheme()
   const { openDrawer } = useContext(ShellContext)
-  const [exchange, setExchange] = useState<ExchangeKey>('all')
+  const { exchange, setExchange } = useExchangeFilter()
   const user = useSessionUser()
 
   return (
@@ -57,7 +66,8 @@ export default function TopBar() {
               className={`${FILTER_PILL_BASE} ${exchange === e.key ? FILTER_PILL_ON : FILTER_PILL_OFF}`}
               onClick={() => setExchange(e.key)}
               disabled={e.soon}
-              title={e.soon ? 'Coming soon' : undefined}
+              aria-pressed={exchange === e.key}
+              title={e.soon ? 'Coming soon' : `Show ${e.label === 'All' ? 'every exchange' : `${e.label} only`}`}
             >
               <span className={FILTER_DOT} style={{ background: e.dot }} />
               {e.label}

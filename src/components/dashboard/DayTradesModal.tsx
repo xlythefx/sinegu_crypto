@@ -6,6 +6,7 @@ import { fmtDateTime, fmtMediumDate, fmtNum, fmtSignedMoney } from '../../lib/fo
 import { useTapUnlock } from '../../hooks/useTapUnlock'
 import type { DayPnl, DayTrade } from '../../types/dashboard'
 import FeeLine from '../positions/FeeLine'
+import { EXCHANGE_META } from '../exchanges/meta'
 
 /** Trades shown per page — a busy day can close 30+, which is unreadable in one list. */
 const PAGE_SIZE = 5
@@ -157,6 +158,15 @@ export default function DayTradesModal({
                       {t.strategy}
                     </span>
                   )}
+                  {t.exchange && t.exchange !== 'binance' && (
+                    <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-muted">
+                      <i
+                        className="h-1.5 w-1.5 rounded-full"
+                        style={{ background: EXCHANGE_META[t.exchange].color }}
+                      />
+                      {EXCHANGE_META[t.exchange].label}
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2.5 flex-shrink-0">
                   <div className="flex flex-col items-end gap-[3px]">
@@ -171,7 +181,10 @@ export default function DayTradesModal({
                     </span>
                     <FeeLine fee={t.exchange_fee} source={t.fee_source} align="end" />
                   </div>
-                  {showManage && (
+                  {/* The admin editor writes binance_pastpositions by bare
+                      id; a MEXC row with the same id is a different trade,
+                      so the buttons stay off rows from any other table. */}
+                  {showManage && (!t.exchange || t.exchange === 'binance') && (
                     <div className="flex items-center gap-1.5 pl-2.5 border-l border-hair animate-[fadeup_0.35s_ease-out]">
                       <button
                         type="button"

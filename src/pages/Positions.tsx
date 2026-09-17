@@ -12,6 +12,10 @@ import { toActivePosition, toClosedTrade } from '../components/positions/adapter
 import type { ExchangeFilter } from '../components/positions/types'
 import { useApiData } from '../hooks/useApiData'
 import {
+  useExchangeFilter,
+  type ExchangeFilter as ExchangeScope,
+} from '../context/ExchangeFilterContext'
+import {
   getDashboardSummary,
   getOpenPositions,
   getPastPositions,
@@ -20,18 +24,25 @@ import { ApiError } from '../services/api'
 
 type Tab = 'active' | 'closed'
 
-/** Everything the positions page needs, in one parallel fetch. */
-async function fetchPositionsData() {
+/** Everything the positions page needs, in one parallel fetch, under the
+ *  top-bar exchange scope (the API reads that venue's tables, or all). */
+async function fetchPositionsData(scope: ExchangeScope) {
   const [summary, open, closed] = await Promise.all([
-    getDashboardSummary(),
-    getOpenPositions(),
-    getPastPositions(),
+    getDashboardSummary(scope),
+    getOpenPositions(scope),
+    getPastPositions(scope),
   ])
   return { summary, open, closed }
 }
 
 export default function Positions() {
-  const { data, loading, error, reload } = useApiData(fetchPositionsData)
+  // Two exchange controls, two jobs: the top bar decides what the API
+  // returns; the facet below narrows what is already on the page.
+  const { exchange: scope } = useExchangeFilter()
+  const { data, loading, error, reload } = useApiData(
+    () => fetchPositionsData(scope),
+    [scope],
+  )
 
   const [tab, setTab] = useState<Tab>('active')
   const [exchange, setExchange] = useState<ExchangeFilter>('all')

@@ -7,6 +7,7 @@ import TraderSidebar from './TraderSidebar'
 import TopBar from './TopBar'
 import OnboardingGate from './OnboardingGate'
 import ConfirmModal from '../ui/ConfirmModal'
+import { ExchangeFilterProvider } from '../../context/ExchangeFilterContext'
 import { logout } from '../../services/auth'
 
 interface DashboardLayoutProps {
@@ -16,7 +17,10 @@ interface DashboardLayoutProps {
 
 /**
  * Shared chrome for every dashboard page: shell + sidebar + top bar, AOS init,
- * and the standard yes/no logout confirmation.
+ * and the standard yes/no logout confirmation. Also owns the top bar's
+ * exchange filter, so the page content below can read the same value the
+ * pills write (it survives navigation via localStorage — each page mounts
+ * its own layout).
  */
 export default function DashboardLayout({
   title,
@@ -35,29 +39,31 @@ export default function DashboardLayout({
   }, [title])
 
   return (
-    <DashboardShell
-      sidebar={<TraderSidebar onLogout={() => setConfirmLogout(true)} />}
-    >
-      <TopBar />
-      <OnboardingGate />
-      {children}
-      <ConfirmModal
-        open={confirmLogout}
-        title="Log out?"
-        message="You will be signed out of your trader portal."
-        confirmLabel="Yes, log out"
-        cancelLabel="No"
-        danger
-        onConfirm={async () => {
-          setConfirmLogout(false)
-          try {
-            await logout()
-          } finally {
-            navigate('/auth')
-          }
-        }}
-        onCancel={() => setConfirmLogout(false)}
-      />
-    </DashboardShell>
+    <ExchangeFilterProvider>
+      <DashboardShell
+        sidebar={<TraderSidebar onLogout={() => setConfirmLogout(true)} />}
+      >
+        <TopBar />
+        <OnboardingGate />
+        {children}
+        <ConfirmModal
+          open={confirmLogout}
+          title="Log out?"
+          message="You will be signed out of your trader portal."
+          confirmLabel="Yes, log out"
+          cancelLabel="No"
+          danger
+          onConfirm={async () => {
+            setConfirmLogout(false)
+            try {
+              await logout()
+            } finally {
+              navigate('/auth')
+            }
+          }}
+          onCancel={() => setConfirmLogout(false)}
+        />
+      </DashboardShell>
+    </ExchangeFilterProvider>
   )
 }

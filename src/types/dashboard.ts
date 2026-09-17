@@ -1,3 +1,5 @@
+import type { ExchangeKind } from './exchanges'
+
 /**
  * BASIS. The trading dashboard and Performance Analytics lead with P&L
  * BEFORE exchange fees — the strategy's result — and every money figure
@@ -77,6 +79,13 @@ export interface PnlBreakdown {
 }
 
 export interface DashboardSummary {
+  /** The scope this was computed for: 'all' or one venue (the top-bar pill). */
+  exchange: 'all' | ExchangeKind
+  /** The venues pooled into it — one entry under a venue filter. */
+  exchanges: ExchangeKind[]
+  /** Connected accounts inside that scope; 0 under a venue filter means
+   *  "nothing connected on that exchange", not an emptied account. */
+  accounts: number
   equity: number
   balance: number
   /** After fees — the figure beside a list of trades (Positions page). */
@@ -156,8 +165,10 @@ export type FeeSource = 'estimated' | 'actual' | 'manual' | null
 
 /** One closed trade within a calendar day (from /dashboard/daily-pnl). */
 export interface DayTrade {
-  /** `binance_pastpositions.id` — names the row for an admin correction. */
+  /** `{exchange}_pastpositions.id` — names the row for an admin correction,
+   *  together with `exchange` (ids repeat across the per-exchange tables). */
   id: number
+  exchange: ExchangeKind
   symbol: string
   position_side: string
   position_amt: number
@@ -189,6 +200,8 @@ export type DailyPnlMap = Record<string, DayPnl>
 /** Row from /binance/positions (decimals arrive as strings from MySQL). */
 export interface OpenPosition {
   id: number
+  /** Which venue's table the row came from. */
+  exchange: ExchangeKind
   api_key: string
   symbol: string
   position_side: string
@@ -203,6 +216,8 @@ export interface OpenPosition {
 /** Row from /binance/past-positions (decimals arrive as strings from MySQL). */
 export interface PastPosition {
   id: number
+  /** Which venue's table the row came from. */
+  exchange: ExchangeKind
   api_key: string
   symbol: string
   position_side: string
