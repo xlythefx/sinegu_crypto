@@ -81,8 +81,9 @@ _TRANSIENT_HTTP = frozenset({408, 500, 502, 503, 504})
 
 # Query parameter names for the time window on the history endpoints. The
 # platform rule is snake_case for GET; the condensed docs list camelCase for
-# history_orders only, which reads like a transcription slip. One place to
-# flip if the live API disagrees (smoke check 3(e) in the plan).
+# history_orders only, which reads like a transcription slip. Worked live
+# 2026-09-17: the history poller found a close within its window and shipped
+# both fills of the round trip as receipts through these names.
 HISTORY_START_PARAM = "start_time"
 HISTORY_END_PARAM = "end_time"
 

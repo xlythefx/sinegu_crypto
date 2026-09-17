@@ -54,11 +54,12 @@ from binance_abcd.mexc_api import (
 
 log = logging.getLogger(__name__)
 
-# Whether a deal's `profit` already has its `fee` taken out. MEXC's materials
-# call it a "PnL component" beside a separate `fee`, i.e. gross — the same
-# basis Binance's realizedPnl has, which TradingFee then nets on ingest. If the
-# real-key smoke check shows profit is NET, flip this: the adapter adds the fee
-# back so the API does not net it twice.
+# Whether a deal's `profit` already has its `fee` taken out. VERIFIED GROSS on
+# 2026-09-17 (futures testnet, real key): a 0.01 BTC LONG opened 76,427.3 and
+# closed 76,419.4 reported profit -0.079 = (exit - entry) x qty exactly, with
+# fee 0.1528 on a separate field — the same basis Binance's realizedPnl has,
+# which TradingFee then nets on ingest (net -0.3847 matched the account
+# balance to the cent). Kept as a switch only so a venue change is one line.
 DEAL_PROFIT_IS_NET = False
 
 # Position-mode code the engine wants MEXC accounts in.

@@ -380,11 +380,18 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   that it authenticates a production key as-is and, sitting behind a CDN,
   refuses any IP-BOUND key with 406, so a demo key is created without "Link
   IP address". Closes + fee receipts come from `fetch_mexc_history` (history_orders
-  → order_deals → funding_records, own watermarks). Still unverified against
-  a live key — see the smoke script's docstring: whether `order/create`
-  answers 604 for a non-whitelisted key, the sign/basis of deal `profit`
-  (`mexc_adapter.DEAL_PROFIT_IS_NET`) and `funding`, and the history
-  endpoints' time-param spelling (`mexc_api.HISTORY_START_PARAM`).
+  → order_deals → funding_records, own watermarks). **Verified end to end on
+  2026-09-17** with a real key on that testnet (one 0.01 BTC round trip, see
+  `mexc_smoke.py`'s docstring): entry with leverage on the order, exit via
+  side 4 + positionId, deal `profit` is GROSS (`DEAL_PROFIT_IS_NET=False` is
+  right — the netted P&L matched the account balance to the cent), both fills
+  shipped as receipts and rebased the close to `fee_source=actual` on the
+  next tick, `start_time`/`end_time` honoured. The one fact still not seen
+  live is the SIGN of `funding_records.funding` (no settlement fell inside
+  the test position's lifetime) — check the first MEXC position held across
+  00/08/16 UTC against the app before trusting a funded row's fee.
+  **The trader UI does not read `mexc_*` yet**: a MEXC trade shows in Admin →
+  Signal Log and on the account card, not on Positions/Analytics/calendar.
 - **Cache freshness is PUSHED, never polled — and the engine is never
   restarted for a data change.** The engine TTL-caches its account and asset
   lists (90 s, `binance_abcd/cache.py`); Laravel's `App\Services\EngineCache`

@@ -36,6 +36,19 @@ Checks, and what each one settles:
                               positionId; English error messages
 
 Nothing here touches the engine's tables, Telegram, or the engine API.
+
+Settled live on 2026-09-17 (prod engine against futures.testnet.mexc.com with a
+production key — the testnet authenticates live keys and serves the same API):
+  (a) ok — 10,000 test USDT, equity/unrealized present.
+  (e) start_time/end_time honoured; the close was found in-window.
+  (f) `profit` is GROSS: -0.079 on a 0.01 BTC round trip 76,427.3 → 76,419.4
+      is (exit − entry) × qty to the cent, `fee` separate (0.1528546 in,
+      0.1528388 out = 0.02% taker each way). DEAL_PROFIT_IS_NET stays False;
+      the netted -0.3846934 matched the account balance exactly.
+  (i) order/create succeeded (type 5, leverage on the order, positionMode 1),
+      deal_details indexed within ~0.5 s, close via side 4 + positionId.
+  Still open: (g) funding sign — the position lived 1h42m across no 8-hourly
+  settlement, so no funding row exists yet to compare against the app.
 """
 
 from __future__ import annotations
