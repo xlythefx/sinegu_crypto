@@ -42,7 +42,16 @@ that tells a customer where to write — legal contact sections, footers,
 error/empty states, "need help?" strips — **reads those constants, never
 retypes the address or handle.** The legal renderer already has `email` and
 `telegram` block kinds (`types/legal.ts`) for contact lines. The public
-signals channel (**Voltrax Trades**) is NOT a support contact.
+signals channel (**Voltrax Trades**) is NOT a support contact. **No personal
+line beside the desk** (the founder's Telegram was removed 2026-09-18): a
+contact must outlive whoever holds it.
+
+**The Contact page (`/contact`) presents Pixel Alpha and its Bangkok office**
+(`OFFICE` in `company.ts` — Park Ventures Ecoplex, Mon–Fri 9–18 ICT), never
+the billing entity. `COMPANY.legalName` / `registryNumber` / `addressLines`
+(Feature Digital LTD, Israel) are the INVOICE issuer and belong on invoices
+and legal text, where the entity that bills must be named — two different
+addresses for two different questions, and neither is retyped elsewhere.
 
 ## Stack
 
@@ -1236,3 +1245,16 @@ page publishing **−980%** against a real +46.6%):
   the nearest trading day; the by-group card puts every series on ONE shared
   date axis (carried forward, one point per trading day) for that, where it
   used to space each line by its own trade count.
+- **The landing page shows the LTC/USDT strategy alone** (2026-09-18,
+  `LANDING_TRACK_RECORD_SYMBOLS` in `lib/trackRecord.ts`; empty = every
+  trade). It requests `?symbols=LTCUSDT`; the API filters the TRADES only —
+  the capital stays the whole account's, since every position is backed by
+  all of it — and echoes the applied list as `symbols`, which is what the
+  section labels itself from (subtitle, chart pill, footnote): a page that
+  shows one strategy says so. Names are reduced to `[A-Z0-9]` before
+  matching, so one filter covers Binance's `LTCUSDT` and MEXC's `LTC_USDT`.
+  The filter is caller-chosen and part of the cache key, hence capped at 5
+  and the `/public/*` group throttled 60/min per IP. **The Telegram recaps
+  are NOT filtered**: the channel announces every asset's entries and exits,
+  so its recap covers every asset — the site and the channel now describe
+  two labelled scopes, not one number twice.
