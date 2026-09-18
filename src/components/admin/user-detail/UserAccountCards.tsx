@@ -58,7 +58,8 @@ export default function UserAccountCards({
       <div className="flex flex-1 flex-col gap-2.5">
         {filtered.map((a) => (
           <div
-            key={a.id}
+            // Ids repeat across the per-exchange tables — key by both.
+            key={`${a.exchange}-${a.id}`}
             className={`rounded-row border border-hair bg-surface2 p-3.5 ${
               a.deleted_at ? 'opacity-[.65]' : ''
             }`}

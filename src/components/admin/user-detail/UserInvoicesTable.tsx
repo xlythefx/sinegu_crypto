@@ -5,6 +5,7 @@ import { getAdminUserInvoices } from '../../../services/admin'
 import { getApiErrorMessage } from '../../../services/api'
 import { fmtMediumDate, fmtMoney } from '../../../lib/format'
 import type { Invoice } from '../../../lib/billing'
+import type { ExchangePillValue } from './ExchangeFilterPill'
 
 const TH =
   'text-left text-[10.5px] uppercase tracking-[0.07em] text-faint font-semibold py-2.5 px-3 border-b border-hair whitespace-nowrap'
@@ -30,9 +31,21 @@ function statusPill(inv: Invoice) {
   }
 }
 
+interface UserInvoicesTableProps {
+  uniId: string
+  /** The page's exchange pill — invoices are per exchange, so it narrows them. */
+  exchange?: ExchangePillValue
+}
+
 /** The user's invoices — period, fee, status, due & paid dates. Self-fetching. */
-export default function UserInvoicesTable({ uniId }: { uniId: string }) {
-  const fetchInvoices = useCallback(() => getAdminUserInvoices(uniId), [uniId])
+export default function UserInvoicesTable({
+  uniId,
+  exchange = 'all',
+}: UserInvoicesTableProps) {
+  const fetchInvoices = useCallback(
+    () => getAdminUserInvoices(uniId, exchange),
+    [uniId, exchange],
+  )
   const { data, loading, error } = useApiData(fetchInvoices, [fetchInvoices])
   const invoices = data ?? []
 

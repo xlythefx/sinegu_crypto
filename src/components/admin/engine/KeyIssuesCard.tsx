@@ -10,21 +10,31 @@ import {
 import { Link } from 'react-router-dom'
 import { recheckEngineKey } from '../../../services/admin'
 import { getApiErrorMessage } from '../../../services/api'
+import { EXCHANGE_META } from '../../exchanges/meta'
 import { fmtMediumDate } from '../../../lib/format'
-import type { KeyIssuesData } from '../../../types/admin'
+import type { KeyIssueAccount, KeyIssuesData } from '../../../types/admin'
 
 interface KeyIssuesCardProps {
   data: KeyIssuesData
   onChanged: () => void
 }
 
-/** IP_OR_PERMISSION → what support should actually tell the customer. */
+/**
+ * The engine's classification → what support should actually tell the
+ * customer. Binance reasons first, then MEXC's (see types/exchanges.ts).
+ */
 const REASON_COPY: Record<string, string> = {
   IP_OR_PERMISSION: 'Our server IP is not on the key’s allow-list (or Futures is off).',
   BAD_KEY_FORMAT: 'The key is malformed — it was deleted or mistyped.',
-  UNKNOWN_KEY: 'Binance does not recognise this key any more.',
+  UNKNOWN_KEY: 'The exchange does not recognise this key any more.',
   BAD_SIGNATURE: 'The secret does not match the key.',
+  IP_NOT_WHITELISTED: 'Our server IP is not bound to the key on MEXC.',
+  KEY_EXPIRED: 'The key has expired — MEXC keys with no IP bound last 90 days.',
+  NOT_LOGGED_IN: 'MEXC refused the key outright — it was deleted or mistyped.',
 }
+
+/** Ids repeat across the per-exchange tables — key rows and busy state by both. */
+const refKey = (a: KeyIssueAccount): string => `${a.exchange}:${a.id}`
 
 const DEADLINE_TONE = (days: number | null): string => {
   if (days === null) return 'text-muted'
@@ -40,8 +50,8 @@ const DEADLINE_TONE = (days: number | null): string => {
  * so opening the page costs nothing at Binance — only "Recheck" talks to it.
  */
 export default function KeyIssuesCard({ data, onChanged }: KeyIssuesCardProps) {
-  const [busyId, setBusyId] = useState<number | null>(null)
-  const [note, setNote] = useState<{ id: number; text: string } | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [note, setNote] = useState<{ id: string; text: string } | null>(null)
   const [copied, setCopied] = useState(false)
 
   const copyIp = async () => {
@@ -55,11 +65,12 @@ export default function KeyIssuesCard({ data, onChanged }: KeyIssuesCardProps) {
     }
   }
 
-  const recheck = async (id: number) => {
+  const recheck = async (a: KeyIssueAccount) => {
+    const id = refKey(a)
     setBusyId(id)
     setNote(null)
     try {
-      const result = await recheckEngineKey(id)
+      const result = await recheckEngineKey({ exchange: a.exchange, id: a.id })
       setNote({ id, text: result.message })
       if (result.cleared) onChanged()
     } catch (err) {
@@ -121,7 +132,7 @@ export default function KeyIssuesCard({ data, onChanged }: KeyIssuesCardProps) {
         <div className="flex flex-col gap-2.5">
           {data.accounts.map((a) => (
             <article
-              key={a.id}
+              key={refKey(a)}
               className="rounded-row border border-[color-mix(in_srgb,var(--red)_28%,transparent)] bg-[color-mix(in_srgb,var(--red)_6%,transparent)] p-3.5"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -133,6 +144,13 @@ export default function KeyIssuesCard({ data, onChanged }: KeyIssuesCardProps) {
                     >
                       {a.owner_name || a.uni_id}
                     </Link>
+                    <span className="inline-flex items-center gap-1.5 rounded-pill border border-border bg-surface2 px-2 py-[2px] text-[10px] font-semibold text-muted">
+                      <span
+                        className="h-1.5 w-1.5 flex-none rounded-full"
+                        style={{ background: EXCHANGE_META[a.exchange]?.color ?? 'var(--accent)' }}
+                      />
+                      {EXCHANGE_META[a.exchange]?.label ?? a.exchange}
+                    </span>
                     <span className="rounded-pill border border-border bg-surface2 px-2 py-[2px] font-mono text-[10px] font-semibold text-muted">
                       {a.demo ? 'DEMO' : 'LIVE'}
                     </span>
@@ -164,10 +182,10 @@ export default function KeyIssuesCard({ data, onChanged }: KeyIssuesCardProps) {
                   <button
                     type="button"
                     className="inline-flex items-center gap-1.5 rounded-pill border border-border bg-surface px-3 py-1.5 text-[12px] font-bold text-text transition-[border-color] duration-150 hover:border-accent disabled:cursor-not-allowed disabled:opacity-55"
-                    onClick={() => recheck(a.id)}
+                    onClick={() => recheck(a)}
                     disabled={busyId !== null}
                   >
-                    {busyId === a.id ? (
+                    {busyId === refKey(a) ? (
                       <Loader2
                         size={13}
                         className="animate-[dstate-spin_0.8s_linear_infinite]"
@@ -175,7 +193,7 @@ export default function KeyIssuesCard({ data, onChanged }: KeyIssuesCardProps) {
                     ) : (
                       <RefreshCw size={13} />
                     )}
-                    {busyId === a.id ? 'Testing…' : 'Recheck'}
+                    {busyId === refKey(a) ? 'Testing…' : 'Recheck'}
                   </button>
                 </div>
               </div>
@@ -187,7 +205,7 @@ export default function KeyIssuesCard({ data, onChanged }: KeyIssuesCardProps) {
                   ` · auto-disconnect ${fmtMediumDate(a.grace_ends_at)}`}
               </p>
 
-              {note?.id === a.id && (
+              {note?.id === refKey(a) && (
                 <p className="mt-2 text-[12px] font-semibold text-accent">
                   {note.text}
                 </p>

@@ -8,6 +8,8 @@ import type {
   AdminApiKeyUpdateInput,
   AdminAsset,
   AdminEngineStatus,
+  AdminExchangeScope,
+  ApiKeyRef,
   AdminPastTradeUpdate,
   AdminPerformance,
   AdminPositionsData,
@@ -277,6 +279,14 @@ export async function rejectUser(uniId: string): Promise<void> {
 
 /* ============ user detail (/admin/users/{uniId}) ============ */
 
+/**
+ * The `?exchange=` every per-user read takes — the detail page's exchange
+ * pill. 'all' is the server default, so it sends nothing.
+ */
+function exchangeQuery(exchange: AdminExchangeScope): string {
+  return exchange === 'all' ? '' : `?exchange=${exchange}`
+}
+
 export async function getAdminUserDetail(
   uniId: string,
 ): Promise<AdminUserDetail> {
@@ -289,9 +299,10 @@ export async function getAdminUserDetail(
 
 export async function getAdminUserSummary(
   uniId: string,
+  exchange: AdminExchangeScope = 'all',
 ): Promise<AdminUserSummary> {
   const res = await apiFetch<{ success: boolean; summary: AdminUserSummary }>(
-    `/admin/users/${uniId}/summary`,
+    `/admin/users/${uniId}/summary${exchangeQuery(exchange)}`,
     { auth: true },
   )
   return res.summary
@@ -299,9 +310,10 @@ export async function getAdminUserSummary(
 
 export async function getAdminUserDailyPnl(
   uniId: string,
+  exchange: AdminExchangeScope = 'all',
 ): Promise<DailyPnlMap> {
   const res = await apiFetch<{ success: boolean; days: DailyPnlMap }>(
-    `/admin/users/${uniId}/daily-pnl`,
+    `/admin/users/${uniId}/daily-pnl${exchangeQuery(exchange)}`,
     { auth: true },
   )
   // PHP serializes an empty map as [] — normalize to an object
@@ -310,17 +322,21 @@ export async function getAdminUserDailyPnl(
 
 export async function getAdminUserPositions(
   uniId: string,
+  exchange: AdminExchangeScope = 'all',
 ): Promise<AdminPositionsData> {
   const res = await apiFetch<{ success: boolean } & AdminPositionsData>(
-    `/admin/users/${uniId}/positions`,
+    `/admin/users/${uniId}/positions${exchangeQuery(exchange)}`,
     { auth: true },
   )
   return { positions: res.positions, trades: res.trades }
 }
 
-export async function getAdminUserInvoices(uniId: string): Promise<Invoice[]> {
+export async function getAdminUserInvoices(
+  uniId: string,
+  exchange: AdminExchangeScope = 'all',
+): Promise<Invoice[]> {
   const res = await apiFetch<{ success: boolean; invoices: ApiInvoice[] }>(
-    `/admin/users/${uniId}/invoices`,
+    `/admin/users/${uniId}/invoices${exchangeQuery(exchange)}`,
     { auth: true },
   )
   return res.invoices.map(mapApiInvoice)
@@ -491,19 +507,24 @@ export async function getEngineKeyIssues(): Promise<KeyIssuesData> {
   }
 }
 
-/** Re-test one account against the exchange from the admin side. */
-export async function recheckEngineKey(id: number): Promise<KeyRecheckResult> {
-  return apiFetch<KeyRecheckResult>(`/admin/engine/key-issues/${id}/recheck`, {
-    method: 'POST',
-    auth: true,
-  })
+/**
+ * Re-test one account against its exchange from the admin side. Addressed by
+ * (exchange, id): ids repeat across the per-exchange account tables.
+ */
+export async function recheckEngineKey(
+  key: ApiKeyRef,
+): Promise<KeyRecheckResult> {
+  return apiFetch<KeyRecheckResult>(
+    `/admin/engine/key-issues/${key.exchange}/${key.id}/recheck`,
+    { method: 'POST', auth: true },
+  )
 }
 
 /* ============ API-key inventory (/admin/api-keys) ============ */
 
 /**
- * Every exchange account in the system with its owner, soft-deleted ones
- * included. Reads DB columns only — no exchange round trips.
+ * Every exchange account in the system with its owner, on every exchange,
+ * soft-deleted ones included. Reads DB columns only — no exchange round trips.
  */
 export async function getAdminApiKeys(): Promise<AdminApiKeysData> {
   const res = await apiFetch<{
@@ -524,19 +545,22 @@ export async function getAdminApiKeys(): Promise<AdminApiKeysData> {
 
 /** Rename / enable / disable one account. */
 export async function updateAdminApiKey(
-  id: number,
+  key: ApiKeyRef,
   input: AdminApiKeyUpdateInput,
 ): Promise<AdminApiKey> {
   const res = await apiFetch<{ success: boolean; key: AdminApiKey }>(
-    `/admin/api-keys/${id}`,
+    `/admin/api-keys/${key.exchange}/${key.id}`,
     { method: 'PUT', body: input, auth: true },
   )
   return res.key
 }
 
 /** Disconnect one account (soft delete — the trade history survives). */
-export async function deleteAdminApiKey(id: number): Promise<void> {
-  await apiFetch(`/admin/api-keys/${id}`, { method: 'DELETE', auth: true })
+export async function deleteAdminApiKey(key: ApiKeyRef): Promise<void> {
+  await apiFetch(`/admin/api-keys/${key.exchange}/${key.id}`, {
+    method: 'DELETE',
+    auth: true,
+  })
 }
 
 /**
@@ -544,23 +568,23 @@ export async function deleteAdminApiKey(id: number): Promise<void> {
  * delete on the page. The server re-checks the guard (not-working keys only,
  * never one with invoices) and answers 422 if the row has since recovered.
  */
-export async function purgeAdminApiKey(id: number): Promise<PurgeKeyResult> {
-  return apiFetch<PurgeKeyResult>(`/admin/api-keys/${id}/purge`, {
-    method: 'DELETE',
-    auth: true,
-  })
+export async function purgeAdminApiKey(key: ApiKeyRef): Promise<PurgeKeyResult> {
+  return apiFetch<PurgeKeyResult>(
+    `/admin/api-keys/${key.exchange}/${key.id}/purge`,
+    { method: 'DELETE', auth: true },
+  )
 }
 
 /**
- * Disconnect several at once. The ids travel in the body, so the server can
- * only ever delete what the admin actually had on screen.
+ * Disconnect several at once. The (exchange, id) pairs travel in the body,
+ * so the server can only ever delete what the admin actually had on screen.
  */
 export async function bulkDeleteAdminApiKeys(
-  ids: number[],
+  keys: ApiKeyRef[],
 ): Promise<BulkKeyDeleteResult> {
   return apiFetch<BulkKeyDeleteResult>('/admin/api-keys/bulk-delete', {
     method: 'POST',
-    body: { ids },
+    body: { keys: keys.map(({ exchange, id }) => ({ exchange, id })) },
     auth: true,
   })
 }

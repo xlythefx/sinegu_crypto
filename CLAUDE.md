@@ -399,8 +399,15 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   live is the SIGN of `funding_records.funding` (no settlement fell inside
   the test position's lifetime) — check the first MEXC position held across
   00/08/16 UTC against the app before trusting a funded row's fee.
-  **The trader UI does not read `mexc_*` yet**: a MEXC trade shows in Admin →
-  Signal Log and on the account card, not on Positions/Analytics/calendar.
+  **Where `mexc_*` is read (2026-09-18):** every per-user read goes through
+  `UserStatsService` and spans every exchange or the one `?exchange=` names —
+  the trader dashboard / analytics / positions / calendar, AND the admin
+  user-detail page (`AdminUserController`, whose exchange pill is the DATA
+  SCOPE of summary, calendar, positions and invoices, not a client filter).
+  Admin → API Keys, Engine → key issues and User Management list every
+  exchange's accounts. Still Binance-only: Admin → Trading Positions
+  (`AdminController::positions` and its edit/delete routes) and the master
+  stats card.
 - **Cache freshness is PUSHED, never polled — and the engine is never
   restarted for a data change.** The engine TTL-caches its account and asset
   lists (90 s, `binance_abcd/cache.py`); Laravel's `App\Services\EngineCache`
@@ -459,9 +466,17 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   `config('services.engine.public_ip')`, never hardcoded in the frontend.
 
 **Admin → API Keys** (`/admin/api-keys`, `AdminApiKeyController`) is the whole
-inventory: every `binance_accounts` row with its owner, soft-deleted ones
-included, filtered by Connected / Faulty / Disabled / Disconnected. Three rules
-make it a support screen rather than a liability:
+inventory: every `{exchange}_accounts` row (Binance and MEXC, via
+`ExchangeSchema::supported()`) with its owner, soft-deleted ones included,
+filtered by Connected / Faulty / Disabled / Disconnected and by exchange.
+**Ids repeat across the per-exchange tables**, so every row carries
+`exchange`, every write is `/admin/api-keys/{exchange}/{id}` (same rule as
+the trader's `/exchange/{exchange}/accounts/{id}`), bulk-delete takes
+`{exchange, id}` pairs, the engine recheck is
+`/admin/engine/key-issues/{exchange}/{id}/recheck`, and the purge guard's
+invoice count is narrowed to the row's exchange — a Binance invoice on
+`account_id = 3` must not shield MEXC account 3. Three rules make it a support
+screen rather than a liability:
 - **Rows carry `api_key_hint` (first 6 + last 4) and never `secret_key`** — a
   test asserts the full key does not appear in the response. Editing is limited
   to the display name and `enabled`; re-keying stays in the owner's connect

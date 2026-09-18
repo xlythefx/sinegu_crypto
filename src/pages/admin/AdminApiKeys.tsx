@@ -15,7 +15,11 @@ import ConfirmModal from '../../components/ui/ConfirmModal'
 import ApiKeyEditModal from '../../components/admin/ApiKeyEditModal'
 import ApiKeyStatCards from '../../components/admin/ApiKeyStatCards'
 import ApiKeyActionsMenu from '../../components/admin/ApiKeyActionsMenu'
+import ExchangeFilterPill, {
+  type ExchangePillValue,
+} from '../../components/admin/user-detail/ExchangeFilterPill'
 import { BADGE } from '../../components/admin/badges'
+import { EXCHANGE_META } from '../../components/exchanges/meta'
 import { useApiData } from '../../hooks/useApiData'
 import {
   bulkDeleteAdminApiKeys,
@@ -27,7 +31,11 @@ import {
 } from '../../services/admin'
 import { ApiError, getApiErrorMessage } from '../../services/api'
 import { fmtMediumDate, fmtMoney } from '../../lib/format'
-import type { AdminApiKey, AdminApiKeyUpdateInput } from '../../types/admin'
+import type {
+  AdminApiKey,
+  AdminApiKeyUpdateInput,
+  ApiKeyRef,
+} from '../../types/admin'
 
 /**
  * Filters are predicates on the raw row, mirroring the server's `counts`
@@ -36,6 +44,14 @@ import type { AdminApiKey, AdminApiKeyUpdateInput } from '../../types/admin'
  * "disabled": it is finished.
  */
 type KeyFilter = 'all' | 'connected' | 'faulty' | 'disabled' | 'disconnected'
+
+/**
+ * One string per account for selection state and React keys. Accounts live
+ * in one table per exchange and ids collide across them, so `id` alone would
+ * make a Binance row and a MEXC row the same checkbox.
+ */
+const refKey = (k: ApiKeyRef): string => `${k.exchange}:${k.id}`
+const toRef = (k: AdminApiKey): ApiKeyRef => ({ exchange: k.exchange, id: k.id })
 
 const FILTERS: { key: KeyFilter; label: string; match: (k: AdminApiKey) => boolean }[] = [
   { key: 'all', label: 'All', match: () => true },
@@ -60,7 +76,9 @@ const PAG_BTN =
 const CHECKBOX = 'w-[15px] h-[15px] accent-[var(--accent)] cursor-pointer'
 
 /** Delete confirmation target — one row, or the whole current selection. */
-type DeleteTarget = { kind: 'one'; key: AdminApiKey } | { kind: 'bulk'; ids: number[] }
+type DeleteTarget =
+  | { kind: 'one'; key: AdminApiKey }
+  | { kind: 'bulk'; keys: ApiKeyRef[] }
 
 /** Sort weight: broken first, then disabled, then everything else, then gone. */
 function rank(k: AdminApiKey): number {
@@ -86,9 +104,10 @@ export default function AdminApiKeys() {
   const { data, loading, error, reload } = useApiData(getAdminApiKeys)
 
   const [filter, setFilter] = useState<KeyFilter>('all')
+  const [exchange, setExchange] = useState<ExchangePillValue>('all')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
-  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const [editing, setEditing] = useState<AdminApiKey | null>(null)
   const [saving, setSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
@@ -97,26 +116,31 @@ export default function AdminApiKeys() {
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [recheckingId, setRecheckingId] = useState<number | null>(null)
+  const [rechecking, setRechecking] = useState<string | null>(null)
 
   const keys = useMemo(() => data?.keys ?? [], [data])
   const counts = data?.counts
 
-  /** Every faulty (and still connected) id — the bulk-cleanup target. */
-  const faultyIds = useMemo(
-    () => keys.filter((k) => !k.deleted_at && k.key_blocked).map((k) => k.id),
+  /** Every faulty (and still connected) key — the bulk-cleanup target. */
+  const faultyRefs = useMemo(
+    () => keys.filter((k) => !k.deleted_at && k.key_blocked).map(toRef),
     [keys],
   )
 
   const filtered = useMemo(() => {
     const predicate = FILTERS.find((f) => f.key === filter)?.match ?? (() => true)
     let list = keys.filter(predicate)
+    if (exchange !== 'all') {
+      list = list.filter((k) => k.exchange === exchange)
+    }
     const q = search.trim().toLowerCase()
     if (q) {
       list = list.filter(
         (k) =>
           k.name.toLowerCase().includes(q) ||
           k.api_key_hint.toLowerCase().includes(q) ||
+          k.exchange.includes(q) ||
+          (EXCHANGE_META[k.exchange]?.label ?? '').toLowerCase().includes(q) ||
           (k.owner.name ?? '').toLowerCase().includes(q) ||
           (k.owner.email ?? '').toLowerCase().includes(q),
       )
@@ -125,7 +149,7 @@ export default function AdminApiKeys() {
     // without anyone having to pick a filter first. Within a group the API's
     // newest-first order is preserved (Array.sort is stable).
     return [...list].sort((a, b) => rank(a) - rank(b))
-  }, [keys, filter, search])
+  }, [keys, filter, exchange, search])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / KEYS_PER_PAGE))
   const safePage = Math.min(page, totalPages)
@@ -139,7 +163,7 @@ export default function AdminApiKeys() {
   const selectableOnPage = paginated.filter((k) => !k.deleted_at)
   const allPageSelected =
     selectableOnPage.length > 0 &&
-    selectableOnPage.every((k) => selected.has(k.id))
+    selectableOnPage.every((k) => selected.has(refKey(k)))
 
   if (error instanceof ApiError && error.status === 401) {
     return <Navigate to="/auth" replace />
@@ -150,11 +174,12 @@ export default function AdminApiKeys() {
     setPage(1)
   }
 
-  const toggleOne = (id: number) => {
+  const toggleOne = (k: AdminApiKey) => {
+    const key = refKey(k)
     setSelected((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
   }
@@ -162,18 +187,22 @@ export default function AdminApiKeys() {
   const togglePage = () => {
     setSelected((prev) => {
       const next = new Set(prev)
-      if (allPageSelected) selectableOnPage.forEach((k) => next.delete(k.id))
-      else selectableOnPage.forEach((k) => next.add(k.id))
+      if (allPageSelected) selectableOnPage.forEach((k) => next.delete(refKey(k)))
+      else selectableOnPage.forEach((k) => next.add(refKey(k)))
       return next
     })
   }
+
+  /** The selected rows as (exchange, id) pairs — what the server takes. */
+  const selectedRefs = (): ApiKeyRef[] =>
+    keys.filter((k) => selected.has(refKey(k))).map(toRef)
 
   const runSave = async (input: AdminApiKeyUpdateInput) => {
     if (!editing) return
     setSaving(true)
     setEditError(null)
     try {
-      await updateAdminApiKey(editing.id, input)
+      await updateAdminApiKey(toRef(editing), input)
       setEditing(null)
       setNotice('API key updated.')
       reload()
@@ -190,15 +219,15 @@ export default function AdminApiKeys() {
     setActionError(null)
     try {
       if (deleteTarget.kind === 'one') {
-        await deleteAdminApiKey(deleteTarget.key.id)
+        await deleteAdminApiKey(toRef(deleteTarget.key))
         setNotice(`${deleteTarget.key.name} disconnected.`)
         setSelected((prev) => {
           const next = new Set(prev)
-          next.delete(deleteTarget.key.id)
+          next.delete(refKey(deleteTarget.key))
           return next
         })
       } else {
-        const res = await bulkDeleteAdminApiKeys(deleteTarget.ids)
+        const res = await bulkDeleteAdminApiKeys(deleteTarget.keys)
         setNotice(
           res.skipped > 0
             ? `${res.message} ${res.skipped} were already gone.`
@@ -221,7 +250,7 @@ export default function AdminApiKeys() {
     setBusy(true)
     setActionError(null)
     try {
-      const res = await purgeAdminApiKey(purgeTarget.id)
+      const res = await purgeAdminApiKey(toRef(purgeTarget))
       const wiped = res.removed.trades + res.removed.positions + res.removed.transactions
       setNotice(
         wiped > 0
@@ -230,7 +259,7 @@ export default function AdminApiKeys() {
       )
       setSelected((prev) => {
         const next = new Set(prev)
-        next.delete(purgeTarget.id)
+        next.delete(refKey(purgeTarget))
         return next
       })
       setPurgeTarget(null)
@@ -250,16 +279,16 @@ export default function AdminApiKeys() {
    * A success clears the flag server-side, so we just reload afterwards.
    */
   const runRecheck = async (key: AdminApiKey) => {
-    setRecheckingId(key.id)
+    setRechecking(refKey(key))
     setActionError(null)
     try {
-      const res = await recheckEngineKey(key.id)
+      const res = await recheckEngineKey(toRef(key))
       setNotice(`${key.name}: ${res.message}`)
       reload()
     } catch (err) {
       setActionError(getApiErrorMessage(err, 'Could not reach the engine.'))
     } finally {
-      setRecheckingId(null)
+      setRechecking(null)
     }
   }
 
@@ -316,7 +345,7 @@ export default function AdminApiKeys() {
             <button
               type="button"
               className={BTN_DANGER}
-              onClick={() => setDeleteTarget({ kind: 'bulk', ids: faultyIds })}
+              onClick={() => setDeleteTarget({ kind: 'bulk', keys: faultyRefs })}
             >
               <Trash2 size={13} />
               Disconnect all {counts.faulty}
@@ -370,37 +399,46 @@ export default function AdminApiKeys() {
               className="flex-1 border-0 bg-transparent text-[13px] text-text outline-none placeholder:text-faint"
             />
           </label>
-          <div className="flex flex-wrap gap-1.5">
-            {FILTERS.map((f) => {
-              const active = filter === f.key
-              const count = counts ? counts[f.key] : 0
-              const alert = f.key === 'faulty' && count > 0
-              return (
-                <button
-                  key={f.key}
-                  type="button"
-                  className={`inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 text-[12.5px] font-semibold cursor-pointer ${
-                    active
-                      ? 'bg-accent border-accent text-on-accent font-bold'
-                      : alert
-                        ? 'border-[color-mix(in_srgb,var(--red)_35%,transparent)] bg-surface2 text-red'
-                        : 'border-border bg-surface2 text-muted'
-                  }`}
-                  onClick={() => setFilterAndResetPage(() => setFilter(f.key))}
-                >
-                  {f.label}
-                  <span
-                    className={`grid place-items-center h-[18px] min-w-[18px] px-[5px] rounded-full font-mono text-[11px] font-bold ${
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-1.5">
+              {FILTERS.map((f) => {
+                const active = filter === f.key
+                const count = counts ? counts[f.key] : 0
+                const alert = f.key === 'faulty' && count > 0
+                return (
+                  <button
+                    key={f.key}
+                    type="button"
+                    className={`inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 text-[12.5px] font-semibold cursor-pointer ${
                       active
-                        ? 'bg-[rgba(0,0,0,0.18)] border border-transparent text-on-accent'
-                        : 'bg-surface border border-hair'
+                        ? 'bg-accent border-accent text-on-accent font-bold'
+                        : alert
+                          ? 'border-[color-mix(in_srgb,var(--red)_35%,transparent)] bg-surface2 text-red'
+                          : 'border-border bg-surface2 text-muted'
                     }`}
+                    onClick={() => setFilterAndResetPage(() => setFilter(f.key))}
                   >
-                    {count}
-                  </span>
-                </button>
-              )
-            })}
+                    {f.label}
+                    <span
+                      className={`grid place-items-center h-[18px] min-w-[18px] px-[5px] rounded-full font-mono text-[11px] font-bold ${
+                        active
+                          ? 'bg-[rgba(0,0,0,0.18)] border border-transparent text-on-accent'
+                          : 'bg-surface border border-hair'
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+            {/* Which venue's keys — the same pill the user-detail page uses. */}
+            <div className="ml-auto">
+              <ExchangeFilterPill
+                value={exchange}
+                onChange={(value) => setFilterAndResetPage(() => setExchange(value))}
+              />
+            </div>
           </div>
         </div>
 
@@ -422,7 +460,7 @@ export default function AdminApiKeys() {
                 type="button"
                 className={BTN_DANGER}
                 onClick={() =>
-                  setDeleteTarget({ kind: 'bulk', ids: [...selected] })
+                  setDeleteTarget({ kind: 'bulk', keys: selectedRefs() })
                 }
               >
                 <Trash2 size={13} />
@@ -434,7 +472,7 @@ export default function AdminApiKeys() {
 
         {/* Table — re-mounts on filter/page switch to replay the reveal */}
         <div
-          key={`${filter}-${safePage}`}
+          key={`${filter}-${exchange}-${safePage}`}
           className="overflow-x-auto animate-[fadeup_0.35s_ease-out]"
         >
           <table className="w-full border-collapse text-[13px]">
@@ -472,11 +510,11 @@ export default function AdminApiKeys() {
               )}
               {paginated.map((k) => (
                 <KeyRow
-                  key={k.id}
+                  key={refKey(k)}
                   apiKey={k}
-                  selected={selected.has(k.id)}
-                  rechecking={recheckingId === k.id}
-                  onToggle={() => toggleOne(k.id)}
+                  selected={selected.has(refKey(k))}
+                  rechecking={rechecking === refKey(k)}
+                  onToggle={() => toggleOne(k)}
                   onEdit={() => {
                     setEditError(null)
                     setEditing(k)
@@ -541,7 +579,7 @@ export default function AdminApiKeys() {
         title={
           deleteTarget?.kind === 'one'
             ? `Disconnect ${deleteTarget.key.name}?`
-            : `Disconnect ${deleteTarget?.ids.length ?? 0} API keys?`
+            : `Disconnect ${deleteTarget?.keys.length ?? 0} API keys?`
         }
         message={
           deleteTarget?.kind === 'one'
@@ -637,8 +675,12 @@ function KeyRow({
           <KeyRound size={13} className="flex-none text-muted" />
           {k.name}
         </div>
-        <div className="mt-px text-[11.5px] capitalize text-faint">
-          {k.exchange}
+        <div className="mt-1 inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-faint">
+          <span
+            className="h-1.5 w-1.5 flex-none rounded-full"
+            style={{ background: EXCHANGE_META[k.exchange]?.color ?? 'var(--accent)' }}
+          />
+          {EXCHANGE_META[k.exchange]?.label ?? k.exchange}
         </div>
         {/* The exchange's own refusal, spelled out. A support screen that only
             says "Faulty" makes someone go and look this up elsewhere. */}

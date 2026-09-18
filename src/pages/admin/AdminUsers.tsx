@@ -19,6 +19,7 @@ import ConfirmModal from '../../components/ui/ConfirmModal'
 import CreateUserModal from '../../components/admin/CreateUserModal'
 import { BADGE, StatusBadge } from '../../components/admin/badges'
 import RolePicker from '../../components/admin/RolePicker'
+import { EXCHANGE_META } from '../../components/exchanges/meta'
 import { useApiData } from '../../hooks/useApiData'
 import { useSessionUser } from '../../hooks/useSessionUser'
 import {
@@ -670,7 +671,8 @@ function UserRows({
                     className={`flex flex-wrap items-center gap-4 rounded-[10px] border border-hair bg-surface px-2.5 py-[7px] text-[12.5px] ${
                       a.deleted_at ? 'opacity-[.55]' : ''
                     }`}
-                    key={a.id}
+                    // Ids repeat across the per-exchange tables — key by both.
+                    key={`${a.exchange}-${a.id}`}
                   >
                     <span className="flex items-center gap-[7px] min-w-[140px] font-bold text-text">
                       <Building2 size={12} />
@@ -680,6 +682,15 @@ function UserRows({
                           Disconnected
                         </span>
                       )}
+                    </span>
+                    {/* Which venue the key is on — a user can hold one per
+                        exchange, so the name alone no longer says. */}
+                    <span className="inline-flex items-center gap-1.5 rounded-pill border border-hair bg-surface2 px-2 py-0.5 text-[11px] font-semibold text-muted">
+                      <span
+                        className="h-1.5 w-1.5 flex-none rounded-full"
+                        style={{ background: EXCHANGE_META[a.exchange]?.color ?? 'var(--accent)' }}
+                      />
+                      {EXCHANGE_META[a.exchange]?.label ?? a.exchange}
                     </span>
                     <span className="font-mono text-[12px] text-muted">
                       {a.api_key ?? '—'}

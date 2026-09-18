@@ -1,5 +1,6 @@
 import { Wallet } from 'lucide-react'
 import MetricTile, { type Tone } from '../../analytics/MetricTile'
+import { EXCHANGE_META } from '../../exchanges/meta'
 import { fmtMoney, fmtPctOf, fmtSignedMoney } from '../../../lib/format'
 import type { AdminUserSummary } from '../../../types/admin'
 
@@ -12,12 +13,18 @@ interface UserBalanceCardProps {
 
 /**
  * Headline balance + the 5 P&L / commission stats. Figures come from LIVE
- * accounts only, so they match what the user sees on their own dashboard.
+ * accounts only, on the exchange(s) the page's pill names, so they match
+ * what the user sees on their own dashboard under the same pill.
  */
 export default function UserBalanceCard({
   summary,
   loading,
 }: UserBalanceCardProps) {
+  const scope =
+    summary && summary.exchange !== 'all'
+      ? EXCHANGE_META[summary.exchange].label
+      : null
+
   return (
     <section className="mb-stack rounded-card border border-border bg-surface p-card">
       <div className="mb-3.5 flex items-center gap-2.5">
@@ -29,7 +36,8 @@ export default function UserBalanceCard({
             Balance / Equity
           </div>
           <div className="mt-px text-[12px] text-muted">
-            Live accounts — matches the user's own dashboard
+            {scope ? `${scope} accounts` : 'Live accounts'} — matches the
+            user's own dashboard
           </div>
         </div>
       </div>
@@ -37,6 +45,13 @@ export default function UserBalanceCard({
       {!summary ? (
         <div className="grid min-h-[140px] place-items-center text-[13px] text-muted">
           {loading ? 'Loading stats…' : 'Could not load this user’s stats.'}
+        </div>
+      ) : scope && summary.accounts === 0 ? (
+        // Zero accounts under a venue filter means "nothing connected there",
+        // which must not read as a $0.00 equity — that looks like a wiped
+        // account.
+        <div className="grid min-h-[140px] place-items-center rounded-row border border-dashed border-border bg-surface2 px-4 text-center text-[13px] text-muted">
+          No {scope} account connected — nothing to show for this exchange.
         </div>
       ) : (
         <>

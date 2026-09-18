@@ -1,5 +1,6 @@
 import type { AssetSide } from './assets'
 import type { FeeSource } from './dashboard'
+import type { ExchangeKind } from './exchanges'
 import type { ApiInvoice } from '../lib/billing'
 
 // Single source of truth — admin tables render the same roles the session
@@ -9,11 +10,25 @@ import type { UserRole, UserStatus } from './auth'
 
 export type { UserRole, UserStatus }
 
+/**
+ * The address of one exchange account. Accounts live in one table per
+ * exchange and ids collide across them, so an id alone names a different row
+ * on every venue — every admin write carries both.
+ */
+export interface ApiKeyRef {
+  exchange: ExchangeKind
+  id: number
+}
+
+/** The `?exchange=` scope an admin read runs under. */
+export type AdminExchangeScope = 'all' | ExchangeKind
+
 /** Exchange account row nested under an admin user (API keys pre-masked). */
 export interface AdminUserAccount {
   id: number
   name: string
-  exchange: string
+  /** Which exchange's table the row lives in (ids repeat across tables). */
+  exchange: ExchangeKind
   api_key: string | null
   demo: boolean
   enabled: boolean
@@ -79,6 +94,8 @@ export type DailyPnlMap = Record<string, DailyPnlDay>
 /** One open position from GET /admin/positions. */
 export interface AdminOpenPosition {
   id: number
+  /** The table this row lives in — stamped by the per-user endpoint. */
+  exchange?: ExchangeKind
   account_id: number | null
   account_name: string | null
   account_balance: number
@@ -93,6 +110,8 @@ export interface AdminOpenPosition {
 /** One closed trade from GET /admin/positions. */
 export interface AdminPastTrade {
   id: number
+  /** The table this row lives in — stamped by the per-user endpoint. */
+  exchange?: ExchangeKind
   account_id: number | null
   account_name: string | null
   account_balance: number
@@ -385,8 +404,15 @@ export interface AdminUserDetail {
   accounts: AdminUserDetailAccount[]
 }
 
-/** GET /admin/users/{uniId}/summary — headline stats from LIVE accounts only. */
+/**
+ * GET /admin/users/{uniId}/summary?exchange= — headline stats from LIVE
+ * accounts only, on the exchange(s) the page's pill names.
+ */
 export interface AdminUserSummary {
+  /** The scope these figures were computed for. */
+  exchange: AdminExchangeScope
+  /** Connected accounts inside that scope — 0 means nothing on that venue. */
+  accounts: number
   balance: number
   unrealized_pnl: number
   realized_pnl: number
@@ -511,6 +537,8 @@ export interface AdminEngineStatus {
  */
 export interface KeyIssueAccount {
   id: number
+  /** Which exchange's table the row lives in — the recheck is addressed by both. */
+  exchange: ExchangeKind
   name: string
   uni_id: string
   /** First 6 and last 4 characters only — enough to find it on Binance. */
@@ -564,7 +592,8 @@ export interface ApiKeyOwner {
  */
 export interface AdminApiKey {
   id: number
-  exchange: string
+  /** Which exchange's table the row lives in — every write is addressed by both. */
+  exchange: ExchangeKind
   name: string
   /** First 6 + last 4 characters. The full key never leaves the server. */
   api_key_hint: string

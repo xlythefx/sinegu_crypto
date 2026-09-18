@@ -32,14 +32,34 @@ const TAB_BTN =
 
 type Tab = 'overview' | 'positions'
 
-/** Admin drill-down into one user: Overview stats + Positions. */
+/**
+ * Admin drill-down into one user: Overview stats + Positions.
+ *
+ * The exchange pill is the page's DATA SCOPE, not a display filter: it goes
+ * to the API as `?exchange=` on every read (summary, calendar, positions,
+ * invoices), so "MEXC" shows exactly what the user sees under their own MEXC
+ * pill — equity, P&L, calendar and invoices all narrowed to that venue's
+ * accounts and tables, never one card filtered beside another still pooling
+ * every exchange. Only the account cards filter client-side: the profile
+ * read returns every account (disconnected ones too) and the cards just pick
+ * the venue's.
+ */
 export default function AdminUserDetail() {
   const { uniId = '' } = useParams<{ uniId: string }>()
   const navigate = useNavigate()
 
+  const [tab, setTab] = useState<Tab>('overview')
+  const [exchange, setExchange] = useState<ExchangePillValue>('all')
+
   const fetchDetail = useCallback(() => getAdminUserDetail(uniId), [uniId])
-  const fetchSummary = useCallback(() => getAdminUserSummary(uniId), [uniId])
-  const fetchDays = useCallback(() => getAdminUserDailyPnl(uniId), [uniId])
+  const fetchSummary = useCallback(
+    () => getAdminUserSummary(uniId, exchange),
+    [uniId, exchange],
+  )
+  const fetchDays = useCallback(
+    () => getAdminUserDailyPnl(uniId, exchange),
+    [uniId, exchange],
+  )
 
   const { data: user, loading, error, reload } = useApiData(fetchDetail, [
     fetchDetail,
@@ -48,9 +68,6 @@ export default function AdminUserDetail() {
     fetchSummary,
   ])
   const { data: days } = useApiData(fetchDays, [fetchDays])
-
-  const [tab, setTab] = useState<Tab>('overview')
-  const [exchange, setExchange] = useState<ExchangePillValue>('all')
 
   if (error instanceof ApiError && error.status === 401) {
     return <Navigate to="/auth" replace />
@@ -154,7 +171,7 @@ export default function AdminUserDetail() {
               </div>
 
               <div className="grid grid-cols-2 gap-stack mb-stack max-[1100px]:grid-cols-1">
-                <UserInvoicesTable uniId={uniId} />
+                <UserInvoicesTable uniId={uniId} exchange={exchange} />
                 <UserReferralsTable uniId={uniId} />
               </div>
 

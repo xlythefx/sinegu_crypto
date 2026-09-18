@@ -20,13 +20,20 @@ interface UserPositionsTabProps {
 /**
  * Positions tab: P&L tiles + Active/Closed switcher reusing the shared
  * positions tables (closed side paginated 10/page).
+ *
+ * The exchange pill is sent to the API rather than applied to the rows: the
+ * server reads only that venue's tables, so the tiles (from the summary,
+ * fetched under the same scope) and the lists describe the same money.
  */
 export default function UserPositionsTab({
   uniId,
   exchange,
   summary,
 }: UserPositionsTabProps) {
-  const fetchPositions = useCallback(() => getAdminUserPositions(uniId), [uniId])
+  const fetchPositions = useCallback(
+    () => getAdminUserPositions(uniId, exchange),
+    [uniId, exchange],
+  )
   const { data, loading, error, reload } = useApiData(fetchPositions, [
     fetchPositions,
   ])
@@ -37,22 +44,12 @@ export default function UserPositionsTab({
   const pctBase = summary?.pct_base ?? 0
 
   const active = useMemo(
-    () =>
-      (data?.positions ?? [])
-        .map(toActiveRow)
-        .filter(
-          (p) => exchange === 'all' || p.exchange.toLowerCase() === exchange,
-        ),
-    [data, exchange],
+    () => (data?.positions ?? []).map(toActiveRow),
+    [data],
   )
   const closed = useMemo(
-    () =>
-      (data?.trades ?? [])
-        .map((t) => toClosedRow(t, pctBase))
-        .filter(
-          (t) => exchange === 'all' || t.exchange.toLowerCase() === exchange,
-        ),
-    [data, pctBase, exchange],
+    () => (data?.trades ?? []).map((t) => toClosedRow(t, pctBase)),
+    [data, pctBase],
   )
 
   if (!data) {

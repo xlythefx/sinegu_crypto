@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { KeyRound, Lock } from 'lucide-react'
+import { EXCHANGE_META } from '../exchanges/meta'
 import type { AdminApiKey, AdminApiKeyUpdateInput } from '../../types/admin'
 
 /* ---- shared class strings (same vocabulary as AssetFormModal) ---- */
@@ -89,7 +90,9 @@ export default function ApiKeyEditModal({
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-muted">
             <span>
               Exchange:{' '}
-              <strong className="text-text capitalize">{apiKey.exchange}</strong>
+              <strong className="text-text">
+                {EXCHANGE_META[apiKey.exchange]?.label ?? apiKey.exchange}
+              </strong>
             </span>
             <span>
               Mode:{' '}
