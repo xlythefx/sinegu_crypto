@@ -77,4 +77,10 @@ export interface TrackRecord {
   available: boolean
   stats: TrackRecordStats | null
   series: TrackRecordPoint[]
+  /**
+   * The ticker filter the record was computed under, canonical (`LTCUSDT`);
+   * empty when it covers every trade. What the page labels its scope from —
+   * a section that shows one strategy must say so.
+   */
+  symbols: string[]
 }

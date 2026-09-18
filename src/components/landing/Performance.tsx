@@ -1,10 +1,18 @@
 import { useState } from 'react'
 import { useApiData } from '../../hooks/useApiData'
 import { getTrackRecord } from '../../services/publicStats'
+import { displaySymbol } from '../../lib/chart'
 import { fmtMediumDate } from '../../lib/format'
-import { CHART_MODES, statCards, type ChartMode } from '../../lib/trackRecord'
+import {
+  CHART_MODES,
+  LANDING_TRACK_RECORD_SYMBOLS,
+  statCards,
+  type ChartMode,
+} from '../../lib/trackRecord'
 import { SECTION_IDS } from '../../lib/scroll'
 import TrackRecordChart from './TrackRecordChart'
+
+const fetchLandingRecord = () => getTrackRecord(LANDING_TRACK_RECORD_SYMBOLS)
 
 const CONTAINER = 'max-w-[1280px] mx-auto px-10 max-[560px]:px-5'
 const SECTION_TITLE =
@@ -24,18 +32,23 @@ const TAB_OFF =
 
 /**
  * "See every trade, verified" — the master account's live track record, read
- * from the public (unauthenticated) `/public/track-record` endpoint.
+ * from the public (unauthenticated) `/public/track-record` endpoint, narrowed
+ * to `LANDING_TRACK_RECORD_SYMBOLS`.
  *
  * Percentages only, by design: the endpoint publishes returns and counts and
- * never a balance, so nothing here can leak the account's size.
+ * never a balance, so nothing here can leak the account's size. The scope is
+ * labelled from the API's echo of the filter, not from the constant: what the
+ * page says it shows is what the numbers were computed from.
  */
 export default function Performance() {
-  const { data, loading, error } = useApiData(getTrackRecord)
+  const { data, loading, error } = useApiData(fetchLandingRecord)
   const [mode, setMode] = useState<ChartMode>('cumulative')
 
   const stats = data?.stats ?? null
   const series = data?.series ?? []
   const cards = statCards(stats)
+  /** "LTC/USDT" — or null when the record covers every trade. */
+  const scope = data?.symbols.length ? data.symbols.map(displaySymbol).join(', ') : null
 
   const placeholder = loading
     ? 'Loading the verified track record…'
@@ -45,7 +58,7 @@ export default function Performance() {
 
   const footnote =
     stats && series.length > 0
-      ? `Verified from ${stats.trades.toLocaleString('en-US')} closed trades over ${stats.trading_days} trading days · ${fmtMediumDate(stats.first_trade_at)} – ${fmtMediumDate(stats.last_trade_at)}`
+      ? `Verified from ${stats.trades.toLocaleString('en-US')} closed ${scope ? `${scope} ` : ''}trades over ${stats.trading_days} trading days · ${fmtMediumDate(stats.first_trade_at)} – ${fmtMediumDate(stats.last_trade_at)}`
       : null
 
   return (
@@ -57,8 +70,9 @@ export default function Performance() {
       <div className="text-center mb-9">
         <h2 className={SECTION_TITLE}>See every trade, verified</h2>
         <p className={SECTION_SUB}>
-          Full, real-time performance analytics for every strategy — the same
-          numbers we're paid on.
+          {scope
+            ? `Full, real-time performance analytics for the ${scope} strategy — the same numbers we're paid on.`
+            : "Full, real-time performance analytics for every strategy — the same numbers we're paid on."}
         </p>
       </div>
       {/* Six cards, and every breakpoint divides into six exactly (6 / 3 / 2 / 1)
@@ -99,6 +113,12 @@ export default function Performance() {
               </div>
             </div>
           </div>
+          {scope && (
+            <span className="inline-flex items-center gap-2 self-center rounded-pill border border-accent-line bg-accent-soft px-3.5 py-1.5 font-mono text-[11.5px] font-semibold tracking-[0.4px] text-accent">
+              <span className="h-[6px] w-[6px] rounded-full bg-accent" />
+              {scope}
+            </span>
+          )}
         </div>
         <div className="grid grid-cols-3 gap-1 bg-surface2 border border-hair rounded-xl p-[5px] mb-6">
           {CHART_MODES.map((tab) => (

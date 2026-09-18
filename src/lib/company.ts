@@ -21,9 +21,29 @@ export const COMPANY = {
 } as const
 
 /**
+ * Where a person can find Pixel Alpha — the Contact page's address block
+ * (2026-09-18). This is the PRODUCT's office, deliberately separate from
+ * `COMPANY.addressLines`: that is the billing entity's registered address and
+ * belongs on invoices and legal text, which must name the entity that bills.
+ * The contact page presents Pixel Alpha and only Pixel Alpha.
+ */
+export const OFFICE = {
+  name: 'Pixel Alpha',
+  label: 'Office (Bangkok)',
+  /** Rendered one line per entry. */
+  addressLines: [
+    'Park Ventures Ecoplex, 57 Witthayu Rd',
+    'Lumphini, Pathum Wan, Bangkok 10330',
+  ],
+  hours: 'Mon–Fri 9:00–18:00 (ICT, Bangkok time)',
+} as const
+
+/**
  * The two support channels, in the form every page prints them. Anything that
  * tells a customer where to write (legal contact sections, footers, error
- * states) reads these rather than retyping the address or handle.
+ * states) reads these rather than retyping the address or handle. There is no
+ * personal line beside them (removed 2026-09-18): a contact is a desk, not a
+ * person, so the address outlives whoever holds it.
  */
 export const SUPPORT_EMAIL = COMPANY.email
 export const SUPPORT_TELEGRAM_HANDLE = `@${COMPANY.telegram}`
