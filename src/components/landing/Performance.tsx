@@ -120,9 +120,17 @@ export default function Performance() {
             mode={mode}
             placeholder={placeholder}
           />
+          {/* The views are not on one denominator (see CHART_MODES), so each
+              names its own — a −13% day beside a −2% dip on the cumulative
+              curve is two measures, not a mistake. */}
+          {series.length > 0 && (
+            <p className="text-[11.5px] text-muted mt-4 text-center">
+              {CHART_MODES.find((tab) => tab.id === mode)?.note}
+            </p>
+          )}
         </div>
         {footnote && (
-          <p className="text-[11.5px] text-faint mt-4 text-center">{footnote}</p>
+          <p className="text-[11.5px] text-faint mt-1.5 text-center">{footnote}</p>
         )}
       </div>
     </section>

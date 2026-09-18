@@ -10,11 +10,48 @@ import type { TrackRecordPoint, TrackRecordStats } from '../types/publicStats'
 
 export type ChartMode = 'cumulative' | 'daily' | 'monthly'
 
-export const CHART_MODES: { id: ChartMode; label: string }[] = [
-  { id: 'cumulative', label: 'Cumulative P&L' },
-  { id: 'daily', label: 'Daily P&L' },
-  { id: 'monthly', label: 'Monthly P&L' },
+/**
+ * The three views and the basis each one is measured on — printed under the
+ * chart, because the views deliberately do NOT share a denominator:
+ *
+ *  - Cumulative draws `roc`, realized P&L to date over ALL capital invested.
+ *    That is the dashboard's equity curve expressed as a percentage (the
+ *    dollar curve divided by one constant), so the two rise and fall
+ *    together, and it ends on the Return on Capital card above the chart.
+ *  - Daily and monthly stay on the capital the account HELD at the time (the
+ *    compounded, time-weighted basis) because those are the figures the
+ *    Telegram recaps post — the site and the channel must show one number
+ *    for the same day.
+ *
+ * The compounded cumulative (`cumulative` / `total_pnl_pct`) is still
+ * published, just no longer drawn: on this account most of the capital
+ * arrived after the losing early months, so chaining measured those losses
+ * against ~1k and every later gain against ~6k, and the curve fell to −17%
+ * while the dashboard's equity climbed. Naming the basis on each view is
+ * what keeps a −13% day on the daily view and a −2% dip on the cumulative
+ * view from reading as a contradiction.
+ */
+export const CHART_MODES: { id: ChartMode; label: string; note: string }[] = [
+  {
+    id: 'cumulative',
+    label: 'Cumulative P&L',
+    note: 'Realized P&L to date as a share of all capital invested — the same basis as Return on Capital above.',
+  },
+  {
+    id: 'daily',
+    label: 'Daily P&L',
+    note: "Each trading day's return on the capital the account held that day.",
+  },
+  {
+    id: 'monthly',
+    label: 'Monthly P&L',
+    note: "Each month's trading days compounded.",
+  },
 ]
+
+/** The cumulative view's value for a point; an older payload has no `roc`. */
+const cumulativeOf = (point: TrackRecordPoint): number =>
+  point.roc ?? point.cumulative
 
 /**
  * SVG viewBox geometry. The plot is inset by `X0` on the left (room for the
@@ -56,10 +93,10 @@ const pct = (value: number | null | undefined, dp: number): string =>
 export function statCards(stats: TrackRecordStats | null): StatCard[] {
   return [
     {
-      // Return on capital committed — NOT the chart's compounded curve, which
-      // answers a different question and reads lower here because most of the
-      // capital arrived after the early losing months. The hint names the base
-      // so the two are never mistaken for one figure disagreeing with itself.
+      // Return on capital invested — the figure the cumulative view builds to,
+      // so the card and the curve's endpoint are one number. The hint names
+      // the base because the daily/monthly views are measured on a different
+      // one (see CHART_MODES).
       label: 'Return on Capital',
       value: pct(stats?.return_on_capital_pct, 2),
       tone: toneOf(stats?.return_on_capital_pct),
@@ -98,18 +135,42 @@ export function statCards(stats: TrackRecordStats | null): StatCard[] {
   ]
 }
 
+/** One plotted period plus what the hover readout shows for it. */
+export interface ChartMark {
+  /** Position as a fraction of the FULL viewBox (X0 inset included), 0..1 —
+   *  the overlay is plain HTML over a stretched SVG, so fractions are the only
+   *  unit that lands on the line at any container width. */
+  xFrac: number
+  yFrac: number
+  /** YYYY-MM-DD for a day, YYYY-MM for a month. */
+  date: string
+  /** The view's own figure for the period — see CHART_MODES for its basis. */
+  value: number
+  /** Closed increments in the period. */
+  trades: number
+}
+
 export interface ChartModel {
   /** Line and zero-baseline-anchored fill, in local coords (translate by X0). */
   path: string
   areaPath: string
   /** Four gridlines / axis labels, top to bottom. */
   ticks: { value: number; label: string; topPct: number }[]
-  /** The 0% baseline — "starting capital" on the cumulative view. */
+  /** The 0% baseline — "capital invested" on the cumulative view. */
   zeroY: number
   baselineLabel: string
   /** x positions as a percentage of the full viewBox width. */
   labels: { key: string; text: string; leftPct: number }[]
   end: { x: number; y: number }
+  /** One per REAL period, in plot order — the cumulative view's synthetic
+   *  leading 0% point is not a day and has no mark. */
+  marks: ChartMark[]
+}
+
+interface PeriodPoint {
+  date: string
+  value: number
+  trades: number
 }
 
 /**
@@ -117,15 +178,19 @@ export interface ChartModel {
  * not summed, so a month reads the same way the total does and the twelve
  * months of a year multiply back out to that year.
  */
-function toMonthly(series: TrackRecordPoint[]): { date: string; value: number }[] {
-  const months = new Map<string, number>()
+function toMonthly(series: TrackRecordPoint[]): PeriodPoint[] {
+  const months = new Map<string, { growth: number; trades: number }>()
   for (const point of series) {
     const key = point.date.slice(0, 7)
-    months.set(key, (months.get(key) ?? 1) * Math.max(0, 1 + point.pct / 100))
+    const month = months.get(key) ?? { growth: 1, trades: 0 }
+    month.growth *= Math.max(0, 1 + point.pct / 100)
+    month.trades += point.trades
+    months.set(key, month)
   }
-  return [...months.entries()].map(([month, growth]) => ({
+  return [...months.entries()].map(([month, { growth, trades }]) => ({
     date: month,
     value: (growth - 1) * 100,
+    trades,
   }))
 }
 
@@ -153,12 +218,13 @@ export function buildChartModel(
 ): ChartModel | null {
   if (series.length === 0) return null
 
-  const points =
+  const points: PeriodPoint[] =
     mode === 'monthly'
       ? toMonthly(series)
       : series.map((p) => ({
           date: p.date,
-          value: mode === 'cumulative' ? p.cumulative : p.pct,
+          value: mode === 'cumulative' ? cumulativeOf(p) : p.pct,
+          trades: p.trades,
         }))
   if (points.length === 0) return null
 
@@ -195,7 +261,7 @@ export function buildChartModel(
       topPct: (yOf(value) / VB_H) * 100,
     })),
     zeroY,
-    baselineLabel: withBaseline ? 'Starting capital' : 'Break-even',
+    baselineLabel: withBaseline ? 'Capital invested' : 'Break-even',
     labels: sampleEvenly(points, MAX_X_LABELS).map(({ item, index }) => ({
       key: item.date,
       text: label(item.date),
@@ -205,5 +271,28 @@ export function buildChartModel(
       x: PLOT_W,
       y: yOf(values[values.length - 1]),
     },
+    // Same x as the labels and the same y as the path, so the crosshair sits
+    // on the line rather than beside it.
+    marks: points.map((point, index) => ({
+      xFrac: (X0 + (index + offset) * stepX) / VB_W,
+      yFrac: yOf(point.value) / VB_H,
+      date: point.date,
+      value: point.value,
+      trades: point.trades,
+    })),
   }
+}
+
+/** Nearest mark to a horizontal position (0..1 of the plot box), or null. */
+export function nearestMark(marks: ChartMark[], xFrac: number): number | null {
+  let best: number | null = null
+  let bestGap = Infinity
+  marks.forEach((mark, i) => {
+    const gap = Math.abs(mark.xFrac - xFrac)
+    if (gap < bestGap) {
+      bestGap = gap
+      best = i
+    }
+  })
+  return best
 }

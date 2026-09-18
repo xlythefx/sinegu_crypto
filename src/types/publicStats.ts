@@ -16,15 +16,19 @@ export interface TrackRecordAsset {
 export interface TrackRecordPoint {
   /** YYYY-MM-DD */
   date: string
-  /** That day's return, in percent of the capital it started the day with. */
+  /** That day's return, in percent of the capital it started the day with —
+   *  the daily view's bar, and the figure the Telegram daily recap posts. */
   pct: number
-  /** Compounded return up to and including this day — what the chart plots. */
+  /** Compounded (time-weighted) return up to and including this day.
+   *  Published, no longer drawn: the cumulative view plots `roc`. */
   cumulative: number
   /**
-   * Return on capital committed as of this day: realized P&L to date over
-   * `initial_deposit + (deposits − withdrawals)`. A different question from
-   * `cumulative`, and a different number whenever capital arrived unevenly.
-   * Null on a payload predating the field.
+   * Return on capital invested as of this day: realized P&L to date over
+   * `initial_deposit + (deposits − withdrawals)` — the dashboard's equity
+   * curve as a percentage, and what the cumulative view plots. A different
+   * question from `cumulative`, and a different number whenever capital
+   * arrived unevenly. Null on a payload predating the field (the chart then
+   * falls back to `cumulative`).
    */
   roc?: number | null
   trades: number
@@ -38,15 +42,16 @@ export interface TrackRecordPoint {
  */
 export interface TrackRecordStats {
   /**
-   * What every dollar committed has returned so far — the headline figure, and
-   * the one the Telegram recap quotes. Null if no capital was ever recorded.
+   * What every dollar invested has returned so far — the headline figure, the
+   * one the Telegram recap quotes, and where the cumulative curve ends. Null
+   * if no capital was ever recorded.
    */
   return_on_capital_pct: number | null
   /**
-   * The COMPOUNDED (time-weighted) return, which is what the chart's
-   * `cumulative` points build to. Kept beside the headline rather than in place
-   * of it: the two diverge when capital arrived unevenly, so each is labelled
-   * where it appears instead of being shown as a bare percentage.
+   * The COMPOUNDED (time-weighted) return — what the series' `cumulative`
+   * points build to. Kept beside the headline rather than in place of it: the
+   * two diverge when capital arrived unevenly, so each is labelled where it
+   * appears instead of being shown as a bare percentage.
    */
   total_pnl_pct: number
   /** Share of TRADING DAYS that closed green (not per-trade). */

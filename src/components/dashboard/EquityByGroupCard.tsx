@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { Check, TrendingUp, X } from 'lucide-react'
 import { displaySymbol, linePath, linePoints, seriesColor } from '../../lib/chart'
-import { fmtSigned } from '../../lib/format'
+import { fmtMediumDate, fmtSigned } from '../../lib/format'
 import type { GroupSeries } from '../../types/dashboard'
 
 type GroupKey = 'asset' | 'strategy'
@@ -13,6 +13,7 @@ interface EquityByGroupCardProps {
 
 const VB_W = 600
 const VB_H = 200
+const PAD_Y = 12
 
 /** One stat row inside the selection tooltip. */
 function TipRow({
@@ -36,13 +37,26 @@ function TipRow({
   )
 }
 
+/** "YYYY-MM-DD" at local midnight, in ms. */
+const dayTime = (date: string) => new Date(`${date.slice(0, 10)}T00:00:00`).getTime()
+
 /** "Equity by Asset / Strategy" — multi-line cumulative P&L with a checkable
  *  legend filter and a By Asset / By Strategy toggle.
  *
- *  Hovering a line brings it forward; clicking one pins it and opens its stats.
- *  Both only ever DIM the rest — the legend checkboxes are what removes a curve,
- *  and a chart that hid its other series on click would read as having lost
- *  them. */
+ *  Every series is drawn on ONE shared date axis: one point per trading day of
+ *  the whole set, each series carrying its last cumulative figure across the
+ *  days it did not trade. The API sends each series as its own per-trade
+ *  list, and spacing those by index put LTC's 129th trade and BTC's 30th at
+ *  the same x — the lines could not be read against each other, and a day
+ *  crosshair had nothing to snap to. Carrying the value forward is also what
+ *  makes the readout honest on a day an asset sat out: its contribution that
+ *  day is whatever it had made so far, not nothing.
+ *
+ *  Hovering the plot snaps a crosshair to the nearest trading day and lists
+ *  every visible series' figure for it. Hovering a line brings it forward;
+ *  clicking one pins it and opens its stats. Both only ever DIM the rest —
+ *  the legend checkboxes are what removes a curve, and a chart that hid its
+ *  other series on click would read as having lost them. */
 export default function EquityByGroupCard({
   assets,
   strategies,
@@ -50,27 +64,74 @@ export default function EquityByGroupCard({
   const [group, setGroup] = useState<GroupKey>('asset')
   const [hidden, setHidden] = useState<Set<string>>(new Set())
   const [hoverId, setHoverId] = useState<string | null>(null)
+  const [hoverDay, setHoverDay] = useState<number | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tip, setTip] = useState({ x: 0.5, y: 0.5 })
   const plotRef = useRef<HTMLDivElement>(null)
 
-  const series = useMemo(() => {
+  const { dates, xFracs, series } = useMemo(() => {
     const source = group === 'asset' ? assets : strategies
-    return source.map((s, i) => ({
-      id: s.id,
-      name: group === 'asset' ? displaySymbol(s.id) : s.id,
-      color: seriesColor(s.id, i),
-      total: s.total,
-      totalNet: s.total_net,
-      fees: s.fees,
-      trades: s.trades,
-      winRate: s.win_rate,
-      profitFactor: s.profit_factor,
-      values: s.curve.map((p) => p.cum),
-    }))
+
+    // The shared axis: every day on which anything in the group closed.
+    const dateSet = new Set<string>()
+    for (const s of source) for (const p of s.curve) dateSet.add(p.date.slice(0, 10))
+    const dates = [...dateSet].sort()
+
+    // X by TIME, as the equity hero does, so a quiet fortnight is as wide as
+    // a busy one and the two charts line up under each other.
+    const times = dates.map(dayTime)
+    const first = times[0] ?? 0
+    const elapsed = (times[times.length - 1] ?? 0) - first
+    const xFracs = dates.map((_, i) =>
+      elapsed > 0
+        ? (times[i] - first) / elapsed
+        : dates.length > 1
+          ? i / (dates.length - 1)
+          : 0,
+    )
+
+    const series = source.map((s, i) => {
+      // Several trades on one day collapse to the day's closing figure — the
+      // list is in close order, so the last write for a date is its end.
+      const closeOfDay = new Map<string, { cum: number; cumNet: number }>()
+      for (const p of s.curve) {
+        closeOfDay.set(p.date.slice(0, 10), { cum: p.cum, cumNet: p.cum_net ?? p.cum })
+      }
+      let cum = 0
+      let cumNet = 0
+      const values: number[] = []
+      const valuesNet: number[] = []
+      for (const date of dates) {
+        const close = closeOfDay.get(date)
+        if (close) {
+          cum = close.cum
+          cumNet = close.cumNet
+        }
+        values.push(cum)
+        valuesNet.push(cumNet)
+      }
+      return {
+        id: s.id,
+        name: group === 'asset' ? displaySymbol(s.id) : s.id,
+        color: seriesColor(s.id, i),
+        total: s.total,
+        totalNet: s.total_net,
+        fees: s.fees,
+        trades: s.trades,
+        winRate: s.win_rate,
+        profitFactor: s.profit_factor,
+        values,
+        valuesNet,
+      }
+    })
+
+    return { dates, xFracs, series }
   }, [group, assets, strategies])
 
-  const shown = series.filter((s) => !hidden.has(s.id))
+  const shown = useMemo(
+    () => series.filter((s) => !hidden.has(s.id)),
+    [series, hidden],
+  )
 
   // Shared Y-scale across all visible series (always include 0 baseline)
   const paths = useMemo(() => {
@@ -78,15 +139,17 @@ export default function EquityByGroupCard({
     if (all.length === 0) return []
     const yMin = Math.min(0, ...all)
     const yMax = Math.max(0, ...all)
+    const xs = xFracs.length > 1 ? xFracs : undefined
     return shown.map((s) => {
-      const pts = linePoints(s.values, VB_W, VB_H, 12, yMin, yMax)
+      const points = linePoints(s.values, VB_W, VB_H, PAD_Y, yMin, yMax, xs)
       return {
         ...s,
-        path: linePath(s.values, VB_W, VB_H, 12, yMin, yMax),
-        end: pts[pts.length - 1],
+        points,
+        path: linePath(s.values, VB_W, VB_H, PAD_Y, yMin, yMax, xs),
+        end: points[points.length - 1],
       }
     })
-  }, [shown])
+  }, [shown, xFracs])
 
   /** Pinned beats hovered — a click is a decision, a mouse crossing the plot on
    *  its way somewhere else is not. */
@@ -108,6 +171,7 @@ export default function EquityByGroupCard({
     setHidden(new Set())
     setSelectedId(null)
     setHoverId(null)
+    setHoverDay(null)
   }
 
   // A pinned series that gets hidden (legend, "None", a group switch) must not
@@ -135,6 +199,30 @@ export default function EquityByGroupCard({
     }
     setSelectedId((prev) => (prev === id ? null : id))
   }
+
+  /** Nearest trading day to the pointer, horizontally — snapping to a real
+   *  day keeps the readout to figures that actually happened. */
+  const trackPointer = (e: PointerEvent<HTMLDivElement>) => {
+    const rect = plotRef.current?.getBoundingClientRect()
+    if (!rect || rect.width === 0 || xFracs.length === 0) return
+    const ratio = (e.clientX - rect.left) / rect.width
+    let best = 0
+    let bestGap = Infinity
+    for (let i = 0; i < xFracs.length; i++) {
+      const gap = Math.abs(xFracs[i] - ratio)
+      if (gap < bestGap) {
+        bestGap = gap
+        best = i
+      }
+    }
+    setHoverDay(best)
+  }
+
+  // The day readout steps aside while a series is pinned: the pinned card
+  // already owns the plot, and two floating cards would fight for the space.
+  const day = hoverDay !== null && !selectedId && paths.length > 0 ? hoverDay : null
+  const dayTotal = day !== null ? paths.reduce((sum, s) => sum + s.values[day], 0) : 0
+  const dayTotalNet = day !== null ? paths.reduce((sum, s) => sum + s.valuesNet[day], 0) : 0
 
   return (
     <section
@@ -175,12 +263,19 @@ export default function EquityByGroupCard({
       </div>
 
       {paths.length > 0 ? (
-        <div ref={plotRef} className="relative">
+        <div
+          ref={plotRef}
+          className="relative touch-pan-y"
+          onPointerMove={trackPointer}
+          onPointerLeave={() => {
+            setHoverDay(null)
+            setHoverId(null)
+          }}
+        >
           <svg
             viewBox={`0 0 ${VB_W} ${VB_H}`}
             preserveAspectRatio="none"
             className="w-full h-[220px] block"
-            onPointerLeave={() => setHoverId(null)}
             onClick={() => setSelectedId(null)}
           >
             <g stroke="var(--hair)" strokeWidth="1">
@@ -227,6 +322,7 @@ export default function EquityByGroupCard({
                 className="cursor-pointer"
                 onPointerEnter={() => setHoverId(s.id)}
                 onPointerMove={() => setHoverId(s.id)}
+                onPointerLeave={() => setHoverId(null)}
                 onClick={(e) => {
                   e.stopPropagation()
                   pin(s.id, e)
@@ -239,7 +335,7 @@ export default function EquityByGroupCard({
               as an SVG <circle> because preserveAspectRatio="none" stretches
               the viewBox unevenly and would flatten the dot into an ellipse. */}
           {paths.map((s) =>
-            activeId === s.id && s.end ? (
+            activeId === s.id && s.end && day === null ? (
               <span
                 key={`${s.id}-dot`}
                 className="pointer-events-none absolute h-[9px] w-[9px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface"
@@ -252,30 +348,101 @@ export default function EquityByGroupCard({
             ) : null,
           )}
 
-          {/* Hover label — name + total, while nothing is pinned. */}
-          {!selectedId && hoverId && (
-            <div className="pointer-events-none absolute top-2 left-2 flex items-center gap-2 rounded-btn border border-border bg-surface2/95 px-2.5 py-1.5 backdrop-blur-sm">
+          {/* Day crosshair: one dot per visible series on the hovered day, and
+              the readout listing what each had made by then. */}
+          {day !== null && (
+            <>
               <span
-                className="h-2 w-2 shrink-0 rounded-full"
-                style={{
-                  background:
-                    series.find((s) => s.id === hoverId)?.color ?? 'var(--accent)',
-                }}
+                className="pointer-events-none absolute inset-y-0 w-px bg-[var(--muted)] opacity-50"
+                style={{ left: `${xFracs[day] * 100}%` }}
               />
-              <span className="text-[11.5px] font-bold text-text">
-                {series.find((s) => s.id === hoverId)?.name}
-              </span>
-              <span
-                className={`font-mono text-[11.5px] font-bold ${
-                  (series.find((s) => s.id === hoverId)?.total ?? 0) < 0
-                    ? 'text-red'
-                    : 'text-green'
-                }`}
+              {paths.map((s) => {
+                const point = s.points[Math.min(day, s.points.length - 1)]
+                const dimmed = activeId !== null && activeId !== s.id
+                return (
+                  <span
+                    key={`${s.id}-day`}
+                    className="pointer-events-none absolute h-[9px] w-[9px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface"
+                    style={{
+                      left: `${xFracs[day] * 100}%`,
+                      top: `${(point.y / VB_H) * 100}%`,
+                      background: s.color,
+                      opacity: dimmed ? 0.3 : 1,
+                    }}
+                  />
+                )
+              })}
+              <div
+                className="pointer-events-none absolute top-2 z-10 min-w-[168px] rounded-card border border-border bg-surface2/97 px-3 py-2 backdrop-blur-sm"
+                style={{
+                  left: `${xFracs[day] * 100}%`,
+                  transform: `translateX(${
+                    xFracs[day] > 0.7
+                      ? 'calc(-100% - 12px)'
+                      : xFracs[day] < 0.3
+                        ? '12px'
+                        : '-50%'
+                  })`,
+                }}
               >
-                {fmtSigned(series.find((s) => s.id === hoverId)?.total ?? 0)}
-              </span>
-              <span className="text-[10.5px] text-faint">click to pin</span>
-            </div>
+                <div className="mb-1.5 font-mono text-[10.5px] tracking-[0.4px] text-faint whitespace-nowrap">
+                  {fmtMediumDate(dates[day])} · before fees
+                </div>
+                <div className="flex flex-col gap-[3px]">
+                  {paths.map((s) => {
+                    const value = s.values[day]
+                    const dimmed = activeId !== null && activeId !== s.id
+                    return (
+                      <div
+                        key={`${s.id}-row`}
+                        className={`flex items-baseline justify-between gap-4 transition-opacity ${
+                          dimmed ? 'opacity-40' : ''
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5 text-[11.5px] font-bold text-text whitespace-nowrap">
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ background: s.color }}
+                          />
+                          {s.name}
+                        </span>
+                        <span
+                          className={`font-mono text-[11.5px] font-bold whitespace-nowrap ${
+                            value < 0 ? 'text-red' : 'text-green'
+                          }`}
+                        >
+                          {fmtSigned(value)}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+                {paths.length > 1 && (
+                  <div className="mt-1.5 flex items-baseline justify-between gap-4 border-t border-hair pt-1.5">
+                    <span className="text-[10.5px] font-semibold tracking-[0.3px] text-faint uppercase">
+                      {hidden.size > 0 ? 'Shown' : 'Total'}
+                    </span>
+                    <span
+                      className={`font-mono text-[11.5px] font-extrabold whitespace-nowrap ${
+                        dayTotal < 0 ? 'text-red' : 'text-green'
+                      }`}
+                    >
+                      {fmtSigned(dayTotal)}
+                    </span>
+                  </div>
+                )}
+                {/* The after-fees twin every before-fees figure carries. Equal
+                    means no fee on record up to that day. */}
+                {dayTotalNet !== dayTotal && (
+                  <div className="mt-1 font-mono text-[10.5px] text-faint whitespace-nowrap">
+                    After fees {fmtSigned(dayTotalNet)}
+                  </div>
+                )}
+                {hoverId && (
+                  <div className="mt-1 text-[10.5px] text-faint">click to pin</div>
+                )}
+              </div>
+            </>
           )}
 
           {/* Pinned stats. */}

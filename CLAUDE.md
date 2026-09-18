@@ -1217,3 +1217,22 @@ page publishing **−980%** against a real +46.6%):
   arithmetic and the total is compounded. Both are labelled as such
   ("Compounded return" / "Per trading day"). Monthly points compound within the
   month for the same reason.
+- **The Cumulative view draws `roc`, not the chained `cumulative`** (2026-09-18).
+  `roc` = realized P&L to date over ALL capital invested — the dashboard's
+  equity curve as a percentage (the dollar curve over one constant), so the
+  two rise and fall together and the curve ends on the Return on Capital
+  card. The chained curve is still published (`cumulative`, `total_pnl_pct`)
+  but no longer drawn: on the master most of the capital arrived after the
+  losing May–June weeks, so chaining measured those losses against ~1k and
+  every later gain against ~6k, and the landing page fell to −17% while the
+  dashboard's equity climbed — the owner read that as the site being wrong.
+  The accepted cost is the one `roc` always had: a new deposit rescales the
+  whole curve (shape intact). **Daily and monthly views stay on the day's-
+  capital basis** because those are the figures the Telegram recaps post, and
+  a day must read the same on the site and in the channel; each view names its
+  basis in a caption under the chart (`CHART_MODES[].note`), so a −13% day
+  beside a −2% dip on the cumulative curve reads as two measures, not a bug.
+  Every equity curve — hero, by-asset/strategy, landing — snaps a crosshair to
+  the nearest trading day; the by-group card puts every series on ONE shared
+  date axis (carried forward, one point per trading day) for that, where it
+  used to space each line by its own trade count.
