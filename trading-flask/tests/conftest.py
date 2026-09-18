@@ -24,14 +24,17 @@ os.environ.setdefault("BINANCE_ABCD_EXCHANGES", "binance")
 # No fallback leverage: a MEXC entry with none from the signal or the account
 # must be refused, and a test that wants a default sets it explicitly.
 os.environ.setdefault("BINANCE_ABCD_MEXC_DEFAULT_LEVERAGE", "0")
-# Telegram OFF for the whole suite. hooks.py load_dotenv()s the real .env, so
-# without these the fan-out tests would post to the live channel. Setting them
-# here wins: load_dotenv runs with override=False. test_notify.py re-enables
-# notifications per-test by monkeypatching hooks, with _send captured.
+# Telegram AND Discord OFF for the whole suite. hooks.py load_dotenv()s the real
+# .env, so without these the fan-out tests would post to the live channels.
+# Setting them here wins: load_dotenv runs with override=False. test_notify.py
+# re-enables notifications per-test by monkeypatching hooks, with _send (and
+# discord_notify.post) captured.
 os.environ.setdefault("BINANCE_ABCD_TELEGRAM_ENABLED", "false")
 os.environ.setdefault("BINANCE_ABCD_TELEGRAM_BOT_TOKEN", "")
 os.environ.setdefault("BINANCE_ABCD_TELEGRAM_CHAT_ID", "")
 os.environ.setdefault("BINANCE_ABCD_TELEGRAM_ADMIN_CHAT_ID", "")
+os.environ.setdefault("BINANCE_ABCD_DISCORD_ENABLED", "false")
+os.environ.setdefault("BINANCE_ABCD_DISCORD_WEBHOOK_URL", "")
 
 import pytest  # noqa: E402
 

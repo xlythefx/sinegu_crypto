@@ -223,6 +223,16 @@ TELEGRAM_ADMIN_CHAT_ID = _env_str("TELEGRAM_ADMIN_CHAT_ID", "")
 # PnL (read from userTrades, deferred) before sending with whatever arrived.
 TELEGRAM_PNL_WAIT_SECONDS = _env_float("TELEGRAM_PNL_WAIT_SECONDS", 25.0)
 
+# --- Discord mirror (public messages only) ------------------------------------
+# The PUBLIC messages — entries, exits + PnL percent, scheduled recaps — are
+# also posted to a Discord channel as embeds. Ops alerts are never mirrored:
+# there is no admin webhook and no fallback of admin text to the public one.
+# Independent of Telegram (works with Telegram off); off while the URL is empty.
+# The URL carries the webhook's token — anyone holding it can post to the
+# channel — so it lives in the gitignored .env only.
+DISCORD_ENABLED = _env_bool("DISCORD_ENABLED", True)
+DISCORD_WEBHOOK_URL = _env_str("DISCORD_WEBHOOK_URL", "")  # secret — .env only
+
 # --- Scheduled performance reports (public channel) ---------------------------
 # Recaps posted on a clock rather than in response to a signal. They are built
 # from GET /api/public/track-record — the SAME endpoint the landing page reads —

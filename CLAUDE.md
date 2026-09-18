@@ -645,6 +645,19 @@ for the overlay's `position: fixed` and trap it inside.
   `trading-flask/.env` and run `sync-engine-env` (the key is already in
   `MIRRORED_ENGINE_ENV_KEYS`). `notify_startup` sends with `_send_admin` for the
   same reason: it carries account and asset counts.
+  **The PUBLIC messages are mirrored to a Discord channel as coloured embeds**
+  (2026-09-18, `binance_abcd/discord_notify.py`; green long entry, red short,
+  exit by PnL sign, blue recap). `notify._send_public` is the one path to
+  Discord and only the three public builders call it; admin builders go
+  through `_send_admin` → `_send`, which knows nothing about Discord — so an
+  ops alert cannot reach the mirror by construction. **No admin webhook, no
+  fallback**, for the reason above. It is independent of Telegram
+  (`BINANCE_ABCD_DISCORD_WEBHOOK_URL` alone turns it on; an exit batch opens
+  when either destination exists) and posts on a ONE-worker pool with a single
+  `Retry-After` retry — order preserved, and the month-end tick's six recaps
+  do not trip Discord's 5-per-2-s bucket. The URL is a credential (last path
+  segment = token): gitignored `.env` only, in `MIRRORED_ENGINE_ENV_KEYS`, and
+  scrubbed from every log line — a `requests` error quotes the request path.
   **`Increment (2/3)` is the stack depth this entry reached** = pre-entry
   `stacks_now + 1`, over `assets.max_increments` (`(#2)` when the asset has no
   cap). Derived from the batched `positions/check` read the fan-out already
@@ -758,7 +771,7 @@ for the overlay's `position: fixed` and trap it inside.
   `SYNC_POSITION_MODE_ON_STARTUP`. Config-only fix, no code, no test gate:
   `python .claude/deploy_sinegualcrypto.py sync-engine-env` (upserts + restarts).
 - **Commands:** `python -m binance_abcd.main` (waitress), `python -m pytest
-  tests/ -q` (146 tests, no network), `python webhook_tester.py` (Tkinter GUI
+  tests/ -q` (344 tests, no network), `python webhook_tester.py` (Tkinter GUI
   trade sender — local or prod target, red banner on prod).
 - **Naming trap:** root `src/` is the React app; the engine package is
   `binance_abcd/`, deliberately not named `src`. Python and TypeScript

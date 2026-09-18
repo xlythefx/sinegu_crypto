@@ -30,8 +30,18 @@ each account's bookkeeping reports into it, and the message is flushed when
 every filled account has reported (or after ``TELEGRAM_PNL_WAIT_SECONDS``,
 whichever comes first).
 
-Config lives in ``hooks.py`` under ``BINANCE_ABCD_TELEGRAM_*`` and is read
-through the ``hooks`` module (not `from`-imported) so it stays monkeypatchable.
+The PUBLIC messages are also mirrored to a Discord channel as coloured embeds
+(``discord_notify.py``): ``_send_public`` is the one function that posts to
+both, and only the three public builders call it. The admin builders go
+through ``_send_admin`` → ``_send``, which knows nothing about Discord — so
+an ops alert cannot reach the mirror by construction, not by a flag. The
+mirror is independent of Telegram (a webhook URL alone turns it on) and it
+receives the exact string the public chat gets, so it can publish nothing
+the channel does not already.
+
+Config lives in ``hooks.py`` under ``BINANCE_ABCD_TELEGRAM_*`` (and
+``BINANCE_ABCD_DISCORD_*``) and is read through the ``hooks`` module (not
+`from`-imported) so it stays monkeypatchable.
 """
 
 from __future__ import annotations
@@ -43,7 +53,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Optional
 
-from binance_abcd import hooks
+from binance_abcd import discord_notify, hooks
 from binance_abcd.http_client import get_session
 
 log = logging.getLogger(__name__)
@@ -147,6 +157,13 @@ def _admin_chat() -> str:
     return hooks.TELEGRAM_ADMIN_CHAT_ID or hooks.TELEGRAM_CHAT_ID
 
 
+def _redact(message: str) -> str:
+    """Scrub the bot token out of anything logged — a requests ConnectionError
+    quotes the request path, and the token is IN the Telegram path."""
+    token = str(hooks.TELEGRAM_BOT_TOKEN or "")
+    return message.replace(token, "***") if token else message
+
+
 def _send_sync(text: str, chat_id: str) -> None:
     url = f"https://api.telegram.org/bot{hooks.TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
@@ -158,13 +175,13 @@ def _send_sync(text: str, chat_id: str) -> None:
     try:
         response = get_session().post(url, json=payload, timeout=10)
         if not response.ok:
-            log.warning("telegram send failed: %s %.200s", response.status_code, response.text)
+            log.warning("telegram send failed: %s %.200s", response.status_code, _redact(response.text))
     except Exception as exc:  # noqa: BLE001 - a notification must never raise
-        log.warning("telegram send exception: %s", exc)
+        log.warning("telegram send exception: %s", _redact(str(exc)))
 
 
 def _send(text: str, chat_id: Optional[str] = None) -> None:
-    """Queue a message (no-op when notifications are off)."""
+    """Queue a Telegram message (no-op when Telegram is off)."""
     if not _enabled():
         return
     target = chat_id or hooks.TELEGRAM_CHAT_ID
@@ -176,6 +193,20 @@ def _send(text: str, chat_id: Optional[str] = None) -> None:
 
 def _send_admin(text: str) -> None:
     _send(text, _admin_chat())
+
+
+def _send_public(text: str, *, color: int) -> None:
+    """The public channel: the Telegram chat AND the Discord mirror. This is the
+    only path to Discord, and only the public builders call it — admin text
+    never comes through here. `color` is keyword-only with no default so a new
+    public message has to decide what its side bar says."""
+    _send(text)
+    discord_notify.post(text, color=color)
+
+
+def _public_enabled() -> bool:
+    """Is there anywhere at all to publish a public message?"""
+    return _enabled() or discord_notify.enabled()
 
 
 # --- Public: lifecycle --------------------------------------------------------
@@ -246,7 +277,8 @@ def notify_entry(
     shown = fill_price if fill_price is not None else price
     if shown:  # never render a 0/None price to the channel
         lines.append(f"Entry Price: {_fmt_price(shown)}")
-    _send("\n".join(lines))
+    color = discord_notify.RED if action.upper() == "SELL" else discord_notify.GREEN
+    _send_public("\n".join(lines), color=color)
 
 
 # --- Public: exits + realized PnL ---------------------------------------------
@@ -275,8 +307,9 @@ _batch_lock = threading.Lock()
 
 def open_exit_batch(action: str, ticker: str, *, price: Any = None, label: Optional[str] = None) -> Optional[str]:
     """Start collecting an exit's per-account PnL. Call BEFORE the fan-out so no
-    report can arrive before the batch exists. None when notifications are off."""
-    if not _enabled():
+    report can arrive before the batch exists. None when no public destination
+    is configured — Telegram or Discord alone is enough to open one."""
+    if not _public_enabled():
         return None
     batch_id = uuid.uuid4().hex
     batch = _ExitBatch(action, ticker, price, label)
@@ -446,7 +479,13 @@ def _flush_exit_batch(batch_id: str) -> None:
     if pct is not None:
         lines.append(f"PnL: {_fmt_pct(pct)}")
 
-    _send("\n".join(lines))
+    # The side bar is the sign of the PnL line, judged on the same rounding
+    # `_fmt_pct` prints — a -0.0001 that reads "+0.000%" is not a red card.
+    if pct is None:
+        color = discord_notify.GREY
+    else:
+        color = discord_notify.GREEN if round(pct, 3) >= 0 else discord_notify.RED
+    _send_public("\n".join(lines), color=color)
 
 
 # --- Public: scheduled performance reports ------------------------------------
@@ -574,7 +613,7 @@ def notify_report(kind: str, summary: dict, exchange: Optional[str] = None) -> N
     else:
         lines.append("No trades closed.")
 
-    _send("\n".join(lines))
+    _send_public("\n".join(lines), color=discord_notify.BLUE)
 
 
 # --- Admin: operational alerts ------------------------------------------------

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from binance_abcd import hooks, notify
+from binance_abcd import discord_notify, hooks, notify
 
 
 @pytest.fixture()
@@ -318,3 +318,91 @@ def test_max_increments_survives_an_underivable_depth(sent):
 def test_max_increments_sends_nothing_when_no_account_was_capped(sent):
     notify.notify_max_increments("BUY", "BTCUSDT", [])
     assert sent == []
+
+
+# --- Discord mirror -----------------------------------------------------------
+
+@pytest.fixture()
+def mirrored(monkeypatch):
+    """Discord ON, its post captured as (text, color). Telegram is left as the
+    test sets it — the mirror must not depend on it."""
+    monkeypatch.setattr(hooks, "DISCORD_ENABLED", True)
+    monkeypatch.setattr(hooks, "DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/1/t")
+    posts: list[tuple[str, int]] = []
+    monkeypatch.setattr(discord_notify, "post", lambda text, *, color: posts.append((text, color)))
+    return posts
+
+
+def test_discord_alone_is_a_public_destination(mirrored, monkeypatch):
+    """With Telegram off entirely, an exit batch still opens and its message
+    lands on Discord — the mirror is independent, not a Telegram add-on."""
+    monkeypatch.setattr(hooks, "TELEGRAM_BOT_TOKEN", "")
+    monkeypatch.setattr(hooks, "TELEGRAM_CHAT_ID", "")
+    telegram = []
+    monkeypatch.setattr(notify, "_send_sync", lambda *a: telegram.append(a))
+    assert notify._enabled() is False
+
+    batch_id = notify.open_exit_batch("EXIT_LONG", "BTCUSDT", price=110000)
+    assert batch_id is not None
+    notify.seal_exit_batch(batch_id, expected=1)
+    notify.report_exit_fill(batch_id, realized_pnl=30.0, exit_price=110100, quantity=1, balance=1030.0)
+
+    assert telegram == []
+    (text, color) = mirrored[0]
+    assert "Closing Long Positions — BTCUSDT" in text
+    assert "PnL: +3.000%" in text
+    assert color == discord_notify.GREEN
+
+
+def test_discord_gets_the_exact_public_text_telegram_gets(sent, mirrored):
+    notify.notify_entry("BUY", "BTCUSDT", fill_price=109250.5, filled=3, increment=2, max_increments=3)
+    assert mirrored[0][0] == sent[0][0]
+
+
+def test_entry_colour_follows_the_side(mirrored):
+    notify.notify_entry("BUY", "BTCUSDT", fill_price=1, filled=1)
+    notify.notify_entry("SELL", "BTCUSDT", fill_price=1, filled=1)
+    assert [c for _, c in mirrored] == [discord_notify.GREEN, discord_notify.RED]
+
+
+def test_exit_colour_follows_the_sign_of_the_printed_pnl(sent, mirrored):
+    def close(pnl, balance):
+        batch_id = notify.open_exit_batch("EXIT_LONG", "BTCUSDT", price=100)
+        notify.seal_exit_batch(batch_id, expected=1)
+        notify.report_exit_fill(batch_id, realized_pnl=pnl, exit_price=100, quantity=1, balance=balance)
+
+    close(10.0, 1010.0)      # +1.000%
+    close(-5.0, 995.0)       # -0.500%
+    close(-0.000001, 1000.0)  # prints "+0.000%" — not a red card
+    assert "+0.000%" in sent[2][0]
+    assert [c for _, c in mirrored] == [discord_notify.GREEN, discord_notify.RED, discord_notify.GREEN]
+
+
+def test_exit_without_a_pnl_is_grey(mirrored):
+    batch_id = notify.open_exit_batch("EXIT_LONG", "BTCUSDT", price=100)
+    notify.seal_exit_batch(batch_id, expected=1)
+    notify.report_exit_fill(batch_id, exit_price=100, quantity=1)
+    assert mirrored[0][1] == discord_notify.GREY
+    assert "PnL:" not in mirrored[0][0]
+
+
+def test_reports_are_blue(mirrored):
+    notify.notify_report("daily", {"start": "2026-09-16", "end": "2026-09-16", "trading_days": 1,
+                                   "return_pct": 1.0, "trades": 2, "assets": []}, exchange="Binance")
+    assert mirrored[0][1] == discord_notify.BLUE
+    assert "Daily Report" in mirrored[0][0]
+
+
+def test_no_admin_message_is_ever_mirrored(sent, mirrored, monkeypatch):
+    """Ops alerts carry account names and counts. Discord has no admin webhook
+    and no fallback — every admin builder must leave the mirror untouched."""
+    monkeypatch.setattr(hooks, "TELEGRAM_ADMIN_CHAT_ID", "")  # the fallback-to-public case
+    notify.notify_startup(7, 4)
+    notify.notify_rejected("BUY", "BTCUSDT", "asset not configured")
+    notify.notify_account_failures("EXIT_LONG", "BTCUSDT", [("Live One", "-2019")])
+    notify.notify_account_failures("BUY", "BTCUSDT", [("Live One", "408")], retrying=True)
+    notify.notify_retry_abandoned("EXIT_LONG", "BTCUSDT", ["uni-1"], attempts=5)
+    notify.notify_max_increments("BUY", "BTCUSDT", [("Live One", 3, 3)])
+    notify.notify_error("poller", "boom")
+    assert len(sent) == 7
+    assert mirrored == []

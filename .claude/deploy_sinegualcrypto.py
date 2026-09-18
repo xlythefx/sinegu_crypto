@@ -1331,6 +1331,12 @@ MIRRORED_ENGINE_ENV_KEYS = (
     "BINANCE_ABCD_TELEGRAM_BOT_TOKEN",
     "BINANCE_ABCD_TELEGRAM_CHAT_ID",
     "BINANCE_ABCD_TELEGRAM_ADMIN_CHAT_ID",
+    # The Discord mirror of the PUBLIC messages. Same category as the Telegram
+    # keys — WHICH channel the trades are announced in is the product — and the
+    # URL is a credential (its last segment is the webhook token), which is why
+    # it lives in the gitignored .env and reaches prod only through this upsert.
+    "BINANCE_ABCD_DISCORD_ENABLED",
+    "BINANCE_ABCD_DISCORD_WEBHOOK_URL",
     # The scheduled recap timetable. Same category: WHEN the public channel gets
     # its daily/weekly/monthly report is a product decision, not a property of
     # the box, so prod running a different schedule from local is a mistake.
@@ -1388,8 +1394,11 @@ def _sync_mirrored_engine_env(ssh) -> None:
     if changed:
         log("  engine/.env: mirrored from local -> " + ", ".join(changed))
     if missing:
-        # Not fatal: Telegram is optional, and a missing token simply means the
-        # channel stays quiet (notify.py is off unless token AND chat id exist).
+        # Not fatal: Telegram and Discord are optional, and a missing token or
+        # webhook URL simply means that channel stays quiet (notify.py is off
+        # unless token AND chat id exist; discord_notify.py unless the URL is).
+        # The flip side: local .env is the source of truth, so a local
+        # *_ENABLED=false is mirrored too and silences prod.
         log("  engine/.env: not set locally, skipped -> " + ", ".join(missing))
     if not changed and not missing:
         log("  engine/.env: mirrored keys already match local")

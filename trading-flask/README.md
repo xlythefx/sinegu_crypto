@@ -146,9 +146,42 @@ the gitignored `.env` only.
 | `BINANCE_ABCD_TELEGRAM_PNL_WAIT_SECONDS` | Exit-message PnL wait (default 25) |
 | `BINANCE_ABCD_FILL_SUMMARY_ATTEMPTS` | userTrades reads per close (default 3) |
 | `BINANCE_ABCD_FILL_SUMMARY_RETRY_SECONDS` | Backoff base between them (default 2) |
+| `BINANCE_ABCD_DISCORD_ENABLED` | Discord mirror switch (default true) |
+| `BINANCE_ABCD_DISCORD_WEBHOOK_URL` | Discord webhook — **secret**, public messages only |
 
 Everything is off unless **both** a token and a chat id are set, so a fresh
 clone (and the test suite — `conftest.py` forces it off) never posts.
+
+### Discord mirror
+
+The **public** messages — entries, exits + PnL percent, and the scheduled
+recaps — are also posted to a Discord channel (`binance_abcd/discord_notify.py`)
+as embeds: a card whose side bar is green for a long entry, red for a short
+one, the sign of the PnL on a close (grey when no PnL could be derived), blue
+for a recap. The text inside the card is the exact string the Telegram channel
+gets — `notify._send_public` is the one function that posts to both, and only
+the three public builders call it. Admin alerts go through `_send_admin`, which
+knows nothing about Discord: **there is no admin webhook and no fallback of
+admin text to the public one** (that fallback is what leaked account names into
+the public Telegram channel until 2026-09-04). Because the mirror only ever sees
+the public text plus a colour, it can publish nothing the channel does not
+already.
+
+The mirror is independent of Telegram — a webhook URL alone turns it on, and
+an exit batch opens when *either* destination exists. Sends run on their own
+**one-worker** pool (an entry is always posted before its exit, and a 429 sleep
+throttles the queue instead of a second thread hitting the same 5-per-2-s
+bucket); a rate limit is retried once after Discord's own `Retry-After`,
+anything else is logged and dropped. Never raises.
+
+The URL **is** the credential — its last path segment is the webhook token, and
+anyone holding it can post to the channel — so it lives in the gitignored `.env`
+only, is mirrored to prod by `sync-engine-env` / `deploy-engine`, and is
+scrubbed from every log line (a `requests` `ConnectionError` quotes the request
+path, which would otherwise write the token to the journal on every outage;
+the Telegram sender redacts its bot token the same way). Create the webhook in
+Discord under *Server Settings → Integrations → Webhooks*; the poster's name
+and avatar are configured there, not in the payload.
 
 What gets sent, one message per signal — never one per account:
 
@@ -210,7 +243,9 @@ written with NULLs and the past-positions poller backfills it — the DB
 self-heals, but the Telegram message is sent once and never edited.
 
 Sends are fire-and-forget on a 2-thread pool over the shared pooled session —
-a slow or down Telegram never adds latency to the trade path.
+a slow or down Telegram never adds latency to the trade path. The Discord
+mirror has its own pool for the same reason, so neither channel can delay the
+other.
 
 ## Scheduled performance reports
 

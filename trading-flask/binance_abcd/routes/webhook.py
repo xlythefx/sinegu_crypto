@@ -1012,8 +1012,9 @@ def _notify_job(
     venue_label: Optional[str] = None,
     name_venues: bool = False,
 ) -> None:
-    """Telegram fan-out for one finished job. Never raises — a notification
-    problem must not fail the trade job that already executed."""
+    """Notification fan-out for one finished job — the public channels
+    (Telegram + the Discord mirror) and the admin chat. Never raises — a
+    notification problem must not fail the trade job that already executed."""
     try:
         if exit_batch_id:
             # Releases the exit message once every closed account reports its PnL
