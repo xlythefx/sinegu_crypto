@@ -241,16 +241,20 @@ DISCORD_WEBHOOK_URL = _env_str("DISCORD_WEBHOOK_URL", "")  # secret — .env onl
 # already world-readable and carries percentages and counts only.
 #
 # Times are local to REPORT_TIMEZONE. The formats are:
-#   REPORT_DAILY_AT    "HH:MM"                       ("11:30")
-#   REPORT_WEEKLY_AT   "<mon..sun> HH:MM"            ("fri 11:30")
-#   REPORT_MONTHLY_AT  "<last|1-28> HH:MM"           ("last 11:30")
-# An empty value disables that one report; a malformed one is logged, alerted to
-# the admin chat and skipped — a typo in a recap must not stop the engine trading.
+#   REPORT_DAILY_AT    "HH:MM"                       ("00:10")
+#   REPORT_WEEKLY_AT   "<mon..sun> HH:MM"            ("sat 00:10")
+#   REPORT_MONTHLY_AT  "<last|1-28> HH:MM"           ("1 00:10")
+# Every recap covers the period ending YESTERDAY (the last completed local
+# day), so it fires shortly after midnight: the daily is the day just ended,
+# the weekly on Saturday is Sat..Fri, the monthly on the 1st is the previous
+# calendar month. An empty value disables that one report; a malformed one is
+# logged, alerted to the admin chat and skipped — a typo in a recap must not
+# stop the engine trading.
 REPORT_ENABLED = _env_bool("REPORT_ENABLED", True)
 REPORT_TIMEZONE = _env_str("REPORT_TIMEZONE", "Asia/Manila")
-REPORT_DAILY_AT = _env_str("REPORT_DAILY_AT", "11:30")
-REPORT_WEEKLY_AT = _env_str("REPORT_WEEKLY_AT", "fri 11:30")
-REPORT_MONTHLY_AT = _env_str("REPORT_MONTHLY_AT", "last 11:30")
+REPORT_DAILY_AT = _env_str("REPORT_DAILY_AT", "00:10")
+REPORT_WEEKLY_AT = _env_str("REPORT_WEEKLY_AT", "sat 00:10")
+REPORT_MONTHLY_AT = _env_str("REPORT_MONTHLY_AT", "1 00:10")
 # A report the engine was down for is still posted when it comes back, but only
 # within this window. Past it the period is marked done and skipped: a Tuesday
 # recap arriving on Thursday is worse than no recap.

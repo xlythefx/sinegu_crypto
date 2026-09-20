@@ -707,8 +707,9 @@ for the overlay's `position: fixed` and trap it inside.
   it — the same approximation `stacks_now` carries, and why it is rounded.
 - **Scheduled recaps** (`binance_abcd/reports.py`, 2026-09-07) are the ONE thing
   the engine posts because a clock ticked rather than because a signal fired:
-  **daily 23:55, weekly Friday 23:55, monthly last-day 23:55 — Asia/Manila**, to
-  the PUBLIC channel (`BINANCE_ABCD_REPORT_*`, mirrored to prod).
+  **daily 00:10, weekly Saturday 00:10, monthly 1st 00:10 — Asia/Manila**, each
+  describing the period that has just ENDED, to the PUBLIC channel
+  (`BINANCE_ABCD_REPORT_*`, mirrored to prod).
   **They are built from `GET /api/public/track-record`, never from a fresh
   query**, and that is the whole design. It cannot leak — the channel is
   world-readable, so a recap may carry percentages, TRADE counts and tickers
@@ -720,21 +721,23 @@ for the overlay's `position: fixed` and trap it inside.
   site and the channel would publish two different track records for the same
   month. So `reports.py` touches neither Binance nor the DB: it slices the daily
   series and chains it, and `notify.notify_report` owns what the channel may say.
-  - **Days are MANILA calendar days, and every recap ends on TODAY** (2026-09-16;
-    until then the series was UTC days and each recap covered the *previous*
-    one, so the "daily" posted at 23:30 Manila described a day that had ended
-    at 08:00 that morning). The API buckets the track record in
+  - **Days are MANILA calendar days, and every recap ends on YESTERDAY — the
+    last COMPLETED day** (2026-09-20). The API buckets the track record in
     `services.track_record.timezone` (`TRACK_RECORD_TIMEZONE`, default
     Asia/Manila) and publishes it as `payload.timezone`; `reports.py` cuts its
     window in THAT calendar (`series_timezone`, UTC fallback for an older API),
     never in `REPORT_TIMEZONE`, so the channel's "16 Sep" and the landing
-    chart's "16 Sep" are the same trades by construction. The daily is the
-    local day it fires in, the weekly the 7 days ending today, the monthly the
-    1st → today (so `last` is the whole month; `<1-28>` is month-to-date). The
-    stated trade-off: a close AFTER the firing time is on the site and in the
-    weekly/monthly but in no daily — hence 23:55, the latest the ~3-min
-    past-positions backfill and the endpoint's 5-min cache allow. A published
-    percentage is still never reposted or revised.
+    chart's "16 Sep" are the same trades by construction. The daily fired at
+    00:10 is the day that just ended, the weekly (Saturday) the 7 days ending
+    Friday, the monthly (the 1st) the previous calendar month (`monthly
+    <2-28>` is that month's completed days; `last` would drop the final day —
+    avoid). History: until 09-16 the series was UTC days; from 09-16 to 09-20
+    the window was "today so far" fired at 23:55, which — through the
+    endpoint's 5-min cache and the ~3-min past-positions backfill — could
+    never name a close from the last quarter-hour of a day, and the owner's
+    rule is that a daily lists every trade of its day. The 10 minutes past
+    midnight are for those two lags. A published percentage is still never
+    reposted or revised.
   - **Chained, not summed** — same time-weighted math as the endpoint's own
     total, so a mid-period deposit cannot inflate it.
   - **The DAILY recap ranks every asset traded** (`reports.rank_assets` +

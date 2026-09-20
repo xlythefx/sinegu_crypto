@@ -100,29 +100,49 @@ def test_monthly_last_resolves_per_month_length(schedules):
 
 # --- Windows -----------------------------------------------------------------
 
-def test_windows_end_on_the_local_day_they_fire_in(schedules):
-    """A 23:30 Manila recap is TODAY's, in Manila days — the series is bucketed
-    in that calendar too (`payload["timezone"]`), so the two agree."""
+def test_windows_end_on_the_last_completed_local_day(schedules):
+    """A recap fired just after midnight describes YESTERDAY — the day that has
+    just ended, in Manila days (the series is bucketed in that calendar too,
+    `payload["timezone"]`). The weekly is the seven days ending yesterday, the
+    monthly the 1st of yesterday's month through yesterday."""
     daily, weekly, monthly = schedules
-    fire = _now("2026-09-07T23:30")  # 15:30 UTC, still the 7th in Manila
+    fire = _now("2026-09-08T00:10")  # 16:10 UTC on the 7th; the 8th in Manila
     assert reports.period_window(daily, fire, MANILA) == ("2026-09-07", "2026-09-07")
     assert reports.period_window(weekly, fire, MANILA) == ("2026-09-01", "2026-09-07")
     assert reports.period_window(monthly, fire, MANILA) == ("2026-09-01", "2026-09-07")
 
 
-def test_monthly_on_the_last_day_covers_the_whole_month(schedules):
-    monthly = schedules[2]
-    assert reports.period_window(monthly, _now("2026-09-30T23:30"), MANILA) == ("2026-09-01", "2026-09-30")
+def test_a_close_in_the_last_minutes_of_the_day_is_in_that_days_daily(schedules):
+    """The reason the window ends yesterday and not today. A 23:55 "today"
+    recap could never name a 23:58 close; fired at 00:10 the same day is
+    complete, whatever the firing time. The window is a whole calendar day,
+    so which minute the recap fires at no longer decides what is in it."""
+    daily = schedules[0]
+    for clock in ("00:10", "00:59", "06:00", "23:59"):
+        fire = _now(f"2026-09-08T{clock}")
+        assert reports.period_window(daily, fire, MANILA) == ("2026-09-07", "2026-09-07")
+
+
+def test_monthly_on_the_first_covers_the_previous_month_whole():
+    monthly = reports.parse_schedule("monthly", "1 00:10")
+    assert reports.period_window(monthly, _now("2026-10-01T00:10"), MANILA) == ("2026-09-01", "2026-09-30")
+    # February, leap year: the window ends on the 29th without a hardcoded table.
+    assert reports.period_window(monthly, _now("2028-03-01T00:10"), MANILA) == ("2028-02-01", "2028-02-29")
+
+
+def test_monthly_mid_month_is_the_completed_days_so_far():
+    monthly = reports.parse_schedule("monthly", "15 00:10")
+    assert reports.period_window(monthly, _now("2026-09-15T00:10"), MANILA) == ("2026-09-01", "2026-09-14")
 
 
 def test_the_window_is_cut_in_the_series_calendar_not_the_schedule_one(schedules):
     """The firing instant is one moment; which DATE it is depends on the
     calendar. 07:00 Manila on the 8th is still 23:00 UTC on the 7th — an API
-    bucketing in UTC would file that recap under the 7th, and so must the
-    window."""
+    bucketing in UTC is still inside the 7th, so ITS completed day is the 6th,
+    and the window must follow the series' calendar, not the schedule's."""
     daily = schedules[0]
-    assert reports.period_window(daily, _now("2026-09-08T07:00"), MANILA) == ("2026-09-08", "2026-09-08")
-    assert reports.period_window(daily, _now("2026-09-08T07:00"), timezone.utc) == ("2026-09-07", "2026-09-07")
+    assert reports.period_window(daily, _now("2026-09-08T07:00"), MANILA) == ("2026-09-07", "2026-09-07")
+    assert reports.period_window(daily, _now("2026-09-08T07:00"), timezone.utc) == ("2026-09-06", "2026-09-06")
 
 
 def test_series_timezone_comes_from_the_payload_and_falls_back_to_utc():
@@ -383,19 +403,20 @@ def test_each_enabled_exchange_gets_its_own_recap(schedules, track_record, sent,
     """The channel labels every entry `· Binance` / `· MEXC`; the recap reads
     the same way — one message per venue, each from that venue's own slice."""
     monkeypatch.setattr(hooks, "EXCHANGES", ("binance", "mexc"))
-    mexc_series = [{"date": "2026-09-08", "pct": 2.0, "trades": 1,
+    # The daily fired on the 8th describes the 7th — the day that has ended.
+    mexc_series = [{"date": "2026-09-07", "pct": 2.0, "trades": 1,
                     "assets": [{"symbol": "ETH_USDT", "pct": 2.0, "trades": 1}]}]
     track_record["by_exchange"] = {
         "binance": {"available": True, "timezone": "Asia/Manila",
-                    "series": [{"date": "2026-09-08", "pct": 1.0, "trades": 2, "assets": []}]},
+                    "series": [{"date": "2026-09-07", "pct": 1.0, "trades": 2, "assets": []}]},
         "mexc": {"available": True, "timezone": "Asia/Manila", "series": mexc_series},
     }
     reports.run_once(schedules, MANILA, _now("2026-09-07T12:00"))   # seed
     reports.run_once(schedules, MANILA, _now("2026-09-08T11:31"))   # daily due
     assert len(sent) == 2
     binance, mexc = sent
-    assert "Daily Report — 8 Sep 2026 · Binance" in binance and "+1.000%" in binance
-    assert "Daily Report — 8 Sep 2026 · MEXC" in mexc and "+2.000%" in mexc and "ETH_USDT" in mexc
+    assert "Daily Report — 7 Sep 2026 · Binance" in binance and "+1.000%" in binance
+    assert "Daily Report — 7 Sep 2026 · MEXC" in mexc and "+2.000%" in mexc and "ETH_USDT" in mexc
     assert _state()["daily"] == {"binance": "2026-09-08", "mexc": "2026-09-08"}
 
 

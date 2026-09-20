@@ -36,17 +36,17 @@ kept per (kind, exchange), so one venue's failed fetch retries alone.
 
 Two details worth keeping:
 
-* **Windows are calendar days in the SERIES' timezone, ending TODAY.** The
-  endpoint buckets its days in a configured reporting zone (Asia/Manila on
-  prod) and says which in ``payload["timezone"]``; the window is cut in that
-  same calendar, so "16 Sep" in the channel is the same set of trades as
-  "16 Sep" on the landing page. The daily is the local day the schedule fires
-  in — a recap at 23:30 is "today", which is what the audience asked for —
-  the weekly is the seven days ending today, the monthly runs from the 1st.
-  The trade-off is stated, not hidden: a close AFTER the firing time lands on
-  the site and in the weekly/monthly, but no daily ever names it. Fire as late
-  in the day as the past-positions backfill (~3 min) and the endpoint's 5-min
-  cache allow; ``23:55`` is about the latest that is still honest.
+* **Windows are calendar days in the SERIES' timezone, ending YESTERDAY.**
+  The endpoint buckets its days in a configured reporting zone (Asia/Manila
+  on prod) and says which in ``payload["timezone"]``; the window is cut in
+  that same calendar, so "16 Sep" in the channel is the same set of trades as
+  "16 Sep" on the landing page. Every window ends on the last COMPLETED day:
+  the daily fired at 00:10 describes the day that just ended, the weekly the
+  seven days ending yesterday, the monthly runs from the 1st of that month.
+  Until 2026-09-20 the window ended on the firing day itself ("today so
+  far", fired 23:55), which left a quarter-hour of every day that no daily
+  could ever name — the owner's rule is that a daily lists every trade of
+  its day, so a recap is posted only once its period is over.
 * **The period return is CHAINED, not summed** — identical to how the endpoint
   computes its own total. It is therefore a time-weighted return: a deposit
   landing mid-week cannot inflate it, because each day's return was already
@@ -232,13 +232,22 @@ def period_window(schedule: Schedule, fire: datetime, tzinfo=timezone.utc) -> tu
     """The inclusive date range a firing covers, as ISO strings, in the
     calendar the series is bucketed in (`tzinfo`, from :func:`series_timezone`).
 
-    Every window ends on the day the schedule fires in — TODAY, locally. The
-    daily is that one day; the weekly is the seven days ending on it; the
-    monthly runs from the 1st to it, so ``monthly last`` covers the whole
-    calendar month and reads "1 - 30 Sep". A ``monthly <1-28>`` schedule is
-    therefore month-to-date, not the previous month.
+    Every window ends on the last COMPLETED local day — yesterday, in the
+    series' calendar — never on the day the schedule fires in. The daily is
+    that one day; the weekly is the seven days ending on it; the monthly runs
+    from the 1st of its month to it, so ``monthly 1`` covers the whole previous
+    calendar month and reads "1 - 30 Sep", while ``monthly <2-28>`` is that
+    month to date (its completed days only).
+
+    Ending on yesterday rather than today is what makes a recap COMPLETE. A
+    "today" window is only as full as the firing time, and the endpoint's
+    5-minute cache plus the ~3-minute past-positions backfill pushed the real
+    cut to ~23:47 — so a close in the last quarter-hour of a day was on the
+    site and in the weekly, but in no daily. The owner's rule (2026-09-20) is
+    that a daily names every trade of its day, so the daily fires shortly
+    after midnight and describes the day that just ended.
     """
-    end = fire.astimezone(tzinfo).date()
+    end = fire.astimezone(tzinfo).date() - timedelta(days=1)
     if schedule.kind == "daily":
         start = end
     elif schedule.kind == "weekly":
