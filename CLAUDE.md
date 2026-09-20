@@ -46,12 +46,16 @@ signals channel (**Voltrax Trades**) is NOT a support contact. **No personal
 line beside the desk** (the founder's Telegram was removed 2026-09-18): a
 contact must outlive whoever holds it.
 
-**The Contact page (`/contact`) presents Pixel Alpha and its Bangkok office**
-(`OFFICE` in `company.ts` — Park Ventures Ecoplex, Mon–Fri 9–18 ICT), never
-the billing entity. `COMPANY.legalName` / `registryNumber` / `addressLines`
-(Feature Digital LTD, Israel) are the INVOICE issuer and belong on invoices
-and legal text, where the entity that bills must be named — two different
-addresses for two different questions, and neither is retyped elsewhere.
+**Pixel Alpha is the ONLY name and the Bangkok office the ONLY address a
+customer ever sees (2026-09-20).** `COMPANY.name` + `OFFICE.addressLines` /
+`OFFICE.country` in `company.ts` feed the Contact page, the legal pages'
+controller/contact blocks, the footer, the invoice's FROM block and the API's
+emails. The billing entity that used to be printed beside it (a legal name,
+registry number and Israeli address — `COMPANY.legalName` / `registryNumber`
+/ `addressLines`, since deleted) was removed from every user-visible surface,
+**invoices included**, at the owner's request. Do not reintroduce a second
+entity name anywhere a customer reads; if the owner wants it back on invoices
+it goes back through `company.ts`, not retyped.
 
 ## Stack
 
@@ -143,9 +147,9 @@ page by page ("we slowly do it"). Rules for every ported page:
 
 **The printable invoice document** — "View invoice" on `/dashboard/invoices/:id` opens
 `components/billing/InvoiceDocumentModal.tsx`: white paper on the dark scrim, with the
-issuer (`lib/company.ts` — **Feature Digital LTD**, Reg. 516203072, Lilinblum 26, Gedera
-7070000, Israel), the billed trader, line items, subtotal / VAT / total, the performance
-summary the fee derives from, and payment terms. Two rules:
+issuer (`lib/company.ts` — **Pixel Alpha** at the Bangkok `OFFICE`; no legal entity or
+registry number, by decision on 2026-09-20), the billed trader, line items, subtotal /
+VAT / total, the performance summary the fee derives from, and payment terms. Two rules:
 - **It is styled with FIXED light colors, never the theme tokens.** It is a legal record
   the customer files and prints; a dark PDF is not an invoice, and flipping the app to
   light theme must not change what their copy looks like.
@@ -759,16 +763,23 @@ for the overlay's `position: fixed` and trap it inside.
     state file counts for every venue. MEXC recaps start the day
     `BINANCE_ABCD_EXCHANGES` includes `mexc` on prod AND the master has a
     `mexc_accounts` row.
-  - **"Trades closed" counts INCREMENTS, not close orders** (2026-09-17). A
-    `binance_pastpositions` row is one close order, and the engine closes a
-    whole stacked position in one order, so `Increment (1/3)…(3/3)` closes as
-    ONE row — the recap said 4 under six announced closes. The close path now
-    writes `increments_closed` (the `Increments Closed (n/cap)` figure) on the
-    row via `past-positions/sync`, and `PublicStatsController` sums
-    `COALESCE(increments_closed, 1)` for every `trades` figure (series, assets,
-    `stats.trades`). NULL = not recorded (history, poller rows) and is never
-    backfilled from `position_amt`: the divisor was that account's scaled entry
-    size at close time and is not recoverable later.
+  - **"Trades closed" counts CLOSE ORDERS (rows), not increments** — decided
+    2026-09-20, reversing three days of the opposite. From 09-17 the recap
+    summed `increments_closed`, so a 2-increment stack closed in one order
+    posted "Trades closed: 2" for the 19 Sep day; the owner counts a close as
+    one trade and held up the reference bot's recap (`binance-flask`
+    `performance_report.py`: `len(rows)`) as correct. `PublicStatsController`
+    now counts one per row for every `trades` figure (series, assets,
+    `stats.trades`). The `increments_closed` column is still written by the
+    close path (`past-positions/sync`) and still prints as `Increments Closed
+    (n/cap)` on the close message — it is information about the close, not a
+    multiplier on the count. NULL = not recorded and is never backfilled from
+    `position_amt`. **The two products' daily windows are the SAME day**:
+    binance-flask anchors at 23:00 Bangkok = 16:00 UTC = 00:00 Manila, which
+    is exactly the Manila calendar day this series buckets on — a "timezone"
+    complaint about the recap is almost certainly this count rule or the
+    percent basis (ours: net P&L over the walked capital; theirs: gross P&L
+    over `balance − period_pnl`, on a differently-sized master account).
   - **A failed fetch is not "no trades"** — `None` leaves the period unmarked
     and the next tick retries it, the same empty-vs-unavailable rule the pollers
     follow. `available: false` is an answer and is marked done.
