@@ -19,7 +19,9 @@ export interface AnalyticsFilters {
 /**
  * Append a chip selection as `key[]=A&key[]=B`, which PHP reads as an array.
  * The mode rides along only when something is actually selected, so an idle
- * filter bar leaves the URL (and the browser cache key) untouched.
+ * filter bar leaves the URL (and the browser cache key) untouched. It is
+ * always sent explicitly: the API's own fallback for a missing mode is
+ * `exclude`, while the page defaults to `include`.
  */
 function appendChips(
   params: URLSearchParams,
@@ -31,7 +33,7 @@ function appendChips(
   if (!values || values.length === 0) return
   // Sorted so the same selection always produces the same URL.
   for (const value of [...values].sort()) params.append(`${key}[]`, value)
-  params.set(modeKey, mode ?? 'exclude')
+  params.set(modeKey, mode ?? 'include')
 }
 
 export async function getAnalytics(

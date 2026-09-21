@@ -41,6 +41,7 @@ function AuthForm() {
   const [email, setEmail] = useState(import.meta.env.DEV ? 'test@sinegu.com' : '')
   const [password, setPassword] = useState(import.meta.env.DEV ? 'password123' : '')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [termsAccepted, setTermsAccepted] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -78,6 +79,12 @@ function AuthForm() {
       setError('Passwords do not match.')
       return
     }
+    // The checkbox is `required`, so the browser blocks submit first; this is
+    // the belt for a browser that does not enforce it.
+    if (isRegister && !termsAccepted) {
+      setError('Please accept the Terms to create an account.')
+      return
+    }
 
     setLoading(true)
     try {
@@ -93,7 +100,11 @@ function AuthForm() {
         const firstFieldError = err.errors
           ? Object.values(err.errors)[0]?.[0]
           : undefined
-        setError(firstFieldError ?? err.message)
+        setError(
+          err.status === 429
+            ? 'Too many attempts. Wait a minute and try again.'
+            : (firstFieldError ?? err.message),
+        )
       } else {
         setError('Something went wrong. Please try again.')
       }
@@ -199,13 +210,39 @@ function AuthForm() {
                   required
                 />
               )}
+              {isRegister && (
+                <label className="flex cursor-pointer items-start gap-3 text-[13px] leading-[1.55] text-muted">
+                  <input
+                    type="checkbox"
+                    className="mt-[3px] h-4 w-4 shrink-0 cursor-pointer accent-[var(--accent)]"
+                    checked={termsAccepted}
+                    onChange={(e) => setTermsAccepted(e.target.checked)}
+                    required
+                  />
+                  <span>
+                    I have read and agree to the{' '}
+                    <Link to="/terms" target="_blank" className="font-semibold text-text hover:underline">
+                      Terms
+                    </Link>
+                    ,{' '}
+                    <Link to="/privacy" target="_blank" className="font-semibold text-text hover:underline">
+                      Privacy Policy
+                    </Link>{' '}
+                    and{' '}
+                    <Link to="/risk" target="_blank" className="font-semibold text-text hover:underline">
+                      Risk Disclosure
+                    </Link>
+                    , and I understand that leveraged trading can lose my capital.
+                  </span>
+                </label>
+              )}
               {!isRegister && (
-                <a
-                  href="#"
-                  className="self-start text-[13px] text-muted"
+                <Link
+                  to="/auth/forgot"
+                  className="self-start text-[13px] text-muted hover:text-text"
                 >
                   Forgot your password?
-                </a>
+                </Link>
               )}
               {error && (
                 <p

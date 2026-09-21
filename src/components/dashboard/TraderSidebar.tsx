@@ -10,6 +10,7 @@ import {
   LineChart,
   Users,
   Settings,
+  LifeBuoy,
   LogOut,
   Shield,
 } from 'lucide-react'
@@ -52,6 +53,9 @@ export const NAV_ITEMS: TraderNavItem[] = [
   { label: 'Asset Performance', url: '/dashboard/asset-performance', icon: LineChart },
   { label: 'Referrals', url: '/dashboard/referrals', icon: Users },
   { label: 'Settings', url: '/dashboard/settings', icon: Settings },
+  // Public page, but a trader with a stuck key or an invoice question should
+  // not have to leave the shell to find out where to write.
+  { label: 'Help & Contact', url: '/contact', icon: LifeBuoy },
 ]
 
 interface TraderSidebarProps {

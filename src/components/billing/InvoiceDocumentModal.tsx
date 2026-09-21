@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  Building2,
   CalendarDays,
   CheckCircle2,
   Mail,
@@ -12,7 +11,7 @@ import {
   Wallet,
   X,
 } from 'lucide-react'
-import { COMPANY, VAT_RATE } from '../../lib/company'
+import { COMPANY, OFFICE, VAT_RATE } from '../../lib/company'
 import { fmtMoney, fmtSignedMoney, fmtSignedPct, fmtMediumDate } from '../../lib/format'
 import { hasFee, type Invoice } from '../../lib/billing'
 import { EXCHANGE_META } from '../exchanges/meta'
@@ -22,7 +21,7 @@ import { EXCHANGE_META } from '../exchanges/meta'
  * the app's theme.
  *
  * Everything else in the product is the dark dashboard; this one surface is a
- * printable record with a legal issuer, a billed party, line items and a total,
+ * printable record with an issuer, a billed party, line items and a total,
  * so it is styled with fixed light colors rather than the theme tokens. Flipping
  * to light theme must not change what the customer's copy looks like, and a
  * dark PDF is not an invoice anyone files.
@@ -197,7 +196,7 @@ export default function InvoiceDocumentModal({
               />
               <div className="min-w-0">
                 <p className="font-display text-[15px] font-extrabold leading-tight">
-                  {COMPANY.tradingName}
+                  {COMPANY.name}
                 </p>
                 <p
                   className="font-mono text-[11.5px] leading-tight mt-0.5"
@@ -231,16 +230,14 @@ export default function InvoiceDocumentModal({
                   From
                 </p>
                 <p className="text-[16px] font-extrabold mb-2 leading-tight">
-                  {COMPANY.legalName}
+                  {COMPANY.name}
                 </p>
                 <div className="flex flex-col gap-1.5" style={{ color: INK_SOFT }}>
                   <p className={META_LINE}>
                     <MapPin size={14} className="flex-shrink-0 mt-[2px]" />
-                    <span>{COMPANY.addressLines.join(', ')}</span>
-                  </p>
-                  <p className={META_LINE}>
-                    <Building2 size={14} className="flex-shrink-0 mt-[2px]" />
-                    <span>Registry Number: {COMPANY.registryNumber}</span>
+                    <span>
+                      {OFFICE.addressLines.join(', ')}, {OFFICE.country}
+                    </span>
                   </p>
                   <p className={META_LINE}>
                     <Mail size={14} className="flex-shrink-0 mt-[2px]" />
@@ -496,7 +493,7 @@ export default function InvoiceDocumentModal({
                 {' '}— you never pay twice on the same gains.{' '}
                 {paid
                   ? 'This billing period is settled. Thank you.'
-                  : `Settle in USDT or supported crypto from your ${COMPANY.tradingName} billing page.`}
+                  : `Settle in USDT or supported crypto from your ${COMPANY.name} billing page.`}
               </p>
             </div>
           </div>
@@ -510,7 +507,7 @@ export default function InvoiceDocumentModal({
               className="inline-flex items-center gap-1.5 text-[11.5px]"
               style={{ color: INK_FAINT }}
             >
-              <ShieldCheck size={13} /> {COMPANY.legalName} · {COMPANY.website}
+              <ShieldCheck size={13} /> {COMPANY.name} · {COMPANY.website}
             </p>
             {!paid && fee && onPay && (
               <button

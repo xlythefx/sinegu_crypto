@@ -5,7 +5,13 @@ import ProdApiBadge from './components/ui/ProdApiBadge'
 import Landing from './pages/Landing'
 import LandingV2 from './pages/LandingV2'
 import Auth from './pages/Auth'
+import ForgotPassword from './pages/ForgotPassword'
 import Terms from './pages/Terms'
+import Privacy from './pages/Privacy'
+import RiskDisclosure from './pages/RiskDisclosure'
+import Contact from './pages/Contact'
+import Faq from './pages/Faq'
+import NotFound from './pages/NotFound'
 import TradingBot from './pages/TradingBot'
 import BinanceGuide from './pages/BinanceGuide'
 import Dashboard from './pages/Dashboard'
@@ -47,7 +53,12 @@ function App() {
             <Route path="/" element={<Landing />} />
             <Route path="/v2" element={<LandingV2 />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/auth/forgot" element={<ForgotPassword />} />
             <Route path="/terms" element={<Terms />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/risk" element={<RiskDisclosure />} />
+            <Route path="/contact" element={<Contact />} />
+            <Route path="/faq" element={<Faq />} />
             <Route path="/trading-bot" element={<TradingBot />} />
             <Route path="/docs/binance" element={<BinanceGuide />} />
             <Route path="/dashboard/analytics" element={<Analytics />} />
@@ -79,6 +90,7 @@ function App() {
             <Route path="/admin/database" element={<AdminDatabase />} />
             <Route path="/admin/tron-transfers" element={<AdminTronTransfers />} />
             <Route path="/admin/*" element={<AdminDashboard />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
           <ProdApiBadge />
         </PortalSwitchProvider>

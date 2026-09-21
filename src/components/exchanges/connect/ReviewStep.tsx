@@ -1,4 +1,5 @@
-import { FlaskConical, Wallet, Zap } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { AlertTriangle, FlaskConical, Wallet, Zap } from 'lucide-react'
 import type { ExchangeKind } from '../../../types/exchanges'
 import { EXCHANGE_META } from '../meta'
 import { LABEL } from './classes'
@@ -98,6 +99,26 @@ export default function ReviewStep({ kind, demo, form }: ReviewStepProps) {
         The account starts trading from the next signal — the engine is told
         about it immediately, not on a timer. You can disconnect at any time.
       </p>
+
+      {/* The one place a person is about to hand over a key that trades real
+          money — the Risk Disclosure belongs here, not only in the footer. */}
+      {!demo && (
+        <p className="flex items-start gap-2 text-[12px] leading-[1.55] text-muted">
+          <AlertTriangle size={14} className="mt-px flex-none text-accent" />
+          <span>
+            Leveraged futures can lose the funds in this wallet. By connecting
+            you confirm you have read the{' '}
+            <Link
+              to="/risk"
+              target="_blank"
+              className="font-semibold text-text underline-offset-2 hover:underline"
+            >
+              Risk Disclosure
+            </Link>
+            .
+          </span>
+        </p>
+      )}
     </div>
   )
 }

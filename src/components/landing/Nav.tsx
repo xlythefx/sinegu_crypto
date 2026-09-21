@@ -29,10 +29,16 @@ export default function Nav() {
             Pixel Alpha
           </span>
         </Link>
-        <div className="flex gap-[26px] text-sm font-medium text-muted whitespace-nowrap">
-          <span className="cursor-pointer">Structure</span>
-          <span className="cursor-pointer">Exchanges</span>
-          <span className="cursor-pointer">Pricing</span>
+        <div className="flex gap-[26px] text-sm font-medium text-muted whitespace-nowrap max-[560px]:hidden">
+          <Link to="/trading-bot" className="text-muted! hover:text-text!">
+            Trading Bot
+          </Link>
+          <Link to="/faq" className="text-muted! hover:text-text!">
+            FAQ
+          </Link>
+          <Link to="/contact" className="text-muted! hover:text-text!">
+            Contact
+          </Link>
         </div>
       </div>
       <div className="flex items-center gap-3.5 shrink-0">

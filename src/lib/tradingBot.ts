@@ -1,4 +1,4 @@
-import { COMPANY } from './company'
+import { COMPANY, OFFICE } from './company'
 import type { LegalDocumentContent } from '../types/legal'
 
 /**
@@ -336,7 +336,7 @@ export const TRADING_BOT: LegalDocumentContent = {
         { kind: 'email', label: 'Support', address: COMPANY.email },
         {
           kind: 'p',
-          text: `${COMPANY.tradingName} is operated by ${COMPANY.legalName} (Reg. ${COMPANY.registryNumber}), ${COMPANY.addressLines.join(', ')}.`,
+          text: `${COMPANY.name} is based at ${OFFICE.addressLines.join(', ')}, ${OFFICE.country}.`,
         },
       ],
     },

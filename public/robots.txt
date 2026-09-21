@@ -1,0 +1,10 @@
+# Public marketing + legal pages are crawlable; the app and its API are not.
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /auth
+Disallow: /api/
+Disallow: /v2
+
+Sitemap: https://pixel-alpha.com/sitemap.xml
