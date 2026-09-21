@@ -1,20 +1,31 @@
 import { Link } from 'react-router-dom'
+import SocialLinks from '../ui/SocialLinks'
 import { COMPANY } from '../../lib/company'
 
-// `to` marks the entries that are real pages; the rest are still placeholders
-// and stay as plain (non-navigating) labels rather than dead links.
+// `to` marks the entries that are real pages; anything without one would stay
+// a plain (non-navigating) label rather than a dead link.
 const COLUMNS: { title: string; links: { label: string; to?: string }[] }[] = [
   {
     title: 'PRODUCT',
-    links: [{ label: 'Trading Bot', to: '/trading-bot' }],
+    links: [
+      { label: 'Trading Bot', to: '/trading-bot' },
+      { label: 'FAQ', to: '/faq' },
+    ],
   },
   {
     title: 'RESOURCES',
-    links: [{ label: 'Binance Docs', to: '/docs/binance' }],
+    links: [
+      { label: 'Binance Docs', to: '/docs/binance' },
+      { label: 'Contact & Support', to: '/contact' },
+    ],
   },
   {
-    title: 'COMPANY',
-    links: [{ label: 'Terms & Conditions', to: '/terms' }],
+    title: 'LEGAL',
+    links: [
+      { label: 'Terms & Conditions', to: '/terms' },
+      { label: 'Privacy Policy', to: '/privacy' },
+      { label: 'Risk Disclosure', to: '/risk' },
+    ],
   },
 ]
 
@@ -37,6 +48,8 @@ export default function Footer() {
             Automated trading bots that run on your own exchange. Free to use —
             you only pay 20% of the profit you make.
           </p>
+          {/* Public channels — where to follow, not where to get support. */}
+          <SocialLinks className="mt-5" />
         </div>
         {COLUMNS.map((col) => (
           <div key={col.title}>
@@ -65,9 +78,7 @@ export default function Footer() {
       </div>
       <div className="max-w-[1280px] mx-auto py-[18px] px-10 border-t border-hair flex justify-between items-center font-mono text-[11px] leading-[1.6] text-faint flex-wrap gap-x-8 gap-y-2">
         <span>
-          © {new Date().getFullYear()} {COMPANY.tradingName} — a trading name of{' '}
-          {COMPANY.legalName} (Reg. {COMPANY.registryNumber}). All rights
-          reserved.
+          © {new Date().getFullYear()} {COMPANY.name}. All rights reserved.
         </span>
         <span className="max-w-[52ch]">
           Trading cryptocurrency futures carries a high level of risk and may

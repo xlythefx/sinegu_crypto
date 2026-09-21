@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Check } from 'lucide-react'
+import SocialLinks from '../ui/SocialLinks'
 
 // `to` = an in-app route (rendered as a <Link>); `href` = an on-page anchor.
 const COLUMNS: {
@@ -20,9 +21,10 @@ const COLUMNS: {
     title: 'Company',
     links: [
       { label: 'FAQ', href: '#faq' },
-      { label: 'Contact', href: '#' },
+      { label: 'Contact', to: '/contact' },
       { label: 'Terms', to: '/terms' },
-      { label: 'Privacy', href: '#' },
+      { label: 'Privacy', to: '/privacy' },
+      { label: 'Risk Disclosure', to: '/risk' },
     ],
   },
 ]
@@ -59,6 +61,8 @@ export default function FooterV2() {
               Automated crypto trading with full custody. Connect Binance, Bybit or
               MEXC and pay only when you profit.
             </p>
+            {/* Public channels — where to follow, not where to get support. */}
+            <SocialLinks className="mt-5" />
           </div>
 
           {/* Link columns */}
