@@ -508,3 +508,68 @@ def test_preview_skips_an_exchange_with_no_record(routed, track_record, monkeypa
     track_record["payload"] = {"success": True, "available": False}
     assert reports.preview("daily", _now("2026-09-06T19:00")) == []
     assert routed == []
+
+
+def test_preview_refuses_a_disabled_or_unknown_kind(monkeypatch):
+    monkeypatch.setattr(hooks, "REPORT_WEEKLY_AT", "")
+    with pytest.raises(reports.PreviewUnavailable):
+        reports.preview("weekly")
+    with pytest.raises(reports.PreviewUnavailable):
+        reports.preview("hourly")
+
+
+# --- POST /admin/reports/preview (the Bot Engine page's buttons) ------------------
+
+SECRET = "test-webhook-secret"
+
+
+def test_preview_endpoint_needs_the_admin_secret(client):
+    assert client.post("/admin/reports/preview", json={"kind": "daily"}).status_code == 403
+
+
+def test_preview_endpoint_renders_sends_and_reports_the_day(client, routed, track_record, monkeypatch):
+    monkeypatch.setattr(hooks, "REPORT_DAILY_AT", "23:55")
+    response = client.post(
+        "/admin/reports/preview",
+        json={"kind": "daily", "on": "2026-09-05"},
+        headers={"X-Admin-Secret": SECRET},
+    )
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["kind"] == "daily" and body["on"] == "2026-09-05"
+    (message,) = body["messages"]
+    assert message["html"].startswith("📅 <b>Daily Report — 5 Sep 2026 · Binance</b>")
+    # The page shows the plain text; no Telegram markup leaks into it.
+    assert message["text"].startswith("📅 Daily Report — 5 Sep 2026 · Binance")
+    assert "<b>" not in message["text"]
+    assert [dest for dest, _ in routed] == ["admin-chat"]
+
+
+def test_preview_endpoint_resolves_yesterday_in_the_report_timezone(client, routed, track_record, monkeypatch):
+    """'yesterday' is decided on the server in REPORT_TIMEZONE, never by the
+    browser's clock — an admin in another zone still gets the Manila day."""
+    monkeypatch.setattr(hooks, "REPORT_DAILY_AT", "23:55")
+    monkeypatch.setattr(hooks, "REPORT_TIMEZONE", "Asia/Manila")
+
+    class _Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 9, 7, 0, 30, tzinfo=MANILA).astimezone(tz)  # 16:30 UTC on the 6th
+
+    import binance_abcd.routes.admin as admin_routes
+    monkeypatch.setattr(admin_routes, "datetime", _Clock)
+    response = client.post(
+        "/admin/reports/preview", json={"kind": "daily", "on": "yesterday"}, headers={"X-Admin-Secret": SECRET},
+    )
+    assert response.status_code == 200
+    assert response.get_json()["on"] == "2026-09-06"
+    assert "6 Sep 2026" in response.get_json()["messages"][0]["text"]
+
+
+@pytest.mark.parametrize("body,status", [
+    ({"kind": "hourly"}, 422),
+    ({"kind": "daily", "on": "not-a-date"}, 400),
+])
+def test_preview_endpoint_rejects_bad_input(client, track_record, body, status):
+    response = client.post("/admin/reports/preview", json=body, headers={"X-Admin-Secret": SECRET})
+    assert response.status_code == status

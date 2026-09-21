@@ -39,6 +39,9 @@ import type {
   MasterStats,
   PerformanceFilters,
   PurgeKeyResult,
+  RecapKind,
+  RecapPreviewDay,
+  RecapPreviewResult,
   SandboxPositionInput,
   SandboxUser,
   ScenarioRun,
@@ -604,6 +607,27 @@ export async function restartEngine(): Promise<EngineRestartResult> {
     { method: 'POST', auth: true },
   )
   return { state: res.state ?? null }
+}
+
+/**
+ * Render a recap as the scheduler would and send it to the ADMIN Telegram
+ * group under a test banner — never the public channel. `on` picks the day
+ * it is rendered "as of" (ISO date or 'yesterday'); null = right now.
+ */
+export async function previewRecap(
+  kind: RecapKind,
+  on: RecapPreviewDay = null,
+): Promise<RecapPreviewResult> {
+  const res = await apiFetch<{ success: boolean } & RecapPreviewResult>(
+    '/admin/engine/reports/preview',
+    { method: 'POST', auth: true, body: { kind, on } },
+  )
+  return {
+    kind: res.kind,
+    on: res.on ?? null,
+    telegram: Boolean(res.telegram),
+    messages: res.messages ?? [],
+  }
 }
 
 /* ============ sandbox (testing) ============ */

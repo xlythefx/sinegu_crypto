@@ -682,6 +682,34 @@ export interface EngineRestartResult {
   state: EngineState | null
 }
 
+/* ============ recap previews (/admin/engine/reports/preview) ============ */
+
+export type RecapKind = 'daily' | 'weekly' | 'monthly'
+
+/**
+ * Which day a preview is rendered "as of": an ISO date, or `yesterday`, which
+ * the ENGINE resolves in the report timezone — the browser's clock must never
+ * decide which calendar day that is.
+ */
+export type RecapPreviewDay = string | 'yesterday' | null
+
+export interface RecapPreviewMessage {
+  /** Plain text for the page (Telegram markup stripped). */
+  text: string
+  /** The exact Telegram HTML that was sent. */
+  html: string
+}
+
+export interface RecapPreviewResult {
+  kind: RecapKind
+  /** The resolved day (ISO) the recap was rendered for; null = "now". */
+  on: string | null
+  /** false when the engine has no Telegram configured — rendered only, nothing sent. */
+  telegram: boolean
+  /** One per exchange with a published track record. Empty = nothing to show. */
+  messages: RecapPreviewMessage[]
+}
+
 /* ============ database browser (/admin/database/*) ============ */
 
 /** Scalar as it arrives from a MySQL row over JSON. */

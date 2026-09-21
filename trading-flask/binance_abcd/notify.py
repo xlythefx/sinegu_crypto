@@ -153,6 +153,12 @@ def _enabled() -> bool:
     return bool(hooks.TELEGRAM_ENABLED and hooks.TELEGRAM_BOT_TOKEN and hooks.TELEGRAM_CHAT_ID)
 
 
+def telegram_enabled() -> bool:
+    """Is there a Telegram bot + chat to send to at all? For callers outside
+    this module that need to say "sent" vs "rendered only" honestly."""
+    return _enabled()
+
+
 def _admin_chat() -> str:
     return hooks.TELEGRAM_ADMIN_CHAT_ID or hooks.TELEGRAM_CHAT_ID
 

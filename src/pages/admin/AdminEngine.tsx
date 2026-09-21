@@ -6,6 +6,7 @@ import EngineStatusCard from '../../components/admin/engine/EngineStatusCard'
 import EngineHealthCard from '../../components/admin/engine/EngineHealthCard'
 import EngineLogCard from '../../components/admin/engine/EngineLogCard'
 import KeyIssuesCard from '../../components/admin/engine/KeyIssuesCard'
+import RecapPreviewCard from '../../components/admin/engine/RecapPreviewCard'
 import { useApiData } from '../../hooks/useApiData'
 import { useInterval } from '../../hooks/useInterval'
 import {
@@ -73,6 +74,10 @@ export default function AdminEngine() {
           restartError={restartError}
           onRestart={doRestart}
         />
+        {/* Test-send the daily / weekly / monthly recap to the admin group.
+            Gated on the engine answering /health, not on systemd: a local
+            engine can render one too. */}
+        <RecapPreviewCard engineReachable={data.health !== null} />
         <EngineHealthCard health={data.health} available={data.available} />
         {/* Accounts the exchange is refusing — the silent failure the engine
             can see but the customer cannot. */}

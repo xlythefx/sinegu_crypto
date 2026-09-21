@@ -550,7 +550,14 @@ def start_reporter(shutdown: threading.Event) -> Optional[threading.Thread]:
     return thread
 
 
-# --- Preview (CLI) ------------------------------------------------------------------
+# --- Preview (CLI + admin endpoint) --------------------------------------------------
+
+KINDS = ("daily", "weekly", "monthly")
+
+
+class PreviewUnavailable(ValueError):
+    """The requested recap cannot be rendered here (schedule disabled, bad kind)."""
+
 
 def preview(kind: str, now: Optional[datetime] = None, on: Optional[date] = None) -> list[str]:
     """Build the `kind` recap for the window that would apply if it fired
@@ -558,19 +565,24 @@ def preview(kind: str, now: Optional[datetime] = None, on: Optional[date] = None
     ADMIN chat with a test banner, one per enabled exchange with a published
     record. Nothing reaches the public channel and the state file is
     untouched, so the real scheduled post is unaffected. Returns the rendered
-    texts (for stdout).
+    texts (for stdout / the admin page).
 
-    ``python -m binance_abcd.reports preview daily [YYYY-MM-DD]``
+    ``python -m binance_abcd.reports preview daily [YYYY-MM-DD]``, and the
+    Bot Engine admin page through ``POST /admin/reports/preview``.
     """
     from zoneinfo import ZoneInfo
 
+    if kind not in KINDS:
+        raise PreviewUnavailable(f"kind must be one of {', '.join(KINDS)}")
     schedule = parse_schedule(kind, {
         "daily": hooks.REPORT_DAILY_AT,
         "weekly": hooks.REPORT_WEEKLY_AT,
         "monthly": hooks.REPORT_MONTHLY_AT,
     }[kind])
     if schedule is None:
-        raise SystemExit(f"{kind} recap is disabled (empty BINANCE_ABCD_REPORT_{kind.upper()}_AT)")
+        raise PreviewUnavailable(
+            f"{kind} recap is disabled (empty BINANCE_ABCD_REPORT_{kind.upper()}_AT)"
+        )
     tzinfo = ZoneInfo(hooks.REPORT_TIMEZONE)
     if on is not None:
         now = _at(schedule, on, tzinfo)
@@ -603,7 +615,10 @@ if __name__ == "__main__":
         on_day = date.fromisoformat(args[2]) if len(args) == 3 else None
     except ValueError:
         raise SystemExit(usage) from None
-    texts = preview(args[1], on=on_day)
+    try:
+        texts = preview(args[1], on=on_day)
+    except PreviewUnavailable as exc:
+        raise SystemExit(str(exc)) from None
     for text in texts:
         print(text, end="\n\n")
     if not texts:
