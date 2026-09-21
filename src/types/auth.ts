@@ -25,6 +25,20 @@ export interface AuthUser {
    * undefined as "unknown", never as "not connected".
    */
   has_exchange_account?: boolean
+  /**
+   * False for an account created through Discord that has not set a password
+   * yet: Settings offers "Set a password" instead of "Change password", and
+   * Discord cannot be disconnected. Undefined (older session) = assume true.
+   */
+  has_password?: boolean
+  /** The linked Discord account, or null. `id` is a snowflake — keep it a string. */
+  discord?: DiscordLink | null
+}
+
+export interface DiscordLink {
+  id: string
+  username: string
+  linked_at: string | null
 }
 
 export interface AuthResponse {

@@ -1,19 +1,16 @@
 import { useState, type FormEvent } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { CheckCircle2, KeyRound, MailCheck } from 'lucide-react'
 import { forgotPassword, resetPassword } from '../services/auth'
 import { ApiError } from '../services/api'
 import { isLoggedIn } from '../lib/session'
+import AuthFrame, { AuthBrand } from '../components/auth/AuthFrame'
+import { BUTTON, ERROR, ICON_CHIP, INPUT } from '../components/auth/authClasses'
 
 type Step = 'email' | 'code' | 'done'
 
-// Same field styling as the sign-in form (`pages/Auth.tsx`).
-const INPUT =
-  'h-12 w-full border border-border rounded-[12px] bg-surface2 px-4 text-[14px] text-text outline-none font-body transition-[border-color,box-shadow] duration-200 focus:border-accent focus:shadow-[0_0_0_3px_var(--glowAuth)]'
-const BUTTON =
-  'relative mt-1 h-12 rounded-[12px] border-0 bg-accent font-body text-[15px] font-bold text-on-accent shadow-[0_10px_24px_var(--glowAuth)] transition-transform duration-200 hover:-translate-y-0.5 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60'
-const ERROR =
-  'm-0 rounded-[10px] border border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.08)] py-2.5 px-3.5 text-[13px] leading-[1.4] text-[#ef4444]'
+const H1 = 'mt-4 mb-1.5 font-display text-[28px] font-extrabold tracking-[-0.02em]'
+const LEDE = 'mb-6 text-[14px] leading-[1.6] text-muted'
 
 /**
  * `/auth/forgot` — request a six-digit code, redeem it with a new password.
@@ -83,130 +80,112 @@ function ForgotPasswordForm() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-bg p-6 text-text">
-      <Link
-        to="/auth"
-        className="absolute top-[22px] left-6 z-[5] flex items-center gap-2 rounded-pill border border-border bg-surface py-[9px] pr-4 pl-3 font-mono text-[12px] text-text"
-      >
-        ← Sign in
-      </Link>
+    <AuthFrame back={{ to: '/auth', label: '← Sign in' }}>
+      <AuthBrand />
 
-      <div className="w-full max-w-[460px] rounded-[24px] border border-border bg-surface p-[44px] shadow-[0_40px_100px_rgba(0,0,0,0.35)] animate-[fadeup_0.6s_cubic-bezier(0.2,0.7,0.2,1)_both] max-[560px]:p-7">
-        <div className="mb-6 flex items-center gap-2.5">
-          <img className="h-[26px] w-[26px] scale-[1.6] object-contain" src="/assets/logo.png" alt="" />
-          <span className="font-display text-[19px] font-extrabold">Pixel Alpha</span>
-        </div>
-
-        {step === 'email' && (
-          <>
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-btn border border-accent-line bg-accent-soft text-accent">
-              <KeyRound size={20} />
-            </span>
-            <h1 className="mt-4 mb-1.5 font-display text-[28px] font-extrabold tracking-[-0.02em]">
-              Reset your password
-            </h1>
-            <p className="mb-6 text-[14px] leading-[1.6] text-muted">
-              Enter the email on your account and we'll send a six-digit code.
-            </p>
-            <form className="flex flex-col gap-3.5" onSubmit={sendCode}>
-              <input
-                type="email"
-                placeholder="Email"
-                className={INPUT}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoFocus
-                required
-              />
-              {error && <p className={ERROR} role="alert">{error}</p>}
-              <button type="submit" className={BUTTON} disabled={loading}>
-                {loading ? 'Sending…' : 'Send code'}
-              </button>
-            </form>
-          </>
-        )}
-
-        {step === 'code' && (
-          <>
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-btn border border-accent-line bg-accent-soft text-accent">
-              <MailCheck size={20} />
-            </span>
-            <h1 className="mt-4 mb-1.5 font-display text-[28px] font-extrabold tracking-[-0.02em]">
-              Check your inbox
-            </h1>
-            <p className="mb-6 text-[14px] leading-[1.6] text-muted">
-              If <span className="font-semibold text-text">{email}</span> has an
-              account, a code is on its way. It expires in 15 minutes.
-            </p>
-            <form className="flex flex-col gap-3.5" onSubmit={redeem}>
-              <input
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                pattern="\d{6}"
-                maxLength={6}
-                placeholder="6-digit code"
-                className={`${INPUT} font-mono tracking-[0.3em]`}
-                value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-                autoFocus
-                required
-              />
-              <input
-                type="password"
-                placeholder="New password"
-                className={INPUT}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                minLength={8}
-                required
-              />
-              <input
-                type="password"
-                placeholder="Confirm new password"
-                className={INPUT}
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                required
-              />
-              {error && <p className={ERROR} role="alert">{error}</p>}
-              <button type="submit" className={BUTTON} disabled={loading}>
-                {loading ? 'Please wait…' : 'Set new password'}
-              </button>
-            </form>
-            <p className="mt-5 text-center text-[13px] text-muted">
-              Nothing arrived?{' '}
-              <button
-                type="button"
-                className="font-bold text-text"
-                onClick={() => {
-                  setStep('email')
-                  setError(null)
-                }}
-              >
-                Try again
-              </button>
-            </p>
-          </>
-        )}
-
-        {step === 'done' && (
-          <>
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-btn border border-accent-line bg-accent-soft text-accent">
-              <CheckCircle2 size={20} />
-            </span>
-            <h1 className="mt-4 mb-1.5 font-display text-[28px] font-extrabold tracking-[-0.02em]">
-              Password updated
-            </h1>
-            <p className="mb-6 text-[14px] leading-[1.6] text-muted">
-              Every device has been signed out. Sign in with your new password.
-            </p>
-            <button type="button" className={`${BUTTON} w-full`} onClick={() => navigate('/auth')}>
-              Go to sign in
+      {step === 'email' && (
+        <>
+          <span className={ICON_CHIP}>
+            <KeyRound size={20} />
+          </span>
+          <h1 className={H1}>Reset your password</h1>
+          <p className={LEDE}>
+            Enter the email on your account and we'll send a six-digit code.
+          </p>
+          <form className="flex flex-col gap-3.5" onSubmit={sendCode}>
+            <input
+              type="email"
+              placeholder="Email"
+              className={INPUT}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoFocus
+              required
+            />
+            {error && <p className={ERROR} role="alert">{error}</p>}
+            <button type="submit" className={BUTTON} disabled={loading}>
+              {loading ? 'Sending…' : 'Send code'}
             </button>
-          </>
-        )}
-      </div>
-    </div>
+          </form>
+        </>
+      )}
+
+      {step === 'code' && (
+        <>
+          <span className={ICON_CHIP}>
+            <MailCheck size={20} />
+          </span>
+          <h1 className={H1}>Check your inbox</h1>
+          <p className={LEDE}>
+            If <span className="font-semibold text-text">{email}</span> has an
+            account, a code is on its way. It expires in 15 minutes.
+          </p>
+          <form className="flex flex-col gap-3.5" onSubmit={redeem}>
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="\d{6}"
+              maxLength={6}
+              placeholder="6-digit code"
+              className={`${INPUT} font-mono tracking-[0.3em]`}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              autoFocus
+              required
+            />
+            <input
+              type="password"
+              placeholder="New password"
+              className={INPUT}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              minLength={8}
+              required
+            />
+            <input
+              type="password"
+              placeholder="Confirm new password"
+              className={INPUT}
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              required
+            />
+            {error && <p className={ERROR} role="alert">{error}</p>}
+            <button type="submit" className={BUTTON} disabled={loading}>
+              {loading ? 'Please wait…' : 'Set new password'}
+            </button>
+          </form>
+          <p className="mt-5 text-center text-[13px] text-muted">
+            Nothing arrived?{' '}
+            <button
+              type="button"
+              className="font-bold text-text"
+              onClick={() => {
+                setStep('email')
+                setError(null)
+              }}
+            >
+              Try again
+            </button>
+          </p>
+        </>
+      )}
+
+      {step === 'done' && (
+        <>
+          <span className={ICON_CHIP}>
+            <CheckCircle2 size={20} />
+          </span>
+          <h1 className={H1}>Password updated</h1>
+          <p className={LEDE}>
+            Every device has been signed out. Sign in with your new password.
+          </p>
+          <button type="button" className={`${BUTTON} w-full`} onClick={() => navigate('/auth')}>
+            Go to sign in
+          </button>
+        </>
+      )}
+    </AuthFrame>
   )
 }

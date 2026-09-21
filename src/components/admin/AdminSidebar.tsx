@@ -17,6 +17,7 @@ import {
   LogOut,
   Share2,
   ArrowDownToLine,
+  ListTodo,
 } from 'lucide-react'
 import { usePortalSwitch } from '../ui/PortalSwitchOverlay'
 import { getUser } from '../../lib/session'
@@ -49,6 +50,8 @@ export interface AdminNavItem {
 
 export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { label: 'Admin Dashboard', url: '/admin', icon: LayoutDashboard },
+  // The owner's list of things only they can do or decide (lib/adminTodos.ts).
+  { label: 'To be Done', url: '/admin/todo', icon: ListTodo },
   { label: 'User Management', url: '/admin/users', icon: UserCog },
   { label: 'API Keys', url: '/admin/api-keys', icon: KeyRound },
   { label: 'Strategies', url: '/admin/strategies', icon: Target },

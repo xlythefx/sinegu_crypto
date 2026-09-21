@@ -59,7 +59,7 @@ it goes back through `company.ts`, not retyped.
 
 ## Stack
 
-- **Frontend (this repo):** React 19 + TypeScript + Vite (scaffolded with `npm create vite`), `react-router-dom`. Styling is currently **plain CSS with design-token variables** but is **migrating to Tailwind** (see "Styling — migrating to Tailwind" below). Routes: `/` (landing), `/auth` (sign in / register).
+- **Frontend (this repo):** React 19 + TypeScript + Vite (scaffolded with `npm create vite`), `react-router-dom`. Styling is **Tailwind v4 utility classes mapped to the design tokens** in `src/index.css` (`@theme inline` — `bg-surface`, `text-muted`, `rounded-card`, …); repeated strings are hoisted into module-level `const`s or a shared `*Classes.ts` (`components/settings/formClasses.ts`, `components/auth/authClasses.ts`, `components/dashboard/shellClasses.ts`). Routes: `/` (landing), `/auth` (sign in / register), `/auth/discord/*` (Discord sign-in).
 - **Backend:** `sinegutrade-api` (Laravel + Sanctum) + MySQL DB `sinegu_crypto`, running locally on WAMP.
   Exchange data lives in `binance_*` tables (accounts, positions, pastpositions, transactions, invoices);
   **`mexc_*` and `bybit_*` tables will be added soon** — keep exchange-specific reads behind API
@@ -304,6 +304,98 @@ the invoice bills the wrong month. The scenario suite catches this.
 `AdminLayout` client-guards the route (logged-in plain users bounce to `/dashboard`); the
 role comes from the auth payload (`AuthUser.type`) in the stored session. Client gating is
 cosmetic — real enforcement must be added as admin middleware in `sinegutrade-api`.
+
+## Owner to-do list — Admin → To be Done (`/admin/todo`, 2026-09-21)
+
+**Whenever a feature leaves work only the OWNER can do — register at a third
+party, paste a key, run something on prod by hand, or make a product decision —
+append an item to `src/lib/adminTodos.ts` in the SAME change.** That page is
+where the owner looks; a chat transcript is not. Item shape (`types/adminTodos.ts`):
+a stable slug `id` (never renamed once shipped — it is the API's key), the
+`feature`, `kind: 'action' | 'decision'`, `title`, `added` (YYYY-MM-DD), `why`
+(what stays broken or undecided until it is done), ordered `steps`, the
+`envKeys` the steps fill in, and `links`. Rules:
+- **Never a secret** — this repo is public. Steps say WHERE a value comes from
+  and WHICH env key it goes in, never the value.
+- **Items are never marked done in code.** The owner ticks them on the page;
+  done-state and the note live in the API's `admin_todo_states` (`GET|PUT
+  /admin/todos[/{slug}]`, `AdminTodoController`) so a phone and a laptop agree.
+  A `decision` item's note is where the outcome gets written down — read it
+  before assuming a decision is still open.
+- **Remove an item only when its feature is removed**; a done item stays so the
+  note and the date it was settled stay readable. A state row whose slug is
+  gone is harmless and simply not rendered.
+The list was seeded with the Discord items below and the owner tasks this file
+already recorded (TRON Nile wallet / rehearsal / withdrawal-fee measurement,
+MEXC funding sign).
+
+## Sign in with Discord + server roles (2026-09-21)
+
+`POST /auth/discord/*` (`DiscordAuthController`), `App\Services\Discord\{DiscordGateway,DiscordRoleSync}`,
+frontend `pages/Discord{Start,Callback,Terms}.tsx` + `lib/discordOAuth.ts` +
+`components/settings/DiscordCard.tsx`. Hand-rolled OAuth2 (no Socialite): the bot
+half needs an HTTP client anyway and the WAMP cacert must apply to every call.
+The code is dormant until `DISCORD_CLIENT_ID`/`_SECRET` exist — **the owner
+registers the app from Admin → To be Done**; tests fake the gateway
+(`tests/Feature/Support/FakeDiscordGateway.php`).
+- **Flow.** `/auth` reads `GET /auth/discord/config` (`configured`, `enabled`,
+  `authorize_url`) and shows the button only when `enabled`. The SPA mints the
+  `state` nonce and keeps it in localStorage (`lib/discordOAuth.ts` — NOT
+  sessionStorage, which a phone browser drops when the redirect opens a new
+  tab); the callback page strips the query, guards against StrictMode's
+  double effect (the code is single-use), consumes the record, and only a
+  `state` this browser minted is accepted. **The browser-held nonce IS the CSRF
+  defence — there is deliberately no server-side state store** (the API has no
+  session; anyone can obtain an issued state). A mismatch is not a dead end:
+  "we couldn't confirm this sign-in started here" + a restart button (the
+  in-app-browser case). `redirect_uri` is client-sent, checked against the
+  `DISCORD_REDIRECT_URIS` allow-list (prod AND localhost:5173, so a local SPA on
+  the prod API round-trips) and echoed into the token exchange.
+- **Three outcomes from the callback**: known `discord_id` → login (suspended →
+  403); email already registered → `password_required` (a 15-min encrypted
+  Cache token, ≤5 wrong guesses, login's throttle) — **never auto-linked, verified
+  flag or not**: `register()` marks every address verified unchecked and the
+  profile lets anyone change theirs, so an attacker registered as your email
+  would capture your Discord login and the exchange keys you paste next; the
+  account's password is the proof. New → `terms_required`: the row is created
+  only after `POST /auth/discord/complete` (Terms mandatory, `?ref=` recalled
+  from `lib/referral.ts`, `status = pending` like everyone), `password = NULL`.
+- **Discord-only accounts.** `user_credentials.password` is nullable;
+  `hasPassword()` drives `DISCORD_ONLY` on password login, `NO_PASSWORD` on
+  change-password and on unlink (Discord would be the only way in), and
+  `POST /user/password/set` (once, while NULL). Settings swaps Change Password
+  for "Set a password" when `has_password === false`. Forgot-password also
+  works on such a row. **`discord_id` is a string end to end** (snowflake >
+  2^53) and UNIQUE (the race backstop, `DISCORD_TAKEN`).
+- **Roles are the point.** `DiscordRoleSync`: Member while `status = active`,
+  Trader while `hasLiveExchangeAccount()` (demo = 0), both off on suspended;
+  an empty role id switches that rule off and the bot never touches a role it
+  was not given. Synced **explicitly** (never an observer — it would fire
+  inside transactions) after `resolvePending`, `AdminUserController::update`
+  (status change only), `ExchangeAccountController::store/destroy`,
+  `AdminApiKeyController::destroy/purge/bulkDestroy` (one sync per owner) and
+  `exchange:disconnect-blocked-keys`; nightly `discord:sync-roles` (00:40,
+  stops after 3 consecutive non-answers — 401/403 count toward Discord's
+  Cloudflare ban). Best-effort like `EngineCache`: a Discord outage never fails
+  a login, approval or connect (a test asserts it). **The user's OAuth token is
+  never stored**: the guild join happens at login/complete with the token in
+  hand; the nightly pass is bot-only and skips non-members (404/10007).
+- **Discord facts encoded in `DiscordGateway`**: form-encoded token exchange
+  with client id/secret as fields; `/users/@me` `email`/`verified` need the
+  `email` scope; Add Guild Member → 201 added / 204 already there (roles in that
+  body apply on 201 only, so roles are always reconciled separately);
+  `Authorization: Bot …` AND a `DiscordBot (url, version)` User-Agent or
+  Cloudflare blocks it. Bot invite permissions `268435457` (Create Invite +
+  Manage Roles); its role must sit ABOVE the ones it assigns; Membership
+  Screening off. No secret ever appears in a response (test); `diagnostics()`
+  is presence booleans.
+- **Rollout.** `DISCORD_LOGIN_PUBLIC=false` only hides the button — the flow is
+  reachable at `/auth/discord/start` (a developer rehearses on prod; an early
+  sign-up merely lands in the pending queue, so it is a rollout switch, not a
+  gate). `sync-api-env` mirrors `DISCORD_CLIENT_ID/SECRET/REDIRECT_URIS/BOT_TOKEN/
+  GUILD_ID/ROLE_MEMBER_ID/ROLE_TRADER_ID`; `LOGIN_PUBLIC` (rollout) and `CACERT`
+  (box) are deliberately not mirrored. A faked `ConnectionException` crashes
+  PHP natively on the WAMP box, so that one gateway test skips on Windows.
 
 ## Related projects (context only — do not modify unless asked)
 

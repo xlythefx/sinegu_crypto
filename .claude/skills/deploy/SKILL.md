@@ -129,9 +129,9 @@ python .claude/deploy_sinegualcrypto.py deploy-engine    # bot engine (tests-gat
                                                          #   .env + systemd + nginx route)
 python .claude/deploy_sinegualcrypto.py sync-engine-env  # config only: re-mirror engine/.env
                                                          #   from local + restart (no code)
-python .claude/deploy_sinegualcrypto.py sync-api-env     # config only: Coinsbuy keys from local
-                                                         #   sinegutrade-api/.env + PAYMENTS_* URLs
-                                                         #   + config:cache (no code)
+python .claude/deploy_sinegualcrypto.py sync-api-env     # config only: Coinsbuy / TRON / Discord
+                                                         #   keys from local sinegutrade-api/.env
+                                                         #   + PAYMENTS_* URLs + config:cache (no code)
 python .claude/deploy_sinegualcrypto.py deploy-telegram  # pixel-telegram ops alerts (tests-gated;
                                                          #   venv + .env + 2 systemd timers)
 python .claude/deploy_sinegualcrypto.py sync-telegram-env # config only: bot token / group chat id

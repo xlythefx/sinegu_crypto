@@ -6,6 +6,9 @@ import Landing from './pages/Landing'
 import LandingV2 from './pages/LandingV2'
 import Auth from './pages/Auth'
 import ForgotPassword from './pages/ForgotPassword'
+import DiscordStart from './pages/DiscordStart'
+import DiscordCallback from './pages/DiscordCallback'
+import DiscordTerms from './pages/DiscordTerms'
 import Terms from './pages/Terms'
 import Privacy from './pages/Privacy'
 import RiskDisclosure from './pages/RiskDisclosure'
@@ -43,6 +46,7 @@ import AdminDatabase from './pages/admin/AdminDatabase'
 import AdminTronTransfers from './pages/admin/AdminTronTransfers'
 import AdminReferrals from './pages/admin/AdminReferrals'
 import AdminReleasePayment from './pages/admin/AdminReleasePayment'
+import AdminTodo from './pages/admin/AdminTodo'
 
 function App() {
   return (
@@ -54,6 +58,9 @@ function App() {
             <Route path="/v2" element={<LandingV2 />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/auth/forgot" element={<ForgotPassword />} />
+            <Route path="/auth/discord/start" element={<DiscordStart />} />
+            <Route path="/auth/discord/callback" element={<DiscordCallback />} />
+            <Route path="/auth/discord/terms" element={<DiscordTerms />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/risk" element={<RiskDisclosure />} />
@@ -89,6 +96,7 @@ function App() {
             <Route path="/admin/resources" element={<AdminResources />} />
             <Route path="/admin/database" element={<AdminDatabase />} />
             <Route path="/admin/tron-transfers" element={<AdminTronTransfers />} />
+            <Route path="/admin/todo" element={<AdminTodo />} />
             <Route path="/admin/*" element={<AdminDashboard />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

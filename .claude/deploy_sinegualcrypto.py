@@ -32,8 +32,9 @@ Subcommands:
   deploy-api    - local sinegutrade-api -> remote api/ (preserves .env/storage/vendor)
   deploy-engine - local trading-flask/ (binance_abcd) -> remote engine/ + venv +
                   server-side .env + systemd unit + nginx webhook route (preserves .env/.venv)
-  sync-api-env  - config only: mirror the Coinsbuy keys from local sinegutrade-api/.env
-                  into api/.env, set the prod PAYMENTS_* URLs, config:cache
+  sync-api-env  - config only: mirror the Coinsbuy / TRON / Discord keys from local
+                  sinegutrade-api/.env into api/.env, set the prod PAYMENTS_* URLs,
+                  config:cache
   sync-engine-env - config only: mirror the engine's product keys, restart the unit
   deploy-nginx  - rewrite the vhost + Cloudflare real-IP list, test, reload
   setup-tls     - issue/renew the Let's Encrypt cert for the domain, enable :443
@@ -1437,6 +1438,22 @@ MIRRORED_API_ENV_KEYS = (
     "TRON_MAINNET_USDT_CONTRACT",
     "TRON_NILE_ADDRESS",
     "TRON_NILE_USDT_CONTRACT",
+    # "Sign in with Discord" + the server-roles bot. The OAuth app, the bot,
+    # the server and its role ids identify the PRODUCT's Discord presence —
+    # the same app is registered once for every origin, which is why the
+    # redirect allow-list is mirrored too (it lists prod AND localhost).
+    #
+    # Deliberately NOT mirrored:
+    #   DISCORD_LOGIN_PUBLIC — rollout state (whether /auth SHOWS the button).
+    #     Same rule as TRON_PUBLIC: set it on the box when you mean it.
+    #   DISCORD_CACERT — describes the BOX, like TRON_CACERT.
+    "DISCORD_CLIENT_ID",
+    "DISCORD_CLIENT_SECRET",
+    "DISCORD_REDIRECT_URIS",
+    "DISCORD_BOT_TOKEN",
+    "DISCORD_GUILD_ID",
+    "DISCORD_ROLE_MEMBER_ID",
+    "DISCORD_ROLE_TRADER_ID",
 )
 
 # Written with PROD values, never mirrored — these describe the BOX. Locally
@@ -1468,7 +1485,7 @@ def _upsert_remote_env(ssh, path: str, key: str, value: str) -> None:
 
 
 def _sync_payment_env(ssh) -> None:
-    """Give prod the Coinsbuy credentials and its own payment URLs.
+    """Give prod the product credentials (Coinsbuy, TRON, Discord) and its own payment URLs.
 
     Only key NAMES are logged for the mirrored secrets — a deploy transcript must
     not become a place secrets are written down. The URL keys log their value,
@@ -1495,7 +1512,7 @@ def _sync_payment_env(ssh) -> None:
     if missing:
         log("  api/.env: not set locally, skipped -> " + ", ".join(missing))
     if not changed and not missing:
-        log("  api/.env: Coinsbuy keys already match local")
+        log("  api/.env: mirrored keys (Coinsbuy, TRON, Discord) already match local")
 
     for key, value in PROD_PAYMENT_ENV.items():
         if _remote_env_value(ssh, f"{REMOTE_API}/.env", key) == value:
@@ -1854,7 +1871,7 @@ def do_sync_engine_env(ssh):
 
 
 def do_sync_api_env(ssh):
-    """Push the Coinsbuy credentials + prod payment URLs into api/.env, re-cache.
+    """Push the mirrored product keys (Coinsbuy, TRON, Discord) + prod payment URLs into api/.env, re-cache.
 
     Config-only: no code, no build, no migration — the twin of sync-engine-env.
     It has to be its own command because `php artisan config:cache` bakes .env

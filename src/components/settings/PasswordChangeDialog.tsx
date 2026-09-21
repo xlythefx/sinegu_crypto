@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom'
 import { AlertCircle, KeyRound, X } from 'lucide-react'
 import ConfirmModal from '../ui/ConfirmModal'
 import { ApiError, getApiErrorMessage } from '../../services/api'
-import { updatePassword } from '../../services/user'
+import { setPassword, updatePassword } from '../../services/user'
+import { saveUser } from '../../lib/session'
 import {
   BTN_GHOST,
   BTN_PRIMARY,
@@ -22,21 +23,30 @@ interface PasswordChangeDialogProps {
   open: boolean
   /** Shown as the "signed in as" hint in the footer. */
   email: string
+  /**
+   * `change` (default) asks for the current password and PUTs /user/password.
+   * `set` is for a Discord-only account that has none yet: no current
+   * password field, POST /user/password/set, and the session user is
+   * refreshed so Settings flips to the change card.
+   */
+  mode?: 'change' | 'set'
   onClose: () => void
-  /** Called after PUT /user/password succeeds — the parent closes + reports. */
+  /** Called after the API succeeds — the parent closes + reports. */
   onSuccess: (message: string) => void
 }
 
 /**
- * Change password in a modal — validates locally, confirms through
- * ConfirmModal, then PUT /user/password (which also revokes other sessions).
+ * Change (or first set) a password in a modal — validates locally, confirms
+ * through ConfirmModal, then calls the API (which also revokes other sessions).
  */
 export default function PasswordChangeDialog({
   open,
   email,
+  mode = 'change',
   onClose,
   onSuccess,
 }: PasswordChangeDialogProps) {
+  const isSet = mode === 'set'
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -70,7 +80,7 @@ export default function PasswordChangeDialog({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (saving) return
-    if (!currentPassword || !newPassword || !confirmPassword) {
+    if ((!isSet && !currentPassword) || !newPassword || !confirmPassword) {
       setError('Please complete all password fields.')
       return
     }
@@ -90,12 +100,14 @@ export default function PasswordChangeDialog({
     setConfirmOpen(false)
     setSaving(true)
     try {
-      const res = await updatePassword(
-        currentPassword,
-        newPassword,
-        confirmPassword,
-      )
-      onSuccess(res.message || 'Your password has been changed successfully.')
+      if (isSet) {
+        const res = await setPassword(newPassword, confirmPassword)
+        saveUser(res.user)
+        onSuccess(res.message || 'Your password is set. You can now sign in with it too.')
+      } else {
+        const res = await updatePassword(currentPassword, newPassword, confirmPassword)
+        onSuccess(res.message || 'Your password has been changed successfully.')
+      }
     } catch (err) {
       if (err instanceof ApiError && err.errorCode === 'INVALID_PASSWORD') {
         setError('Your current password is incorrect.')
@@ -117,7 +129,7 @@ export default function PasswordChangeDialog({
       onClick={() => !saving && onClose()}
       role="dialog"
       aria-modal="true"
-      aria-label="Change password"
+      aria-label={isSet ? 'Set a password' : 'Change password'}
     >
       <div
         className="w-full max-w-[460px] max-h-[calc(100vh-48px)] overflow-y-auto p-[26px] border border-border rounded-[20px] bg-surface shadow-[0_30px_80px_rgba(0,0,0,0.35)] animate-[fadeup_0.25s_cubic-bezier(0.2,0.7,0.2,1)_both] max-[600px]:p-5"
@@ -128,9 +140,11 @@ export default function PasswordChangeDialog({
             <KeyRound size={15} />
           </span>
           <div className="flex-1 min-w-0 pr-1">
-            <h3 className={CARD_TITLE}>Change Password</h3>
+            <h3 className={CARD_TITLE}>{isSet ? 'Set a Password' : 'Change Password'}</h3>
             <p className={CARD_SUB}>
-              Update your account password for better security
+              {isSet
+                ? 'Add a password beside your Discord sign-in'
+                : 'Update your account password for better security'}
             </p>
           </div>
           <button
@@ -153,35 +167,38 @@ export default function PasswordChangeDialog({
         )}
 
         <form className={FORM} onSubmit={handleSubmit}>
-          <div className={FIELD}>
-            <label className={LABEL} htmlFor="pw-current">
-              Current Password
-            </label>
-            <input
-              id="pw-current"
-              className={INPUT}
-              type="password"
-              autoComplete="current-password"
-              placeholder="Enter current password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              disabled={saving}
-              autoFocus
-            />
-          </div>
+          {!isSet && (
+            <div className={FIELD}>
+              <label className={LABEL} htmlFor="pw-current">
+                Current Password
+              </label>
+              <input
+                id="pw-current"
+                className={INPUT}
+                type="password"
+                autoComplete="current-password"
+                placeholder="Enter current password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                disabled={saving}
+                autoFocus
+              />
+            </div>
+          )}
           <div className={FIELD}>
             <label className={LABEL} htmlFor="pw-new">
-              New Password
+              {isSet ? 'Password' : 'New Password'}
             </label>
             <input
               id="pw-new"
               className={INPUT}
               type="password"
               autoComplete="new-password"
-              placeholder="Enter new password (min. 8)"
+              placeholder={isSet ? 'Choose a password (min. 8)' : 'Enter new password (min. 8)'}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               disabled={saving}
+              autoFocus={isSet}
             />
           </div>
           <div className={FIELD}>
@@ -217,16 +234,20 @@ export default function PasswordChangeDialog({
               Cancel
             </button>
             <button type="submit" className={BTN_PRIMARY} disabled={saving}>
-              {saving ? 'Updating…' : 'Change Password'}
+              {saving ? 'Saving…' : isSet ? 'Set Password' : 'Change Password'}
             </button>
           </div>
         </form>
 
         <ConfirmModal
           open={confirmOpen}
-          title="Change your password?"
-          message="You will need to use the new password the next time you sign in. All your other sessions will be signed out."
-          confirmLabel="Yes, change it"
+          title={isSet ? 'Set this password?' : 'Change your password?'}
+          message={
+            isSet
+              ? 'From now on you can sign in with either Discord or this password. All your other sessions will be signed out.'
+              : 'You will need to use the new password the next time you sign in. All your other sessions will be signed out.'
+          }
+          confirmLabel={isSet ? 'Yes, set it' : 'Yes, change it'}
           cancelLabel="No"
           onConfirm={() => void handleConfirmedChange()}
           onCancel={() => setConfirmOpen(false)}

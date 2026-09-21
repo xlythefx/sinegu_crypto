@@ -14,12 +14,25 @@ import {
 
 interface PasswordChangeCardProps {
   email: string
+  /**
+   * `set` for a Discord-only account (has_password === false): the card
+   * offers a first password instead of a change, because there is no current
+   * one to ask for — and until one exists Discord cannot be disconnected.
+   */
+  mode?: 'change' | 'set'
+  /** Fired after a `set` succeeds so the page can refresh the user. */
+  onChanged?: () => void
 }
 
-/** Change password — opens PasswordChangeDialog (PUT /user/password). */
-export default function PasswordChangeCard({ email }: PasswordChangeCardProps) {
+/** Change (or first set) the password — opens PasswordChangeDialog. */
+export default function PasswordChangeCard({
+  email,
+  mode = 'change',
+  onChanged,
+}: PasswordChangeCardProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
+  const isSet = mode === 'set'
 
   return (
     <section className={`${CARD} flex flex-col mb-4`} data-aos="fade-up">
@@ -28,9 +41,11 @@ export default function PasswordChangeCard({ email }: PasswordChangeCardProps) {
           <KeyRound size={15} />
         </span>
         <div className={CARD_TITLES}>
-          <h3 className={CARD_TITLE}>Change Password</h3>
+          <h3 className={CARD_TITLE}>{isSet ? 'Set a Password' : 'Change Password'}</h3>
           <p className={CARD_SUB}>
-            Update your account password for better security
+            {isSet
+              ? 'You sign in with Discord. A password adds a second way in.'
+              : 'Update your account password for better security'}
           </p>
         </div>
         <button
@@ -42,7 +57,7 @@ export default function PasswordChangeCard({ email }: PasswordChangeCardProps) {
           }}
         >
           <KeyRound size={13} />
-          Change Password
+          {isSet ? 'Set Password' : 'Change Password'}
         </button>
       </div>
 
@@ -63,10 +78,12 @@ export default function PasswordChangeCard({ email }: PasswordChangeCardProps) {
       <PasswordChangeDialog
         open={dialogOpen}
         email={email}
+        mode={mode}
         onClose={() => setDialogOpen(false)}
         onSuccess={(message) => {
           setDialogOpen(false)
           setSuccess(message)
+          onChanged?.()
         }}
       />
     </section>

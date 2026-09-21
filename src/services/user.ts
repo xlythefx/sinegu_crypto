@@ -78,6 +78,21 @@ export async function uploadProfileImage(
 }
 
 /**
+ * Give a Discord-only account its first password (POST /user/password/set).
+ * Allowed only while the account has none — errorCode 'HAS_PASSWORD' otherwise.
+ */
+export function setPassword(
+  password: string,
+  passwordConfirmation: string,
+): Promise<UpdateProfileResponse> {
+  return apiFetch<UpdateProfileResponse>('/user/password/set', {
+    method: 'POST',
+    auth: true,
+    body: { password, password_confirmation: passwordConfirmation },
+  })
+}
+
+/**
  * Change the user's password (PUT /user/password). A wrong current password
  * surfaces as an ApiError with status 422 and errorCode 'INVALID_PASSWORD'.
  */
