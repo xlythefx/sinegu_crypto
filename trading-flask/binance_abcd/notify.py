@@ -584,6 +584,26 @@ def notify_report(kind: str, summary: dict, exchange: Optional[str] = None) -> N
     publishing "+0.000%": a quiet week and a flat week are different claims, and
     staying silent instead would make the bot look broken.
     """
+    _send_public(render_report(kind, summary, exchange), color=discord_notify.BLUE)
+
+
+def preview_report(kind: str, summary: dict, exchange: Optional[str] = None) -> str:
+    """The recap exactly as :func:`notify_report` would post it, sent to the
+    ADMIN chat with a test banner instead of to the public channel — for
+    checking wording and figures without the subscribers seeing a duplicate
+    of the real one. Same renderer, so what the admin sees is what will go
+    out. Returns the rendered text (the banner excluded)."""
+    text = render_report(kind, summary, exchange)
+    _send_admin(
+        f"🧪 <b>TEST — preview of the {_esc(kind)} recap</b>\n"
+        f"(what the public channel would receive if it fired now; not posted there)\n\n{text}"
+    )
+    return text
+
+
+def render_report(kind: str, summary: dict, exchange: Optional[str] = None) -> str:
+    """Render a recap; :func:`notify_report` and :func:`preview_report` share
+    this so a preview can never differ from the message that goes out."""
     emoji, label = _REPORT_META.get(kind, ("📊", "Performance Report"))
     venue = f" · {_esc(exchange)}" if exchange else ""
     lines = [
@@ -613,7 +633,7 @@ def notify_report(kind: str, summary: dict, exchange: Optional[str] = None) -> N
     else:
         lines.append("No trades closed.")
 
-    _send_public("\n".join(lines), color=discord_notify.BLUE)
+    return "\n".join(lines)
 
 
 # --- Admin: operational alerts ------------------------------------------------

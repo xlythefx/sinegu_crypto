@@ -255,12 +255,9 @@ a daily, weekly and monthly recap to the **public** channel.
 
 | Report | Default | Covers |
 |---|---|---|
-| Daily | `00:10` Asia/Manila | yesterday — the local day that has just ended |
-| Weekly | `sat 00:10` | the 7 days ending yesterday (Sat..Fri) |
-| Monthly | `1 00:10` | the previous calendar month, whole |
-
-**Every window ends on the last COMPLETED day**, never on the firing day, so a
-recap is posted only once its period is over and names every trade in it.
+| Daily | `23:55` Asia/Manila | today (the local day it fires in) |
+| Weekly | `fri 23:55` | the 7 days ending today |
+| Monthly | `last 23:55` | the 1st of the month through today — the whole month |
 
 **One message per exchange.** Each firing fetches `track-record/{exchange}` for
 every exchange in `BINANCE_ABCD_EXCHANGES` and posts a recap headed
@@ -273,10 +270,8 @@ state file is read as covering every venue.
 "Day" means a calendar day in the timezone the API buckets the track record in
 (`TRACK_RECORD_TIMEZONE`, Asia/Manila on prod), which the payload publishes as
 `timezone`; the window is cut in that same calendar. Before 2026-09-16 the
-series was UTC days, so the "daily" posted at 23:30 Manila described a day
-that had ended at 08:00 that morning; from 09-16 to 09-20 it was "today so
-far", fired at 23:55 — which could never name a close from the last minutes
-of the day. Now it is the Manila day that has just ended, fired at 00:10.
+series was UTC days and each recap covered the *previous* one, so the "daily"
+posted at 23:30 Manila described a day that had ended at 08:00 that morning.
 
 Config is `BINANCE_ABCD_REPORT_*` (see `.env.example`); an empty `*_AT` disables
 that one report, and a malformed one is logged + alerted to the admin chat and
@@ -301,13 +296,12 @@ decision about what the channel is allowed to say.
 
 Rules worth keeping:
 
-- **Windows end on the last completed day, so the fire time never decides
-  what is in one.** A daily fired at 00:10 describes yesterday in full; the
-  ten minutes are for the endpoint's 5-minute cache and the ~3-minute
-  past-positions backfill to catch a close at 23:59. (Until 2026-09-20 the
-  window was "today so far", fired at 23:55, and the last quarter-hour of
-  every day belonged to no daily.) A published percentage is never reposted
-  or revised.
+- **Windows end on the day they fire in, and the fire time decides how much of
+  it is in.** A close after the firing time reaches the site and the
+  weekly/monthly, but no daily ever names it — so fire as late as the
+  past-positions backfill (~3 min) and the endpoint's 5-minute cache allow;
+  `23:55` is about the latest that is still honest. A published percentage is
+  never reposted or revised.
 - **The period return is chained, not summed**, identical to how the endpoint
   computes its own total — so it is time-weighted and a mid-week deposit cannot
   inflate it.
