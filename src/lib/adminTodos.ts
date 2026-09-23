@@ -120,7 +120,7 @@ export const ADMIN_TODOS: AdminTodo[] = [
     kind: 'decision',
     title: 'Measure a real withdrawal from each exchange — the rail is now live without it',
     added: '2026-08-16',
-    why: 'Exchanges deduct their withdrawal fee from the amount the customer typed, so a payment sent from an exchange ARRIVES SHORT. We settle automatically only within max($1.00, 1%) short; anything beyond that waits for you in Admin → Crypto Transfers. Since TRON is now the only payment method, this decides how many invoices you settle by hand: a 1 USDT Binance fee on a $50 invoice is inside the band, the same fee on a $20 invoice is not.',
+    why: 'Exchanges deduct their withdrawal fee from the amount the customer typed, so a payment sent from an exchange ARRIVES SHORT. We settle automatically only within max($1.00, 1%) of the invoice; anything shorter than that waits for you in Admin → Crypto Transfers. Since TRON is now the only payment method, this is what decides how many invoices you settle by hand — a 1 USDT fee sits exactly on the $1.00 floor and still settles, but a 2 USDT fee only clears on invoices of $200 or more, where 1% has overtaken the floor.',
     steps: [
       'Withdraw a small USDT amount over TRC-20 from Binance, Bybit and MEXC to a wallet you control; note the fee deducted and the decimals that arrived for each.',
       'Decide whether the shortfall band max($1.00, 1%) should be widened, and whether the decimals fingerprint (fingerprint_units) can ever be turned on — you get one or the other, never both.',
