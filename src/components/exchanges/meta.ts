@@ -1,3 +1,5 @@
+import { canSeeAdmin } from '../../lib/roles'
+import type { UserRole } from '../../types/auth'
 import type { ExchangeKind } from '../../types/exchanges'
 
 export interface ExchangeMeta {
@@ -14,6 +16,21 @@ export interface ExchangeMeta {
    * could only ever be a live account wearing the wrong badge.
    */
   hasTestnet: boolean
+  /**
+   * Live in the engine, but not yet offered to customers: only staff
+   * (`canSeeAdmin`) may CONNECT one. MEXC is that today — it trades, it just
+   * has not run long enough on a real customer account to sell.
+   *
+   * Client twin of the API's `config('exchanges.staff_only')`, which is the
+   * real enforcement (`EXCHANGE_RESTRICTED`, 403). This one only decides what
+   * the wizard offers, and a customer is shown the same "Coming soon" a venue
+   * without tables gets — for them that is the whole truth.
+   *
+   * Connecting only. An account already on the venue keeps trading and can
+   * always be renamed or disconnected; restricting a venue must never trap
+   * someone's keys inside it.
+   */
+  staffOnly: boolean
 }
 
 export const EXCHANGE_META: Record<ExchangeKind, ExchangeMeta> = {
@@ -23,6 +40,7 @@ export const EXCHANGE_META: Record<ExchangeKind, ExchangeMeta> = {
     available: true,
     blurb: 'Connect your Binance account with trade-only API keys',
     hasTestnet: true,
+    staffOnly: false,
   },
   bybit: {
     label: 'Bybit',
@@ -30,6 +48,7 @@ export const EXCHANGE_META: Record<ExchangeKind, ExchangeMeta> = {
     available: false,
     blurb: 'Connect your Bybit account with trade-only API keys',
     hasTestnet: true,
+    staffOnly: false,
   },
   mexc: {
     label: 'MEXC',
@@ -37,15 +56,30 @@ export const EXCHANGE_META: Record<ExchangeKind, ExchangeMeta> = {
     available: true,
     blurb: 'Connect your MEXC futures account with trade-only API keys',
     hasTestnet: true,
+    staffOnly: true,
   },
 }
 
 export const EXCHANGE_ORDER: ExchangeKind[] = ['binance', 'bybit', 'mexc']
 
-/** The exchanges a user can actually connect today. */
+/** The exchanges that are wired at all — before any per-user restriction. */
 export const AVAILABLE_EXCHANGES: ExchangeKind[] = EXCHANGE_ORDER.filter(
   (k) => EXCHANGE_META[k].available,
 )
+
+/** Whether THIS user may connect a new account on this venue. */
+export function canConnectExchange(
+  kind: ExchangeKind,
+  role: UserRole | undefined,
+): boolean {
+  const meta = EXCHANGE_META[kind]
+  return meta.available && (!meta.staffOnly || canSeeAdmin(role))
+}
+
+/** The venues the connect wizard may offer this user, in display order. */
+export function connectableExchanges(role: UserRole | undefined): ExchangeKind[] {
+  return AVAILABLE_EXCHANGES.filter((k) => canConnectExchange(k, role))
+}
 
 /** Rows from an API that predates the `exchange` column are Binance rows. */
 export function exchangeOf(account: { exchange?: ExchangeKind | null }): ExchangeKind {

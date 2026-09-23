@@ -22,11 +22,12 @@ import {
   STEP_FOOTER,
 } from '../components/exchanges/connect/classes'
 import {
-  AVAILABLE_EXCHANGES,
   EXCHANGE_META,
+  connectableExchanges,
   exchangeOf,
 } from '../components/exchanges/meta'
 import { useApiData } from '../hooks/useApiData'
+import { useSessionUser } from '../hooks/useSessionUser'
 import {
   connectExchangeAccount,
   getExchangeAccountsWithMeta,
@@ -77,6 +78,7 @@ const EMPTY_FORM: KeysForm = { name: '', api_key: '', secret_key: '' }
  */
 export default function ConnectExchange() {
   const navigate = useNavigate()
+  const sessionUser = useSessionUser()
   const { data, loading, error, reload } = useApiData(getExchangeAccountsWithMeta)
 
   const [stepIndex, setStepIndex] = useState(0)
@@ -90,7 +92,12 @@ export default function ConnectExchange() {
 
   const accounts = data?.accounts ?? []
   const connectedKinds: ExchangeKind[] = accounts.map(exchangeOf)
-  const openKinds = AVAILABLE_EXCHANGES.filter((k) => !connectedKinds.includes(k))
+  // Venues this user may connect, minus the ones they already hold. A
+  // staff-only venue (MEXC today) is simply not on offer to a customer — the
+  // API refuses it anyway, and a wizard that lets them fill in keys first
+  // would only be a longer way to say no.
+  const role = sessionUser?.type
+  const openKinds = connectableExchanges(role).filter((k) => !connectedKinds.includes(k))
 
   const steps = stepsFor(kind)
   const current: StepKey = (steps[Math.min(stepIndex, steps.length - 1)]?.key ?? 'exchange') as StepKey
@@ -261,6 +268,7 @@ export default function ConnectExchange() {
             <ExchangeStep
               selected={kind}
               connectedKinds={connectedKinds}
+              role={role}
               onSelect={selectExchange}
             />
           )}

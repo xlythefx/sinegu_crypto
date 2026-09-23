@@ -161,6 +161,20 @@ export const ADMIN_TODOS: AdminTodo[] = [
 
   // ── MEXC (live on prod since 2026-09-17) ─────────────────────────────────
   {
+    id: 'mexc-open-to-customers',
+    feature: 'MEXC',
+    kind: 'decision',
+    title: 'When MEXC opens to customers',
+    added: '2026-09-23',
+    why: 'MEXC trades, bills and syncs like Binance, but only admin / master / developer accounts may connect one — customers see "Coming soon". Nothing opens it by itself: until you decide, every MEXC signal only ever reaches staff accounts.',
+    steps: [
+      'Prove it on a real (non-testnet) staff account first: a full round trip, the fee receipts landing, and the funding sign confirmed (see the funding item below).',
+      'To open it: on the server set EXCHANGES_STAFF_ONLY= (empty) in /var/www/sinegualerts/api/.env and run php artisan config:cache. Nothing else — no deploy, no code change. Setting it back to `mexc` closes it again, and accounts already connected keep trading either way.',
+      'Connecting the MASTER account to MEXC is a separate switch with its own consequence: it is what turns on MEXC Telegram recaps and the PnL line on MEXC close messages, which stay silent while the master has no account there.',
+    ],
+    envKeys: ['EXCHANGES_STAFF_ONLY'],
+  },
+  {
     id: 'mexc-verify-funding-sign',
     feature: 'MEXC',
     kind: 'action',

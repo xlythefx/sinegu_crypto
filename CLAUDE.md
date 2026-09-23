@@ -104,8 +104,29 @@ it goes back through `company.ts`, not retyped.
 **Supported exchanges (the only brokers) — Binance, Bybit, MEXC.** These three are the
 entire universe of exchanges the product supports; there are no others (no Capital.com, no
 IG, etc.). Any "broker/exchange" list, filter, badge, or selector must contain exactly these
-three. Binance is live; Bybit and MEXC are "Coming soon" until their `bybit_*`/`mexc_*`
-tables land. Canonical labels/brand colors/order live in `src/components/exchanges/meta.ts`.
+three. Binance is live; Bybit is "Coming soon" until its `bybit_*` tables land.
+Canonical labels/brand colors/order live in `src/components/exchanges/meta.ts`.
+
+**MEXC is live in the engine but STAFF-ONLY to connect (2026-09-23).** It
+trades, bills and syncs like Binance; it has simply not run long enough on a
+real customer account to sell, so only `admin` / `master` / `developer` may
+connect one. The gate is `config('exchanges.staff_only')` (CSV env
+`EXCHANGES_STAFF_ONLY`, default `mexc`) checked in
+`ExchangeAccountController::store` against `EnsureAdmin::ROLES` — the admin
+portal's own list, never a second spelling of it — answering 403
+`EXCHANGE_RESTRICTED`. Three rules:
+- **It gates CONNECTING ONLY.** An account already on the venue keeps trading,
+  keeps syncing, and can always be renamed or disconnected. Closing a venue
+  must never trap someone's keys inside it (a test asserts it).
+- **A customer is told "Coming soon", not "staff only"** — for them that is the
+  whole truth, and it is the same words Bybit gets. `staffOnly` in `meta.ts` +
+  `canConnectExchange(kind, role)` is the client twin (cosmetic, as always);
+  staff see the row selectable with a "Staff only" badge.
+- **Opening it is a config change on the box** (`EXCHANGES_STAFF_ONLY=` then
+  `config:cache`), never a deploy — and it is deliberately NOT mirrored by
+  `sync-api-env`, for the same reason `TRON_PUBLIC` is not: rollout state must
+  not follow a local experiment onto prod. The default is the closed state, so
+  a box missing the key still protects it.
 
 ## Current objective — port the user side of the mother dashboard
 
