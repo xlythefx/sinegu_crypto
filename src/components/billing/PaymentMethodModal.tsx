@@ -47,6 +47,21 @@ import PaymentSuccess from './PaymentSuccess'
  */
 const CARD_PAYMENTS_ENABLED = false
 
+/**
+ * Coinsbuy is hidden from traders (2026-09-23, owner's call): invoices are paid
+ * in USDT over TRC-20, straight to our own wallet, with no provider in the
+ * middle.
+ *
+ * A switch rather than a deletion — the provider is still fully wired on both
+ * sides (keys, gateway, signed callback, `InvoiceService::settle`), so bringing
+ * it back is this flag plus nothing else. Deleting the path would throw away a
+ * working fallback for the day the TRON rail needs one.
+ *
+ * Leaving the ENDPOINT alive is deliberate too: a deposit someone opened before
+ * this shipped must still be able to settle on its webhook.
+ */
+const COINSBUY_ENABLED = false
+
 interface PaymentMethodModalProps {
   open: boolean
   invoice: Invoice | null
@@ -65,9 +80,13 @@ const META_VAL = 'text-[12.5px] font-bold text-text font-mono text-right'
 
 /**
  * Full invoice payment sheet — restates exactly what is being charged (amount,
- * fee breakdown, period, HWM impact), then opens a Coinsbuy deposit and sends
- * the trader to the hosted checkout. Settlement happens on the Coinsbuy webhook
- * server-side, never here.
+ * fee breakdown, period, HWM impact), then reserves a USDT amount on TRC-20 and
+ * shows the wallet to send it to.
+ *
+ * Settlement NEVER happens here. The chain watcher matches the amount against
+ * the open intent server-side and calls `InvoiceService::settle`; this sheet
+ * only polls to notice. (While {@link COINSBUY_ENABLED}, the provider path
+ * settles on its signed callback instead — also server-side.)
  */
 export default function PaymentMethodModal({
   open,
@@ -82,8 +101,13 @@ export default function PaymentMethodModal({
   const [error, setError] = useState<string | null>(null)
   /** Set only on the Enterprise-wallet path — a bare address to send to. */
   const [deposit, setDeposit] = useState<CoinsbuyDeposit | null>(null)
-  /** Which rail the trader picked. Only ever 'tron' when {@link tronVisible}. */
-  const [provider, setProvider] = useState<'coinsbuy' | 'tron'>('coinsbuy')
+  /**
+   * Which rail the trader picked. Only consulted while {@link COINSBUY_ENABLED}
+   * — with Coinsbuy hidden there is nothing to pick, and `provider` below is
+   * pinned to 'tron' so no code path can reach the provider by accident.
+   */
+  const [pickedProvider, setPickedProvider] = useState<'coinsbuy' | 'tron'>('coinsbuy')
+  const provider = COINSBUY_ENABLED ? pickedProvider : 'tron'
   /** Set once a TRON amount is reserved — replaces the whole method section. */
   const [tronIntent, setTronIntent] = useState<TronIntent | null>(null)
   /**
@@ -129,7 +153,7 @@ export default function PaymentMethodModal({
     setPhase('idle')
     setError(null)
     setDeposit(null)
-    setProvider('coinsbuy')
+    setPickedProvider('coinsbuy')
     setTronIntent(null)
     setSettled(null)
     setCopied(false)
@@ -145,7 +169,7 @@ export default function PaymentMethodModal({
         setCrypto(m.coinsbuy.defaultCryptocurrency || 'USDT')
         // The server decides which rail leads; the trader can still switch.
         if (m.defaultProvider === 'tron' && m.tron.visible && m.tron.enabled) {
-          setProvider('tron')
+          setPickedProvider('tron')
         }
       })
       .catch((err: unknown) => {
@@ -258,6 +282,14 @@ export default function PaymentMethodModal({
   const tronVisible = methods?.tron.visible === true && methods.tron.enabled
   const tronIsTestnet = tronVisible && methods.tron.network !== 'mainnet'
   const payDisabled = provider === 'tron' ? !tronVisible : !cryptoEnabled
+  /**
+   * Whether this sheet is about to move REAL money. With Coinsbuy hidden, the
+   * provider's own sandbox flag says nothing — what decides it is the chain the
+   * address lives on.
+   */
+  const testMode = testAccount || (COINSBUY_ENABLED ? sandbox : tronIsTestnet)
+  /** No rail left to offer: say so instead of rendering an empty "Pay with". */
+  const noRail = !tronVisible && (!COINSBUY_ENABLED || !cryptoEnabled)
 
   // Once the invoice is settled the sheet has one job left: confirm what was
   // paid and offer somewhere to go. Everything above it — the fee breakdown,
@@ -293,7 +325,7 @@ export default function PaymentMethodModal({
           <div className="min-w-0">
             <h3 className="font-display text-[18px] font-extrabold tracking-[-0.01em] leading-tight flex items-center gap-2 flex-wrap">
               Pay with crypto
-              {(sandbox || testAccount) && (
+              {testMode && (
                 <span className="font-body text-[9.5px] font-bold uppercase tracking-[0.06em] py-[3px] px-2 rounded-pill bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-accent">
                   Test mode
                 </span>
@@ -521,6 +553,7 @@ export default function PaymentMethodModal({
               </div>
             ) : (
               <>
+              {COINSBUY_ENABLED && (
               <div
                 className={`rounded-[14px] border p-4 max-[420px]:p-3.5 transition-[border-color] duration-150 ${
                   provider === 'coinsbuy'
@@ -529,7 +562,7 @@ export default function PaymentMethodModal({
                 }`}
                 role={tronVisible ? 'button' : undefined}
                 tabIndex={tronVisible && provider !== 'coinsbuy' ? 0 : undefined}
-                onClick={tronVisible && provider !== 'coinsbuy' ? () => setProvider('coinsbuy') : undefined}
+                onClick={tronVisible && provider !== 'coinsbuy' ? () => setPickedProvider('coinsbuy') : undefined}
               >
                 <div className="flex items-center gap-3 mb-3.5">
                   <span className="w-9 h-9 flex-shrink-0 grid place-items-center rounded-[10px] bg-[var(--bubble)] border border-accent-line text-accent">
@@ -572,21 +605,26 @@ export default function PaymentMethodModal({
                   automatically once the transfer confirms on-chain.
                 </p>
               </div>
+              )}
 
               {/* Direct wallet — no provider in the middle. Hidden entirely
                   until the server says this caller may see it. */}
               {tronVisible && (
                 <div
-                  className={`mt-2.5 rounded-[14px] border p-4 max-[420px]:p-3.5 cursor-pointer transition-[border-color] duration-150 ${
+                  className={`rounded-[14px] border p-4 max-[420px]:p-3.5 transition-[border-color] duration-150 ${
+                    COINSBUY_ENABLED ? 'mt-2.5 cursor-pointer' : ''
+                  } ${
                     provider === 'tron'
                       ? 'border-accent bg-accent-soft'
                       : 'border-border bg-surface2 hover:border-accent'
                   }`}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setProvider('tron')}
+                  role={COINSBUY_ENABLED ? 'button' : undefined}
+                  tabIndex={COINSBUY_ENABLED ? 0 : undefined}
+                  onClick={COINSBUY_ENABLED ? () => setPickedProvider('tron') : undefined}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') setProvider('tron')
+                    if (COINSBUY_ENABLED && (e.key === 'Enter' || e.key === ' ')) {
+                      setPickedProvider('tron')
+                    }
                   }}
                 >
                   <div className="flex items-center gap-3">
@@ -610,7 +648,7 @@ export default function PaymentMethodModal({
                         Send straight to our wallet — no provider, no redirect.
                       </p>
                     </div>
-                    {provider === 'tron' && (
+                    {COINSBUY_ENABLED && provider === 'tron' && (
                       <Check size={16} strokeWidth={3} className="flex-shrink-0 text-accent" />
                     )}
                   </div>
@@ -619,7 +657,7 @@ export default function PaymentMethodModal({
               </>
             )}
 
-            {!cryptoEnabled && !tronVisible && (
+            {noRail && (
               <p className="flex items-start gap-2 text-[11.5px] font-semibold text-red mt-2.5">
                 <AlertTriangle size={13} className="flex-shrink-0 mt-px" />
                 Crypto payments are not configured on this server yet.

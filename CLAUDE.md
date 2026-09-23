@@ -212,14 +212,28 @@ lists/filters/settles/deletes; **Admin Sandbox → Invoice Testing** generates a
 a user's closed P&L and marks it paid (manual charging). Still deferred, both reusing
 `InvoiceService::settle`: monthly auto-generation and off-session auto-charge.
 
-**Direct USDT-TRC20 payments — a second crypto rail, beside Coinsbuy (built
-2026-08-16).** Customers send USDT straight to a TRON wallet we control; a
-scheduled poller reads the public chain and settles the invoice. **Coinsbuy is
-untouched and still the default.** Two independent config switches turn the new
-rail on, in this order: `TRON_PUBLIC=true` makes it visible to every trader, then
-`PAYMENTS_DEFAULT_PROVIDER=tron` makes it the default. Until the first is true
-**only `developer` accounts see it**, which is what lets the whole flow be
-rehearsed on production with no customer noticing.
+**Direct USDT-TRC20 payments — THE rail customers pay on (2026-09-23).**
+Customers send USDT straight to a TRON wallet we control; a scheduled poller
+reads the public chain and settles the invoice. Built 2026-08-16 as a second
+rail beside Coinsbuy; **on 2026-09-23 the owner hid Coinsbuy and made this the
+only method a trader is offered.**
+- **Coinsbuy is hidden, not removed.** `COINSBUY_ENABLED = false` in
+  `components/billing/PaymentMethodModal.tsx` (same shape as
+  `CARD_PAYMENTS_ENABLED`) drops the option; the whole provider — keys,
+  gateway, signed callback, `InvoiceService::settle` — stays wired on both
+  sides, and its ENDPOINT stays live so a deposit opened before the switch can
+  still settle. Bringing it back is that one flag.
+- **Three env keys make it work, and all three are needed**:
+  `TRON_MAINNET_ADDRESS` (the receiving wallet — `enabled` is false without
+  it), `TRON_PUBLIC=true` (`visible` = developer OR public; without it a
+  customer opening the pay sheet reads "Crypto payments are not configured on
+  this server yet"), and `PAYMENTS_DEFAULT_PROVIDER=tron`. The address is
+  mirrored by `sync-api-env`; the two switches are rollout state, set ON THE
+  BOX by hand and never mirrored.
+- **A `developer` account still pays on Nile, not mainnet**
+  (`TRON_DEVELOPER_NETWORK=nile`) — that is the rule that stops a test ever
+  exposing the real receiving address, so a MAINNET rehearsal means flipping
+  that key temporarily rather than testing as a developer and assuming.
 
 - **Matching is by AMOUNT, not by sender or address.** One shared receiving
   address; a `payment_intents` row reserves the exact figure for an invoice and
