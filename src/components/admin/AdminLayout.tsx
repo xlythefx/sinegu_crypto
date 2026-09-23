@@ -103,6 +103,9 @@ export default function AdminLayout({
           setConfirmLogout(false)
           try {
             await logout()
+          } catch {
+            // An expired token answers 401 — which is exactly when someone
+            // reaches for Log out. The session is cleared locally either way.
           } finally {
             navigate('/auth')
           }

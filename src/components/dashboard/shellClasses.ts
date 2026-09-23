@@ -14,9 +14,16 @@ export const SHELL_MAIN = 'flex-1 min-w-0 py-[22px] px-6'
 export const SHELL_BACKDROP = 'fixed inset-0 bg-black/50 z-[60]'
 
 // ---- sidebar rail ----
+/* Height is `dvh`, never `vh`. The footer (Log out) is pinned to the BOTTOM of
+   this box, and on a phone `100vh` is the LARGE viewport — the height with the
+   browser chrome hidden. With the URL bar or the bottom toolbar showing, the
+   last 50-90px of a `100vh` rail sit off-screen, and since the rail's content
+   (~575px) is shorter than the box there is nothing to scroll: Log out became
+   physically untappable on every phone. `100dvh` tracks the visible viewport,
+   so the footer is always the last thing above the browser chrome. */
 export const RAIL =
-  'group/rail w-[76px] flex-none self-stretch bg-surface border-r border-hair overflow-x-hidden overflow-y-auto flex flex-col sticky top-0 h-screen z-20 transition-[width] duration-[220ms] ease-[cubic-bezier(0.4,0,0.2,1)] hover:w-[246px] ' +
-  'max-[900px]:fixed max-[900px]:left-0 max-[900px]:top-0 max-[900px]:w-[246px] max-[900px]:h-screen max-[900px]:-translate-x-full max-[900px]:transition-transform max-[900px]:duration-[280ms] max-[900px]:z-[70] max-[900px]:group-[.drawer-open]/shell:translate-x-0'
+  'group/rail w-[76px] flex-none self-stretch bg-surface border-r border-hair overflow-x-hidden overflow-y-auto flex flex-col sticky top-0 h-dvh z-20 transition-[width] duration-[220ms] ease-[cubic-bezier(0.4,0,0.2,1)] hover:w-[246px] ' +
+  'max-[900px]:fixed max-[900px]:left-0 max-[900px]:top-0 max-[900px]:w-[246px] max-[900px]:h-dvh max-[900px]:-translate-x-full max-[900px]:transition-transform max-[900px]:duration-[280ms] max-[900px]:z-[70] max-[900px]:group-[.drawer-open]/shell:translate-x-0'
 
 export const BRAND =
   'flex items-center gap-3 h-[74px] pl-[22px] border-b border-hair flex-none no-underline'
