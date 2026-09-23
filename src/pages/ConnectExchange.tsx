@@ -1,6 +1,14 @@
 import { useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, Link2, Loader2, X } from 'lucide-react'
+import {
+  ArrowLeft,
+  ArrowRight,
+  Hourglass,
+  Link2,
+  Loader2,
+  ShieldAlert,
+  X,
+} from 'lucide-react'
 import DashboardLayout from '../components/dashboard/DashboardLayout'
 import DataState from '../components/dashboard/DataState'
 import ConfirmModal from '../components/ui/ConfirmModal'
@@ -34,6 +42,8 @@ import {
   type ConnectExchangeResult,
 } from '../services/exchanges'
 import { ApiError, getApiErrorMessage } from '../services/api'
+import { canConnectExchanges } from '../lib/accountStatus'
+import { SUPPORT_EMAIL } from '../lib/company'
 import { updateStoredUser } from '../lib/session'
 import type { ExchangeKind } from '../types/exchanges'
 
@@ -105,6 +115,51 @@ export default function ConnectExchange() {
 
   if (error instanceof ApiError && error.status === 401) {
     return <Navigate to="/auth" replace />
+  }
+
+  // Approval comes first. The API refuses a pending user's connect anyway
+  // (403 PENDING_APPROVAL), but it refuses it at the END — after they have
+  // created API keys on their exchange and typed them in. Saying so up front
+  // is the same answer, delivered before the wasted work.
+  if (!canConnectExchanges(sessionUser?.status)) {
+    const suspended = sessionUser?.status === 'suspended'
+    return (
+      <DashboardLayout title="Connect an exchange">
+        <div
+          className={`${CARD} mx-auto max-w-[560px] text-center animate-[fadeup_0.35s_ease-out]`}
+        >
+          <span className="mx-auto grid h-[60px] w-[60px] place-items-center rounded-[18px] border border-accent-line bg-accent-soft text-accent">
+            {suspended ? <ShieldAlert size={26} /> : <Hourglass size={26} />}
+          </span>
+          <h2 className="mt-4 font-display text-[19px] font-extrabold tracking-[-0.02em]">
+            {suspended
+              ? 'Your account is suspended'
+              : 'Your account is waiting for approval'}
+          </h2>
+          <p className="mx-auto mt-2 max-w-[420px] text-[13px] leading-[1.6] text-muted">
+            {suspended ? (
+              <>
+                Connecting an exchange is disabled while an account is
+                suspended. Write to{' '}
+                <a className="text-accent" href={`mailto:${SUPPORT_EMAIL}`}>
+                  {SUPPORT_EMAIL}
+                </a>{' '}
+                and we will look into it.
+              </>
+            ) : (
+              <>
+                An admin reviews every new account before it can trade. You will
+                get an email the moment yours is approved — then this page opens
+                up and you can connect your keys. Nothing to do until then.
+              </>
+            )}
+          </p>
+          <Link className={`${PRIMARY_BTN} mt-5`} to="/dashboard">
+            Back to dashboard
+          </Link>
+        </div>
+      </DashboardLayout>
+    )
   }
 
   const filled = {

@@ -4,6 +4,7 @@ import {
   BarChart3,
   Building2,
   Link2,
+  Lock,
   Plus,
   ShieldCheck,
   Zap,
@@ -19,11 +20,13 @@ import {
   exchangeOf,
 } from '../components/exchanges/meta'
 import { useApiData } from '../hooks/useApiData'
+import { useSessionUser } from '../hooks/useSessionUser'
 import {
   deleteExchangeAccount,
   getExchangeAccountsWithMeta,
 } from '../services/exchanges'
 import { ApiError, getApiErrorMessage } from '../services/api'
+import { canConnectExchanges } from '../lib/accountStatus'
 import { updateStoredUser } from '../lib/session'
 import type { ExchangeAccount, ExchangeKind } from '../types/exchanges'
 
@@ -35,6 +38,12 @@ const FILTER_ORDER: Filter[] = ['all', ...EXCHANGE_ORDER]
 const CONNECT_BTN =
   'inline-flex h-[38px] items-center gap-[7px] rounded-pill bg-accent px-4 text-[13px] font-bold text-on-accent shadow-[0_10px_24px_var(--glow)] transition-[filter] hover:brightness-[1.06]'
 
+/** The same pill, inert — shown while the account is still waiting on approval. */
+const CONNECT_BTN_LOCKED =
+  'inline-flex h-[38px] cursor-not-allowed items-center gap-[7px] rounded-pill border border-border bg-surface2 px-4 text-[13px] font-bold text-faint'
+
+const PENDING_HINT = 'You can connect an exchange once an admin approves your account.'
+
 const EMPTY_FEATURES = [
   { icon: Link2, label: 'API connection' },
   { icon: Zap, label: 'Real-time data' },
@@ -43,7 +52,11 @@ const EMPTY_FEATURES = [
 ]
 
 export default function Exchanges() {
+  const sessionUser = useSessionUser()
   const { data, loading, error, reload } = useApiData(getExchangeAccountsWithMeta)
+  // A pending account is refused by the API, so the wizard is not offered —
+  // the strip above the page already says why.
+  const canConnect = canConnectExchanges(sessionUser?.status)
 
   const [filter, setFilter] = useState<Filter>('all')
   const [renameTarget, setRenameTarget] = useState<ExchangeAccount | null>(null)
@@ -133,10 +146,21 @@ export default function Exchanges() {
           </p>
         </div>
         <div className="flex flex-col items-end gap-2.5 max-[700px]:w-full max-[700px]:items-start">
-          <Link className={CONNECT_BTN} to="/dashboard/exchanges/connect">
-            <Plus size={15} />
-            Connect exchange
-          </Link>
+          {canConnect ? (
+            <Link className={CONNECT_BTN} to="/dashboard/exchanges/connect">
+              <Plus size={15} />
+              Connect exchange
+            </Link>
+          ) : (
+            <span
+              className={CONNECT_BTN_LOCKED}
+              aria-disabled="true"
+              title={PENDING_HINT}
+            >
+              <Lock size={15} />
+              Connect exchange
+            </span>
+          )}
           <div className="flex flex-wrap gap-1.5">
             {FILTER_ORDER.map((key) => {
               const label = key === 'all' ? 'All' : EXCHANGE_META[key].label
@@ -196,16 +220,28 @@ export default function Exchanges() {
             No accounts to show
           </h3>
           <p className="mx-auto mb-5 mt-2 max-w-[420px] text-[13px] leading-[1.6] text-muted">
-            Connect an exchange to start tracking trades, viewing real-time
-            PNL, and unlocking analytics.
+            {canConnect
+              ? 'Connect an exchange to start tracking trades, viewing real-time PNL, and unlocking analytics.'
+              : 'Your account is waiting for approval. Connecting an exchange unlocks as soon as an admin approves you — we will email you the moment it happens.'}
           </p>
-          <Link
-            className={`${CONNECT_BTN} mx-auto`}
-            to="/dashboard/exchanges/connect"
-          >
-            <Plus size={15} />
-            Connect an exchange
-          </Link>
+          {canConnect ? (
+            <Link
+              className={`${CONNECT_BTN} mx-auto`}
+              to="/dashboard/exchanges/connect"
+            >
+              <Plus size={15} />
+              Connect an exchange
+            </Link>
+          ) : (
+            <span
+              className={`${CONNECT_BTN_LOCKED} mx-auto`}
+              aria-disabled="true"
+              title={PENDING_HINT}
+            >
+              <Lock size={15} />
+              Connect an exchange
+            </span>
+          )}
           <div className="mt-7 flex flex-wrap justify-center gap-x-[22px] gap-y-3">
             {EMPTY_FEATURES.map(({ icon: Icon, label }) => (
               <div
