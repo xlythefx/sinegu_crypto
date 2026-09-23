@@ -35,10 +35,14 @@ export default function Analytics() {
     from: '',
     to: '',
   })
+  // Both chip filters open on INCLUDE: picking a ticker reads as "show me
+  // this one", which is what a chip looks like it does. Exclude is the
+  // deliberate second choice, one click away. (Either way no chip is selected
+  // on load, so the mode changes nothing until one is.)
   const [symbols, setSymbols] = useState<Set<string>>(new Set())
-  const [symbolMode, setSymbolMode] = useState<ChipMode>('exclude')
+  const [symbolMode, setSymbolMode] = useState<ChipMode>('include')
   const [strategies, setStrategies] = useState<Set<string>>(new Set())
-  const [strategyMode, setStrategyMode] = useState<ChipMode>('exclude')
+  const [strategyMode, setStrategyMode] = useState<ChipMode>('include')
 
   // Switching mode clears the selection: the same chips would silently flip
   // meaning from "hide these three" to "show only these three".
