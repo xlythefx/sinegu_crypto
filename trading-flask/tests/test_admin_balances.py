@@ -139,10 +139,29 @@ def test_a_key_that_may_trade_is_cleared_by_the_same_check(client):
     assert [p["status"] for p in posted] == ["ok"]
 
 
-def test_the_poller_does_not_spend_a_call_on_the_permission_check(client):
+def test_the_poller_does_not_spend_a_call_on_a_HEALTHY_account(client):
     """One extra request per account per tick, forever, to answer a question
-    that only changes when a human edits the key. The pollers stay on the
-    balance read; the check rides the refresh someone is waiting on."""
+    that only changes when a human edits the key. A healthy account's poll
+    stays on the balance read; the check rides a refresh someone is waiting on
+    — or an account already known to be broken."""
     posted = _verdicts(client, _ReadOnlyKey, {})
 
     assert not [p for p in posted if p["status"] == "blocked"]
+
+
+def test_a_flagged_account_is_re_probed_by_the_poller_so_it_can_recover(client):
+    """A trade verdict cannot clear itself: a blocked account is skipped on
+    entries, and a flat one never exits, so no order will ever run to prove the
+    key works again. Without this the customer fixes their key and stays
+    frozen until the 3-day deadline disconnects them."""
+    import binance_abcd.exchanges as exchanges
+    import binance_abcd.fetch_balances as fb
+
+    flagged = [{**ACCOUNTS[0], "key_blocked": True}]
+    with patch.object(fb, "fetch_accounts", return_value=flagged), \
+            patch.object(exchanges, "BinanceAPI", _FullKey), \
+            patch.object(fb.engine_client, "post_json", return_value={"success": True}), \
+            patch.object(fb.key_status, "_post") as reported:
+        client.post("/admin/refresh-balances", json={}, headers={"X-Admin-Secret": SECRET})
+
+    assert [c.args[0]["status"] for c in reported.call_args_list] == ["ok"]

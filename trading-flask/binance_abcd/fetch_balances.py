@@ -19,14 +19,19 @@ log = logging.getLogger(__name__)
 def _settle_trade_verdict(account: dict, client) -> None:
     """Ask the venue whether this key may TRADE, and record the answer.
 
-    Only ever called on a TARGETED refresh — the trader's "recheck" button and
-    the admin's — because it costs one extra call and answers a question the
-    poller does not need to ask every five minutes.
+    Called on a TARGETED refresh (the trader's "recheck" button and the
+    admin's) and on every poll of an account already FLAGGED — never on a
+    healthy account's poll, where it would be one extra call per account per
+    tick to re-answer a question that only changes when a human edits a key.
 
     It exists because a balance read cannot settle this verdict: reading is
     exactly what a key missing the futures permission can still do, so the
     button that says "I've fixed it — recheck" would otherwise clear nothing
-    and report success on a key that still cannot place an order.
+    and report success on a key that still cannot place an order. Polling the
+    flagged ones is the same rule stated the other way — an account we stop
+    probing can never recover, and a trade verdict is not reachable by any
+    other path: entries are skipped while blocked, and a flat account has no
+    exit to try.
 
     Best-effort in both directions: an unknown answer (MEXC, a testnet key, a
     failed diagnostic) leaves whatever verdict is standing untouched.
@@ -74,9 +79,14 @@ def fetch_and_save(api_keys: list[str] | None = None) -> dict | None:
         if balance is None:
             log.warning("[balances] account read failed for %s", account.get("name"))
             continue
-        if targeted:
-            # The read just proved the key READS. Someone is waiting on an
-            # answer about whether it can trade, which is a different question.
+        if targeted or account.get("key_blocked"):
+            # The read just proved the key READS, which is a different question
+            # from whether it may trade. Asked when someone is waiting on the
+            # answer (a recheck), and on every tick for an account already
+            # flagged — a trade verdict cannot clear itself, because a blocked
+            # account is skipped on entries and a flat one never exits, so
+            # without this the poll would be the only thing still running and
+            # it would never notice the key was fixed.
             _settle_trade_verdict(account, client)
         wallet, unrealized = balance
         rows_by_exchange.setdefault(exchange_of(account), []).append({

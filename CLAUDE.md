@@ -613,11 +613,18 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
     balance. `BinanceAdapter.trade_permission()` reads
     `GET /sapi/v1/account/apiRestrictions` (`enableFutures`) — a SPOT-host call
     needing only the Reading permission, so it answers for exactly the key that
-    cannot trade. It runs **only on a targeted `refresh-balances`** (the
-    trader's and the admin's recheck button), never in the poller: it answers a
-    question that changes only when a human edits the key. Without it the
-    button would read the balance, succeed, and report a fixed key that still
-    cannot place an order — reading being precisely what the broken key can do.
+    cannot trade. Without it the button would read the balance, succeed, and
+    report a fixed key that still cannot place an order — reading being
+    precisely what the broken key can do. It runs on a targeted
+    `refresh-balances` (the trader's and the admin's recheck button) **and on
+    every poll of an already-FLAGGED account**, never on a healthy one's: on a
+    healthy account it would be one extra call per account per tick to
+    re-answer a question that changes only when a human edits a key, while on a
+    flagged one it is the ONLY path back. **A trade verdict cannot clear
+    itself** — entries are skipped while blocked and a flat account has no exit
+    to try — so without the re-probe a customer who fixed their key would stay
+    frozen until the 3-day deadline disconnected them. Same rule as "the
+    pollers keep probing them", applied to the verdict a read cannot settle.
     MEXC returns `None` (no such endpoint, and its codes already name the
     permission); `None` always leaves the standing verdict alone.
   - **Blocked accounts stay in `GET /accounts`**, flagged `key_blocked`. The
