@@ -377,6 +377,41 @@ def test_rejected_signal_names_the_reason(sent):
     assert "asset_not_configured" in sent[0][0]
 
 
+def test_a_refused_key_alert_carries_the_fix_not_just_the_complaint(sent):
+    """Binance's own sentence names three possible faults and no remedy. The
+    person reading this alert has to answer a customer, so the alert says what
+    the customer must change."""
+    notify.notify_account_failures(
+        "BUY", "LTCUSDT",
+        [("Binance guyomard", "Invalid API-key, IP, or permissions for action", "binance")],
+    )
+    text = sent[0][0]
+    assert "The CREDENTIALS were refused, not the order." in text
+    assert "Enable Futures" in text
+    assert "Restrict access to trusted IPs" in text
+    assert "skipped on entries until it is fixed" in text
+
+
+def test_each_distinct_fix_is_stated_once(sent):
+    notify.notify_account_failures(
+        "BUY", "LTCUSDT",
+        [("One", "Invalid API-key, IP, or permissions for action", "binance"),
+         ("Two", "Invalid API-key, IP, or permissions for action", "binance"),
+         ("Three (MEXC)", "Accessing IP is not in the whitelist", "mexc")],
+    )
+    text = sent[0][0]
+    assert text.count("Restrict access to trusted IPs") == 1
+    assert "Link IP address" in text
+
+
+def test_an_ordinary_rejection_gets_no_key_advice(sent):
+    """Nothing is wrong with the key when the venue rejects the ORDER — telling
+    someone to go edit their API key over a balance shortfall is worse than
+    saying nothing."""
+    notify.notify_account_failures("BUY", "LTCUSDT", [("One", "2005 Balance insufficient", "mexc")])
+    assert "CREDENTIALS" not in sent[0][0]
+
+
 # --- Increments ---------------------------------------------------------------
 
 def test_increment_bar_fills_then_pads():

@@ -155,8 +155,10 @@ def test_credential_codes_are_scoped_to_their_exchange():
 
 def test_blocked_reports_go_to_the_exchanges_own_route():
     with patch.object(key_status.engine_client, "post_json") as post:
-        key_status.report_blocked("mx0k", 402, "KEY_EXPIRED", "expired", "mexc")
-        key_status.report_blocked("mx0k", 402, "KEY_EXPIRED", "expired", "mexc")  # deduped
+        # READ scope: an expired MEXC key is refused on every call, reads
+        # included — so a read succeeding again is a real recovery.
+        key_status.report_blocked("mx0k", 402, "KEY_EXPIRED", "expired", "mexc", scope=key_status.READ)
+        key_status.report_blocked("mx0k", 402, "KEY_EXPIRED", "expired", "mexc", scope=key_status.READ)  # deduped
         key_status.report_ok("mx0k", "mexc")
         key_status.report_ok("mx0k")  # a Binance key with the same string is another key
     assert [(c.args[0], c.args[1]["status"], c.kwargs["exchange"]) for c in post.call_args_list] == [

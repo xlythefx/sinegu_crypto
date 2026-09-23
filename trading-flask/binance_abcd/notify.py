@@ -53,7 +53,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Optional
 
-from binance_abcd import discord_notify, hooks
+from binance_abcd import discord_notify, exchanges, hooks, key_status
 from binance_abcd.http_client import get_session
 
 log = logging.getLogger(__name__)
@@ -720,7 +720,8 @@ def notify_account_failures(
     action: str, ticker: str, failures: list[tuple], *, retrying: bool = False
 ) -> None:
     """One consolidated alert listing every account the exchange rejected.
-    `failures` = list of (account_name, error).
+    `failures` = list of (account_name, error) or (account_name, error, exchange);
+    the venue, when given, is what picks the right remedy to print.
 
     `retrying=True` when the retry queue has already taken these accounts: the
     close is UNCONFIRMED, not abandoned, and the engine re-places it on its own.
@@ -743,8 +744,9 @@ def notify_account_failures(
         head = "⚠️ <b>ENTRY REJECTED</b>"
         sub = "order not placed (out of sync with the rest) on:"
     lines = [head, f"{_esc(ticker)} ({_esc(action)}) — {sub}"]
-    for name, error in failures[:20]:
-        lines.append(f"  • {_esc(name)} — {_esc(error)}")
+    for failure in failures[:20]:
+        error = failure[1] if len(failure) > 1 else "unknown"
+        lines.append(f"  • {_esc(failure[0])} — {_esc(error)}")
     if len(failures) > 20:
         lines.append(f"  … +{len(failures) - 20} more")
     lines.append(f"({len(failures)} account(s) affected)")
@@ -753,7 +755,42 @@ def notify_account_failures(
             f"Retrying every {int(hooks.RETRY_INTERVAL_SECONDS)}s, up to "
             f"{hooks.RETRY_MAX_ATTEMPTS} attempts — a red alert follows only if they all fail."
         )
+    lines += _credential_fixes(failures)
     _send_admin("\n".join(lines))
+
+
+def _credential_fixes(failures: list[tuple]) -> list[str]:
+    """The "what do we tell them" block, for failures the exchange refused on
+    the CREDENTIALS rather than on the order.
+
+    The venue's own sentence is not a fix: Binance's "Invalid API-key, IP, or
+    permissions for action" names three possible faults and no remedy, and
+    whoever reads this alert has to answer a customer with something they can
+    act on. So the alert carries the action, once per distinct fault.
+
+    Tuples may carry the venue as a third item; without one the fix is read
+    against Binance, whose wording is the one that needs translating.
+    """
+    remedies: list[str] = []
+    for failure in failures:
+        error = failure[1] if len(failure) > 1 else ""
+        venue = str(failure[2]) if len(failure) > 2 and failure[2] else "binance"
+        fix = key_status.fix_for(str(error), venue)
+        if not fix:
+            continue
+        line = f"  • {_esc(exchanges.label(venue))}: {_esc(fix)}"
+        if line not in remedies:
+            remedies.append(line)
+    if not remedies:
+        return []
+    return [
+        "",
+        "🔑 <b>The CREDENTIALS were refused, not the order.</b> What fixes it:",
+        *remedies,
+        "The account is flagged in the app — the customer gets these steps and the "
+        "IP to allow-list there — and is skipped on entries until it is fixed, so "
+        "this alert does not repeat on every signal.",
+    ]
 
 
 def notify_retry_abandoned(action: str, ticker: str, uni_ids: list, attempts: int) -> None:

@@ -129,6 +129,17 @@ class ExchangeClient(Protocol):
         """(wallet_balance, unrealized_pnl) in USDT; None on a failed read."""
         ...
 
+    def trade_permission(self) -> Optional[bool]:
+        """Does the venue say these credentials may TRADE futures?
+
+        True / False when the venue answers, None when it cannot be determined
+        — and None must leave whatever verdict is standing alone. Exists
+        because reading and trading are separate permissions: a key with
+        Reading only returns a live balance and refuses every order, which
+        looks like a healthy account that never trades.
+        """
+        ...
+
     def open_positions_rows(self) -> Optional[list[dict]]:
         """Every open position as a positions/sync row (see fetch_positions);
         None on a failed read, [] when flat."""

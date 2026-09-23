@@ -383,6 +383,13 @@ class MexcAdapter:
             return None
         return equity - unrealized, unrealized
 
+    def trade_permission(self) -> Optional[bool]:
+        """Unknown, always: MEXC publishes no endpoint that reports a key's own
+        permissions. It does not need one — its rejection codes already SAY
+        which permission is missing (701-704), where Binance's single -2015
+        does not, so nothing here has to be inferred."""
+        return None
+
     def open_positions_rows(self) -> Optional[list[dict]]:
         rows = self.api.open_positions()
         if rows is None:

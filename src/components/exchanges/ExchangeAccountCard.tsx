@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import KeyBlockedModal from './KeyBlockedModal'
 import type { ExchangeAccount, ExchangeKind } from '../../types/exchanges'
+import { keyFault } from './exchangeCopy'
 import { EXCHANGE_META } from './meta'
 import { maskSecret } from '../../lib/mask'
 import { refreshAccountBalance } from '../../services/exchanges'
@@ -129,6 +130,12 @@ export default function ExchangeAccountCard({
   }
 
   const keyBlocked = account.key_status === 'blocked'
+  // The strip is the whole warning most people ever read, so it names the
+  // fault rather than "refusing this API key" for all three of them.
+  const keyStripNote =
+    keyFault(exchange, account.key_error_reason) === 'tradePermission'
+      ? `${meta.label} will not let this key trade — tap to fix.`
+      : `${meta.label} is refusing this API key — tap to fix.`
 
   return (
     <article
@@ -151,9 +158,7 @@ export default function ExchangeAccountCard({
             <span className="block text-[12.5px] font-bold text-red">
               Not receiving trades
             </span>
-            <span className="block text-[11.5px] text-muted">
-              {meta.label} is refusing this API key — tap to fix.
-            </span>
+            <span className="block text-[11.5px] text-muted">{keyStripNote}</span>
           </span>
         </button>
       )}

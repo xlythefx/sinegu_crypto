@@ -223,7 +223,7 @@ def test_a_failure_on_one_venue_is_retried_on_that_venue_only():
     assert job.targets == {"mexc": ["uni-1", "uni-3"]}
     assert job.announce is False  # Binance already published the signal
     amber = [c for c in m["failures"].call_args_list if c.kwargs.get("retrying")][0]
-    assert sorted(name for name, _ in amber.args[2]) == ["Live One (MEXC)", "MEXC Three (MEXC)"]
+    assert sorted(f[0] for f in amber.args[2]) == ["Live One (MEXC)", "MEXC Three (MEXC)"]
 
 
 def test_a_retry_run_only_touches_its_targets():
@@ -286,7 +286,7 @@ def test_the_label_only_names_venues_that_actually_filled():
     _, m = _run(entry=entry)
     assert m["notify_entry"].call_args.kwargs["label"] == "Binance"
     red = [c for c in m["failures"].call_args_list if not c.kwargs.get("retrying")][0]
-    assert sorted(name for name, _ in red.args[2]) == ["Live One (MEXC)", "MEXC Three (MEXC)"]
+    assert sorted(f[0] for f in red.args[2]) == ["Live One (MEXC)", "MEXC Three (MEXC)"]
 
 
 # --- Locks are per venue -----------------------------------------------------------------

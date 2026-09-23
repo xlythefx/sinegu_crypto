@@ -216,14 +216,16 @@ class MexcFuturesAPI:
             headers["Recv-Window"] = str(self.recv_window)
         return headers
 
-    def _judge_body(self, body: Any, account_scoped: bool) -> None:
-        """Route a credential verdict to key_status when the body carries one."""
+    def _judge_body(self, body: Any, account_scoped: bool, scope: str = key_status.TRADE) -> None:
+        """Route a credential verdict to key_status when the body carries one.
+        `scope` is what was refused — a rejected READ and a rejected ORDER are
+        different permissions, and only a success in the same scope clears it."""
         if not account_scoped or not isinstance(body, dict):
             return
         verdict = key_status.classify(body, EXCHANGE)
         if verdict is not None:
             code, reason, message = verdict
-            key_status.report_blocked(self.api_key, code, reason, message, EXCHANGE)
+            key_status.report_blocked(self.api_key, code, reason, message, EXCHANGE, scope=scope)
 
     @staticmethod
     def _parse_body(text: str) -> Optional[dict]:
@@ -253,7 +255,7 @@ class MexcFuturesAPI:
         except requests.RequestException as exc:
             response = getattr(exc, "response", None)
             text = (response.text or "")[:500] if response is not None else ""
-            self._judge_body(self._parse_body(text), account_scoped)
+            self._judge_body(self._parse_body(text), account_scoped, key_status.READ)
             log.error("[MEXC] GET %s: %s%s", path, exc, f" — {text}" if text else "")
             return None
         try:
@@ -262,11 +264,11 @@ class MexcFuturesAPI:
             log.error("[MEXC] GET %s: non-JSON response %.200s", path, resp.text)
             return None
         if not isinstance(envelope, dict) or envelope.get("success") is not True:
-            self._judge_body(envelope, account_scoped)
+            self._judge_body(envelope, account_scoped, key_status.READ)
             log.error("[MEXC] GET %s refused: %.300s", path, envelope)
             return None
         if account_scoped:
-            key_status.report_ok(self.api_key, EXCHANGE)
+            key_status.report_ok(self.api_key, EXCHANGE, scope=key_status.READ)
         data = envelope.get("data")
         return data if data is not None else {}
 
@@ -321,7 +323,7 @@ class MexcFuturesAPI:
                 rate_limited=verdict["rate_limited"], transient=verdict["transient"],
                 maintenance=verdict["maintenance"],
             )
-        key_status.report_ok(self.api_key, EXCHANGE)
+        key_status.report_ok(self.api_key, EXCHANGE, scope=key_status.TRADE)
         return envelope
 
     # --- public market data ---------------------------------------------------

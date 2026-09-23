@@ -1068,13 +1068,13 @@ def _notify_job(
 
             notify.notify_account_failures(
                 action, symbol,
-                [(_account_label(r, name_venues), r.get("error") or "unknown") for r in failures
-                 if not _queued(r)],
+                [(_account_label(r, name_venues), r.get("error") or "unknown",
+                  r.get("exchange", "binance")) for r in failures if not _queued(r)],
             )
             notify.notify_account_failures(
                 action, symbol,
-                [(_account_label(r, name_venues), r.get("error") or "unknown") for r in failures
-                 if _queued(r)],
+                [(_account_label(r, name_venues), r.get("error") or "unknown",
+                  r.get("exchange", "binance")) for r in failures if _queued(r)],
                 retrying=True,
             )
     except Exception:  # noqa: BLE001

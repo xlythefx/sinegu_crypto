@@ -93,3 +93,56 @@ def test_an_empty_api_keys_list_is_rejected(client):
         headers={"X-Admin-Secret": SECRET},
     )
     assert response.status_code == 400
+
+
+# --- The trade verdict a balance read cannot settle -------------------------------
+
+class _ReadOnlyKey(_FakeBinance):
+    """Reads fine, may not trade — the live 2026-09-23 fault."""
+
+    def get_api_restrictions(self):
+        return {"enableReading": True, "enableFutures": False, "ipRestrict": False}
+
+
+class _FullKey(_FakeBinance):
+    def get_api_restrictions(self):
+        return {"enableReading": True, "enableFutures": True, "ipRestrict": True}
+
+
+def _verdicts(client, api, payload):
+    import binance_abcd.exchanges as exchanges
+    import binance_abcd.fetch_balances as fb
+
+    with patch.object(fb, "fetch_accounts", return_value=list(ACCOUNTS)), \
+            patch.object(exchanges, "BinanceAPI", api), \
+            patch.object(fb.engine_client, "post_json", return_value={"success": True}), \
+            patch.object(fb.key_status, "_post") as reported:
+        client.post("/admin/refresh-balances", json=payload, headers={"X-Admin-Secret": SECRET})
+    return [c.args[0] for c in reported.call_args_list]
+
+
+def test_a_targeted_refresh_settles_whether_the_key_may_trade(client):
+    """"I've fixed it — recheck" reads the balance, and reading is exactly what
+    a key missing the futures permission can still do. So the refresh asks the
+    venue for the key's own permission flags; otherwise the button would report
+    success on a key that still cannot place an order."""
+    posted = _verdicts(client, _ReadOnlyKey, {"api_keys": ["key-b"]})
+
+    blocked = [p for p in posted if p["status"] == "blocked"]
+    assert [p["reason"] for p in blocked] == ["TRADE_PERMISSION"]
+    assert blocked[0]["api_key"] == "key-b"
+
+
+def test_a_key_that_may_trade_is_cleared_by_the_same_check(client):
+    posted = _verdicts(client, _FullKey, {"api_keys": ["key-b"]})
+
+    assert [p["status"] for p in posted] == ["ok"]
+
+
+def test_the_poller_does_not_spend_a_call_on_the_permission_check(client):
+    """One extra request per account per tick, forever, to answer a question
+    that only changes when a human edits the key. The pollers stay on the
+    balance read; the check rides the refresh someone is waiting on."""
+    posted = _verdicts(client, _ReadOnlyKey, {})
+
+    assert not [p for p in posted if p["status"] == "blocked"]

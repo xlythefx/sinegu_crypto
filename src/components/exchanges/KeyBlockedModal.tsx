@@ -8,12 +8,13 @@ import {
   Loader2,
   RefreshCw,
   ShieldAlert,
+  ToggleRight,
   Unplug,
   X,
 } from 'lucide-react'
 import { FALLBACK_SERVER_IP } from '../../lib/serverIp'
 import type { ExchangeAccount, ExchangeKind } from '../../types/exchanges'
-import { EXCHANGE_COPY, isDeadKey } from './exchangeCopy'
+import { EXCHANGE_COPY, keyFault } from './exchangeCopy'
 import { EXCHANGE_META } from './meta'
 
 interface KeyBlockedModalProps {
@@ -38,14 +39,21 @@ function daysLeft(graceEndsAt: string | null | undefined): number | null {
 }
 
 /**
- * Shown when the exchange refuses an account's API key from our server —
- * nearly always an IP allow-list on the key that does not include us.
+ * Shown when the exchange refuses an account's API key from our server.
  *
  * The failure is invisible without this: the account still says "connected",
  * its balance quietly stops moving, and it takes no trades. So the modal leads
- * with the consequence ("not receiving trades"), gives the one thing that fixes
- * it (the IP, copyable), and offers the two ways out — recheck after fixing, or
- * disconnect and connect a fresh key.
+ * with the consequence ("not receiving trades"), gives the things that fix it
+ * (the permission to tick and the IP, copyable), and offers the two ways out —
+ * recheck after fixing, or disconnect and connect a fresh key.
+ *
+ * It names ONE of three faults, because they need different actions and the
+ * exchange's own sentence distinguishes none of them. Binance answers -2015
+ * for a dead key, an IP that is not allow-listed AND a key that simply may not
+ * trade — and that last one is the cruellest, since balances keep updating and
+ * nothing on the account looks wrong (seen live on 2026-09-23: a customer sat
+ * funded and idle through four signals). The engine tells them apart by what
+ * it has proved about the key and reports the reason; `keyFault` reads it.
  */
 export default function KeyBlockedModal({
   open,
@@ -65,7 +73,9 @@ export default function KeyBlockedModal({
   const copy = EXCHANGE_COPY[exchange]
   const ip = serverIp || FALLBACK_SERVER_IP
   const remaining = daysLeft(account.key_grace_ends_at)
-  const wrongKey = isDeadKey(exchange, account.key_error_reason)
+  const fault = keyFault(exchange, account.key_error_reason)
+  const wrongKey = fault === 'dead'
+  const fix = fault === 'tradePermission' ? copy.blocked.tradePermission : copy.blocked.ip
 
   const copyIp = async () => {
     try {
@@ -107,7 +117,9 @@ export default function KeyBlockedModal({
               {account.name} is not receiving trades
             </h3>
             <p className="mt-1.5 text-[12.5px] text-muted">
-              {label} is refusing this API key from our server.
+              {fault === 'tradePermission'
+                ? `${label} will not let this API key place orders.`
+                : `${label} is refusing this API key from our server.`}
             </p>
           </div>
           <button
@@ -136,13 +148,31 @@ export default function KeyBlockedModal({
             </section>
           ) : (
             <section>
-              <p className="text-[13px] leading-[1.6] text-text">
-                Your API key is restricted to specific IP addresses, and ours is not
-                on the list. Add this address in {label} → API Management → edit the
-                key → <em>{copy.ipSettingName}</em>:
-              </p>
+              <p className="text-[13px] leading-[1.6] text-text">{fix.explanation}</p>
 
-              <div className="mt-3 flex items-center gap-2 rounded-[12px] border border-accent bg-accent-soft px-3 py-2.5">
+              {/* The permission gets the same weight as the IP, because it IS
+                  the fix here — a numbered step reading "tick Enable Futures"
+                  is the one instruction people skim past. */}
+              {fault === 'tradePermission' && (
+                <div className="mt-3 flex items-center gap-2.5 rounded-[12px] border border-accent bg-accent-soft px-3 py-2.5">
+                  <ToggleRight size={18} className="flex-none text-accent" />
+                  <span className="min-w-0">
+                    <span className="block font-mono text-[14px] font-bold tracking-[0.01em] text-text">
+                      {copy.permissionName}
+                    </span>
+                    <span className="block text-[11.5px] text-muted">
+                      Turn this on for the key — it is what is missing.
+                    </span>
+                  </span>
+                </div>
+              )}
+
+              <p className="mt-3.5 text-[12px] font-semibold text-muted">
+                {fault === 'tradePermission'
+                  ? 'And allow our server on the key:'
+                  : `Add this address under “${copy.ipSettingName}”:`}
+              </p>
+              <div className="mt-1.5 flex items-center gap-2 rounded-[12px] border border-accent bg-accent-soft px-3 py-2.5">
                 <code className="min-w-0 flex-1 break-all font-mono text-[15px] font-bold tracking-[0.02em] text-text">
                   {ip}
                 </code>
@@ -157,13 +187,9 @@ export default function KeyBlockedModal({
               </div>
 
               <ol className="mt-3.5 flex list-decimal flex-col gap-1.5 pl-4 text-[12.5px] leading-[1.55] text-muted">
-                <li>Open {label} → API Management and edit this key.</li>
-                <li>Paste the address above into the IP list and save.</li>
-                <li>
-                  Keep <strong className="text-text">{copy.permissionName}</strong>{' '}
-                  ticked — the key must be able to trade, never to withdraw.
-                </li>
-                <li>Come back and press “I’ve added it — recheck”.</li>
+                {fix.steps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
               </ol>
 
               <a
@@ -205,7 +231,7 @@ export default function KeyBlockedModal({
               ) : (
                 <RefreshCw size={15} />
               )}
-              {rechecking ? 'Checking…' : 'I’ve added it — recheck'}
+              {rechecking ? 'Checking…' : 'I’ve fixed it — recheck'}
             </button>
           )}
         </footer>

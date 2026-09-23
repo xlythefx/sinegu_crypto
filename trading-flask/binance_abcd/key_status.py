@@ -8,15 +8,26 @@ account silently receives no trades. MEXC has the same failure under its own
 codes (406 "Accessing IP is not in the whitelist", 402 "API Key expired" — keys
 without IP binding expire after 90 days there).
 
-Two rules make the report trustworthy:
+Three rules make the report trustworthy:
 
 - **Only the exchange decides.** A credential verdict comes from an error code
   the exchange returned, never from a timeout, a 5xx, or a rate limit — those
   say nothing about the key and must never disconnect anyone.
-- **Any successful signed call clears it.** That is how a user who whitelists
-  our IP gets un-flagged without asking anyone: the next poller tick succeeds
-  and the flag is gone. Which is also why the backend keeps handing blocked
-  accounts to the pollers — an account we stop probing can never recover.
+- **A success clears only what it PROVES.** A signed GET proves the key can
+  read; it says nothing about whether it may trade, and on every venue those
+  are two separate permissions. So a read success clears a verdict raised on a
+  read — which is how a user who whitelists our IP un-flags themselves without
+  asking anyone — but never one raised on a refused order. Until 2026-09-23 any
+  success cleared everything, and a real customer key with Reading enabled and
+  Futures NOT enabled therefore flapped: flagged by the refused order, cleared
+  by the poller 90 seconds later, so the account read "connected" with a live
+  balance and silently took no trades for a day.
+- **An ambiguous code is sharpened by what we already know.** Binance answers
+  -2015 for three different faults (bad key / IP not allow-listed / permission
+  missing). When a signed READ has succeeded on the same key, the IP is
+  demonstrably allowed and the key demonstrably exists, so a refused WRITE can
+  only be the missing futures permission — reported as TRADE_PERMISSION, which
+  is the one reading the customer can act on.
 
 Reports are deduplicated per (exchange, key), so a poller finding the same
 broken key every five minutes costs one POST, not one per tick, and they go to
@@ -27,11 +38,18 @@ from __future__ import annotations
 
 import logging
 import threading
+from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from binance_abcd import engine_client
 
 log = logging.getLogger(__name__)
+
+# What a signed call proves about the credentials. Reads and trading are
+# separate permissions everywhere, so a verdict carries the scope it was
+# reached in and is only cleared by a success in that scope (or a wider one).
+READ = "read"
+TRADE = "trade"
 
 # Per exchange: the error codes that mean "these credentials cannot be used
 # from here". Everything else (rate limits, timestamp drift, order rejections)
@@ -57,8 +75,25 @@ CREDENTIAL_CODES: dict[str, dict[int, str]] = {
 
 _LABEL = {"binance": "Binance", "mexc": "MEXC"}
 
-# (exchange, api_key) -> last state we told the backend ("blocked:<code>" | "ok").
-_reported: dict[tuple[str, str], str] = {}
+# Codes that do not say WHICH credential fault they are, and the reason they
+# collapse to once a signed read has proved the key and the IP are fine.
+# MEXC needs no entry: 406 (IP), 402 (expired) and 701-704 (permissions) each
+# name their own fault already.
+_AMBIGUOUS: dict[tuple[str, int], str] = {
+    ("binance", -2015): "TRADE_PERMISSION",
+}
+
+
+@dataclass
+class _KeyState:
+    """What we last told the backend about one key, and what we have proved."""
+
+    reported: Optional[str] = None      # "ok" | "blocked:<code>:<reason>"
+    read_ok: bool = False               # a signed READ has succeeded
+    blocked_scope: Optional[str] = None # scope of the verdict currently standing
+
+
+_states: dict[tuple[str, str], _KeyState] = {}
 _lock = threading.Lock()
 
 
@@ -75,14 +110,33 @@ def classify(parsed: Optional[dict], exchange: str = "binance") -> Optional[Tupl
     return code, codes[code], str(message or "")[:250]
 
 
-def report_blocked(api_key: str, code: int, reason: str, message: str, exchange: str = "binance") -> None:
+def report_blocked(
+    api_key: str,
+    code: int,
+    reason: str,
+    message: str,
+    exchange: str = "binance",
+    scope: str = TRADE,
+) -> None:
+    """The exchange refused these credentials. `scope` is what was being
+    attempted — TRADE for a refused order, READ for a refused account read."""
     if not api_key:
         return
-    state = f"blocked:{code}"
     with _lock:
-        if _reported.get((exchange, api_key)) == state:
+        state = _states.setdefault((exchange, api_key), _KeyState())
+        if scope == READ:
+            # Reads are failing too, so this is the key or the IP — not a
+            # permission that only bites on orders. Forget the earlier proof.
+            state.read_ok = False
+        elif state.read_ok:
+            reason = _AMBIGUOUS.get((exchange, code), reason)
+        state.blocked_scope = scope
+        # The reason is part of the identity: the same -2015 sharpening into
+        # TRADE_PERMISSION is a different thing to tell the customer.
+        wanted = f"blocked:{code}:{reason}"
+        if state.reported == wanted:
             return
-        _reported[(exchange, api_key)] = state
+        state.reported = wanted
 
     log.error("[keys] %s… refused by %s (%s %s)", api_key[:6], _LABEL.get(exchange, exchange), code, reason)
     _post({
@@ -94,18 +148,25 @@ def report_blocked(api_key: str, code: int, reason: str, message: str, exchange:
     }, exchange)
 
 
-def report_ok(api_key: str, exchange: str = "binance") -> None:
-    """A signed, account-scoped call succeeded — the key works from here."""
+def report_ok(api_key: str, exchange: str = "binance", scope: str = READ) -> None:
+    """A signed, account-scoped call succeeded — the key works from here FOR
+    THAT SCOPE. A read never clears a verdict an order earned (see module doc)."""
     if not api_key:
         return
     with _lock:
+        state = _states.setdefault((exchange, api_key), _KeyState())
+        if scope == READ:
+            state.read_ok = True
+            if state.blocked_scope == TRADE:
+                return
+        state.blocked_scope = None
         # Nothing to say unless we previously said it was broken. A fresh
         # process has no memory, so the first success reports ok once and then
         # stays quiet; the backend treats a repeat as a no-op anyway.
-        if _reported.get((exchange, api_key)) == "ok":
+        if state.reported == "ok":
             return
-        first_time = (exchange, api_key) not in _reported
-        _reported[(exchange, api_key)] = "ok"
+        first_time = state.reported is None
+        state.reported = "ok"
 
     if not first_time:
         log.info("[keys] %s… works again on %s", api_key[:6], _LABEL.get(exchange, exchange))
@@ -122,4 +183,71 @@ def _post(payload: dict, exchange: str) -> None:
 def reset() -> None:
     """Test hook — forget what has been reported."""
     with _lock:
-        _reported.clear()
+        _states.clear()
+
+
+# --- What a human should do about it -----------------------------------------
+
+# Per exchange, in the venue's own words: what the customer has to change. The
+# ops alert carries this because "Invalid API-key, IP, or permissions" names
+# three possible faults and no fix, and whoever reads the alert has to tell a
+# customer something actionable.
+FIXES: dict[str, dict[str, str]] = {
+    "binance": {
+        "TRADE_PERMISSION": (
+            'the key can read but may not trade — tick "Enable Futures" on it '
+            "(Binance → API Management → edit key)"
+        ),
+        "IP_OR_PERMISSION": (
+            'add our server IP under "Restrict access to trusted IPs" and tick '
+            '"Enable Futures"'
+        ),
+        "BAD_KEY_FORMAT": "the key is not a valid Binance key — reconnect with a fresh one",
+        "UNKNOWN_KEY": "the key was deleted or regenerated on Binance — reconnect with a fresh one",
+        "BAD_SIGNATURE": "the secret does not match the key — reconnect with a fresh pair",
+    },
+    "mexc": {
+        "IP_NOT_WHITELISTED": 'bind our server IP under "Link IP address"',
+        "KEY_EXPIRED": "the key expired (MEXC keys with no IP bound last 90 days) — reconnect a fresh, IP-bound one",
+        "NOT_LOGGED_IN": "MEXC no longer recognises the key — reconnect with a fresh one",
+        "BAD_SIGNATURE": "the secret does not match the key — reconnect with a fresh pair",
+        "PERMISSION_READ": "tick Futures → Read on the key",
+        "PERMISSION_WRITE": "tick Futures → Trade on the key",
+        "PERMISSION_TRADE_READ": "tick Futures → Read on the key",
+        "PERMISSION_TRADE_WRITE": "tick Futures → Trade on the key (and finish KYC — MEXC needs it for futures API trading)",
+    },
+}
+
+
+def fix_for(error_text: str, exchange: str = "binance") -> Optional[str]:
+    """The one-line fix for a credential rejection, recognised from the error
+    text the fan-out recorded. None when the failure is not a credential fault
+    — an order rejection or an outage has no key to fix.
+
+    Matched on the venue's own message rather than a code because that is all
+    the fan-out keeps per account; the reading is deliberately conservative, as
+    a wrong fix sends a customer to edit a key that was never the problem.
+    """
+    text = (error_text or "").lower()
+    if not text:
+        return None
+    fixes = FIXES.get(exchange, {})
+    if exchange == "binance":
+        if "invalid api-key" in text or "-2015" in text:
+            # The fan-out only has Binance's sentence, which does not say which
+            # of the three faults it was. Name both halves of the fix.
+            return fixes.get("IP_OR_PERMISSION")
+        if "api-key format" in text or "-2014" in text:
+            return fixes.get("BAD_KEY_FORMAT")
+        if "signature" in text or "-1022" in text:
+            return fixes.get("BAD_SIGNATURE")
+    elif exchange == "mexc":
+        if "whitelist" in text:
+            return fixes.get("IP_NOT_WHITELISTED")
+        if "expired" in text:
+            return fixes.get("KEY_EXPIRED")
+        if "signature" in text:
+            return fixes.get("BAD_SIGNATURE")
+        if "permission" in text:
+            return fixes.get("PERMISSION_TRADE_WRITE")
+    return None

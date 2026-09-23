@@ -585,9 +585,41 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   hottest read in the system). Rules that make it recoverable:
   - **Only an exchange error code flags a key** (-2015/-2014/-2008/-1022) —
     never a timeout, 5xx or rate limit, which say nothing about the key.
-  - **Any successful signed call clears it**, which is how a user who
-    allow-lists our IP un-flags themselves. `_request_get(..., account_scoped=False)`
-    exists so a public call (exchangeInfo) can never clear a flag.
+  - **A success clears only what it PROVES** (2026-09-23). A signed GET proves
+    the key READS; only a successful signed WRITE proves it may TRADE, and
+    those are two separate permissions on every venue. So every verdict carries
+    a `scope` (`key_status.READ` / `.TRADE`): a read success clears a block
+    raised on a read — which is still how a user who allow-lists our IP
+    un-flags themselves — and never one raised by a refused order.
+    `_request_get(..., account_scoped=False)` exists so a public call
+    (exchangeInfo) can never clear a flag at all.
+    **Until then any success cleared everything**, and a real customer key with
+    Reading enabled and Futures NOT enabled therefore FLAPPED: flagged by the
+    refused order, cleared by the next poller tick ~90s later, so
+    `key_status` sat at `ok` with a live balance while the account took no
+    trades for a day and the modal never fired. `test_key_status.py` pins it.
+  - **-2015 is sharpened by what we already know.** Binance answers it for
+    three different faults (dead key / IP not allow-listed / permission
+    missing). When a signed read has succeeded on the same key the IP is
+    demonstrably allowed and the key demonstrably exists, so a refused WRITE
+    can only be the futures permission — reported as `TRADE_PERMISSION`
+    (`key_status._AMBIGUOUS`), which is the reading the customer can act on.
+    Without that proof it stays the ambiguous `IP_OR_PERMISSION`, whose
+    instructions cover both; naming the wrong fix sends someone to edit a
+    permission that was never the problem. Reads failing later downgrades it
+    back. MEXC needs no entry — 406 (IP), 402 (expired) and 701–704
+    (permissions) each name their own fault.
+  - **"Recheck" asks the venue what the key is ALLOWED to do**, not just for a
+    balance. `BinanceAdapter.trade_permission()` reads
+    `GET /sapi/v1/account/apiRestrictions` (`enableFutures`) — a SPOT-host call
+    needing only the Reading permission, so it answers for exactly the key that
+    cannot trade. It runs **only on a targeted `refresh-balances`** (the
+    trader's and the admin's recheck button), never in the poller: it answers a
+    question that changes only when a human edits the key. Without it the
+    button would read the balance, succeed, and report a fixed key that still
+    cannot place an order — reading being precisely what the broken key can do.
+    MEXC returns `None` (no such endpoint, and its codes already name the
+    permission); `None` always leaves the standing verdict alone.
   - **Blocked accounts stay in `GET /accounts`**, flagged `key_blocked`. The
     fan-out skips them on ENTRY only (exits still try — an open position must
     be closable, and a successful exit clears the flag); the pollers keep
@@ -615,6 +647,18 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   on the exchange card. "Recheck" is the balance-refresh call — a real exchange
   round trip is what settles the verdict. The IP comes from
   `config('services.engine.public_ip')`, never hardcoded in the frontend.
+  **The modal names ONE of three faults** (`keyFault()` in `exchangeCopy.ts`,
+  read off `key_error_reason`): `dead` (replace the key), `tradePermission`
+  (the key reads but may not trade — the permission gets its own highlighted
+  card beside the IP, because "tick Enable Futures" buried as step 3 is the
+  instruction people skim past) and `ip` as the fallback, since that is what an
+  unnamed credential refusal has always meant and its steps cover both. The
+  wording per fault per venue is data in `EXCHANGE_COPY[kind].blocked`.
+  **The admin Telegram alert carries the fix too** (`notify._credential_fixes`
+  → `key_status.fix_for`): Binance's own sentence names three possible faults
+  and no remedy, and whoever reads the alert has to answer a customer. One line
+  per distinct fault, and an ordinary order rejection (balance short, bad size)
+  gets no key advice at all.
 
 **Admin → API Keys** (`/admin/api-keys`, `AdminApiKeyController`) is the whole
 inventory: every `{exchange}_accounts` row (Binance and MEXC, via

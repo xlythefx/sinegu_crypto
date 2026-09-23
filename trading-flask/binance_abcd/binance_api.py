@@ -27,6 +27,10 @@ from binance_abcd.http_client import get_session
 
 log = logging.getLogger(__name__)
 
+# Binance's account-level endpoints (/sapi) live on the SPOT host, never on the
+# futures host a BinanceAPI is otherwise pinned to.
+SPOT_API_BASE = "https://api.binance.com"
+
 # --- 429/418 global backoff ---------------------------------------------------
 _BACKOFF_LOCK = threading.Lock()
 _backoff_until = 0.0
@@ -219,19 +223,21 @@ class BinanceAPI:
         if response is not None and response.status_code in (418, 429):
             _enter_backoff(response.status_code, response.headers.get("Retry-After"))
 
-    def _report_key(self, response: "requests.Response | None") -> None:
+    def _report_key(self, response: "requests.Response | None", scope: str) -> None:
         """Tell the backend when Binance refuses these credentials.
 
         Only an error code from Binance counts — a timeout or a 5xx says
         nothing about the key, and flagging on those would disconnect people
-        for our own outages.
+        for our own outages. `scope` is what was refused (READ for a GET,
+        TRADE for an order): -2015 means different things for each, and only a
+        success in the same scope clears it.
         """
         if response is None:
             return
         verdict = key_status.classify(_parse_binance_error_body(response.text or ""))
         if verdict is not None:
             code, reason, message = verdict
-            key_status.report_blocked(self.api_key, code, reason, message)
+            key_status.report_blocked(self.api_key, code, reason, message, scope=scope)
 
     def _request_get(
         self,
@@ -252,12 +258,12 @@ class BinanceAPI:
             resp = get_session().get(url, headers={"X-MBX-APIKEY": self.api_key}, timeout=self.timeout)
             resp.raise_for_status()
             if account_scoped:
-                key_status.report_ok(self.api_key)
+                key_status.report_ok(self.api_key, scope=key_status.READ)
             return resp.json()
         except requests.RequestException as exc:
             response = getattr(exc, "response", None)
             self._handle_rate_limit(response)
-            self._report_key(response)
+            self._report_key(response, key_status.READ)
             log.error("[Binance] GET %s: %s", path, exc)
             if response is not None and response.text:
                 log.error("[Binance] response: %.500s", response.text)
@@ -274,12 +280,12 @@ class BinanceAPI:
         try:
             resp = get_session().post(f"{self.base_url}{path}", data=body, headers=headers, timeout=self.timeout)
             resp.raise_for_status()
-            key_status.report_ok(self.api_key)
+            key_status.report_ok(self.api_key, scope=key_status.TRADE)
             return resp.json()
         except requests.RequestException as exc:
             response = getattr(exc, "response", None)
             self._handle_rate_limit(response)
-            self._report_key(response)
+            self._report_key(response, key_status.TRADE)
             err_text = ""
             http_status = None
             if response is not None:
@@ -297,6 +303,37 @@ class BinanceAPI:
                 "rate_limited": http_status in (418, 429),
                 "transient": http_status is None or http_status in _TRANSIENT_HTTP,
             }
+
+    # --- credentials ----------------------------------------------------------
+
+    def get_api_restrictions(self) -> Optional[Dict[str, Any]]:
+        """The key's OWN permission flags — `enableFutures`, `ipRestrict`, … —
+        or None when they cannot be read.
+
+        This is the one call that answers "may this key trade?" without placing
+        an order. It needs nothing but the Reading permission, so it answers for
+        exactly the key that cannot trade, and it is what turns the customer's
+        "recheck" button into a real verdict: a balance read proves only that
+        the key reads, and reading is precisely what a Futures-less key can
+        still do.
+
+        Deliberately NOT routed through `_request_get`: it lives on the SPOT
+        host (the flags are an account fact, not a futures one), and a failure
+        here is a diagnostic that came back empty, never a verdict about the
+        futures key — so it reports no key status of its own.
+        """
+        if "testnet" in self.base_url or "demo" in self.base_url:
+            return None  # the testnet has no /sapi, and its keys grant everything
+        query = f"recvWindow=5000&timestamp={int(time.time() * 1000)}"
+        url = f"{SPOT_API_BASE}/sapi/v1/account/apiRestrictions?{query}&signature={_sign(self.secret_key, query)}"
+        try:
+            resp = get_session().get(url, headers={"X-MBX-APIKEY": self.api_key}, timeout=self.timeout)
+            resp.raise_for_status()
+            flags = resp.json()
+            return flags if isinstance(flags, dict) else None
+        except requests.RequestException as exc:
+            log.info("[Binance] key restrictions unavailable: %s", exc)
+            return None
 
     # --- market data ----------------------------------------------------------
 

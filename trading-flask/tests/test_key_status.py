@@ -69,14 +69,79 @@ def test_a_block_is_reported_once_not_once_per_poll():
 
 
 def test_recovery_is_reported_once_and_re_arms_the_block():
+    """The IP case: reads were refused too, so a read succeeding IS the
+    recovery — that is how a user who allow-lists our IP un-flags themselves."""
     with patch.object(key_status.engine_client, "post_json") as post:
-        key_status.report_blocked("key-a", -2015, "IP_OR_PERMISSION", "nope")
+        key_status.report_blocked("key-a", -2015, "IP_OR_PERMISSION", "nope", scope=key_status.READ)
         key_status.report_ok("key-a")
         key_status.report_ok("key-a")           # deduped
-        key_status.report_blocked("key-a", -2015, "IP_OR_PERMISSION", "nope")
+        key_status.report_blocked("key-a", -2015, "IP_OR_PERMISSION", "nope", scope=key_status.READ)
 
     statuses = [call[0][1]["status"] for call in post.call_args_list]
     assert statuses == ["blocked", "ok", "blocked"]
+
+
+def test_a_read_never_clears_a_verdict_an_order_earned():
+    """The read-only key (live, 2026-09-23): Reading enabled, Futures not.
+
+    Balances and positions come back perfectly, every order is refused -2015.
+    While any success cleared any block, the flag was raised by the refused
+    order and erased by the poller ~90s later, so the account read "connected"
+    with a live balance and silently took no trades. The customer had no way to
+    find out, and neither did the pay sheet, the card or the modal.
+    """
+    with patch.object(key_status.engine_client, "post_json") as post:
+        key_status.report_ok("key-a")                                    # balance poll
+        key_status.report_blocked("key-a", -2015, "IP_OR_PERMISSION", "nope")   # refused order
+        for _ in range(5):
+            key_status.report_ok("key-a")                                # the pollers, all day
+
+    statuses = [call[0][1]["status"] for call in post.call_args_list]
+    assert statuses == ["ok", "blocked"]                                 # and it STAYS blocked
+
+
+def test_a_refused_order_on_a_readable_key_names_the_permission():
+    """-2015 covers three faults. A read having succeeded rules out two of
+    them — the IP is allowed and the key exists — so what is left is the
+    futures permission, which is the only one the customer can act on."""
+    with patch.object(key_status.engine_client, "post_json") as post:
+        key_status.report_ok("key-a")
+        key_status.report_blocked("key-a", -2015, "IP_OR_PERMISSION", "nope")
+
+    assert post.call_args_list[-1][0][1]["reason"] == "TRADE_PERMISSION"
+
+    # Without that proof it stays the ambiguous verdict: a key whose reads are
+    # refused too may well be an IP fault, and naming the wrong fix sends the
+    # customer to edit a permission that was never the problem.
+    key_status.reset()
+    with patch.object(key_status.engine_client, "post_json") as post:
+        key_status.report_blocked("key-b", -2015, "IP_OR_PERMISSION", "nope")
+
+    assert post.call_args_list[-1][0][1]["reason"] == "IP_OR_PERMISSION"
+
+
+def test_a_successful_order_clears_everything():
+    """The recovery path for the permission case: the key traded, so whatever
+    was wrong with it is not wrong any more."""
+    with patch.object(key_status.engine_client, "post_json") as post:
+        key_status.report_ok("key-a")
+        key_status.report_blocked("key-a", -2015, "IP_OR_PERMISSION", "nope")
+        key_status.report_ok("key-a", scope=key_status.TRADE)
+
+    statuses = [call[0][1]["status"] for call in post.call_args_list]
+    assert statuses == ["ok", "blocked", "ok"]
+
+
+def test_reads_failing_too_downgrades_the_verdict_back_to_the_ip_reading():
+    """A permission verdict must not outlive its evidence: once reads start
+    being refused as well, the IP or the key is the fault again."""
+    with patch.object(key_status.engine_client, "post_json") as post:
+        key_status.report_ok("key-a")
+        key_status.report_blocked("key-a", -2015, "IP_OR_PERMISSION", "nope")
+        key_status.report_blocked("key-a", -2015, "IP_OR_PERMISSION", "nope", scope=key_status.READ)
+
+    reasons = [call[0][1]["reason"] for call in post.call_args_list if call[0][1]["status"] == "blocked"]
+    assert reasons == ["TRADE_PERMISSION", "IP_OR_PERMISSION"]
 
 
 def test_accounts_are_tracked_independently():

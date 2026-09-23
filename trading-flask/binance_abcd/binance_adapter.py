@@ -207,6 +207,15 @@ class BinanceAdapter:
         except (TypeError, ValueError):
             return None
 
+    def trade_permission(self) -> Optional[bool]:
+        """Binance states it outright: `enableFutures` on the key's own
+        restrictions. A key created with Reading alone reads balances and
+        positions perfectly and is refused -2015 on every order."""
+        flags = self.api.get_api_restrictions()
+        if not isinstance(flags, dict) or "enableFutures" not in flags:
+            return None
+        return bool(flags.get("enableFutures"))
+
     def open_positions_rows(self) -> Optional[list[dict]]:
         positions = self.api.get_positions_v3()
         if positions is None:

@@ -33,6 +33,25 @@ export interface ExchangeCopy {
   deadKeyReasons: string[]
   /** Shown in the blocked-key modal for a dead key. */
   deadKeyExplanation: string
+  /**
+   * `key_error_reason` values that mean the key READS but may not TRADE — the
+   * venue accepts it for balances and positions and refuses every order. It is
+   * the hardest fault to self-diagnose, because nothing about the account looks
+   * broken, so it gets its own wording rather than the IP one.
+   */
+  tradePermissionReasons: string[]
+  /** What the modal says for each fault it can name. */
+  blocked: {
+    ip: BlockedCopy
+    tradePermission: BlockedCopy
+  }
+}
+
+export interface BlockedCopy {
+  /** Leads the modal: what the exchange is doing and why nothing looks wrong. */
+  explanation: string
+  /** Numbered, in the order the site presents them. */
+  steps: string[]
 }
 
 export const EXCHANGE_COPY: Record<ExchangeKind, ExchangeCopy> = {
@@ -63,6 +82,29 @@ export const EXCHANGE_COPY: Record<ExchangeKind, ExchangeCopy> = {
     deadKeyReasons: ['BAD_KEY_FORMAT', 'UNKNOWN_KEY', 'BAD_SIGNATURE'],
     deadKeyExplanation:
       'The key itself is not valid any more — it may have been deleted or regenerated on Binance. Disconnect this account and connect a fresh trade-only key.',
+    tradePermissionReasons: ['TRADE_PERMISSION'],
+    blocked: {
+      ip: {
+        explanation:
+          'Your API key is restricted to specific IP addresses, and ours is not on the list. Binance refuses everything we send with it, which is why the account says connected while the balance sits still.',
+        steps: [
+          'Open Binance → API Management and edit this key.',
+          'Paste the address above under “Restrict access to trusted IPs” and save.',
+          'Check that “Enable Futures” is still ticked — the key must be able to trade, never to withdraw.',
+          'Come back and press “I’ve fixed it — recheck”.',
+        ],
+      },
+      tradePermission: {
+        explanation:
+          'This key works — we can read your balance with it — but Binance does not allow it to trade. Futures was never enabled on the key, so every order is refused while the account looks perfectly connected.',
+        steps: [
+          'Open Binance → API Management and edit this key.',
+          'Paste the address above under “Restrict access to trusted IPs” and save — Binance only allows futures trading on a key that is restricted to trusted IPs.',
+          'Tick “Enable Futures” and save. Leave withdrawals OFF — we never need them.',
+          'Come back and press “I’ve fixed it — recheck”. We ask Binance what the key is allowed to do, so you will know straight away.',
+        ],
+      },
+    },
   },
   bybit: {
     marketName: 'Bybit futures',
@@ -74,6 +116,11 @@ export const EXCHANGE_COPY: Record<ExchangeKind, ExchangeCopy> = {
     secretHint: 'Bybit shows the secret once, at creation.',
     deadKeyReasons: [],
     deadKeyExplanation: '',
+    tradePermissionReasons: [],
+    blocked: {
+      ip: { explanation: '', steps: [] },
+      tradePermission: { explanation: '', steps: [] },
+    },
   },
   mexc: {
     marketName: 'MEXC futures',
@@ -104,10 +151,55 @@ export const EXCHANGE_COPY: Record<ExchangeKind, ExchangeCopy> = {
     deadKeyReasons: ['KEY_EXPIRED', 'NOT_LOGGED_IN', 'BAD_SIGNATURE'],
     deadKeyExplanation:
       'The key itself no longer works — MEXC keys without an IP binding expire after 90 days, and a deleted or regenerated key stops the same way. Disconnect this account and connect a fresh key, bound to our server address so it does not expire.',
+    tradePermissionReasons: [
+      'PERMISSION_READ',
+      'PERMISSION_WRITE',
+      'PERMISSION_TRADE_READ',
+      'PERMISSION_TRADE_WRITE',
+    ],
+    blocked: {
+      ip: {
+        explanation:
+          'Your API key is bound to specific IP addresses, and ours is not one of them. MEXC refuses everything we send with it, which is why the account says connected while the balance sits still.',
+        steps: [
+          'Open MEXC → Account → API Management and edit this key.',
+          'Paste the address above under “Link IP address” and save.',
+          'Check that Futures → Trade is still ticked — the key must be able to trade, never to withdraw.',
+          'Come back and press “I’ve fixed it — recheck”.',
+        ],
+      },
+      tradePermission: {
+        explanation:
+          'MEXC accepts this key but will not let it trade: the Futures permission it needs is not on it. Every order is refused while the account looks perfectly connected.',
+        steps: [
+          'Open MEXC → Account → API Management and edit this key.',
+          'Under Futures, tick Trade and Read. Leave Withdraw and Transfer OFF — we never need them.',
+          'Paste the address above under “Link IP address” and save. A key with no IP bound also expires after 90 days.',
+          'Finish KYC on MEXC if you have not — MEXC only lets verified accounts trade futures through the API.',
+          'Come back and press “I’ve fixed it — recheck”.',
+        ],
+      },
+    },
   },
 }
 
 /** Whether a `key_error_reason` means "replace the key" rather than "fix the IP list". */
 export function isDeadKey(kind: ExchangeKind, reason: string | null | undefined): boolean {
   return Boolean(reason) && EXCHANGE_COPY[kind].deadKeyReasons.includes(reason as string)
+}
+
+/**
+ * Which of the three faults an account is in, from the reason the engine
+ * reported. `ip` is the fallback because it is what an unnamed credential
+ * refusal has always meant, and its instructions (add our address, check the
+ * trading permission) cover the permission case too.
+ */
+export type KeyFault = 'dead' | 'tradePermission' | 'ip'
+
+export function keyFault(kind: ExchangeKind, reason: string | null | undefined): KeyFault {
+  if (isDeadKey(kind, reason)) return 'dead'
+  if (reason && EXCHANGE_COPY[kind].tradePermissionReasons.includes(reason)) {
+    return 'tradePermission'
+  }
+  return 'ip'
 }
