@@ -6,7 +6,6 @@ import Nav from '../components/landing/Nav'
 import Hero from '../components/landing/Hero'
 import Performance from '../components/landing/Performance'
 import Features from '../components/landing/Features'
-import Receipts from '../components/landing/Receipts'
 import HowItWorks from '../components/landing/HowItWorks'
 import Exchanges from '../components/landing/Exchanges'
 import FinalCta from '../components/landing/FinalCta'
@@ -61,7 +60,10 @@ export default function Landing() {
         <Hero />
         <Performance />
         <Features />
-        <Receipts />
+        {/* "We don't talk. We deliver results." (components/landing/Receipts.tsx)
+            is hidden — its per-strategy ROI bars are static prototype numbers, and
+            the only track record the page may publish is the verified one above.
+            The component stays put; render it again to bring it back. */}
         <HowItWorks />
         <Exchanges />
         <FinalCta />

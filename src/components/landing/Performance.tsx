@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useApiData } from '../../hooks/useApiData'
 import { getTrackRecord } from '../../services/publicStats'
-import { displaySymbol } from '../../lib/chart'
 import { fmtMediumDate } from '../../lib/format'
 import {
   CHART_MODES,
@@ -36,9 +35,15 @@ const TAB_OFF =
  * to `LANDING_TRACK_RECORD_SYMBOLS`.
  *
  * Percentages only, by design: the endpoint publishes returns and counts and
- * never a balance, so nothing here can leak the account's size. The scope is
- * labelled from the API's echo of the filter, not from the constant: what the
- * page says it shows is what the numbers were computed from.
+ * never a balance, so nothing here can leak the account's size.
+ *
+ * The record is still narrowed to one pair, but the page no longer NAMES it
+ * (owner's call, 2026-09-23): the pill, the subtitle's "for the … strategy"
+ * and the footnote's "closed … trades" were all dropped. Nothing here may
+ * claim the numbers cover every strategy — they do not — so the copy simply
+ * stays silent on scope. Widening the record is one constant away
+ * (`LANDING_TRACK_RECORD_SYMBOLS`), and the API still echoes the applied
+ * filter in `data.symbols` if the label is ever wanted back.
  */
 export default function Performance() {
   const { data, loading, error } = useApiData(fetchLandingRecord)
@@ -47,8 +52,6 @@ export default function Performance() {
   const stats = data?.stats ?? null
   const series = data?.series ?? []
   const cards = statCards(stats)
-  /** "LTC/USDT" — or null when the record covers every trade. */
-  const scope = data?.symbols.length ? data.symbols.map(displaySymbol).join(', ') : null
 
   const placeholder = loading
     ? 'Loading the verified track record…'
@@ -58,7 +61,7 @@ export default function Performance() {
 
   const footnote =
     stats && series.length > 0
-      ? `Verified from ${stats.trades.toLocaleString('en-US')} closed ${scope ? `${scope} ` : ''}trades over ${stats.trading_days} trading days · ${fmtMediumDate(stats.first_trade_at)} – ${fmtMediumDate(stats.last_trade_at)}`
+      ? `Verified from ${stats.trades.toLocaleString('en-US')} closed trades over ${stats.trading_days} trading days · ${fmtMediumDate(stats.first_trade_at)} – ${fmtMediumDate(stats.last_trade_at)}`
       : null
 
   return (
@@ -70,9 +73,8 @@ export default function Performance() {
       <div className="text-center mb-9">
         <h2 className={SECTION_TITLE}>See every trade, verified</h2>
         <p className={SECTION_SUB}>
-          {scope
-            ? `Full, real-time performance analytics for the ${scope} strategy — the same numbers we're paid on.`
-            : "Full, real-time performance analytics for every strategy — the same numbers we're paid on."}
+          Full, real-time performance analytics — the same numbers we're paid
+          on.
         </p>
       </div>
       {/* Six cards, and every breakpoint divides into six exactly (6 / 3 / 2 / 1)
@@ -98,27 +100,19 @@ export default function Performance() {
         ))}
       </div>
       <div className="bg-surface border border-border rounded-[22px] pt-7 px-[30px] pb-6 shadow-[0_30px_80px_rgba(0,0,0,0.14)] max-[560px]:px-4">
-        <div className="flex items-start justify-between mb-[22px] flex-wrap gap-3">
-          <div className="flex items-center gap-3.5">
-            <div className="w-[42px] h-[42px] rounded-xl bg-accent-soft border border-accent-line flex items-center justify-center text-accent text-xl shrink-0">
-              ↗
+        <div className="flex items-center gap-3.5 mb-[22px]">
+          <div className="w-[42px] h-[42px] rounded-xl bg-accent-soft border border-accent-line flex items-center justify-center text-accent text-xl shrink-0">
+            ↗
+          </div>
+          <div>
+            <div className="font-display text-[22px] font-extrabold">
+              Performance Analytics
             </div>
-            <div>
-              <div className="font-display text-[22px] font-extrabold">
-                Performance Analytics
-              </div>
-              <div className="text-[13px] text-muted mt-0.5">
-                Real-time profit and loss tracking, straight from the master
-                account
-              </div>
+            <div className="text-[13px] text-muted mt-0.5">
+              Real-time profit and loss tracking, straight from the master
+              account
             </div>
           </div>
-          {scope && (
-            <span className="inline-flex items-center gap-2 self-center rounded-pill border border-accent-line bg-accent-soft px-3.5 py-1.5 font-mono text-[11.5px] font-semibold tracking-[0.4px] text-accent">
-              <span className="h-[6px] w-[6px] rounded-full bg-accent" />
-              {scope}
-            </span>
-          )}
         </div>
         <div className="grid grid-cols-3 gap-1 bg-surface2 border border-hair rounded-xl p-[5px] mb-6">
           {CHART_MODES.map((tab) => (
