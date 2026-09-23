@@ -46,6 +46,26 @@ signals channel (**Voltrax Trades**) is NOT a support contact. **No personal
 line beside the desk** (the founder's Telegram was removed 2026-09-18): a
 contact must outlive whoever holds it.
 
+**That mailbox also SENDS and RECEIVES everything the API mails (2026-09-23).**
+Invoices, reminders, password resets, the approval email a customer gets and
+the "someone registered" notice the desk gets — all from
+`support@pixel-alpha.com` (`MAIL_FROM_ADDRESS`), and the notice goes back to
+the same box (`MAIL_ADMIN_ADDRESS`). Never a `noreply@`, and never a personal
+inbox: same rule as the contact page. The mailbox is **Hostinger's**
+(`pixel-alpha.com` MX → `mx1/mx2.hostinger.com`, SPF already includes
+`_spf.mail.hostinger.com`), so sending needs no third party — only that
+mailbox's password in `MAIL_PASSWORD` (`smtp.hostinger.com`:465, `smtps`).
+Two rules: the credentials and the recipient ARE mirrored by `sync-api-env`
+(they are the product's identity), but **`MAIL_MAILER` is not** — the
+transport is per box, `log` locally and `smtp` on prod, so a developer
+testing locally can never switch prod's mail off. Until that key is set,
+`MAIL_MAILER=log` means nothing is delivered anywhere, the reset code
+included; `App\Services\Notifications\AccountMail` therefore treats every send
+as best-effort (the row is the fact, the mail is the telling), and
+`php artisan mail:preview` renders every template to
+`storage/app/mail-previews/` from the real Mailables so a design can be
+reviewed without mailing anyone.
+
 **Pixel Alpha is the ONLY name and the Bangkok office the ONLY address a
 customer ever sees (2026-09-20).** `COMPANY.name` + `OFFICE.addressLines` /
 `OFFICE.country` in `company.ts` feed the Contact page, the legal pages'

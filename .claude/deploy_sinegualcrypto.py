@@ -934,7 +934,10 @@ CACHE_STORE=database
 MAIL_MAILER=log
 MAIL_HOST=127.0.0.1
 MAIL_PORT=2525
-MAIL_FROM_ADDRESS="noreply@pixel-alpha.com"
+# Everything a customer receives comes from the support mailbox — invoices,
+# reminders, approvals — so a reply lands somewhere a human reads. Never a
+# no-reply address (decided 2026-09-23).
+MAIL_FROM_ADDRESS="support@pixel-alpha.com"
 MAIL_FROM_NAME="${{APP_NAME}}"
 # The site emails link back into (the dashboard, the approval queue).
 MAIL_SITE_URL={app_url}
