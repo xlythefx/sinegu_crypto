@@ -592,14 +592,8 @@ export default function PerformanceChartCard({
             <span className="text-[10.5px] font-extrabold tracking-[0.5px] text-faint uppercase">
               Whole Balance
             </span>
-            <div className="font-mono text-[30px] font-extrabold tracking-[-0.6px] mt-1.5 mb-1">
+            <div className="font-mono text-[30px] font-extrabold tracking-[-0.6px] mt-1.5">
               {fmtMoney(range.wholeBalance)}
-            </div>
-            <div className="text-[11px] text-muted font-semibold">
-              Baseline + realized P&L
-            </div>
-            <div className="text-[11px] text-muted font-semibold">
-              {fmtMediumDate(fromDate)} — {fmtMediumDate(toDate)}
             </div>
           </div>
 
@@ -609,18 +603,21 @@ export default function PerformanceChartCard({
                 Total Realized Gains
               </span>
               <div
-                className={`font-mono text-[24px] font-extrabold tracking-[-0.6px] mt-1.5 mb-1 ${range.realized < 0 ? 'text-red' : 'text-green'}`}
+                className={`font-mono text-[24px] font-extrabold tracking-[-0.6px] mt-1.5 ${range.realized < 0 ? 'text-red' : 'text-green'}`}
               >
+                {/* hoverOnly: the breakdown still opens on hover, but without
+                    the dotted underline the figure carried — the card is meant
+                    to read as three clean numbers. */}
                 <PnlBreakdown
                   gross={range.realized}
                   net={range.realizedNet}
                   feesSince={feesSince}
                   heading={`${fmtMediumDate(fromDate)} — ${fmtMediumDate(toDate)}`}
+                  hoverOnly
                 >
                   {fmtSignedMoney(range.realized)}
                 </PnlBreakdown>
               </div>
-              <div className="text-[11px] text-muted font-semibold">Before fees</div>
             </div>
             <div className="border border-hair bg-surface2 rounded-rail py-4 px-[18px]">
               <span className="text-[10.5px] font-extrabold tracking-[0.5px] text-faint uppercase">
@@ -636,9 +633,8 @@ export default function PerformanceChartCard({
               >
                 {range.pct === null ? '—' : fmtSignedPct(range.pct, 2)}
               </div>
-              <div className="text-[11px] text-muted font-semibold">
-                Compounded daily · before fees
-              </div>
+              {/* The one line kept on this card: it is the answer to "why did
+                  my percentage drop when I funded the account". */}
               <div className="text-[11px] text-muted font-semibold">
                 {range.unmeasured > 0
                   ? `${range.measured} of ${range.measured + range.unmeasured} trading days measured`
