@@ -7,6 +7,7 @@ import Nav from '../components/landing/Nav'
 import Footer from '../components/landing/Footer'
 import LegalDocument from '../components/legal/LegalDocument'
 import { TRADING_BOT } from '../lib/tradingBot'
+import { REGISTER_PATH } from '../lib/routes'
 
 export default function TradingBot() {
   useEffect(() => {
@@ -51,10 +52,10 @@ export default function TradingBot() {
                 <ChevronRight size={15} />
               </Link>
               <Link
-                to="/auth"
+                to={REGISTER_PATH}
                 className="inline-flex items-center gap-2 rounded-pill bg-accent px-5 py-3 text-[14px] font-bold text-white transition-transform hover:-translate-y-px"
               >
-                Start free
+                Register
               </Link>
             </div>
           </div>

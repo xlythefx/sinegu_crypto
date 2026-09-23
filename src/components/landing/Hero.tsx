@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useSessionUser } from '../../hooks/useSessionUser'
 import { SECTION_IDS, scrollToSection } from '../../lib/scroll'
+import { REGISTER_PATH } from '../../lib/routes'
 
 const CONTAINER = 'max-w-[1280px] mx-auto px-10 max-[560px]:px-5'
 
@@ -132,9 +133,9 @@ export default function Hero() {
         <div className="flex gap-3.5 items-center mb-7 flex-wrap">
           <button
             className="text-base font-bold bg-accent text-white border-none py-[15px] px-7 rounded-pill cursor-pointer shadow-[0_10px_26px_var(--glow)]"
-            onClick={() => navigate(user ? '/dashboard' : '/auth')}
+            onClick={() => navigate(user ? '/dashboard' : REGISTER_PATH)}
           >
-            {user ? 'Go to your account →' : 'Start free →'}
+            {user ? 'Go to your account →' : 'Register →'}
           </button>
           <button
             className="text-base font-bold bg-surface text-text border border-border py-[15px] px-[26px] rounded-pill cursor-pointer"

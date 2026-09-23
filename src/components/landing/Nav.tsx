@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useTheme } from '../../theme'
 import { useSessionUser } from '../../hooks/useSessionUser'
 import UserAvatar from '../ui/UserAvatar'
+import { REGISTER_PATH } from '../../lib/routes'
 
 const CONTAINER = 'max-w-[1280px] mx-auto px-10 max-[560px]:px-5'
 
@@ -68,9 +69,9 @@ export default function Nav() {
             </Link>
             <button
               className="font-body text-sm bg-accent text-white border-none py-[11px] px-5 rounded-pill font-bold cursor-pointer"
-              onClick={() => navigate('/auth')}
+              onClick={() => navigate(REGISTER_PATH)}
             >
-              Start free
+              Register
             </button>
           </>
         )}

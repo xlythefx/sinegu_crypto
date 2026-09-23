@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useTheme } from '../../theme'
 import { useSessionUser } from '../../hooks/useSessionUser'
 import UserAvatar from '../ui/UserAvatar'
+import { REGISTER_PATH } from '../../lib/routes'
 
 const LINKS = [
   { label: 'Performance', href: '#performance' },
@@ -86,9 +87,9 @@ export default function NavV2() {
                 </Link>
                 <button
                   className="font-body text-sm bg-accent text-on-accent py-[10px] px-5 rounded-pill font-bold cursor-pointer shadow-[0_8px_24px_-8px_var(--glow)] hover:-translate-y-px transition-transform"
-                  onClick={() => navigate('/auth')}
+                  onClick={() => navigate(REGISTER_PATH)}
                 >
-                  Start free
+                  Register
                 </button>
               </>
             )}

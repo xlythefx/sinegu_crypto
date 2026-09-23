@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { ArrowUpRight } from 'lucide-react'
+import { REGISTER_PATH } from '../../lib/routes'
 
 export default function FinalCtaV2() {
   const navigate = useNavigate()
@@ -43,10 +44,10 @@ export default function FinalCtaV2() {
 
             <div className="mt-9 flex flex-wrap items-center justify-center gap-3.5">
               <button
-                onClick={() => navigate('/auth')}
+                onClick={() => navigate(REGISTER_PATH)}
                 className="group inline-flex items-center gap-2 rounded-pill bg-accent px-8 py-4 text-[16px] font-bold text-on-accent shadow-[0_16px_40px_-12px_var(--glow)] transition-transform hover:-translate-y-0.5"
               >
-                Start free
+                Register
                 <ArrowUpRight
                   size={19}
                   className="transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"

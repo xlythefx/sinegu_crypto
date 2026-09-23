@@ -37,7 +37,7 @@ export default function Auth() {
 
 function AuthForm() {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   // Referral code from an invite link (/auth?ref=CODE) — invalid codes are
   // silently ignored server-side, so no client validation is needed. A code
   // that arrived on an earlier visit is recalled, so "Continue with Discord"
@@ -45,7 +45,16 @@ function AuthForm() {
   const refCode = normaliseReferralCode(searchParams.get('ref')) ?? recallReferralCode()
   useEffect(() => rememberReferralCode(refCode), [refCode])
 
-  const [mode, setMode] = useState<Mode>(refCode ? 'register' : 'signin')
+  /*
+   * Which form opens. Every "Register" CTA links to `/auth?mode=register`
+   * (lib/routes.ts) — without it they all landed on Sign in, so someone who
+   * had just been invited to create an account had to find the switch at the
+   * bottom of the panel first. An invite link (`?ref=`) means the same thing
+   * and keeps working on its own.
+   */
+  const [mode, setMode] = useState<Mode>(
+    searchParams.get('mode') === 'register' || refCode ? 'register' : 'signin',
+  )
   const [glow, setGlow] = useState({ x: -120, y: -120, on: false })
 
   const [name, setName] = useState('')
@@ -65,8 +74,16 @@ function AuthForm() {
   const isRegister = mode === 'register'
 
   const switchMode = () => {
-    setMode(isRegister ? 'signin' : 'register')
+    const next: Mode = isRegister ? 'signin' : 'register'
+    setMode(next)
     setError(null)
+    // Keep the URL saying which form is open, so a refresh (or a link someone
+    // copies mid-signup) comes back to the same one. `replace` so flipping
+    // between the two does not fill the back button with dead steps; any
+    // ?ref= already on the URL is preserved.
+    const params = new URLSearchParams(searchParams)
+    params.set('mode', next)
+    setSearchParams(params, { replace: true })
   }
 
   const copy = {

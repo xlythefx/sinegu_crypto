@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { ArrowUpRight, ShieldCheck, Sparkles, TrendingUp } from 'lucide-react'
+import { REGISTER_PATH } from '../../lib/routes'
 
 /** Floating crypto chips — CSS `float` keyframe (defined in index.css). */
 const COINS = [
@@ -81,10 +82,10 @@ export default function HeroV2() {
             className="mt-8 flex flex-wrap items-center gap-3.5"
           >
             <button
-              onClick={() => navigate('/auth')}
+              onClick={() => navigate(REGISTER_PATH)}
               className="group inline-flex items-center gap-2 rounded-pill bg-accent px-6 py-3.5 text-[15px] font-bold text-on-accent shadow-[0_12px_30px_-10px_var(--glow)] transition-transform hover:-translate-y-0.5"
             >
-              Start free
+              Register
               <ArrowUpRight
                 size={18}
                 className="transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"

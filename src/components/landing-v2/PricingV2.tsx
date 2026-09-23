@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { Check, ArrowRight } from 'lucide-react'
+import { REGISTER_PATH } from '../../lib/routes'
 
 const INCLUDED = [
   'All automated strategies',
@@ -64,10 +65,10 @@ export default function PricingV2() {
               </p>
 
               <button
-                onClick={() => navigate('/auth')}
+                onClick={() => navigate(REGISTER_PATH)}
                 className="group mt-8 inline-flex items-center gap-2 rounded-pill bg-accent px-7 py-3.5 text-[15px] font-bold text-on-accent shadow-[0_12px_30px_-10px_var(--glow)] transition-transform hover:-translate-y-0.5"
               >
-                Start free
+                Register
                 <ArrowRight
                   size={18}
                   className="transition-transform group-hover:translate-x-0.5"
