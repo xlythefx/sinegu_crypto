@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any, Optional
 
 from dotenv import load_dotenv
 
@@ -256,6 +257,42 @@ REPORT_MONTHLY_AT = _env_str("REPORT_MONTHLY_AT", "last 11:30")
 # recap arriving on Thursday is worse than no recap.
 REPORT_CATCHUP_HOURS = _env_float("REPORT_CATCHUP_HOURS", 12.0)
 REPORT_TICK_SECONDS = _env_float("REPORT_TICK_SECONDS", 30.0)
+
+# --- Taker commission (for the PUBLISHED close percentage only) ---------------
+# The engine reads Binance/MEXC `realizedPnl`, which is GROSS — before
+# commission. The DB stores it NET (the API's App\Services\Pnl\TradingFee nets
+# it on ingest), so until 2026-09-23 the channel published a bigger percentage
+# than every screen we own, and the daily recap could never add up to the
+# closes it was made of. The close message now nets the same way.
+#
+# These rates MUST match `services.{exchange}.taker_fee_rate` in
+# sinegutrade-api's config, and the estimate MUST match TradingFee::estimate —
+# quantity x exit price x rate x 2 (entry leg + exit leg, both taker, because
+# the engine only ever places MARKET orders). What is published is therefore
+# the same figure the row will hold, give or take the later fee-receipt rebase.
+TAKER_FEE_RATES = {"binance": 0.0005, "mexc": 0.0002}
+DEFAULT_TAKER_FEE_RATE = 0.0005
+
+
+def taker_fee_rate(exchange: Optional[str] = None) -> float:
+    return TAKER_FEE_RATES.get((exchange or "").lower(), DEFAULT_TAKER_FEE_RATE)
+
+
+def estimate_round_trip_fee(
+    quantity: Any, exit_price: Any, exchange: Optional[str] = None
+) -> Optional[float]:
+    """Round-trip taker commission for one close, or None when it cannot be
+    computed. None is NOT zero: with no exit price the fill is not indexed yet,
+    and the published percentage stays gross rather than pretending the trade
+    was free. Mirrors TradingFee::estimate on the API side."""
+    try:
+        notional = abs(float(quantity)) * abs(float(exit_price))
+    except (TypeError, ValueError):
+        return None
+    if notional <= 0:
+        return None
+    return notional * taker_fee_rate(exchange) * 2
+
 
 # --- Local output -------------------------------------------------------------
 OUT_DIR = PROJECT_ROOT / "out"

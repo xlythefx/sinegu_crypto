@@ -398,6 +398,9 @@ def _deferred_close_bookkeeping(
             balance=account.get("balance"),
             increments=increments_closed,
             max_increments=max_increments,
+            # Picks the taker rate the published percentage is netted at; the
+            # row posted above still carries the venue's GROSS figure.
+            exchange=exchange_of(account),
         )
 
 

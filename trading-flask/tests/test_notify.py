@@ -139,16 +139,17 @@ def test_exit_flushes_once_every_account_reports(sent):
     notify.seal_exit_batch(batch_id, expected=2)
     assert sent == []  # nothing sent while PnL is still pending
 
-    notify.report_exit_fill(batch_id, realized_pnl=30.0, exit_price=110100, quantity=2, balance=1030.0)
+    notify.report_exit_fill(batch_id, realized_pnl=30.0, exit_price=110100, quantity=0.02, balance=1030.0)
     assert sent == []
-    notify.report_exit_fill(batch_id, realized_pnl=10.0, exit_price=110200, quantity=1, balance=510.0)
+    notify.report_exit_fill(batch_id, realized_pnl=10.0, exit_price=110200, quantity=0.01, balance=510.0)
 
     text = sent[0][0]
     assert "Closing Long Positions — BTCUSDT" in text
-    # qty-weighted: (110100*2 + 110200*1) / 3
+    # qty-weighted: (110100*0.02 + 110200*0.01) / 0.03
     assert "Exit Price: 110,133.33" in text
-    # 40 profit on (1030-30)+(510-10) = 1500 pre-trade capital
-    assert "PnL: +2.667%" in text
+    # AFTER the round-trip taker fee: 30 - 2.202 and 10 - 1.102 = 36.696 net,
+    # over (1030-27.798)+(510-8.898) = 1503.304 of pre-trade capital.
+    assert "PnL: +2.441%" in text
     assert "Realized" not in text  # percentage only — no USDT amount
     assert "Accounts" not in text  # counts are not public on exits either
     assert batch_id not in notify._batches
@@ -192,11 +193,48 @@ def test_exit_reports_arriving_before_the_seal_still_flush(sent):
     """The fan-out submits bookkeeping per account, so a fast close can report
     before the job has finished aggregating and sealed the batch."""
     batch_id = notify.open_exit_batch("EXIT_SHORT", "ETHUSDT")
-    notify.report_exit_fill(batch_id, realized_pnl=-5.0, exit_price=3000, quantity=1, balance=995.0)
+    notify.report_exit_fill(batch_id, realized_pnl=-5.0, exit_price=3000, quantity=0.1, balance=995.0)
     assert sent == []
     notify.seal_exit_batch(batch_id, expected=1)
     assert "Closing Short Positions — ETHUSDT" in sent[0][0]
-    assert "PnL: -0.500%" in sent[0][0]
+    # -5 gross, -0.3 fee: -5.3 over 1000.3
+    assert "PnL: -0.530%" in sent[0][0]
+
+
+def test_exit_pnl_is_published_after_exchange_fees(sent):
+    """The venue reports GROSS; every screen we own is after fees, and the
+    daily recap has to add up to the closes it is built from. So the channel
+    nets the round-trip taker commission at the same rate the API's
+    TradingFee::estimate uses — 0.05%/side on Binance."""
+    batch_id = notify.open_exit_batch("EXIT_LONG", "LTCUSDT", price=61)
+    notify.seal_exit_batch(batch_id, expected=1)
+    # 100 units at 61 = 6,100 notional -> 6.10 round trip on a 100 gross profit.
+    notify.report_exit_fill(batch_id, realized_pnl=100.0, exit_price=61.0,
+                            quantity=100, balance=10_000.0, exchange="binance")
+    # 93.90 net over 10,000 - 93.90; gross would have published +1.010%.
+    assert "PnL: +0.948%" in sent[0][0]
+
+
+def test_exit_pnl_stays_gross_when_the_fee_cannot_be_computed(sent):
+    """No exit price means the fill is not indexed yet — an UNKNOWN fee, not a
+    free trade. The percentage stays gross rather than being reduced by a zero
+    nobody measured (the same null-is-not-zero rule the API's ingest follows)."""
+    batch_id = notify.open_exit_batch("EXIT_LONG", "LTCUSDT", price=61)
+    notify.seal_exit_batch(batch_id, expected=1)
+    notify.report_exit_fill(batch_id, realized_pnl=100.0, exit_price=None,
+                            quantity=100, balance=10_000.0, exchange="binance")
+    assert "PnL: +1.010%" in sent[0][0]
+
+
+def test_mexc_nets_at_its_own_taker_rate(sent):
+    """0.02%/side on MEXC against Binance's 0.05% — the rate is per venue, the
+    same split `services.{exchange}.taker_fee_rate` carries on the API."""
+    batch_id = notify.open_exit_batch("EXIT_LONG", "LTC_USDT", price=61)
+    notify.seal_exit_batch(batch_id, expected=1)
+    notify.report_exit_fill(batch_id, realized_pnl=100.0, exit_price=61.0,
+                            quantity=100, balance=10_000.0, exchange="mexc")
+    # 2.44 of fee, not 6.10: 97.56 net over 9,902.44
+    assert "PnL: +0.985%" in sent[0][0]
 
 
 def test_exit_with_nothing_closed_sends_nothing(sent):
@@ -345,12 +383,12 @@ def test_discord_alone_is_a_public_destination(mirrored, monkeypatch):
     batch_id = notify.open_exit_batch("EXIT_LONG", "BTCUSDT", price=110000)
     assert batch_id is not None
     notify.seal_exit_batch(batch_id, expected=1)
-    notify.report_exit_fill(batch_id, realized_pnl=30.0, exit_price=110100, quantity=1, balance=1030.0)
+    notify.report_exit_fill(batch_id, realized_pnl=30.0, exit_price=110100, quantity=0.02, balance=1030.0)
 
     assert telegram == []
     (text, color) = mirrored[0]
     assert "Closing Long Positions — BTCUSDT" in text
-    assert "PnL: +3.000%" in text
+    assert "PnL: +2.774%" in text  # 27.798 net over 1002.202
     assert color == discord_notify.GREEN
 
 
@@ -366,14 +404,17 @@ def test_entry_colour_follows_the_side(mirrored):
 
 
 def test_exit_colour_follows_the_sign_of_the_printed_pnl(sent, mirrored):
-    def close(pnl, balance):
+    def close(pnl, balance, *, exit_price=100, quantity=1):
         batch_id = notify.open_exit_batch("EXIT_LONG", "BTCUSDT", price=100)
         notify.seal_exit_batch(batch_id, expected=1)
-        notify.report_exit_fill(batch_id, realized_pnl=pnl, exit_price=100, quantity=1, balance=balance)
+        notify.report_exit_fill(batch_id, realized_pnl=pnl, exit_price=exit_price,
+                                quantity=quantity, balance=balance)
 
-    close(10.0, 1010.0)      # +1.000%
-    close(-5.0, 995.0)       # -0.500%
-    close(-0.000001, 1000.0)  # prints "+0.000%" — not a red card
+    close(10.0, 1010.0)      # +0.990% after the 0.1 round-trip fee
+    close(-5.0, 995.0)       # -0.510%
+    # A dust loss on a dust notional, so the fee cannot drag it off zero: still
+    # prints "+0.000%" — the case that proves a flat close is not a red card.
+    close(-0.000001, 1000.0, exit_price=0.01, quantity=0.01)
     assert "+0.000%" in sent[2][0]
     assert [c for _, c in mirrored] == [discord_notify.GREEN, discord_notify.RED, discord_notify.GREEN]
 

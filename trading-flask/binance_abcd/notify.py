@@ -337,12 +337,20 @@ def report_exit_fill(
     balance: Any = None,
     increments: Any = None,
     max_increments: Any = None,
+    exchange: Any = None,
 ) -> None:
     """One closed account reporting in. Flushes as soon as the batch is sealed
     and every expected account has reported.
 
     `increments` is how many of THIS account's entry-sized units the closed
     position was worth — the exit-side mirror of the entry's stack depth.
+
+    `realized_pnl` is what the VENUE reported, i.e. GROSS. The commission is
+    estimated here (`exchange` picks the taker rate) and carried beside it, so
+    the published percentage is after fees — the basis every screen and the
+    daily recap use. The figure posted to `past-positions/sync` is untouched:
+    the API owns netting on ingest, and sending an already-netted P&L would
+    net it twice.
     """
     if not batch_id:
         return
@@ -352,6 +360,7 @@ def report_exit_fill(
             return
         batch.reports.append({
             "pnl": realized_pnl,
+            "fee": hooks.estimate_round_trip_fee(quantity, exit_price, exchange),
             "exit_price": exit_price,
             "quantity": quantity,
             "balance": balance,
@@ -426,12 +435,21 @@ def _weighted(reports: list[dict], key: str) -> Optional[float]:
 
 
 def _pnl_percent(reports: list[dict]) -> Optional[float]:
-    """Realized PnL as a percent of the balance it was sized against.
+    """Realized PnL AFTER exchange commission, as a percent of the balance it
+    was sized against.
 
-    The denominator is `balance - pnl` per account — the balance BEFORE this
+    The denominator is `balance - net` per account — the balance BEFORE this
     close landed — summed across every account whose balance is known. Returns
     None when no account reported a PnL (or no balance to divide by): the
     channel publishes percentages only, never USDT amounts.
+
+    **After fees since 2026-09-23.** The venue reports gross; every screen we
+    own and the daily recap are after fees, so publishing gross here made the
+    channel the one surface claiming a bigger profit than the customer
+    received, and made the daily recap unable to add up to the closes it was
+    built from. An UNKNOWN fee (no exit price yet — see
+    `hooks.estimate_round_trip_fee`) leaves that account's figure gross rather
+    than treating the trade as free.
     """
     total = 0.0
     saw_pnl = False
@@ -441,6 +459,10 @@ def _pnl_percent(reports: list[dict]) -> Optional[float]:
             pnl = float(report["pnl"])
         except (TypeError, ValueError, KeyError):
             continue
+        try:
+            pnl -= float(report["fee"])
+        except (TypeError, ValueError, KeyError):
+            pass
         total += pnl
         saw_pnl = True
         try:

@@ -749,7 +749,18 @@ for the overlay's `position: fixed` and trap it inside.
   and a chat id are set; `tests/conftest.py` forces it off so the suite never posts.
   **The public channel publishes no account counts** — an entry is
   side + ticker, `Increment (2/3)`, and the executed price; an exit is
-  side + ticker, price, and the PnL percent. How many customers filled is
+  side + ticker, price, and the PnL percent.
+  **That exit percentage is AFTER exchange fees (2026-09-23).** The venue
+  reports `realizedPnl` GROSS, so until then the channel was the one surface
+  claiming a bigger profit than the customer received, and the daily recap
+  could never add up to the closes it was built from. `notify.report_exit_fill`
+  now carries an estimated round-trip commission beside the P&L
+  (`hooks.estimate_round_trip_fee`, mirroring `TradingFee::estimate` — quantity
+  × exit price × the venue's taker rate × 2, `TAKER_FEE_RATES`), and
+  `_pnl_percent` nets it. **The figure posted to `past-positions/sync` is
+  still GROSS** — the API owns netting on ingest, and sending a netted P&L
+  would net it twice. An unknown fee (no exit price yet) leaves that account's
+  figure gross rather than treating the trade as free. How many customers filled is
   business information and the channel is readable by anyone (same rule as
   `/api/public/*`). Counts live in `trade_logs` and, where a human is needed,
   the admin chat: `notify_max_increments` lists the accounts already at their
@@ -855,23 +866,27 @@ for the overlay's `position: fixed` and trap it inside.
     state file counts for every venue. MEXC recaps start the day
     `BINANCE_ABCD_EXCHANGES` includes `mexc` on prod AND the master has a
     `mexc_accounts` row.
-  - **"Trades closed" counts CLOSE ORDERS (rows), not increments** — decided
-    2026-09-20, reversing three days of the opposite. From 09-17 the recap
-    summed `increments_closed`, so a 2-increment stack closed in one order
-    posted "Trades closed: 2" for the 19 Sep day; the owner counts a close as
-    one trade and held up the reference bot's recap (`binance-flask`
-    `performance_report.py`: `len(rows)`) as correct. `PublicStatsController`
-    now counts one per row for every `trades` figure (series, assets,
-    `stats.trades`). The `increments_closed` column is still written by the
-    close path (`past-positions/sync`) and still prints as `Increments Closed
-    (n/cap)` on the close message — it is information about the close, not a
-    multiplier on the count. NULL = not recorded and is never backfilled from
-    `position_amt`. **The two products' daily windows are the SAME day**:
-    binance-flask anchors at 23:00 Bangkok = 16:00 UTC = 00:00 Manila, which
-    is exactly the Manila calendar day this series buckets on — a "timezone"
-    complaint about the recap is almost certainly this count rule or the
-    percent basis (ours: net P&L over the walked capital; theirs: gross P&L
-    over `balance − period_pnl`, on a differently-sized master account).
+  - **"Trades closed" counts INCREMENTS, not close orders** — settled
+    2026-09-23, and **this rule has now been flipped twice; read the whole
+    bullet before touching it a third time.** Binance merges a stacked
+    position, so two entries announced as `Increment (1/3)` and `(2/3)` come
+    back as ONE `pastpositions` row carrying `increments_closed = 2`.
+    09-17 counted increments; 09-20 switched to rows, because the owner had
+    held up the reference bot's recap (`binance-flask`
+    `performance_report.py`: `len(rows)`) as correct for the 19 Sep day; 09-23
+    switched back, because on 22 Sep the channel announced two entries and the
+    recap then said "1 trade". The settled reading: **the count is what was
+    OPENED, so it matches `Increments Closed (n/cap)` on the close message.**
+    `PublicStatsController` sums `COALESCE(increments_closed, 1)` for every
+    `trades` figure (series, assets, `stats.trades`). NULL = not recorded
+    (history, poller rows) and is never backfilled from `position_amt`: the
+    divisor was that account's scaled entry size at close time and is not
+    recoverable later. **A consequence to state when comparing with Nexa:**
+    binance-flask counts rows, so for a stacked day its recap reads lower than
+    ours by design — that is the count rule, NOT a timezone difference. The
+    two products' daily windows are the SAME day (binance-flask anchors at
+    23:00 Bangkok = 16:00 UTC = 00:00 Manila, exactly the Manila calendar day
+    this series buckets on).
   - **A failed fetch is not "no trades"** — `None` leaves the period unmarked
     and the next tick retries it, the same empty-vs-unavailable rule the pollers
     follow. `available: false` is an answer and is marked done.
@@ -1336,6 +1351,24 @@ page publishing **−980%** against a real +46.6%):
   connected has none: the live master had exactly zero. Starting the walk at
   zero divided day one's P&L by the pennies of profit that preceded it, which
   is where −1220% for a −0.73 day came from.
+- **A GROSS row's commission is charged to the CAPITAL, never to its P&L**
+  (2026-09-23). Pre-cutoff rows (`exchange_fee IS NULL`) keep gross
+  `realized_pnl` by the 09-11 decision, but the exchange did take that
+  commission — so a walk that compounds those figures accumulates money the
+  account never had. On the live master it stood **1,103 above the balance
+  Binance reports** (13,559 walked against 12,456), which made every published
+  daily ~9% too small and impossible to reconcile with the close the channel
+  had announced for the same trade (1.427% against 1.689% on 22 Sep).
+  `compute()` now estimates the fee per gross row exactly as
+  `TradingFee::estimate` does, at that row's own venue rate, and subtracts it
+  from `$capital` only. Restated 2026-09-23: every daily/monthly percentage
+  rose ~9% (22 Sep 1.427 → 1.567, the compounded total 14.13 → 17.06).
+  **`roc` and `return_on_capital_pct` did NOT move** — they divide by
+  `capitalContributed`, which is deposits alone — so the landing page's
+  cumulative curve and its Return on Capital card are untouched. The residual
+  against a close message is the ~0.02–0.05pp of POOLING: the channel's
+  percentage blends every filled account's balance, the track record is the
+  master's alone.
 - **The total is the daily returns CHAINED, not summed** — a time-weighted
   return, which is the growth a customer can check against a balance.
   Deposits still cannot inflate it, because each day's return is already
