@@ -127,6 +127,51 @@ export const ADMIN_TODOS: AdminTodo[] = [
     envKeys: ['TRON_PUBLIC', 'PAYMENTS_DEFAULT_PROVIDER'],
   },
 
+  // ── Account emails (2026-09-23) ──────────────────────────────────────────
+  {
+    id: 'mail-sender',
+    feature: 'Account emails',
+    kind: 'action',
+    title: 'Configure a real mail sender — nothing is delivered until you do',
+    added: '2026-09-23',
+    why: 'MAIL_MAILER is `log` on prod, so every email the API produces is written to storage/logs and never sent — the password reset code included. The registration notice and the approval email are built and wired; they stay in the log file until a transport exists.',
+    steps: [
+      'Pick the sender. Fastest: a Gmail account with 2FA on → Google Account → Security → App passwords → generate one for "Mail" (MAIL_HOST=smtp.gmail.com, MAIL_PORT=587, MAIL_SCHEME=tls, MAIL_USERNAME = that address, MAIL_PASSWORD = the 16-character app password). Better for deliverability: Resend or Postmark with pixel-alpha.com verified (SPF + DKIM), which stops approval emails landing in spam.',
+      'Put MAIL_HOST / MAIL_PORT / MAIL_SCHEME / MAIL_USERNAME / MAIL_PASSWORD / MAIL_FROM_ADDRESS in the LOCAL sinegutrade-api/.env, then run: python .claude/deploy_sinegualcrypto.py sync-api-env (it mirrors them and re-runs config:cache — without that a new key stays invisible to every request).',
+      'On the server only, set MAIL_MAILER=smtp in /var/www/sinegualerts/api/.env and re-run php artisan config:cache. The transport is deliberately never mirrored, so a developer testing locally with `log` cannot switch prod off.',
+      'Verify end to end: register a throwaway account and check the notice arrives, then approve it from Admin → Users and check the approval email arrives. Preview the designs any time without sending: php artisan mail:preview.',
+      'If a real sender is not wanted yet, keep MAIL_MAILER=log — everything still works, the messages just sit in storage/logs/laravel.log.',
+    ],
+    envKeys: [
+      'MAIL_MAILER',
+      'MAIL_HOST',
+      'MAIL_PORT',
+      'MAIL_SCHEME',
+      'MAIL_USERNAME',
+      'MAIL_PASSWORD',
+      'MAIL_FROM_ADDRESS',
+      'MAIL_ADMIN_ADDRESS',
+    ],
+    links: [
+      { label: 'Google app passwords', href: 'https://myaccount.google.com/apppasswords' },
+      { label: 'Resend', href: 'https://resend.com' },
+    ],
+  },
+  {
+    id: 'mail-admin-address',
+    feature: 'Account emails',
+    kind: 'decision',
+    title: 'Which inbox works the approval queue',
+    added: '2026-09-23',
+    why: 'Every "someone registered and is waiting" notice goes to exactly one address (MAIL_ADMIN_ADDRESS). A personal inbox works today; it becomes a single point of failure the moment more than one person approves users, and an address nobody reads means registrations sit pending.',
+    steps: [
+      'Today it is set to the owner\'s personal address (set in .env, deliberately never committed — both repos are public).',
+      'Decide whether it should move to a shared desk (e.g. the support mailbox, or an alias that fans out) before sign-ups pick up.',
+      'Changing it is one env key plus sync-api-env — no code, no deploy of the app itself.',
+    ],
+    envKeys: ['MAIL_ADMIN_ADDRESS'],
+  },
+
   // ── MEXC (live on prod since 2026-09-17) ─────────────────────────────────
   {
     id: 'mexc-verify-funding-sign',

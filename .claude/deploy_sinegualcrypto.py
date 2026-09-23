@@ -926,11 +926,18 @@ FILESYSTEM_DISK=local
 QUEUE_CONNECTION=database
 CACHE_STORE=database
 
+# `log` writes the message to storage/logs instead of sending it — nothing is
+# delivered until a real sender exists (Admin -> To be Done, "mail-sender").
+# The host/port/credentials come from sync-api-env; this is the one mail key
+# that is set ON THE BOX, because the transport is what differs between a dev
+# machine and prod.
 MAIL_MAILER=log
 MAIL_HOST=127.0.0.1
 MAIL_PORT=2525
 MAIL_FROM_ADDRESS="noreply@pixel-alpha.com"
 MAIL_FROM_NAME="${{APP_NAME}}"
+# The site emails link back into (the dashboard, the approval queue).
+MAIL_SITE_URL={app_url}
 """
 
 
@@ -1454,6 +1461,25 @@ MIRRORED_API_ENV_KEYS = (
     "DISCORD_GUILD_ID",
     "DISCORD_ROLE_MEMBER_ID",
     "DISCORD_ROLE_TRADER_ID",
+    # The outgoing mail account and the desk that works the approval queue.
+    # Same category as the wallets: they say WHO SENDS and WHO IS TOLD, which
+    # is the product's identity, not the box's — prod differing from local is
+    # always a mistake (and the mistake is silent: nobody is told a customer is
+    # waiting).
+    #
+    # Deliberately NOT mirrored:
+    #   MAIL_MAILER — the TRANSPORT is per box. Local is `log` (write the mail
+    #     to the log rather than send it), prod is `smtp`; mirroring it would
+    #     mean a developer testing locally silently switches prod off.
+    #   MAIL_SITE_URL — the links' base. Local points at localhost:5173.
+    "MAIL_HOST",
+    "MAIL_PORT",
+    "MAIL_SCHEME",
+    "MAIL_USERNAME",
+    "MAIL_PASSWORD",
+    "MAIL_FROM_ADDRESS",
+    "MAIL_FROM_NAME",
+    "MAIL_ADMIN_ADDRESS",
 )
 
 # Written with PROD values, never mirrored — these describe the BOX. Locally
@@ -1469,6 +1495,10 @@ PROD_PAYMENT_ENV = {
     "PAYMENTS_FRONTEND_URL": f"https://{DOMAIN}",
     "PAYMENTS_API_URL": f"https://{DOMAIN}/api",
     "PAYMENTS_LIVE_HOSTS": f"{DOMAIN},{DOMAIN_WWW},{HOST}",
+    # Where an email's buttons point. Same reason as the payment URLs: local
+    # resolves it to localhost:5173, and an approval mail linking there is a
+    # dead end in the customer's inbox.
+    "MAIL_SITE_URL": f"https://{DOMAIN}",
 }
 
 
