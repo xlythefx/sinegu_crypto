@@ -1322,6 +1322,29 @@ Strategy math is client-side (`lib/strategyStats.ts`: `tradePnl` /
 `tradePnlNet` / `tradeFee`), fed `exchange_fee` by `/admin/strategies` and
 `pastPositionsToStrategyTrades`. The public track record is untouched.
 
+**Performance Analytics' date-range percentage is TIME-WEIGHTED (2026-09-23).**
+The Performance card's second tile was "Relative to Baseline" = window P&L ÷
+the ALL-TIME baseline, so a deposit made in September changed the percentage
+August had already reported — a finished month moved, and the owner read the
+drop as the product being wrong. It is now **"Period Return"**: each day's P&L
+over the capital THAT day started with, the daily factors chained, the same
+walk `PublicStatsController` publishes (flows land before the day's trades,
+capital compounds with realized P&L, a gross row's estimated commission comes
+off the CAPITAL only, seeded from `initial_deposit` — a walk from zero is the
+−980% of 2026-09-04). A transfer can no longer move the figure in either
+direction, so no "exclude deposits" toggle is needed. The denominator ships as
+`analytics.daily_capital` (one entry per day with a trade **or** a flow, built
+from EVERY trade and flow — the chips and the date range narrow what is
+measured, not the money that was at work); the chaining itself is in
+`PerformanceChartCard`. Two consequences: the tile no longer equals
+`realized ÷ baseline`, so the card shows a dollar total beside a compounded
+return rather than one over the other; and its days are **UTC** like the rest
+of that page, where the public track record buckets in Asia/Manila — same
+method, different boundary, so the two will not tie out to the decimal.
+`baseline` itself is unchanged (still net flows, still omitting
+`initial_deposit`, unlike the dashboard and invoices) and so is every other
+figure on the page. Pinned by `AnalyticsPeriodReturnTest`.
+
 **Timestamps are UTC in the DB and rendered in the READER's zone**
 (`fmtDateTime`, `lib/format.ts`). The API runs on `'timezone' => 'UTC'`, but a
 bare `"2026-09-09 04:30:22"` has no zone designator and JS reads a zoneless

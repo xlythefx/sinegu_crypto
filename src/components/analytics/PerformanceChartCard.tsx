@@ -99,6 +99,8 @@ interface PerformanceChartCardProps {
   dailyPnl: Record<string, number>
   /** …and after, same keys. */
   dailyPnlNet: Record<string, number>
+  /** Capital traded on per day — the period return's denominator. */
+  dailyCapital: Record<string, number>
   baseline: number
   /** Set when some of the days carry no fee on record. */
   feesSince: string | null
@@ -110,6 +112,7 @@ interface PerformanceChartCardProps {
 export default function PerformanceChartCard({
   dailyPnl,
   dailyPnlNet,
+  dailyCapital,
   baseline,
   feesSince,
 }: PerformanceChartCardProps) {
@@ -236,24 +239,59 @@ export default function PerformanceChartCard({
     }
   }, [entries, period, baseline])
 
+  /**
+   * The window's figures. The percentage is TIME-WEIGHTED: each day's P&L over
+   * the capital that day started with, the daily factors chained.
+   *
+   * It used to be `window P&L / all-time baseline`, which meant a deposit made
+   * in September changed the percentage August had already reported — a
+   * finished month must not move. Chaining fixes that at the root: a transfer
+   * only ever changes the capital of the days after it, and chaining ratios
+   * never sees the flows between them. Same method the landing page track
+   * record and the Telegram recaps use (on Manila days, where these are UTC).
+   *
+   * The consequence to keep in mind: this no longer equals
+   * `realized / baseline`, so the two figures on this card are a dollar total
+   * and a compounded return, not one divided by the other.
+   */
   const range = useMemo(() => {
     let inRange = 0
     let inRangeNet = 0
     let upToEnd = 0
+    let growth = 1
+    let growthNet = 1
+    let measured = 0
+    let unmeasured = 0
     for (const [date, pnl, pnlNet] of entries) {
       if (date <= toDate) upToEnd += pnl
-      if (date >= fromDate && date <= toDate) {
-        inRange += pnl
-        inRangeNet += pnlNet
+      if (date < fromDate || date > toDate) continue
+      inRange += pnl
+      inRangeNet += pnlNet
+
+      const capital = dailyCapital[date]
+      if (capital === undefined || capital <= 0) {
+        // A day whose capital was never recorded (or had gone non-positive)
+        // is left OUT of the chain rather than divided by a guess — and
+        // counted, so the card can say the return covers part of the window.
+        unmeasured++
+        continue
       }
+      // Floored at 0: a day losing more than the whole account must not
+      // compound into a negative factor and flip every later day's sign.
+      growth *= Math.max(0, 1 + pnl / capital)
+      growthNet *= Math.max(0, 1 + pnlNet / capital)
+      measured++
     }
     return {
       realized: inRange,
       realizedNet: inRangeNet,
       wholeBalance: baseline + upToEnd,
-      pct: baseline > 0 ? (inRange / baseline) * 100 : null,
+      pct: measured > 0 ? (growth - 1) * 100 : null,
+      pctNet: measured > 0 ? (growthNet - 1) * 100 : null,
+      measured,
+      unmeasured,
     }
-  }, [entries, fromDate, toDate, baseline])
+  }, [entries, fromDate, toDate, baseline, dailyCapital])
 
   const marks = tab === 'cumulative' ? view.cumMarks : tab === 'daily' ? view.dailyMarks : []
   const hovered = hoverIdx !== null ? (marks[hoverIdx] ?? null) : null
@@ -586,15 +624,25 @@ export default function PerformanceChartCard({
             </div>
             <div className="border border-hair bg-surface2 rounded-rail py-4 px-[18px]">
               <span className="text-[10.5px] font-extrabold tracking-[0.5px] text-faint uppercase">
-                Relative to Baseline
+                Period Return
               </span>
               <div
                 className={`font-mono text-[24px] font-extrabold tracking-[-0.6px] mt-1.5 mb-1 ${(range.pct ?? 0) < 0 ? 'text-red' : 'text-accent'}`}
+                title={
+                  range.pctNet === null
+                    ? undefined
+                    : `After exchange fees: ${fmtSignedPct(range.pctNet, 2)}`
+                }
               >
                 {range.pct === null ? '—' : fmtSignedPct(range.pct, 2)}
               </div>
               <div className="text-[11px] text-muted font-semibold">
-                Baseline: {fmtMoney(baseline)}
+                Compounded daily · before fees
+              </div>
+              <div className="text-[11px] text-muted font-semibold">
+                {range.unmeasured > 0
+                  ? `${range.measured} of ${range.measured + range.unmeasured} trading days measured`
+                  : 'Deposits & withdrawals excluded'}
               </div>
             </div>
           </div>

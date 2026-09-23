@@ -137,6 +137,13 @@ export interface Analytics {
   daily_pnl: Record<string, number>
   /** …and after. */
   daily_pnl_net: Record<string, number>
+  /**
+   * Capital the account traded on that day — after the day's transfers,
+   * before its P&L. Keyed like `daily_pnl`, but with an entry for every day
+   * that carried a trade OR a transfer, so a pure deposit day appears here
+   * and not there. The denominator of the period return.
+   */
+  daily_capital: Record<string, number>
   day_of_week: Record<Weekday, DayOfWeekStat>
   monthly: MonthlyStat[]
   by_symbol: SymbolStat[]

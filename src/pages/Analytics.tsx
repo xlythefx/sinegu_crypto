@@ -140,6 +140,7 @@ export default function Analytics() {
               <PerformanceChartCard
                 dailyPnl={data.daily_pnl}
                 dailyPnlNet={data.daily_pnl_net}
+                dailyCapital={data.daily_capital}
                 baseline={data.baseline}
                 feesSince={data.fees.trades_without_fee > 0 ? data.fees.since : null}
               />
