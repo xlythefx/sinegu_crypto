@@ -338,6 +338,7 @@ def report_exit_fill(
     increments: Any = None,
     max_increments: Any = None,
     exchange: Any = None,
+    is_master: Any = None,
 ) -> None:
     """One closed account reporting in. Flushes as soon as the batch is sealed
     and every expected account has reported.
@@ -366,6 +367,10 @@ def report_exit_fill(
             "balance": balance,
             "increments": increments,
             "max_increments": max_increments,
+            # Omitted, never False, when the caller does not know — an absent
+            # key is how `_master_reports` tells "not the master" apart from
+            # "this API cannot say". bool() would collapse the two.
+            **({"is_master": bool(is_master)} if is_master is not None else {}),
         })
         ready = batch.sealed and len(batch.reports) >= batch.expected
     if ready:
@@ -434,14 +439,39 @@ def _weighted(reports: list[dict], key: str) -> Optional[float]:
     return sum(plain) / len(plain) if plain else None
 
 
+def _master_reports(reports: list[dict]) -> Optional[list[dict]]:
+    """The MASTER account's reports, or None when the caller should fall back
+    to every account.
+
+    The public track record is the master's alone (`PublicStatsController`
+    scopes to `user_credentials.type = 'master'`), so anything the channel
+    publishes per signal has to be the master's too, or the daily recap can
+    never add up to the closes it was built from. Blending every filled
+    account was worth ~0.05pp on 22 Sep and grows with each customer whose
+    sizing sits differently against their balance.
+
+    Three cases, deliberately distinguished:
+      * the master reported  -> its reports;
+      * the flag is present and no report carries it (the master did not fill:
+        key blocked, disabled, joined later) -> `[]`, i.e. publish nothing
+        rather than a customer blend;
+      * no report carries the flag at all -> None, meaning the API predates
+        `is_master` and the caller keeps the old pooled behaviour. Without
+        this an engine deployed ahead of the API would silently drop the
+        figure from every message in the channel.
+    """
+    if not any("is_master" in report for report in reports):
+        return None
+    return [report for report in reports if report.get("is_master")]
+
+
 def _pnl_percent(reports: list[dict]) -> Optional[float]:
     """Realized PnL AFTER exchange commission, as a percent of the balance it
-    was sized against.
+    was sized against — the MASTER account's, see :func:`_master_reports`.
 
-    The denominator is `balance - net` per account — the balance BEFORE this
-    close landed — summed across every account whose balance is known. Returns
-    None when no account reported a PnL (or no balance to divide by): the
-    channel publishes percentages only, never USDT amounts.
+    The denominator is `balance - net` — the balance BEFORE this close landed.
+    Returns None when nothing reported a PnL (or there is no balance to divide
+    by): the channel publishes percentages only, never USDT amounts.
 
     **After fees since 2026-09-23.** The venue reports gross; every screen we
     own and the daily recap are after fees, so publishing gross here made the
@@ -451,6 +481,10 @@ def _pnl_percent(reports: list[dict]) -> Optional[float]:
     `hooks.estimate_round_trip_fee`) leaves that account's figure gross rather
     than treating the trade as free.
     """
+    scoped = _master_reports(reports)
+    if scoped is not None:
+        reports = scoped
+
     total = 0.0
     saw_pnl = False
     denom = 0.0
@@ -489,10 +523,16 @@ def _flush_exit_batch(batch_id: str) -> None:
 
     lines = [_header(batch.action, batch.ticker, default_emoji="🏁", label=batch.label)]
 
-    # How deep the stack was that just closed — the mirror of the entry line.
+    # How deep the stack was that just closed — the mirror of the entry line,
+    # and the MASTER's depth where it is known (same rule as the percentage:
+    # the channel reports one account, not a blend). The modal across accounts
+    # stays the fallback for an API that does not send `is_master`.
+    depth_reports = _master_reports(batch.reports)
+    if depth_reports is None:
+        depth_reports = batch.reports
     depth = _increment_line(
-        _modal([r.get("increments") for r in batch.reports]),
-        _modal([r.get("max_increments") for r in batch.reports]),
+        _modal([r.get("increments") for r in depth_reports]),
+        _modal([r.get("max_increments") for r in depth_reports]),
         label="Increments Closed",
     )
     if depth:

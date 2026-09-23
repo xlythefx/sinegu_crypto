@@ -215,6 +215,52 @@ def test_exit_pnl_is_published_after_exchange_fees(sent):
     assert "PnL: +0.948%" in sent[0][0]
 
 
+def test_exit_pnl_is_the_masters_alone_when_the_flag_is_present(sent):
+    """The published track record is the master's account, so the close the
+    channel announces has to be the master's too — a blend across customers
+    could never add up to the daily recap built from it."""
+    batch_id = notify.open_exit_batch("EXIT_LONG", "LTCUSDT", price=61)
+    notify.seal_exit_batch(batch_id, expected=2)
+    notify.report_exit_fill(batch_id, realized_pnl=100.0, exit_price=61.0, quantity=100,
+                            balance=10_000.0, exchange="binance", is_master=True,
+                            increments=2, max_increments=3)
+    # A customer trading the same signal on a very different balance: pooled,
+    # it would drag the published figure to +0.62%.
+    notify.report_exit_fill(batch_id, realized_pnl=20.0, exit_price=61.0, quantity=20,
+                            balance=20_000.0, exchange="binance", is_master=False,
+                            increments=1, max_increments=3)
+    text = sent[0][0]
+    assert "PnL: +0.948%" in text          # the master's, exactly as if alone
+    assert "Increments Closed (2/3)" in text  # the master's depth, not the mode
+
+
+def test_exit_publishes_no_pnl_when_the_master_did_not_fill(sent):
+    """Key blocked, disabled, or joined later — whatever the reason, a customer
+    blend is not the record this channel publishes. The close is still
+    announced with its price; only the percentage is withheld."""
+    batch_id = notify.open_exit_batch("EXIT_LONG", "LTCUSDT", price=61)
+    notify.seal_exit_batch(batch_id, expected=1)
+    notify.report_exit_fill(batch_id, realized_pnl=20.0, exit_price=61.0, quantity=20,
+                            balance=20_000.0, exchange="binance", is_master=False)
+    text = sent[0][0]
+    assert "Exit Price: 61.00" in text
+    assert "PnL" not in text
+
+
+def test_exit_pools_when_the_api_cannot_say_who_the_master_is(sent):
+    """An engine deployed ahead of the API sends no flag at all. That must keep
+    the old pooled figure rather than silently dropping the percentage from
+    every message in the channel."""
+    batch_id = notify.open_exit_batch("EXIT_LONG", "LTCUSDT", price=61)
+    notify.seal_exit_batch(batch_id, expected=2)
+    notify.report_exit_fill(batch_id, realized_pnl=100.0, exit_price=61.0, quantity=100,
+                            balance=10_000.0, exchange="binance")
+    notify.report_exit_fill(batch_id, realized_pnl=20.0, exit_price=61.0, quantity=20,
+                            balance=20_000.0, exchange="binance")
+    # 112.68 net over (10,000-93.90) + (20,000-18.78) = 29,887.32
+    assert "PnL: +0.377%" in sent[0][0]
+
+
 def test_exit_pnl_stays_gross_when_the_fee_cannot_be_computed(sent):
     """No exit price means the fill is not indexed yet — an UNKNOWN fee, not a
     free trade. The percentage stays gross rather than being reduced by a zero

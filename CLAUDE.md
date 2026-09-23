@@ -760,7 +760,23 @@ for the overlay's `position: fixed` and trap it inside.
   `_pnl_percent` nets it. **The figure posted to `past-positions/sync` is
   still GROSS** — the API owns netting on ingest, and sending a netted P&L
   would net it twice. An unknown fee (no exit price yet) leaves that account's
-  figure gross rather than treating the trade as free. How many customers filled is
+  figure gross rather than treating the trade as free.
+  **And it is the MASTER ACCOUNT'S figure, not a blend** (2026-09-23). The
+  published track record is the master's alone, so a percentage pooled across
+  every filled account could never reconcile with the daily recap built from
+  it — the residual was ~0.05pp on 22 Sep and grows with every customer whose
+  sizing sits differently against their balance. `GET /engine/{exchange}/accounts`
+  carries `is_master` (from `user_credentials.type`, never the account's NAME,
+  which any user can set), and `notify._master_reports` distinguishes three
+  cases: the master reported → its figure; the flag is present and no report
+  carries it → **publish no percentage at all** rather than a customer blend;
+  no report carries the flag → pooled, because an engine deployed ahead of the
+  API must not silently drop the figure from every message in the channel. The
+  consequence to know: **a venue the master has no account on announces its
+  closes without a PnL line** — true of MEXC today, the same condition that
+  keeps MEXC out of the recaps; connecting the master there turns both on. The
+  exit PRICE stays pooled (a market fact, not a performance claim).
+  How many customers filled is
   business information and the channel is readable by anyone (same rule as
   `/api/public/*`). Counts live in `trade_logs` and, where a human is needed,
   the admin chat: `notify_max_increments` lists the accounts already at their
@@ -794,10 +810,11 @@ for the overlay's `position: fixed` and trap it inside.
   cap). Derived from the batched `positions/check` read the fan-out already
   makes — the reference bot in `binance-flask` re-reads the new position size
   from Binance per account per signal purely to print this number. Published
-  per SIGNAL as the **most common** depth among filled accounts, since this
-  engine has no master account: one user who connected late is still at #1
-  while everyone else is at #3, and the mode keeps them from deciding what the
-  channel says.
+  as the **MASTER account's** depth (2026-09-23), like every other figure the
+  channel publishes. Falls back to the most common depth among filled accounts
+  when the master did not fill, or when the API sends no `is_master`: one user
+  who connected late is still at #1 while everyone else is at #3, and the mode
+  keeps them from deciding what the channel says.
   **`Increments Closed (3/3)` is its mirror on the close** (`_closed_increments`)
   = `closed_quantity / _scale_qty(...)`. The divisor is the SCALED entry size,
   never the raw `base_size`, for the same reason the cap is measured that way:

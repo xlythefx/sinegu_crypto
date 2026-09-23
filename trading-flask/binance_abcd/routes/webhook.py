@@ -401,6 +401,10 @@ def _deferred_close_bookkeeping(
             # Picks the taker rate the published percentage is netted at; the
             # row posted above still carries the venue's GROSS figure.
             exchange=exchange_of(account),
+            # Whose figure the channel publishes. Passed through as None when
+            # the accounts endpoint does not carry the flag, which is what
+            # keeps the old pooled behaviour on an older API.
+            is_master=account.get("is_master"),
         )
 
 
@@ -497,6 +501,9 @@ def _run_account(
     base = {
         "account": name, "uni_id": account.get("uni_id"), "exchange": exchange,
         "status": "failed", "retryable": False,
+        # Whose depth the public channel publishes — see _published_increment.
+        # Absent (not False) on an API that does not send the flag.
+        **({"is_master": bool(account["is_master"])} if "is_master" in account else {}),
     }
     is_entry = action in ENTRY_ACTIONS
     symbol = ticker.upper()
@@ -970,14 +977,22 @@ def _mean_fill_price(results: list) -> Optional[float]:
 def _published_increment(results: list) -> tuple[Optional[int], Optional[int]]:
     """The stack depth to publish for a whole fan-out, as (increment, max).
 
-    The reference bot shows the MASTER account's depth; this engine has no
-    master in its account payload, so it publishes the most common depth among
-    the accounts that filled. They all trade the same signal against the same
-    per-asset cap, so they normally agree — the mode is what keeps one account
-    that connected late (still at #1 while everyone else is at #3) from
-    deciding what the channel says. Ties break toward the deeper count, since
-    that is the one the cap is about.
+    **The MASTER account's depth** (2026-09-23), matching the reference bot and
+    everything else the channel says: the published track record is the
+    master's alone, so a blended figure could not be reconciled against it.
+
+    Falls back to the most common depth among the accounts that filled when the
+    accounts endpoint does not carry `is_master` (an engine deployed ahead of
+    the API), or when the master did not fill. They all trade the same signal
+    against the same per-asset cap and normally agree; the mode is what keeps
+    one account that connected late (still at #1 while everyone else is at #3)
+    from deciding what the channel says. Ties break toward the deeper count,
+    since that is the one the cap is about.
     """
+    master = [r for r in results if r.get("is_master") and r.get("status") == "filled"
+              and r.get("increment")]
+    if master:
+        results = master
     depths = [r["increment"] for r in results
               if r.get("status") == "filled" and r.get("increment")]
     if not depths:
