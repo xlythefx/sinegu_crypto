@@ -516,7 +516,10 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   venue in `BINANCE_ABCD_EXCHANGES`** (CSV, default `binance`; add `mexc` or
   `bybit` to turn those on — deliberately NOT mirrored to prod by the deploy
   script, because enabling a venue for customers is a decision made on the box.
-  Prod has had MEXC on since 2026-09-17; **Bybit is NOT on prod yet**).
+  Prod has had MEXC on since 2026-09-17. **Bybit's CODE has been on prod since
+  2026-09-24 but the venue is OFF** — the adapter, the four tables and the
+  nginx route are all live, and adding `bybit` to this CSV on the box is the
+  only thing between that and trading).
   `hooks.WEBHOOK_PATHS` maps `binance → /binance_abcd_webhook`,
   `mexc → /mexc_abcd_webhook`, `bybit → /bybit_abcd_webhook`; the path a
   TradingView alert posts to is what decides which exchange's accounts the
