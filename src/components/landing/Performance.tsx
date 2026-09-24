@@ -1,17 +1,9 @@
 import { useState } from 'react'
-import { useApiData } from '../../hooks/useApiData'
-import { getTrackRecord } from '../../services/publicStats'
 import { fmtMediumDate } from '../../lib/format'
-import {
-  CHART_MODES,
-  LANDING_TRACK_RECORD_SYMBOLS,
-  statCards,
-  type ChartMode,
-} from '../../lib/trackRecord'
+import { CHART_MODES, statCards, type ChartMode } from '../../lib/trackRecord'
 import { SECTION_IDS } from '../../lib/scroll'
+import type { TrackRecord } from '../../types/publicStats'
 import TrackRecordChart from './TrackRecordChart'
-
-const fetchLandingRecord = () => getTrackRecord(LANDING_TRACK_RECORD_SYMBOLS)
 
 const CONTAINER = 'max-w-[1280px] mx-auto px-10 max-[560px]:px-5'
 const SECTION_TITLE =
@@ -29,6 +21,13 @@ const TAB_ON = 'bg-surface border border-border font-bold text-text'
 const TAB_OFF =
   'font-semibold text-muted border border-transparent bg-transparent hover:text-text'
 
+interface PerformanceProps {
+  /** Null while loading, and when the record could not be read. */
+  record: TrackRecord | null
+  loading: boolean
+  error: unknown
+}
+
 /**
  * "See every trade, verified" — the master account's live track record, read
  * from the public (unauthenticated) `/public/track-record` endpoint, narrowed
@@ -44,13 +43,16 @@ const TAB_OFF =
  * stays silent on scope. Widening the record is one constant away
  * (`LANDING_TRACK_RECORD_SYMBOLS`), and the API still echoes the applied
  * filter in `data.symbols` if the label is ever wanted back.
+ *
+ * The record is FETCHED BY THE PAGE and passed in, because the quote strip at
+ * the top of the same page publishes this section's headline figure. One fetch
+ * is what keeps the two from ever showing different returns.
  */
-export default function Performance() {
-  const { data, loading, error } = useApiData(fetchLandingRecord)
+export default function Performance({ record, loading, error }: PerformanceProps) {
   const [mode, setMode] = useState<ChartMode>('cumulative')
 
-  const stats = data?.stats ?? null
-  const series = data?.series ?? []
+  const stats = record?.stats ?? null
+  const series = record?.series ?? []
   const cards = statCards(stats)
 
   const placeholder = loading

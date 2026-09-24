@@ -1,4 +1,5 @@
 import { apiFetch } from './api'
+import { LANDING_TRACK_RECORD_SYMBOLS } from '../lib/trackRecord'
 import type { TrackRecord } from '../types/publicStats'
 
 /**
@@ -25,3 +26,13 @@ export async function getTrackRecord(symbols: readonly string[] = []): Promise<T
     symbols: Array.isArray(res.symbols) ? res.symbols : [],
   }
 }
+
+/**
+ * The record the landing page publishes, narrowed to the strategy it is sold
+ * on. Fetched ONCE per page and handed to both the quote strip and the
+ * track-record section: the filter is part of what the number means, so two
+ * independent calls would be two sets of arguments and could put two different
+ * returns on one page. Module-level so it is a stable `useApiData` fetcher.
+ */
+export const fetchLandingTrackRecord = (): Promise<TrackRecord> =>
+  getTrackRecord(LANDING_TRACK_RECORD_SYMBOLS)

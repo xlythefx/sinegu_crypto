@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import AOS from 'aos'
 import 'aos/dist/aos.css'
+import { useApiData } from '../hooks/useApiData'
+import { fetchLandingTrackRecord } from '../services/publicStats'
 import Ticker from '../components/landing/Ticker'
 import NavV2 from '../components/landing-v2/NavV2'
 import HeroV2 from '../components/landing-v2/HeroV2'
@@ -20,13 +22,17 @@ import FooterV2 from '../components/landing-v2/FooterV2'
  * framer-motion). Lives at /v2; the original Landing (/) is untouched.
  */
 export default function LandingV2() {
+  // Same record the strip reads on the original landing — v2 has no
+  // performance section of its own, so this is only the strip's two items.
+  const { data: record } = useApiData(fetchLandingTrackRecord)
+
   useEffect(() => {
     AOS.init({ duration: 700, once: true, offset: 80, easing: 'ease-out-cubic' })
   }, [])
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-bg text-text transition-[background,color] duration-[400ms]">
-      <Ticker />
+      <Ticker stats={record?.stats ?? null} series={record?.series ?? []} />
       <NavV2 />
       <main>
         <HeroV2 />

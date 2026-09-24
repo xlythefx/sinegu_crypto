@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import AOS from 'aos'
 import 'aos/dist/aos.css'
+import { useApiData } from '../hooks/useApiData'
+import { fetchLandingTrackRecord } from '../services/publicStats'
 import Ticker from '../components/landing/Ticker'
 import Nav from '../components/landing/Nav'
 import Hero from '../components/landing/Hero'
@@ -30,6 +32,11 @@ const BUBBLES: Bubble[] = [
 ]
 
 export default function Landing() {
+  // One fetch for the whole page: the quote strip publishes the same record's
+  // return on capital that the Performance section's headline card shows, and
+  // the record is narrowed to one strategy — two calls could disagree.
+  const { data: record, loading, error } = useApiData(fetchLandingTrackRecord)
+
   useEffect(() => {
     AOS.init({ duration: 700, once: true, offset: 80, easing: 'ease-out-cubic' })
   }, [])
@@ -55,10 +62,10 @@ export default function Landing() {
         ))}
       </div>
       <div className="relative z-[1]">
-        <Ticker />
+        <Ticker stats={record?.stats ?? null} series={record?.series ?? []} />
         <Nav />
         <Hero />
-        <Performance />
+        <Performance record={record} loading={loading} error={error} />
         <Features />
         {/* "We don't talk. We deliver results." (components/landing/Receipts.tsx)
             is hidden — its per-strategy ROI bars are static prototype numbers, and

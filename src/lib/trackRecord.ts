@@ -146,6 +146,43 @@ export function statCards(stats: TrackRecordStats | null): StatCard[] {
   ]
 }
 
+/**
+ * The record's return over the last `days` CALENDAR days, chained.
+ *
+ * Chained, not summed, for the same reason the headline total is: each day's
+ * `pct` is measured on the capital that day started with, so multiplying the
+ * daily factors is the only way the window means "what the capital did". A sum
+ * would read high on a winning streak and could not be checked against a
+ * balance.
+ *
+ * The window is anchored on the LAST day in the series, not on today: the
+ * series buckets its days in Asia/Manila while the reader's clock is anywhere,
+ * and anchoring on the reader would quietly clip a day off the window at some
+ * longitudes. So this is "the 30 days ending on the most recent trading day",
+ * which is exactly what the figure covers.
+ *
+ * Null when there is nothing to measure — never 0, which would read as a flat
+ * month rather than an empty record.
+ */
+export function trailingReturnPct(
+  series: TrackRecordPoint[],
+  days: number,
+): number | null {
+  if (series.length === 0) return null
+
+  const last = series[series.length - 1].date
+  const cutoff = new Date(`${last.slice(0, 10)}T00:00:00Z`)
+  cutoff.setUTCDate(cutoff.getUTCDate() - (days - 1))
+  const from = cutoff.toISOString().slice(0, 10)
+
+  const window = series.filter((point) => point.date.slice(0, 10) >= from)
+  if (window.length === 0) return null
+
+  const factor = window.reduce((acc, point) => acc * (1 + point.pct / 100), 1)
+
+  return (factor - 1) * 100
+}
+
 /** One plotted period plus what the hover readout shows for it. */
 export interface ChartMark {
   /** Position as a fraction of the FULL viewBox (X0 inset included), 0..1 —
