@@ -20,6 +20,7 @@ import { useApiData } from '../hooks/useApiData'
 import { getAnalytics } from '../services/analytics'
 import { ApiError } from '../services/api'
 import { displaySymbol } from '../lib/chart'
+import { EXCHANGE_META, EXCHANGE_ORDER } from '../components/exchanges/meta'
 import type { ChipMode } from '../types/analytics'
 
 /** Toggle one value in a Set, returning a new Set (never mutate state). */
@@ -27,6 +28,12 @@ function toggle(set: Set<string>, value: string): Set<string> {
   const next = new Set(set)
   if (!next.delete(value)) next.add(value)
   return next
+}
+
+/** 'mexc' -> 'MEXC'; 'all' -> 'any exchange'. */
+function activeExchangeLabel(exchange: string): string {
+  const kind = EXCHANGE_ORDER.find((k) => k === exchange)
+  return kind ? EXCHANGE_META[kind].label : 'any exchange'
 }
 
 export default function Analytics() {
@@ -97,6 +104,12 @@ export default function Analytics() {
   // block — re-mount it to replay the reveal instead of hard-cutting.
   const resultsKey = `${filters.exchange}-${filters.from}-${filters.to}-${symbolMode}:${symbolKey}-${strategyMode}:${strategyKey}`
 
+  // Narrowing to a venue with nothing connected returns a page of legitimate
+  // zeros, which reads as "the filter did nothing". Say so instead.
+  const scopeLabel = activeExchangeLabel(filters.exchange)
+  const noAccountsInScope =
+    !!data && data.by_exchange.every((e) => e.accounts === 0)
+
   return (
     <DashboardLayout title="Performance Analytics">
       <div className="flex flex-col gap-stack">
@@ -126,6 +139,13 @@ export default function Analytics() {
             key={resultsKey}
             className="flex flex-col gap-stack animate-[fadeup_0.35s_ease-out]"
           >
+            {noAccountsInScope && (
+              <p className="rounded-card border border-border bg-surface2 px-4 py-3 text-[13px] text-muted">
+                {filters.exchange === 'all'
+                  ? 'No exchange accounts connected yet — every figure below is zero until you connect one.'
+                  : `No ${scopeLabel} account connected, so every figure below is zero. Pick another exchange, or connect ${scopeLabel} from Exchange Accounts.`}
+              </p>
+            )}
             <AnalyticsKpis
               totalReturnPct={data.total_return_pct}
               totalReturnAbs={data.total_return_abs}
@@ -145,6 +165,7 @@ export default function Analytics() {
                 dailyPnl={data.daily_pnl}
                 dailyPnlNet={data.daily_pnl_net}
                 dailyCapital={data.daily_capital}
+                dailyFlows={data.daily_flows}
                 baseline={data.baseline}
                 feesSince={data.fees.trades_without_fee > 0 ? data.fees.since : null}
               />

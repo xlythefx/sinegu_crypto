@@ -45,6 +45,9 @@ export interface SymbolStat {
 
 export interface ExchangeStat {
   exchange: string
+  /** Connected accounts on this venue — 0 distinguishes "made nothing" from
+   *  "nothing connected here", which otherwise render as the same zeros. */
+  accounts: number
   balance: number
   unrealized: number
 }
@@ -144,6 +147,11 @@ export interface Analytics {
    * and not there. The denominator of the period return.
    */
   daily_capital: Record<string, number>
+  /**
+   * Net transfer per day, signed — deposit positive, withdrawal negative,
+   * netted when both land on one day. Only days that moved money.
+   */
+  daily_flows: Record<string, number>
   day_of_week: Record<Weekday, DayOfWeekStat>
   monthly: MonthlyStat[]
   by_symbol: SymbolStat[]
