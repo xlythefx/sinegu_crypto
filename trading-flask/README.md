@@ -61,11 +61,11 @@ The engine caches the list for 90s, so a cutoff lands within minutes.
 ## Exchanges
 
 One process trades every venue listed in `BINANCE_ABCD_EXCHANGES` (CSV;
-default `binance`, add `mexc` to switch MEXC on). **One webhook path per
-venue** (`hooks.WEBHOOK_PATHS`): `/binance_abcd_webhook` trades Binance
-accounts, `/mexc_abcd_webhook` trades MEXC accounts, so each venue has its own
-TradingView alert(s) and the path — not the payload — decides where a signal
-goes. A payload `exchanges` field is accepted only when it agrees with the
+default `binance`, add `mexc` or `bybit` to switch those on). **One webhook
+path per venue** (`hooks.WEBHOOK_PATHS`): `/binance_abcd_webhook` trades
+Binance accounts, `/mexc_abcd_webhook` MEXC, `/bybit_abcd_webhook` Bybit, so
+each venue has its own TradingView alert(s) and the path — not the payload —
+decides where a signal goes. A payload `exchanges` field is accepted only when it agrees with the
 path; a venue not in `EXCHANGES` answers 400 on its path (after the secret
 gate). The job resolves that venue's `assets` row (by `assets.broker`:
 `Binance` / `MEXC`), its accounts from `/engine/{exchange}/accounts` and its
@@ -80,7 +80,8 @@ venue's field names. It talks to an `ExchangeClient` (`exchange_api.py`) in one
 vocabulary — tickers, **coins**, LONG/SHORT, SHORT negative, `None` for a failed
 read and `[]` for an empty one — and `exchanges.client_for(account)` hands it
 the right adapter: `binance_adapter.BinanceAdapter` over the untouched
-`BinanceAPI`, or `mexc_adapter.MexcAdapter` over `mexc_api.MexcFuturesAPI`.
+`BinanceAPI`, `mexc_adapter.MexcAdapter` over `mexc_api.MexcFuturesAPI`, or
+`bybit_adapter.BybitAdapter` over `bybit_api.BybitFuturesAPI`.
 Adding a venue is one adapter plus its tests; nothing in the fan-out changes.
 
 MEXC particulars, all absorbed in the adapter:
@@ -118,6 +119,63 @@ Rolling MEXC out: deploy with `EXCHANGES=binance` (the deploy script does not
 mirror that key — see `MIRRORED_ENGINE_ENV_KEYS`), run the real-key smoke
 checks (`python mexc_smoke.py`, credentials from the environment only), then set `BINANCE_ABCD_EXCHANGES=binance,mexc` on
 the box once the first `mexc_accounts` row exists.
+
+Bybit particulars, all absorbed in the adapter:
+
+- **Coins already, but a grid to land on.** Linear perps are quoted in base
+  coins, so there is no MEXC-style contract conversion; what there IS is
+  `qtyStep` / `minOrderQty` from `/v5/market/instruments-info`
+  (`BybitFuturesAPI.round_qty`), floored on an entry and rounded half-even on
+  an exit — because `0.3 - 0.1` is `0.19999999999999998`, and flooring that to
+  a 0.001 step leaves 0.001 open forever while the close reports success.
+- **Leverage is POSTed** (`LEVERAGE_PER_ORDER = False`, Binance-shaped), and
+  `110043` "leverage not modified" is treated as SUCCESS in the transport, not
+  at the call site.
+- **Direction is `side` + `positionIdx`, and the idx is READ, never assumed.**
+  Bybit rows carry an unsigned `size` plus Title-case `Buy`/`Sell`.
+  `positionIdx` (0 one-way, 1 hedge long, 2 hedge short) comes off the
+  account's own rows, because an idx that disagrees with the account's mode is
+  rejected on every order and config cannot know that mode. A UNIFIED account
+  may not support hedge mode on linear at all — so `position_map` keys
+  LONG/SHORT in EITHER mode (a one-way `side: "Buy"` row is a long), and a
+  refused `switch-mode` is logged rather than failing the venue.
+- **Business errors arrive as HTTP 200 with `retCode != 0`**, like MEXC's
+  `success:false`. 10000/10002/10016 → transient (10002 is OUR clock drifting,
+  never a credential fault), 10006/10018 → rate-limited, 10027/110063 →
+  maintenance, 10003/10004/10005/10009/10010/33004 → credential. `10005`
+  is the only code that does not name WHICH permission, so it is the one Bybit
+  entry in `key_status._AMBIGUOUS` — Binance's `-2015` problem in miniature.
+- **`/v5/position/list` for linear needs `symbol` or `settleCoin`.** The
+  account-wide read always sends `settleCoin=USDT`; a bare `category=linear` is
+  refused, and folding that refusal into `[]` is what deletes live positions.
+- **`trade_permission()` answers for real** (`/v5/user/query-api`), like
+  Binance's `apiRestrictions` and unlike MEXC's permanent `None` — except on
+  the demo host, which does not serve it.
+- **Demo = Demo Trading, not testnet.** A Bybit row flagged `demo` routes to
+  `api-demo.bybit.com` (`BYBIT_DEMO_API_BASE`) — the ordinary bybit.com login,
+  but keys minted in the Demo Trading module and NOT interchangeable with live
+  ones. `testnet.bybit.com` is a separate site with its own registration.
+- **Closes and fee receipts** come from `fetch_bybit_history` (own poller,
+  `BYBIT_HISTORY_FETCH_INTERVAL`, own watermarks
+  `out/last_bybit_{closes,fees}_sync.json`): `/v5/position/closed-pnl` for
+  closes and `/v5/execution/list` for fills AND funding in one read. Two calls
+  per account per tick regardless of how many symbols it traded, where MEXC's
+  is `1 + N_symbols + 2`. Funding `execFee` is **not** sign-flipped: Bybit
+  reports it as a fee (what was paid), which is already the ledger's basis.
+
+**Not yet verified live, and it must be before Bybit trades real money:**
+whether `/v5/position/closed-pnl`'s `closedPnl` is gross or net of fees
+(`bybit_adapter.CLOSED_PNL_IS_NET`). The engine posts GROSS and the API nets
+once on ingest, so a wrong answer nets twice. `closed_gross_pnl` prefers
+`cumExitValue - cumEntryValue`, which is gross by definition, so a wrong switch
+degrades to a fallback rather than to wrong money — but the demo round trip is
+what settles it, exactly as `DEAL_PROFIT_IS_NET` was settled for MEXC on
+2026-09-17.
+
+Rolling Bybit out: same as MEXC — deploy with `bybit` absent from `EXCHANGES`,
+run the demo round trip, then add it on the box once the first `bybit_accounts`
+row exists and `assets` rows with `broker = 'Bybit'` are seeded (entries fail
+closed without them).
 
 ## Setup
 

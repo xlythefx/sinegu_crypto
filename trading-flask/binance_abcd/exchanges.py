@@ -22,6 +22,8 @@ from typing import Optional
 from binance_abcd import hooks
 from binance_abcd.binance_adapter import BinanceAdapter
 from binance_abcd.binance_api import BinanceAPI
+from binance_abcd.bybit_adapter import BybitAdapter
+from binance_abcd.bybit_api import BybitFuturesAPI
 from binance_abcd.exchange_api import ExchangeClient
 from binance_abcd.mexc_adapter import MexcAdapter
 from binance_abcd.mexc_api import MexcFuturesAPI
@@ -37,6 +39,7 @@ class ExchangeSpec:
 SPECS: dict[str, ExchangeSpec] = {
     "binance": ExchangeSpec("binance", "Binance", "Binance"),
     "mexc": ExchangeSpec("mexc", "MEXC", "MEXC"),
+    "bybit": ExchangeSpec("bybit", "Bybit", "Bybit"),
 }
 
 
@@ -67,12 +70,19 @@ def exchange_of(account: dict) -> str:
 
 
 def base_url_for(account: dict) -> str:
-    """Mainnet, or the venue's futures testnet for demo accounts. Both venues
-    have one: demo=1 is the ONLY thing that picks the host, so the flag is
-    never a display preference (see the connect wizard's mode step)."""
+    """Mainnet, or the venue's non-live host for demo accounts. All three have
+    one: demo=1 is the ONLY thing that picks the host, so the flag is never a
+    display preference (see the connect wizard's mode step).
+
+    Bybit's is DEMO TRADING (api-demo.bybit.com), not testnet.bybit.com — a
+    different product with a different login. See hooks.BYBIT_DEMO_API_BASE.
+    """
     demo = bool(account.get("demo"))
-    if exchange_of(account) == "mexc":
+    exchange = exchange_of(account)
+    if exchange == "mexc":
         return hooks.MEXC_TESTNET_API_BASE if demo else hooks.MEXC_API_BASE
+    if exchange == "bybit":
+        return hooks.BYBIT_DEMO_API_BASE if demo else hooks.BYBIT_API_BASE
     return hooks.BINANCE_TESTNET_API_BASE if demo else hooks.BINANCE_API_BASE
 
 
@@ -95,4 +105,6 @@ def client_for(account: dict) -> ExchangeClient:
         return BinanceAdapter(BinanceAPI(account["api_key"], account["secret_key"], base_url=base_url_for(account)))
     if exchange == "mexc":
         return MexcAdapter(MexcFuturesAPI(account["api_key"], account["secret_key"], base_url=base_url_for(account)))
+    if exchange == "bybit":
+        return BybitAdapter(BybitFuturesAPI(account["api_key"], account["secret_key"], base_url=base_url_for(account)))
     raise ValueError(f"unknown exchange '{exchange}' on account {account.get('name') or account.get('api_key', '')[:8]}")

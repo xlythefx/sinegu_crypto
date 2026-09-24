@@ -18,6 +18,8 @@ from binance_abcd.mexc_adapter import MexcAdapter
 BIN = {"api_key": "b-1", "secret_key": "s", "name": "Bin", "uni_id": "u1", "exchange": "binance", "demo": False}
 MEX = {"api_key": "m-1", "secret_key": "s", "name": "Mex", "uni_id": "u2", "exchange": "mexc", "demo": False}
 MEX_DEMO = {"api_key": "m-9", "secret_key": "s", "name": "Mex demo", "uni_id": "u3", "exchange": "mexc", "demo": True}
+BYB = {"api_key": "y-1", "secret_key": "s", "name": "Byb", "uni_id": "u4", "exchange": "bybit", "demo": False}
+BYB_DEMO = {"api_key": "y-9", "secret_key": "s", "name": "Byb demo", "uni_id": "u5", "exchange": "bybit", "demo": True}
 
 BTC = {"symbol": "BTC_USDT", "contractSize": 0.0001, "volScale": 0, "minVol": 1}
 
@@ -79,12 +81,45 @@ class FakeMexc:
         ]
 
 
+class FakeBybit:
+    fail: set = set()
+    hosts: list[str] = []
+
+    def __init__(self, api_key, secret_key, base_url=None):
+        self.api_key, self.base_url = api_key, base_url
+        FakeBybit.hosts.append(base_url)
+
+    def wallet_balance(self):
+        if "balance" in FakeBybit.fail:
+            return None
+        return {"totalWalletBalance": "2000.0", "totalPerpUPL": "7.5"}
+
+    def positions(self, symbol=None):
+        if "positions" in FakeBybit.fail:
+            return None
+        return [{"symbol": "BTCUSDT", "side": "Buy", "size": "0.004", "avgPrice": "60000",
+                 "markPrice": "60500", "unrealisedPnl": "2.0", "positionValue": "242",
+                 "positionIM": "24.2", "positionMM": "1.2", "positionIdx": 1,
+                 "tradeMode": "0", "updatedTime": "1700000000000"}]
+
+    def transaction_log(self, *, kind, start_ms=None, end_ms=None, max_pages=5):
+        if "transfers" in FakeBybit.fail:
+            return None, False
+        if kind == "TRANSFER_IN":
+            return [{"id": "701", "change": "400", "currency": "USDT",
+                     "transactionTime": "9000", "cashBalance": "2400"}], True
+        return [{"id": "702", "change": "-100", "currency": "USDT",
+                 "transactionTime": "9500", "cashBalance": "2300"}], True
+
+
 @pytest.fixture(autouse=True)
 def _seams():
     FakeMexc.fail = set()
+    FakeBybit.fail = set()
     with (
         patch.object(exchanges, "BinanceAPI", FakeBinance),
         patch.object(exchanges, "MexcFuturesAPI", FakeMexc),
+        patch.object(exchanges, "BybitFuturesAPI", FakeBybit),
     ):
         yield
 
@@ -123,6 +158,46 @@ def test_a_failed_mexc_balance_read_skips_that_account_only():
     FakeMexc.fail = {"asset"}
     posts = _posts(fb, [BIN, MEX])
     assert [ex for _, ex, _ in posts] == ["binance"]
+
+
+# --- Bybit routes the same way ---------------------------------------------------
+
+def test_every_bybit_poller_posts_to_the_bybit_route(monkeypatch):
+    monkeypatch.setattr(hooks, "EXCHANGES", ("binance", "mexc", "bybit"))
+
+    balances = {ex: p["rows"] for _path, ex, p in _posts(fb, [BIN, BYB])}
+    assert balances["bybit"] == [
+        {"api_key": "y-1", "balance": 2000.0, "unrealized_pnl": 7.5, "initial_deposit": 2000.0}
+    ]
+
+    positions = {ex: p for _path, ex, p in _posts(fp, [BYB])}
+    row = positions["bybit"]["accounts"][0]["positions"][0]
+    assert row["symbol"] == "BTCUSDT" and row["position_amt"] == 0.004
+    assert row["mark_price"] == 60500.0 and row["notional"] == 242.0
+
+    transfers = {ex: p["rows"] for _path, ex, p in _posts(ft, [BYB])}
+    assert [(r["type"], r["amount"], r["tran_id"]) for r in transfers["bybit"]] == [
+        ("DEPOSIT", 400.0, "701"), ("WITHDRAWAL", 100.0, "702"),
+    ]
+
+
+def test_demo_bybit_rows_are_polled_on_the_demo_host(monkeypatch):
+    monkeypatch.setattr(hooks, "EXCHANGES", ("binance", "mexc", "bybit"))
+    FakeBybit.hosts = []
+    _posts(fb, [BYB, BYB_DEMO])
+    assert FakeBybit.hosts == [hooks.BYBIT_API_BASE, hooks.BYBIT_DEMO_API_BASE]
+
+
+def test_a_failed_bybit_read_skips_that_account_rather_than_syncing_empty(monkeypatch):
+    """A full-replace positions sync fed "flat" for "unreadable" DELETES live
+    rows — the 2026-08-18 incident. Same rule on every venue."""
+    monkeypatch.setattr(hooks, "EXCHANGES", ("binance", "mexc", "bybit"))
+    FakeBybit.fail = {"positions"}
+    posts = _posts(fp, [BIN, BYB])
+    assert [ex for _path, ex, _p in posts] == ["binance"]
+
+    FakeBybit.fail = {"transfers"}
+    assert _posts(ft, [BYB]) == []
 
 
 def test_admin_refresh_narrows_to_one_mexc_key(client):

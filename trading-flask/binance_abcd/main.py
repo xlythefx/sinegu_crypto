@@ -161,6 +161,12 @@ def start_pollers() -> None:
         from binance_abcd.fetch_mexc_history import fetch_and_save as mexc_history
 
         jobs.append(("mexc-history", mexc_history, hooks.MEXC_HISTORY_FETCH_INTERVAL))
+    if "bybit" in enabled_exchanges():
+        # Same shape as MEXC's: Bybit's closes and fee receipts come from its
+        # own closed-pnl + execution history, not from the Binance income loop.
+        from binance_abcd.fetch_bybit_history import fetch_and_save as bybit_history
+
+        jobs.append(("bybit-history", bybit_history, hooks.BYBIT_HISTORY_FETCH_INTERVAL))
     for index, (name, fn, interval) in enumerate(jobs):
         threading.Thread(
             target=_poller_loop,

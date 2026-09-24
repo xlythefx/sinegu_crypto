@@ -71,16 +71,39 @@ CREDENTIAL_CODES: dict[str, dict[int, str]] = {
         703: "PERMISSION_TRADE_READ",
         704: "PERMISSION_TRADE_WRITE",
     },
+    # Bybit V5. Deliberately EXCLUDED, each for a reason a test pins:
+    #   10002 "request expired" — our clock drifted outside recv_window. A fault
+    #         on OUR box (Binance's -1021 twin); flagging it would start a 3-day
+    #         disconnect clock on every account whenever prod's NTP slips.
+    #   10006/10018 rate limits — say nothing about the key.
+    #   10007/10008/10028 — their meanings are not settled enough to disconnect
+    #         a working account over. Left out until a real refusal is seen.
+    "bybit": {
+        10003: "UNKNOWN_KEY",        # "API key is invalid" — deleted or mistyped
+        10004: "BAD_SIGNATURE",      # "error sign" — the secret does not match
+        10005: "PERMISSION_DENIED",  # permission denied, WITHOUT naming which one
+        10009: "IP_BANNED",          # our egress IP is banned at Bybit — ours to fix
+        10010: "IP_NOT_WHITELISTED", # "unmatched IP" — not on the key's bound list
+        33004: "KEY_EXPIRED",        # a Bybit key with no IP bound expires at 90 days
+    },
 }
 
-_LABEL = {"binance": "Binance", "mexc": "MEXC"}
+_LABEL = {"binance": "Binance", "mexc": "MEXC", "bybit": "Bybit"}
 
 # Codes that do not say WHICH credential fault they are, and the reason they
 # collapse to once a signed read has proved the key and the IP are fine.
 # MEXC needs no entry: 406 (IP), 402 (expired) and 701-704 (permissions) each
 # name their own fault already.
+#
+# Bybit sits between the two. It is PRECISE about the IP (10010), the key
+# (10003), the secret (10004) and expiry (33004) — and then collapses every
+# permission fault into a single 10005, which is Binance's -2015 problem in
+# miniature. So it gets one entry, and the existing machinery does the rest: a
+# read success sets read_ok and sharpens the verdict, and a refused READ clears
+# that proof so it downgrades back.
 _AMBIGUOUS: dict[tuple[str, int], str] = {
     ("binance", -2015): "TRADE_PERMISSION",
+    ("bybit", 10005): "TRADE_PERMISSION",
 }
 
 
@@ -216,6 +239,26 @@ FIXES: dict[str, dict[str, str]] = {
         "PERMISSION_TRADE_READ": "tick Futures → Read on the key",
         "PERMISSION_TRADE_WRITE": "tick Futures → Trade on the key (and finish KYC — MEXC needs it for futures API trading)",
     },
+    "bybit": {
+        "TRADE_PERMISSION": (
+            'the key can read but may not trade — tick "Unified Trading → Trade" '
+            "on it (Bybit → API → edit the key)"
+        ),
+        "PERMISSION_DENIED": (
+            'the key is missing a permission — tick "Unified Trading → Trade" '
+            '(on a classic account: "Contract → Orders, Positions")'
+        ),
+        "IP_NOT_WHITELISTED": (
+            'add our server IP to the key\'s allow-list (Bybit → API → edit key → '
+            '"Only IPs with permissions granted have access")'
+        ),
+        # The only fix on this screen the CUSTOMER cannot perform — say so, or
+        # whoever reads the alert sends them to edit a key that is fine.
+        "IP_BANNED": "Bybit has banned our server's IP — ours to fix, not the customer's",
+        "KEY_EXPIRED": "the key expired (a Bybit key with no IP bound lasts 90 days) — reconnect a fresh, IP-bound one",
+        "UNKNOWN_KEY": "Bybit no longer recognises the key — reconnect with a fresh one",
+        "BAD_SIGNATURE": "the secret does not match the key — reconnect with a fresh pair",
+    },
 }
 
 
@@ -250,4 +293,21 @@ def fix_for(error_text: str, exchange: str = "binance") -> Optional[str]:
             return fixes.get("BAD_SIGNATURE")
         if "permission" in text:
             return fixes.get("PERMISSION_TRADE_WRITE")
+    elif exchange == "bybit":
+        # Most specific first, and note two Bybit-only traps: its message for a
+        # bad secret is "error sign", which does NOT contain "signature"; and
+        # "API key is invalid" has to be tested before anything looser, or the
+        # dead-key case falls through to the permission one.
+        if "unmatched ip" in text or "10010" in text:
+            return fixes.get("IP_NOT_WHITELISTED")
+        if "banned" in text or "10009" in text:
+            return fixes.get("IP_BANNED")
+        if "expired" in text or "33004" in text:
+            return fixes.get("KEY_EXPIRED")
+        if "sign" in text or "10004" in text:
+            return fixes.get("BAD_SIGNATURE")
+        if "api key is invalid" in text or "10003" in text:
+            return fixes.get("UNKNOWN_KEY")
+        if "permission" in text or "10005" in text:
+            return fixes.get("PERMISSION_DENIED")
     return None

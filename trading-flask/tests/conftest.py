@@ -62,6 +62,7 @@ def _isolate_watermarks(tmp_path, monkeypatch):
     a test that stamped a fresh closes or fee watermark would make the live
     poller skip everything older on its next tick."""
     import binance_abcd.fee_receipts as fee_receipts
+    import binance_abcd.fetch_bybit_history as fetch_bybit_history
     import binance_abcd.fetch_mexc_history as fetch_mexc_history
     import binance_abcd.fetch_past_positions as fetch_past_positions
 
@@ -70,20 +71,26 @@ def _isolate_watermarks(tmp_path, monkeypatch):
     monkeypatch.setattr(fee_receipts, "FEES_WATERMARK_FILE", tmp_path / "last_fees_sync.json")
     monkeypatch.setattr(fetch_mexc_history, "WATERMARK_FILE", tmp_path / "last_mexc_closes_sync.json")
     monkeypatch.setattr(fetch_mexc_history, "FEES_WATERMARK_FILE", tmp_path / "last_mexc_fees_sync.json")
+    monkeypatch.setattr(fetch_bybit_history, "WATERMARK_FILE", tmp_path / "last_bybit_closes_sync.json")
+    monkeypatch.setattr(fetch_bybit_history, "FEES_WATERMARK_FILE", tmp_path / "last_bybit_fees_sync.json")
 
 
 @pytest.fixture(autouse=True)
 def _reset_exchange_state():
-    """Per-test amnesia for module-level MEXC caches and the key-status dedupe,
-    so one test's contract map or blocked-key memory never leaks into the next."""
+    """Per-test amnesia for the module-level venue caches and the key-status
+    dedupe, so one test's contract/instrument map or blocked-key memory never
+    leaks into the next."""
+    import binance_abcd.bybit_api as bybit_api
     import binance_abcd.key_status as key_status
     import binance_abcd.mexc_api as mexc_api
 
     key_status.reset()
     mexc_api.reset_caches()
+    bybit_api.reset_caches()
     yield
     key_status.reset()
     mexc_api.reset_caches()
+    bybit_api.reset_caches()
 
 
 @pytest.fixture()

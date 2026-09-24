@@ -56,8 +56,10 @@ webhook_bp = Blueprint("abcd_webhook", __name__)
 
 VALID_ACTIONS = ("BUY", "SELL", "EXIT_LONG", "EXIT_SHORT")
 ENTRY_ACTIONS = ("BUY", "SELL")
-# Ticker prefixes TradingView adds when the chart is on that venue.
-_TICKER_PREFIXES = ("BINANCE:", "MEXC:")
+# Ticker prefixes TradingView adds when the chart is on that venue. One entry
+# per venue the engine trades, or `{{ticker}}` from that venue's own chart
+# arrives as `BYBIT:BTCUSDT` and matches no asset row — every signal rejected.
+_TICKER_PREFIXES = ("BINANCE:", "MEXC:", "BYBIT:")
 
 _DISPATCH_EXECUTOR = ThreadPoolExecutor(max_workers=DISPATCH_WORKERS, thread_name_prefix="dispatch")
 _ACCOUNT_EXECUTOR = ThreadPoolExecutor(max_workers=FANOUT_WORKERS, thread_name_prefix="account")

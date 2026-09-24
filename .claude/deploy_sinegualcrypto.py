@@ -513,7 +513,7 @@ gzip_min_length 1024;
 # One public webhook path per venue (must match trading-flask/binance_abcd/hooks.py
 # WEBHOOK_PATHS). nginx proxies exactly these to waitress; a venue added to the
 # engine without a line here answers 404 from nginx, never reaching the engine.
-ENGINE_WEBHOOK_PATHS = ("/binance_abcd_webhook", "/mexc_abcd_webhook")
+ENGINE_WEBHOOK_PATHS = ("/binance_abcd_webhook", "/mexc_abcd_webhook", "/bybit_abcd_webhook")
 
 
 def _engine_webhook_locations(indent: int = 0) -> str:

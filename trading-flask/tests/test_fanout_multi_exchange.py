@@ -327,10 +327,41 @@ def test_a_payload_naming_another_venue_than_its_path_is_refused(client):
     assert response.status_code == 200
     submit.assert_called_once()
 
+    # Bybit is KNOWN to the engine since 2026-09-24, so this refusal is now
+    # about it not being ENABLED in this fixture — a different sentence with a
+    # different fix. Asserted explicitly so the case cannot go on passing while
+    # quietly proving something else.
     with patch.object(webhook._DISPATCH_EXECUTOR, "submit") as submit:
         response = client.post("/mexc_abcd_webhook", json=payload | {"exchanges": ["bybit"]})
-    assert response.status_code == 400 and "bybit" in response.get_json()["error"]
+    error = response.get_json()["error"]
+    assert response.status_code == 400 and "unknown or disabled" in error and "bybit" in error
     submit.assert_not_called()
+
+
+def test_a_payload_naming_an_enabled_third_venue_must_still_match_the_path(client, monkeypatch):
+    monkeypatch.setattr(hooks, "EXCHANGES", ("binance", "mexc", "bybit"))
+    payload = {"secret": "test-webhook-secret", "action": "BUY", "symbol": "BTCUSDT", "exchanges": ["bybit"]}
+
+    with patch.object(webhook._DISPATCH_EXECUTOR, "submit") as submit:
+        response = client.post("/mexc_abcd_webhook", json=payload)
+    assert response.status_code == 400 and "mexc only" in response.get_json()["error"]
+    submit.assert_not_called()
+
+    with patch.object(webhook._DISPATCH_EXECUTOR, "submit") as submit:
+        response = client.post("/bybit_abcd_webhook", json=payload)
+    assert response.status_code == 200
+    assert submit.call_args.kwargs == {"exchanges": ["bybit"]}
+
+
+def test_the_bybit_path_trades_bybit_accounts(client, monkeypatch):
+    monkeypatch.setattr(hooks, "EXCHANGES", ("binance", "mexc", "bybit"))
+    payload = {"secret": "test-webhook-secret", "action": "BUY", "symbol": "BYBIT:btcusdt.p"}
+    with patch.object(webhook._DISPATCH_EXECUTOR, "submit") as submit:
+        response = client.post("/bybit_abcd_webhook", json=payload)
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["ticker"] == "BTCUSDT" and body["exchange"] == "bybit" and body["exchanges"] == ["bybit"]
+    assert submit.call_args.kwargs == {"exchanges": ["bybit"]}
 
 
 def test_a_disabled_venues_webhook_answers_400_after_the_secret_gate(client, monkeypatch):
@@ -340,5 +371,14 @@ def test_a_disabled_venues_webhook_answers_400_after_the_secret_gate(client, mon
         response = client.post("/mexc_abcd_webhook", json=payload)
     assert response.status_code == 400 and "not enabled" in response.get_json()["error"]
     submit.assert_not_called()
+
+    # Every known path is registered even when its venue is off, so a disabled
+    # one answers a clear 400 rather than nginx's 404.
+    with patch.object(webhook._DISPATCH_EXECUTOR, "submit") as submit:
+        response = client.post("/bybit_abcd_webhook", json=payload)
+    assert response.status_code == 400 and "not enabled" in response.get_json()["error"]
+    submit.assert_not_called()
+
     # Without the secret the answer is the same 403 as anywhere else — no venue leak.
     assert client.post("/mexc_abcd_webhook", json={"action": "BUY", "symbol": "BTCUSDT"}).status_code == 403
+    assert client.post("/bybit_abcd_webhook", json={"action": "BUY", "symbol": "BTCUSDT"}).status_code == 403

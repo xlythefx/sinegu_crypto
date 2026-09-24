@@ -59,6 +59,7 @@ SERVICE_NAME = "binance-abcd"
 WEBHOOK_PATHS = {
     "binance": "/binance_abcd_webhook",
     "mexc": "/mexc_abcd_webhook",
+    "bybit": "/bybit_abcd_webhook",
 }
 WEBHOOK_PATH = WEBHOOK_PATHS["binance"]  # the original path; launcher/tester default
 FLASK_PORT = _env_int("FLASK_PORT", 5010)
@@ -78,7 +79,7 @@ ENGINE_EXCHANGE = "binance"  # default route segment: /engine/binance/...
 # adding `mexc` is what switches the second exchange on. Deliberately NOT
 # mirrored to prod by the deploy script — enabling an exchange there is a
 # decision someone makes on the box, not a side effect of a local .env.
-KNOWN_EXCHANGES = ("binance", "mexc")
+KNOWN_EXCHANGES = ("binance", "mexc", "bybit")
 EXCHANGES = tuple(dict.fromkeys(
     e.strip().lower() for e in _env_str("EXCHANGES", "binance").split(",") if e.strip()
 ))
@@ -125,6 +126,26 @@ MEXC_FAIR_PRICE_CACHE_TTL = _env_float("MEXC_FAIR_PRICE_CACHE_TTL", 15.0)
 # Closed trades + fee receipts for MEXC accounts (fetch_mexc_history), the
 # MEXC twin of PAST_POSITIONS_FETCH_INTERVAL.
 MEXC_HISTORY_FETCH_INTERVAL = _env_float("MEXC_HISTORY_FETCH_INTERVAL", 180.0)
+
+# --- Bybit USDT perpetuals (V5, category=linear, accountType=UNIFIED) ---------
+BYBIT_API_BASE = _env_str("BYBIT_API_BASE", "https://api.bybit.com").rstrip("/")
+# Accounts flagged demo=1 route here. This is Bybit's DEMO TRADING host, NOT
+# api-testnet.bybit.com — they are different products and the distinction
+# matters when someone pastes a key: demo is reached from the ordinary
+# bybit.com login (its own sub-UID) and its keys are minted in the Demo Trading
+# module, so a live key is refused here and a demo key is refused on the live
+# host. testnet.bybit.com is a separate site with a separate registration
+# altogether. Demo balances are topped up with POST /v5/account/demo-apply-money.
+BYBIT_DEMO_API_BASE = _env_str("BYBIT_DEMO_API_BASE", "https://api-demo.bybit.com").rstrip("/")
+# Clock skew Bybit tolerates, in MILLISECONDS (its own default is 5000). NOT the
+# same unit as MEXC_RECV_WINDOW above, which is SECONDS — hence the _MS suffix.
+# Copying MEXC's 20 here would ask Bybit for a 20 ms window and fail every call.
+BYBIT_RECV_WINDOW_MS = _env_int("BYBIT_RECV_WINDOW_MS", 5000)
+# Instrument specs (qtyStep, minOrderQty, tickSize, maxLeverage) change rarely;
+# one public call fills the whole map. The Bybit twin of the MEXC contracts TTL.
+BYBIT_INSTRUMENTS_CACHE_TTL = _env_float("BYBIT_INSTRUMENTS_CACHE_TTL", 3600.0)
+# Closed trades + fee receipts for Bybit accounts (fetch_bybit_history).
+BYBIT_HISTORY_FETCH_INTERVAL = _env_float("BYBIT_HISTORY_FETCH_INTERVAL", 180.0)
 
 # hedge (dual-side) or oneway; verified per account at startup, cached after.
 POSITION_MODE = _env_str("POSITION_MODE", "hedge").strip().lower()
@@ -270,7 +291,10 @@ REPORT_TICK_SECONDS = _env_float("REPORT_TICK_SECONDS", 30.0)
 # quantity x exit price x rate x 2 (entry leg + exit leg, both taker, because
 # the engine only ever places MARKET orders). What is published is therefore
 # the same figure the row will hold, give or take the later fee-receipt rebase.
-TAKER_FEE_RATES = {"binance": 0.0005, "mexc": 0.0002}
+# Bybit's published non-VIP USDT-perpetual taker fee is 0.055% — the HIGHEST of
+# the three, which is why it must be listed rather than left to the default: a
+# Bybit close falling back to Binance's 0.05% would publish a fee 10% too small.
+TAKER_FEE_RATES = {"binance": 0.0005, "mexc": 0.0002, "bybit": 0.00055}
 DEFAULT_TAKER_FEE_RATE = 0.0005
 
 

@@ -14,6 +14,7 @@ import binance_abcd.exchanges as exchanges
 import binance_abcd.hooks as hooks
 import binance_abcd.key_status as key_status
 from binance_abcd.binance_adapter import BinanceAdapter
+from binance_abcd.bybit_adapter import BybitAdapter
 from binance_abcd.mexc_adapter import MexcAdapter
 
 
@@ -29,6 +30,11 @@ def test_enabled_follows_hooks_at_call_time(monkeypatch):
     assert exchanges.enabled() == ("binance", "mexc")
     assert exchanges.labels(["binance", "mexc"]) == "Binance + MEXC"
     assert exchanges.spec("mexc").assets_broker == "MEXC"
+
+    monkeypatch.setattr(hooks, "EXCHANGES", ("binance", "mexc", "bybit"))
+    assert exchanges.enabled() == ("binance", "mexc", "bybit")
+    assert exchanges.labels(["binance", "mexc", "bybit"]) == "Binance + MEXC + Bybit"
+    assert exchanges.spec("bybit").assets_broker == "Bybit"
 
 
 def test_unknown_exchange_is_an_error():
@@ -57,6 +63,26 @@ def test_mexc_accounts_get_a_mexc_adapter_on_the_one_mexc_host():
     assert client.LEVERAGE_PER_ORDER is True
 
 
+def test_bybit_accounts_get_a_bybit_adapter_on_the_bybit_host():
+    client = exchanges.client_for({"api_key": "bybitk", "secret_key": "s", "exchange": "bybit"})
+    assert isinstance(client, BybitAdapter) and client.exchange == "bybit"
+    assert client.base_url == hooks.BYBIT_API_BASE
+    assert client.api_key == "bybitk"
+    # Binance-shaped, not MEXC-shaped: set_leverage POSTs.
+    assert client.LEVERAGE_PER_ORDER is False
+
+
+def test_demo_bybit_rows_route_to_demo_trading_not_the_testnet():
+    """Bybit has TWO non-live environments and they are not interchangeable.
+    Demo Trading uses the ordinary bybit.com login with keys minted in its own
+    module; testnet.bybit.com is a separate site with a separate registration.
+    A key pasted for one is refused by the other."""
+    client = exchanges.client_for({"api_key": "k", "secret_key": "s", "exchange": "bybit", "demo": True})
+    assert client.base_url == hooks.BYBIT_DEMO_API_BASE
+    assert "testnet" not in client.base_url
+    assert "demo" in client.base_url
+
+
 def test_the_raw_classes_are_the_patch_seam():
     fake = MagicMock(name="BinanceAPI")
     with patch.object(exchanges, "BinanceAPI", fake):
@@ -67,6 +93,11 @@ def test_the_raw_classes_are_the_patch_seam():
     with patch.object(exchanges, "MexcFuturesAPI", fake):
         exchanges.client_for({"api_key": "k", "secret_key": "s", "exchange": "mexc"})
     fake.assert_called_once_with("k", "s", base_url=hooks.MEXC_API_BASE)
+
+    fake = MagicMock(name="BybitFuturesAPI")
+    with patch.object(exchanges, "BybitFuturesAPI", fake):
+        exchanges.client_for({"api_key": "k", "secret_key": "s", "exchange": "bybit"})
+    fake.assert_called_once_with("k", "s", base_url=hooks.BYBIT_API_BASE)
 
 
 # --- demo rows route to the venue's testnet -------------------------------------
@@ -151,6 +182,12 @@ def test_credential_codes_are_scoped_to_their_exchange():
     assert key_status.classify({"code": -2015, "msg": "x"}, "mexc") is None
     assert key_status.classify({"code": -2015, "msg": "x"})[1] == "IP_OR_PERMISSION"
     assert key_status.classify({"code": True}, "mexc") is None           # bool is not a code
+
+    assert key_status.classify({"code": 10010, "message": "Unmatched IP"}, "bybit") == (
+        10010, "IP_NOT_WHITELISTED", "Unmatched IP",
+    )
+    assert key_status.classify({"code": 10010}, "binance") is None       # 10010 means nothing on Binance
+    assert key_status.classify({"code": 406}, "bybit") is None           # nor 406 on Bybit
 
 
 def test_blocked_reports_go_to_the_exchanges_own_route():

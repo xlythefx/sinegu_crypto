@@ -144,6 +144,51 @@ def test_reads_failing_too_downgrades_the_verdict_back_to_the_ip_reading():
     assert reasons == ["TRADE_PERMISSION", "IP_OR_PERMISSION"]
 
 
+def test_bybit_10005_on_a_readable_key_names_the_trade_permission():
+    """Bybit is PRECISE about the IP (10010), the key (10003), the secret
+    (10004) and expiry (33004) — and then collapses every permission fault into
+    a single 10005. That is Binance's -2015 problem in miniature, so it is the
+    one Bybit code that gets sharpened. MEXC needs none: its 701-704 each name
+    their own permission."""
+    with patch.object(key_status.engine_client, "post_json") as post:
+        key_status.report_ok("by-k", "bybit")
+        key_status.report_blocked("by-k", 10005, "PERMISSION_DENIED", "permission denied", "bybit")
+
+    assert post.call_args_list[-1][0][1]["reason"] == "TRADE_PERMISSION"
+
+    key_status.reset()
+    with patch.object(key_status.engine_client, "post_json") as post:
+        key_status.report_blocked("by-k2", 10005, "PERMISSION_DENIED", "permission denied", "bybit")
+
+    assert post.call_args_list[-1][0][1]["reason"] == "PERMISSION_DENIED"
+
+
+def test_bybit_reads_failing_too_downgrades_the_verdict_back():
+    with patch.object(key_status.engine_client, "post_json") as post:
+        key_status.report_ok("by-k", "bybit")
+        key_status.report_blocked("by-k", 10005, "PERMISSION_DENIED", "x", "bybit")
+        key_status.report_blocked("by-k", 10005, "PERMISSION_DENIED", "x", "bybit", scope=key_status.READ)
+
+    reasons = [c[0][1]["reason"] for c in post.call_args_list if c[0][1]["status"] == "blocked"]
+    assert reasons == ["TRADE_PERMISSION", "PERMISSION_DENIED"]
+
+
+def test_fix_for_speaks_bybits_own_ui_vocabulary():
+    """Matched on Bybit's own retMsg, because that is all the fan-out keeps per
+    account. Two traps: "error sign" does NOT contain the word "signature", and
+    "API key is invalid" must be tested before anything looser."""
+    assert "secret does not match" in key_status.fix_for("error sign", "bybit")
+    assert "allow-list" in key_status.fix_for("Unmatched IP, please check your API key", "bybit")
+    assert "90 days" in key_status.fix_for("Your api key has expired", "bybit")
+    assert "no longer recognises" in key_status.fix_for("API key is invalid", "bybit")
+    assert "Unified Trading" in key_status.fix_for("permission denied for current apikey", "bybit")
+    # Ours to fix, not the customer's — the alert must not send them to a key.
+    assert "ours to fix" in key_status.fix_for("Your IP has been banned", "bybit")
+    # An ordinary order rejection gets no key advice at all.
+    assert key_status.fix_for("ab not enough for new order", "bybit") is None
+    assert key_status.fix_for("", "bybit") is None
+
+
 def test_accounts_are_tracked_independently():
     with patch.object(key_status.engine_client, "post_json") as post:
         key_status.report_blocked("key-a", -2015, "IP_OR_PERMISSION", "nope")
