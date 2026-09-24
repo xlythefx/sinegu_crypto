@@ -8,6 +8,15 @@ import type { TrackRecordPoint, TrackRecordStats } from '../../types/publicStats
 /** How many CALENDAR days the trailing-return item covers. */
 const TRAILING_DAYS = 30
 
+/**
+ * Seconds one item takes to cross the strip. The animation translates the
+ * doubled row by -50%, i.e. exactly one copy's width, so the DURATION has to
+ * scale with the item count or the strip would race whenever another symbol is
+ * configured and crawl whenever one is removed. This is the speed; the length
+ * follows from it.
+ */
+const SECONDS_PER_ITEM = 4
+
 type Tone = 'up' | 'down' | 'accent' | ''
 
 const DELTA_TONE: Record<string, string> = {
@@ -26,8 +35,12 @@ interface Item {
 
 const signTone = (n: number): Tone => (n < 0 ? 'down' : 'up')
 
-/** Two decimals down to a dollar, six below it — these are perp prices. */
-const fmtPrice = (price: number): string => fmtNum(price, price >= 1 ? 2 : 6)
+/**
+ * Decimals by magnitude, so a sub-dollar pair keeps its precision without
+ * printing "0.520000" beside BTC's "84,225.20".
+ */
+const fmtPrice = (price: number): string =>
+  fmtNum(price, price >= 1 ? 2 : price >= 0.01 ? 4 : 6)
 
 /**
  * "in 3h 12m" until funding is next charged. Null when the venue named no next
@@ -127,7 +140,7 @@ export default function Ticker({ stats = null, series = [] }: TickerProps) {
       // call, 2026-09-23), and this figure is that section's headline card.
       label: 'STRATEGY ROC',
       value: fmtSignedPct(stats.return_on_capital_pct, 2),
-      delta: 'on capital invested',
+      delta: null,
       tone: signTone(stats.return_on_capital_pct),
     })
   }
@@ -138,8 +151,15 @@ export default function Ticker({ stats = null, series = [] }: TickerProps) {
   return (
     <div className="border-b border-hair bg-surface2 overflow-hidden whitespace-nowrap">
       {/* The non-breaking space holds the bar's height before the first
-          payload lands, so nothing below it jumps when the quotes arrive. */}
-      <div className="inline-flex gap-9 py-[9px] font-mono text-[12.5px] tabular-nums animate-[tick_42s_linear_infinite] will-change-transform">
+          payload lands, so nothing below it jumps when the quotes arrive.
+          The inline duration overrides the one in the class: it is derived
+          from the item count so the speed stays put as symbols are added. */}
+      <div
+        className="inline-flex gap-9 py-[9px] font-mono text-[12.5px] tabular-nums animate-[tick_42s_linear_infinite] will-change-transform"
+        style={{
+          animationDuration: `${Math.max(items.length, 1) * SECONDS_PER_ITEM}s`,
+        }}
+      >
         {items.length === 0 ? (
           <span>&nbsp;</span>
         ) : (
