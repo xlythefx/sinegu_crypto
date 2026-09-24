@@ -5,8 +5,8 @@ export type ExchangeFilter = 'all' | Exchange
 
 export const EXCHANGES: Exchange[] = ['Binance', 'Bybit', 'MEXC']
 
-/** Venues with tables behind them — Bybit stays disabled in the facet. */
-export const AVAILABLE_EXCHANGES: Exchange[] = ['Binance', 'MEXC']
+/** Venues with tables behind them. All three since 2026-09-24. */
+export const AVAILABLE_EXCHANGES: Exchange[] = ['Binance', 'Bybit', 'MEXC']
 
 export interface ActivePosition {
   ticker: string

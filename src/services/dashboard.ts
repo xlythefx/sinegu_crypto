@@ -10,8 +10,8 @@ import type {
 
 // Every read takes the top-bar exchange filter: omitted / 'all' pools every
 // connected exchange, a venue narrows the API's queries to that venue's own
-// tables. The API answers 400 for a venue it has no tables for (Bybit), which
-// the pills never offer.
+// tables. All three venues have tables since 2026-09-24; the API still answers
+// 400 for a name it does not know, which the pills never offer.
 
 export async function getDashboardSummary(
   exchange: ExchangeFilter = 'all',

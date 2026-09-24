@@ -37,11 +37,14 @@ export interface ConnectExchangePayload {
   api_key: string
   secret_key: string
   /**
-   * true routes this account to the exchange's futures TESTNET, false to real
-   * mainnet trading. The keys differ per network — a Binance testnet key is
-   * issued by testnet.binancefuture.com and is rejected on mainnet — so the
-   * wizard makes the user choose rather than inferring it. Venues without a
-   * testnet (MEXC) refuse `true` outright.
+   * true routes this account to the exchange's non-live environment, false to
+   * real mainnet trading. The keys differ per environment on every venue — a
+   * Binance testnet key is issued by testnet.binancefuture.com and rejected on
+   * mainnet, and a Bybit key made inside Demo Trading is rejected on the live
+   * host and vice versa — so the wizard makes the user choose rather than
+   * inferring it. (MEXC is the exception: its testnet takes the live keys, but
+   * only ones with no IP bound.) A venue with no such environment refuses
+   * `true` outright with DEMO_NOT_AVAILABLE; all three have one today.
    */
   demo: boolean
 }

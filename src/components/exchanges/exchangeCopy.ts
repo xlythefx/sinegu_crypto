@@ -107,19 +107,63 @@ export const EXCHANGE_COPY: Record<ExchangeKind, ExchangeCopy> = {
     },
   },
   bybit: {
-    marketName: 'Bybit futures',
+    marketName: 'Bybit USDT perpetuals',
     liveKeysUrl: 'https://www.bybit.com/app/user/api-management',
     liveKeysLabel: 'Open Bybit API Management',
-    liveSteps: [],
-    ipSettingName: 'IP restriction',
-    permissionName: 'Contract — Orders & Positions',
-    secretHint: 'Bybit shows the secret once, at creation.',
-    deadKeyReasons: [],
-    deadKeyExplanation: '',
-    tradePermissionReasons: [],
+    liveSteps: [
+      'Open Bybit → API → API Management and create a new System-generated API key.',
+      'Under Unified Trading, tick Trade. (On an older, non-unified account the same permission is Contract → Orders, Positions.) Leave Withdraw OFF — we never need it.',
+      'Choose “Only IPs with permissions granted have access” and paste our server address below. A Bybit key with no IP bound expires 90 days after it is created; a bound one does not.',
+      'Copy the API Key and Secret below.',
+    ],
+    // Bybit's non-live environment is DEMO TRADING, not testnet.bybit.com.
+    // Demo uses the same bybit.com login but its own keys; testnet is a
+    // separate site with a separate registration. Naming the wrong one sends
+    // people to make a key that is refused with no useful error.
+    demoSite: 'Demo Trading on bybit.com',
+    demoKeysUrl: 'https://www.bybit.com/app/user/api-management',
+    demoKeysLabel: 'Open Bybit API Management',
+    demoKeysPoint: 'Same Bybit login, but a SEPARATE key made inside Demo Trading',
+    demoSteps: [
+      'Sign in to bybit.com as normal, open the account menu and switch to Demo Trading. It is a separate demo account under your own login, with play money.',
+      'While in Demo Trading, open API → API Management and create a key THERE. Demo keys and live keys are not interchangeable in either direction — a live key pasted here is refused, and vice versa.',
+      'Give it Unified Trading → Trade, exactly as for a live key.',
+      'Top up the demo balance from the Demo Trading screen if it is empty, then paste the API Key and Secret below.',
+    ],
+    ipSettingName: 'Only IPs with permissions granted have access',
+    permissionName: 'Unified Trading — Trade',
+    secretHint:
+      'Bybit shows the Secret once, at creation. If you lost it, create a new key rather than guessing.',
+    keyNote:
+      'Bybit refuses every request from some regions regardless of the key, so if a brand-new key fails immediately it may not be the key at all — tell us and we will check from our side.',
+    // These two lists MUST mirror key_status.CREDENTIAL_CODES['bybit'] in the
+    // engine: they are the two halves of one table, and a reason missing here
+    // falls through to the `ip` wording, which would then name the wrong fix.
+    deadKeyReasons: ['KEY_EXPIRED', 'UNKNOWN_KEY', 'BAD_SIGNATURE'],
+    deadKeyExplanation:
+      'The key itself no longer works — a Bybit key with no IP bound expires 90 days after it was created, and a deleted or regenerated key stops the same way. Disconnect this account and connect a fresh key, bound to our server address so it does not expire.',
+    tradePermissionReasons: ['PERMISSION_DENIED', 'TRADE_PERMISSION'],
     blocked: {
-      ip: { explanation: '', steps: [] },
-      tradePermission: { explanation: '', steps: [] },
+      ip: {
+        explanation:
+          'Your API key only accepts requests from specific IP addresses, and ours is not one of them. Bybit refuses everything we send with it, which is why the account says connected while the balance sits still.',
+        steps: [
+          'Open Bybit → API → API Management and edit this key.',
+          'Under “Only IPs with permissions granted have access”, paste the address above and save.',
+          'Check that Unified Trading → Trade is still ticked — the key must be able to trade, never to withdraw.',
+          'Come back and press “I’ve fixed it — recheck”.',
+        ],
+      },
+      tradePermission: {
+        explanation:
+          'Bybit accepts this key but will not let it place orders: the trading permission it needs is not on it. Every order is refused while the account looks perfectly connected.',
+        steps: [
+          'Open Bybit → API → API Management and edit this key.',
+          'Tick Unified Trading → Trade. (On an older, non-unified account: Contract → Orders, Positions.) Leave Withdraw OFF.',
+          'While you are there, make sure our server address above is on the key’s IP list — a key with no IP bound also expires after 90 days.',
+          'Come back and press “I’ve fixed it — recheck”. We ask Bybit what the key is allowed to do, so you will know straight away.',
+        ],
+      },
     },
   },
   mexc: {

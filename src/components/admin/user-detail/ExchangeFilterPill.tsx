@@ -13,7 +13,13 @@ const PILL_BTN =
 
 /**
  * All / Binance / Bybit / MEXC filter pill (mother's broker pill, adapted).
- * Unavailable exchanges (Bybit, MEXC) render disabled with a "Coming soon" tip.
+ *
+ * It is the DATA SCOPE of everything below it, not a client-side filter, so a
+ * venue is offered only when the API has tables to answer for it — a venue
+ * without them renders disabled with a "Coming soon" tip. All three are
+ * available since 2026-09-24; `staffOnly` is not consulted here, because that
+ * gates CONNECTING, not reading, and an admin must be able to look at any
+ * venue's rows.
  */
 export default function ExchangeFilterPill({
   value,

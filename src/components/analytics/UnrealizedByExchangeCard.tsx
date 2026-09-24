@@ -1,28 +1,36 @@
 import { Building2, TrendingUp } from 'lucide-react'
 import { fmtSignedMoney } from '../../lib/format'
 import type { ExchangeStat } from '../../types/analytics'
-
-// Only Binance is integrated for now; Bybit / MEXC stay listed but disabled
-// ("Soon") until those integrations exist.
-const SOON_ROWS = [
-  { exchange: 'Bybit', color: '#f7a600' },
-  { exchange: 'MEXC', color: '#1972e2' },
-]
+import { EXCHANGE_META, EXCHANGE_ORDER } from '../exchanges/meta'
 
 interface UnrealizedByExchangeCardProps {
   byExchange: ExchangeStat[]
   totalUnrealized: number
 }
 
-/** "Unrealized P&L by Exchange" — open exposure per connected exchange. */
+/** "Unrealized P&L by Exchange" — open exposure per connected exchange.
+ *
+ * Driven by the payload's `by_exchange`, never by a hardcoded row: until
+ * 2026-09-24 this card printed Binance's figure and a fixed "Soon" beside
+ * Bybit AND MEXC, so a MEXC position had been invisible here since MEXC went
+ * live. A venue is "Soon" only when `meta.ts` says it is not wired. */
 export default function UnrealizedByExchangeCard({
   byExchange,
   totalUnrealized,
 }: UnrealizedByExchangeCardProps) {
-  const binance = byExchange.find(
-    (e) => e.exchange.toLowerCase() === 'binance',
+  const figures = new Map(
+    byExchange.map((e) => [e.exchange.toLowerCase(), e.unrealized]),
   )
-  const binanceUnrealized = binance?.unrealized ?? 0
+  const rows = EXCHANGE_ORDER.map((kind) => {
+    const meta = EXCHANGE_META[kind]
+    return {
+      kind,
+      label: meta.label,
+      color: meta.color,
+      // A wired venue with no open position is a real 0.00, not "Soon".
+      unrealized: meta.available ? (figures.get(kind) ?? 0) : null,
+    }
+  })
 
   return (
     <section
@@ -45,26 +53,12 @@ export default function UnrealizedByExchangeCard({
       </div>
 
       <div className="flex flex-col">
-        <div className="flex items-center justify-between py-2.5 px-0.5 border-b border-hair text-[13px] font-bold">
-          <div className="flex items-center gap-[9px]">
-            <span
-              className="w-[26px] h-[26px] rounded-btn border bg-surface2 flex items-center justify-center flex-none"
-              style={{ color: '#f0b90b', borderColor: '#f0b90b55' }}
-            >
-              <Building2 size={14} />
-            </span>
-            Binance
-          </div>
-          <span
-            className={`font-mono ${binanceUnrealized < 0 ? 'text-red' : 'text-green'}`}
-          >
-            {fmtSignedMoney(binanceUnrealized)}
-          </span>
-        </div>
-        {SOON_ROWS.map((row) => (
+        {rows.map((row) => (
           <div
-            className="flex items-center justify-between py-2.5 px-0.5 border-b border-hair text-[13px] font-bold opacity-45"
-            key={row.exchange}
+            className={`flex items-center justify-between py-2.5 px-0.5 border-b border-hair text-[13px] font-bold${
+              row.unrealized === null ? ' opacity-45' : ''
+            }`}
+            key={row.kind}
           >
             <div className="flex items-center gap-[9px]">
               <span
@@ -73,11 +67,19 @@ export default function UnrealizedByExchangeCard({
               >
                 <Building2 size={14} />
               </span>
-              {row.exchange}
+              {row.label}
             </div>
-            <span className="font-mono text-[11px] font-bold uppercase tracking-[0.06em] text-muted">
-              Soon
-            </span>
+            {row.unrealized === null ? (
+              <span className="font-mono text-[11px] font-bold uppercase tracking-[0.06em] text-muted">
+                Soon
+              </span>
+            ) : (
+              <span
+                className={`font-mono ${row.unrealized < 0 ? 'text-red' : 'text-green'}`}
+              >
+                {fmtSignedMoney(row.unrealized)}
+              </span>
+            )}
           </div>
         ))}
         <div className="flex items-center justify-between pt-3 pb-0.5 px-0.5 mt-1 border-t-2 border-accent-line text-[13.5px] font-extrabold">

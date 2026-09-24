@@ -82,8 +82,9 @@ it goes back through `company.ts`, not retyped.
 - **Frontend (this repo):** React 19 + TypeScript + Vite (scaffolded with `npm create vite`), `react-router-dom`. Styling is **Tailwind v4 utility classes mapped to the design tokens** in `src/index.css` (`@theme inline` — `bg-surface`, `text-muted`, `rounded-card`, …); repeated strings are hoisted into module-level `const`s or a shared `*Classes.ts` (`components/settings/formClasses.ts`, `components/auth/authClasses.ts`, `components/dashboard/shellClasses.ts`). Routes: `/` (landing), `/auth` (sign in / register), `/auth/discord/*` (Discord sign-in).
 - **Backend:** `sinegutrade-api` (Laravel + Sanctum) + MySQL DB `sinegu_crypto`, running locally on WAMP.
   Exchange data lives in `binance_*` tables (accounts, positions, pastpositions, transactions, invoices);
-  **`mexc_*` and `bybit_*` tables will be added soon** — keep exchange-specific reads behind API
-  endpoints so the new exchanges can be merged in without frontend changes.
+  `mexc_*` landed 2026-09-16 and `bybit_*` 2026-09-24, all four tables per venue.
+  Keep exchange-specific reads behind API endpoints and behind `ExchangeSchema`,
+  so the next venue merges in without frontend changes.
 - **Deployment (live):** **https://pixel-alpha.com** — Ubuntu 24.04 Contabo VPS
   (origin `2.24.139.176`), provisioned 2026-07-28, domain + TLS 2026-08-11. nginx
   serves the React build at `/` and `sinegutrade-api` at `/api` from the same origin
@@ -104,14 +105,16 @@ it goes back through `company.ts`, not retyped.
 **Supported exchanges (the only brokers) — Binance, Bybit, MEXC.** These three are the
 entire universe of exchanges the product supports; there are no others (no Capital.com, no
 IG, etc.). Any "broker/exchange" list, filter, badge, or selector must contain exactly these
-three. Binance is live; Bybit is "Coming soon" until its `bybit_*` tables land.
-Canonical labels/brand colors/order live in `src/components/exchanges/meta.ts`.
+three. **All three are wired as of 2026-09-24**; MEXC and Bybit are staff-only
+to connect (below). Canonical labels/brand colors/order live in
+`src/components/exchanges/meta.ts`.
 
-**MEXC is live in the engine but STAFF-ONLY to connect (2026-09-23).** It
-trades, bills and syncs like Binance; it has simply not run long enough on a
-real customer account to sell, so only `admin` / `master` / `developer` may
-connect one. The gate is `config('exchanges.staff_only')` (CSV env
-`EXCHANGES_STAFF_ONLY`, default `mexc`) checked in
+**MEXC and Bybit are live in the engine but STAFF-ONLY to connect** (MEXC
+2026-09-23, Bybit 2026-09-24). They trade and sync like Binance; they have
+simply not run long enough on a real customer account to sell, so only
+`admin` / `master` / `developer` may connect one. The gate is
+`config('exchanges.staff_only')` (CSV env `EXCHANGES_STAFF_ONLY`, default
+`mexc,bybit`) checked in
 `ExchangeAccountController::store` against `EnsureAdmin::ROLES` — the admin
 portal's own list, never a second spelling of it — answering 403
 `EXCHANGE_RESTRICTED`. Three rules:
@@ -119,14 +122,17 @@ portal's own list, never a second spelling of it — answering 403
   keeps syncing, and can always be renamed or disconnected. Closing a venue
   must never trap someone's keys inside it (a test asserts it).
 - **A customer is told "Coming soon", not "staff only"** — for them that is the
-  whole truth, and it is the same words Bybit gets. `staffOnly` in `meta.ts` +
-  `canConnectExchange(kind, role)` is the client twin (cosmetic, as always);
-  staff see the row selectable with a "Staff only" badge.
-- **Opening it is a config change on the box** (`EXCHANGES_STAFF_ONLY=` then
+  whole truth. `staffOnly` in `meta.ts` + `canConnectExchange(kind, role)` is
+  the client twin (cosmetic, as always); staff see the row selectable with a
+  "Staff only" badge.
+- **Opening one is a config change on the box** (`EXCHANGES_STAFF_ONLY=…` then
   `config:cache`), never a deploy — and it is deliberately NOT mirrored by
   `sync-api-env`, for the same reason `TRON_PUBLIC` is not: rollout state must
   not follow a local experiment onto prod. The default is the closed state, so
-  a box missing the key still protects it.
+  a box missing the key still protects it — which means **a new venue must join
+  that default in the same change that registers it**. And note the CSV now
+  that two venues are listed: **clearing the key opens BOTH**, so opening one
+  alone means naming the other (`EXCHANGES_STAFF_ONLY=bybit` opens MEXC).
 
 ## Current objective — port the user side of the mother dashboard
 
@@ -148,7 +154,7 @@ page by page ("we slowly do it"). Rules for every ported page:
   (`/dashboard/positions`, from UserAlerts), **Performance Analytics**
   (`/dashboard/analytics`, from UserAnalytics), **Exchange Accounts**
   (`/dashboard/exchanges`, from UserBrokers — live against `/api/exchange/*`;
-  **Binance and MEXC connect (2026-09-16), Bybit locked "Coming soon"**. One
+  **all three venues connect; MEXC and Bybit are staff-only**. One
   account per user PER exchange; every row carries `exchange` and every
   rename/refresh/disconnect goes to `/exchange/{exchange}/accounts/{id}`
   because ids repeat across the per-exchange tables. Connecting is its own
@@ -462,7 +468,7 @@ read-only reference material, consulted only when explicitly prompted.
 |---|---|
 | `C:\Users\Xlythe\sinequal-dash-fusion-main` | **Mother project.** Use only as context/reference when prompted. |
 | `C:\wamp64\www\sinegu-api` | **Mother API.** Consult ONLY when explicitly prompted — it is legacy spaghetti code. Never use it as the sole reference or copy its architecture; at most a lookup for domain facts (field names, business rules). |
-| `C:\wamp64\www\sinegutrade-api` | **This project's API** (Laravel + Sanctum, DB `sinegu_crypto`). Live: auth, profile/password, dashboard summary, binance positions/past-positions, invoices, referrals, the public `/api/public/track-record` feed, and the engine's `/api/engine/*` surface. `mexc_*`/`bybit_*` tables coming soon. |
+| `C:\wamp64\www\sinegutrade-api` | **This project's API** (Laravel + Sanctum, DB `sinegu_crypto`). Live: auth, profile/password, dashboard summary, binance positions/past-positions, invoices, referrals, the public `/api/public/track-record` feed, and the engine's `/api/engine/*` surface. All three venues' tables exist (`binance_*`, `mexc_*`, `bybit_*`). |
 | `C:\Users\Xlythe\trading-flask` | **Original multi-exchange bot — READ-ONLY.** Reference for env-driven config, tests, and the per-exchange service split. Never edit it, not even its `.env`. |
 | `C:\Users\Xlythe\binance-flask` | **Mature bot reference — READ-ONLY.** The runtime pattern the in-repo engine was modeled on (fast-ACK dispatch + account pools, retry queue, billing gate via `enabled=0`). Consult only; never edit. |
 
@@ -501,16 +507,18 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   engine:mark-overdue` (scheduled daily) disables accounts with past-due
   invoices; `InvoiceService::settle` re-enables on payment. `{exchange}` is
   resolved to its own four tables by `App\Services\Exchanges\ExchangeSchema`
-  (`binance` and `mexc` today; `bybit` still answers 400) — the ONE map from
-  an exchange name to `{x}_accounts/positions/pastpositions/transactions`,
-  its asset broker label and its taker fee rate. `BinanceAccount` and
-  `MexcAccount` share the abstract `ExchangeAccount`.
+  (all three since 2026-09-24) — the ONE map from an exchange name to
+  `{x}_accounts/positions/pastpositions/transactions`, its asset broker label
+  and its taker fee rate. `BinanceAccount`, `MexcAccount` and `BybitAccount`
+  share the abstract `ExchangeAccount`. Adding a venue is one REGISTRY entry
+  plus its four migrations; no controller changes.
 - **Exchanges (2026-09-16): one process, one WEBHOOK PATH PER VENUE, every
-  venue in `BINANCE_ABCD_EXCHANGES`** (CSV, default `binance`; add `mexc` to
-  turn MEXC on — deliberately NOT mirrored to prod by the deploy script,
-  because enabling a venue for customers is a decision made on the box; prod
-  has had it on since 2026-09-17). `hooks.WEBHOOK_PATHS` maps
-  `binance → /binance_abcd_webhook`, `mexc → /mexc_abcd_webhook`; the path a
+  venue in `BINANCE_ABCD_EXCHANGES`** (CSV, default `binance`; add `mexc` or
+  `bybit` to turn those on — deliberately NOT mirrored to prod by the deploy
+  script, because enabling a venue for customers is a decision made on the box.
+  Prod has had MEXC on since 2026-09-17; **Bybit is NOT on prod yet**).
+  `hooks.WEBHOOK_PATHS` maps `binance → /binance_abcd_webhook`,
+  `mexc → /mexc_abcd_webhook`, `bybit → /bybit_abcd_webhook`; the path a
   TradingView alert posts to is what decides which exchange's accounts the
   signal trades, so each venue has its own alert(s) and a payload `exchanges`
   field is accepted only when it agrees with the path (a disabled venue's
@@ -558,7 +566,62 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   Admin → API Keys, Engine → key issues and User Management list every
   exchange's accounts. Still Binance-only: Admin → Trading Positions
   (`AdminController::positions` and its edit/delete routes) and the master
-  stats card.
+  stats card. **`bybit_*` is read through exactly the same paths** — it needed
+  no reader changes at all, because every one of them goes through
+  `ExchangeSchema::supported()`.
+- **Bybit is the third venue (2026-09-24), shipped DARK.** `bybit_api.py` +
+  `bybit_adapter.py` + `fetch_bybit_history.py`, `/bybit_abcd_webhook`, the
+  four `bybit_*` tables and one `ExchangeSchema` entry — but `bybit` is NOT in
+  `BINANCE_ABCD_EXCHANGES` and that key is not deploy-mirrored, so prod does
+  not trade it until someone types it on the box. It is closer to Binance than
+  to MEXC (leverage POSTed, sizes already in base coins, a real
+  `trade_permission()` from `/v5/user/query-api`), so roughly half of the MEXC
+  client has no counterpart. The facts worth knowing before touching it:
+  - **V5 signing is a THIRD scheme**: `timestamp + api_key + recv_window +
+    (queryString | rawBody)`, and the query string is signed **unsorted, in URL
+    order** — `mexc_api._param_string` sorts, so it must not be reused.
+    `recv_window` is MILLISECONDS here and SECONDS on MEXC (hence
+    `BYBIT_RECV_WINDOW_MS`); copying MEXC's 20 asks for a 20 ms window.
+  - **`positionIdx` is READ off the account's own rows, never configured.** A
+    UNIFIED account may not support hedge mode on `category=linear` at all, so
+    `position_map` keys LONG/SHORT in EITHER mode (a one-way `side: "Buy"` row
+    IS a long) and a refused `switch-mode` is logged rather than failing the
+    venue. Keying "BOTH" would make every exit read "no position to close" —
+    positions would open and never close. A test pins it.
+  - **`/v5/position/list` for linear needs `symbol` or `settleCoin`.** A bare
+    `category=linear` is refused; folding that refusal into `[]` is the
+    empty-vs-unavailable conflation that deleted live positions on 2026-08-18.
+  - **`retCode == 0` means ACCEPTED, not filled.** Bybit converts a market
+    order to an IOC limit inside a slippage band, so an order can end
+    `Cancelled` having filled nothing — `fill_summary_once` therefore probes
+    the order and returns `(None, None)` on a dead one instead of exhausting
+    the retry budget and publishing a close with no PnL line.
+  - **`110043` / `110025` ("not modified") are successes**, handled in the
+    transport so no later call site can forget it.
+  - **Funding receipts are NOT sign-flipped.** Binance income and MEXC
+    `funding_records` report what the account RECEIVED (negative = paid) and
+    are negated; Bybit reports funding as an execution FEE, already what was
+    paid. Flipping it would invert every funding charge on the venue.
+  - **Transfers come from `/v5/account/transaction-log` TRANSFER_IN/OUT**, not
+    `/v5/asset/*`: deposit records are movements into the Bybit ACCOUNT, so a
+    customer whose funds sit in the Funding wallet would pass the deposit gate
+    and trade against a zero balance.
+  - **`exchange_fee_receipts.ref` became a string for Bybit.** Its `execId` is
+    a UUID and is the only per-execution id it publishes (`orderId` cannot
+    serve — one order yields several executions, and the unique key is what
+    makes re-sent pages harmless). Hashing it was rejected: a ref nobody can
+    paste back into Bybit's UI defeats the one question that table answers.
+  - **STILL UNVERIFIED, and it gates real money:** whether
+    `/v5/position/closed-pnl`'s `closedPnl` is gross or net of fees
+    (`bybit_adapter.CLOSED_PNL_IS_NET`, the `DEAL_PROFIT_IS_NET` twin). The
+    engine posts GROSS and the API nets once on ingest, so a wrong answer nets
+    twice. `closed_gross_pnl` prefers `cumExitValue - cumEntryValue` — gross by
+    definition — so a wrong switch degrades to a fallback rather than to wrong
+    money, but the demo round trip is what settles it. Owner to-do
+    `bybit-demo-round-trip`.
+  - **Demo is Demo Trading (`api-demo.bybit.com`), NOT testnet.bybit.com** —
+    the same bybit.com login but keys minted in its own module, not
+    interchangeable with live ones in either direction.
 - **Cache freshness is PUSHED, never polled — and the engine is never
   restarted for a data change.** The engine TTL-caches its account and asset
   lists (90 s, `binance_abcd/cache.py`); Laravel's `App\Services\EngineCache`
@@ -1036,7 +1099,7 @@ for the overlay's `position: fixed` and trap it inside.
   `SYNC_POSITION_MODE_ON_STARTUP`. Config-only fix, no code, no test gate:
   `python .claude/deploy_sinegualcrypto.py sync-engine-env` (upserts + restarts).
 - **Commands:** `python -m binance_abcd.main` (waitress), `python -m pytest
-  tests/ -q` (344 tests, no network), `python webhook_tester.py` (Tkinter GUI
+  tests/ -q` (447 tests, no network), `python webhook_tester.py` (Tkinter GUI
   trade sender — local or prod target, red banner on prod).
 - **Naming trap:** root `src/` is the React app; the engine package is
   `binance_abcd/`, deliberately not named `src`. Python and TypeScript
@@ -1054,8 +1117,9 @@ should run on both needs one alert per URL with the same message:
 |---|---|---|
 | Binance | **`https://pixel-alpha.com/binance_abcd_webhook`** | `http://127.0.0.1:5010/binance_abcd_webhook` |
 | MEXC | **`https://pixel-alpha.com/mexc_abcd_webhook`** | `http://127.0.0.1:5010/mexc_abcd_webhook` |
+| Bybit | **`https://pixel-alpha.com/bybit_abcd_webhook`** | `http://127.0.0.1:5010/bybit_abcd_webhook` |
 
-Same secret on both (one engine). nginx proxies exactly these paths to
+Same secret on all three (one engine). nginx proxies exactly these paths to
 waitress on 127.0.0.1:5010; `/health` and `/admin/*` stay local-only. The older
 `http://2.24.139.176/binance_abcd_webhook` still works — the bare IP is not
 redirected — so existing alerts keep firing; move them to https when convenient.
