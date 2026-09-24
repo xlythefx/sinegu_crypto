@@ -133,52 +133,91 @@ export default function TrackRecordChart({
               opacity=".7"
             />
             <g transform={`translate(${X0},0)`}>
-              <path d={model.areaPath} fill="url(#trFill)" />
-              <path
-                d={model.path}
-                fill="none"
-                stroke="var(--accent)"
-                strokeWidth="2.5"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-                pathLength={1000}
-                strokeDasharray="1000"
-                strokeDashoffset="1000"
-                className="animate-[draw_2.6s_ease_0.2s_forwards]"
-              />
-              <circle
-                cx={model.end.x}
-                cy={model.end.y}
-                r="5"
-                fill="var(--accent)"
-                opacity="0"
-                className="animate-[fadeup_0.4s_ease_2.6s_forwards]"
-              />
+              {model.line ? (
+                <>
+                  <path d={model.line.areaPath} fill="url(#trFill)" />
+                  <path
+                    d={model.line.path}
+                    fill="none"
+                    stroke="var(--accent)"
+                    strokeWidth="2.5"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    pathLength={1000}
+                    strokeDasharray="1000"
+                    strokeDashoffset="1000"
+                    className="animate-[draw_2.6s_ease_0.2s_forwards]"
+                  />
+                  <circle
+                    cx={model.line.end.x}
+                    cy={model.line.end.y}
+                    r="5"
+                    fill="var(--accent)"
+                    opacity="0"
+                    className="animate-[fadeup_0.4s_ease_2.6s_forwards]"
+                  />
+                </>
+              ) : (
+                // The bars grow out of the break-even line together. The
+                // animation goes on an inner <g> because a CSS transform would
+                // otherwise override the translate above it, not compose with
+                // it — the whole plot would slide to the left edge mid-draw.
+                <g
+                  className="animate-[grow_0.8s_cubic-bezier(0.22,1,0.36,1)]"
+                  style={{
+                    transformBox: 'view-box',
+                    transformOrigin: `0 ${model.zeroY}px`,
+                  }}
+                >
+                  {model.bars.map((bar, i) => (
+                    <rect
+                      key={model.marks[i].date}
+                      x={bar.x}
+                      y={bar.y}
+                      width={bar.width}
+                      height={bar.height}
+                      rx="3"
+                      fill={bar.positive ? 'var(--green)' : 'var(--red)'}
+                      // Dim the rest on hover rather than draw a crosshair
+                      // through the bar being read.
+                      opacity={hoverIdx === null || hoverIdx === i ? 0.88 : 0.32}
+                      className="transition-opacity duration-150"
+                    />
+                  ))}
+                </g>
+              )}
             </g>
-            <text
-              x={X0 + 8}
-              y={model.zeroY - 8}
-              fontFamily="'IBM Plex Mono',monospace"
-              fontSize="12"
-              fill="var(--muted)"
-            >
-              {model.baselineLabel}
-            </text>
+            {model.baselineLabel && (
+              <text
+                x={X0 + 8}
+                y={model.zeroY - 8}
+                fontFamily="'IBM Plex Mono',monospace"
+                fontSize="12"
+                fill="var(--muted)"
+              >
+                {model.baselineLabel}
+              </text>
+            )}
           </svg>
 
           {hovered && (
             <>
-              <span
-                className="pointer-events-none absolute inset-y-0 w-px bg-[var(--accent)] opacity-40"
-                style={{ left: `${hovered.xFrac * 100}%` }}
-              />
-              <span
-                className="pointer-events-none absolute h-[11px] w-[11px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-accent shadow-[0_0_0_4px_var(--glow)]"
-                style={{
-                  left: `${hovered.xFrac * 100}%`,
-                  top: `${hovered.yFrac * 100}%`,
-                }}
-              />
+              {/* The curve needs pointing at; a bar highlights itself. */}
+              {model.line && (
+                <>
+                  <span
+                    className="pointer-events-none absolute inset-y-0 w-px bg-[var(--accent)] opacity-40"
+                    style={{ left: `${hovered.xFrac * 100}%` }}
+                  />
+                  <span
+                    className="pointer-events-none absolute h-[11px] w-[11px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-accent shadow-[0_0_0_4px_var(--glow)]"
+                    style={{
+                      left: `${hovered.xFrac * 100}%`,
+                      top: `${hovered.yFrac * 100}%`,
+                    }}
+                  />
+                </>
+              )}
               <div
                 className="pointer-events-none absolute top-2 z-10 rounded-card border border-border bg-surface2/97 px-3 py-2 backdrop-blur-sm"
                 style={{
@@ -217,11 +256,22 @@ export default function TrackRecordChart({
             return (
               <span
                 key={label.key}
-                // The end labels anchor to their own edge instead of centering,
-                // so neither can be clipped by the card on a narrow screen.
+                // On the line view the end labels anchor to their own edge
+                // instead of centering, so neither can be clipped by the card
+                // on a narrow screen — the first and last points sit ON those
+                // edges. A bar's label centres under the bar whichever it is:
+                // no bar centre reaches an edge (half a slot of inset), so
+                // there is nothing to clip, and anchoring one would leave the
+                // month's label visibly off its own column.
                 className={[
                   'font-mono text-[10.5px] text-faint absolute whitespace-nowrap',
-                  i === 0 ? '' : last ? '-translate-x-full' : '-translate-x-1/2',
+                  model.kind === 'bar'
+                    ? '-translate-x-1/2'
+                    : i === 0
+                      ? ''
+                      : last
+                        ? '-translate-x-full'
+                        : '-translate-x-1/2',
                   // Thin the labels out rather than let them collide.
                   i % 2 === 1 && !last ? 'max-[900px]:hidden' : '',
                   i % 4 !== 0 && !last ? 'max-[560px]:hidden' : '',

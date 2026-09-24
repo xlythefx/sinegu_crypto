@@ -42,6 +42,23 @@ export const LANDING_TRACK_RECORD_SYMBOLS: readonly string[] = ['LTCUSDT']
  * what keeps a −13% day on the daily view and a −2% dip on the cumulative
  * view from reading as a contradiction.
  */
+/**
+ * How each view is DRAWN, and why the two are not interchangeable:
+ *
+ *  - Cumulative is a LEVEL that carries forward — day two's figure contains
+ *    day one's — so the line between two points means something.
+ *  - Daily and monthly are SEPARATE signed quantities, one per period; nothing
+ *    connects one day's return to the next. Drawn as a line they read as a
+ *    continuous track record that dipped, when in fact each bar is its own
+ *    result, and a losing day is a red bar below break-even rather than a
+ *    downward slope that could equally be a smaller gain.
+ */
+export const CHART_KIND: Record<ChartMode, 'line' | 'bar'> = {
+  cumulative: 'line',
+  daily: 'bar',
+  monthly: 'bar',
+}
+
 export const CHART_MODES: { id: ChartMode; label: string; note: string }[] = [
   {
     id: 'cumulative',
@@ -78,6 +95,15 @@ const PLOT_BOTTOM = VB_H - PAD_Y
 
 /** How many x-axis labels at most; every other one is hidden on small screens. */
 const MAX_X_LABELS = 17
+
+/** Bar geometry. The width is a share of the period's slot, capped so five
+ *  monthly bars read as a chart rather than as five blocks; the floor keeps a
+ *  year of daily bars from thinning into hairlines. */
+const BAR_SLOT_SHARE = 0.62
+const BAR_MAX_W = 78
+const BAR_MIN_W = 2.5
+/** A flat period still gets a visible sliver — 0.00% is a result, not a gap. */
+const BAR_MIN_H = 2
 
 const DASH = '—'
 
@@ -198,18 +224,34 @@ export interface ChartMark {
   trades: number
 }
 
+/** One signed bar, in local coords (translate by X0). */
+export interface ChartBar {
+  x: number
+  y: number
+  width: number
+  height: number
+  /** Drives the colour; a flat period counts as positive (it is not a loss). */
+  positive: boolean
+}
+
 export interface ChartModel {
-  /** Line and zero-baseline-anchored fill, in local coords (translate by X0). */
-  path: string
-  areaPath: string
+  kind: 'line' | 'bar'
+  /** Line view only — the curve, its zero-anchored fill and the end cap, all
+   *  in local coords (translate by X0). */
+  line: { path: string; areaPath: string; end: { x: number; y: number } } | null
+  /** Bar view only, one per period in plot order — same order as `marks`. */
+  bars: ChartBar[]
   /** Four gridlines / axis labels, top to bottom. */
   ticks: { value: number; label: string; topPct: number }[]
   /** The 0% baseline — "capital invested" on the cumulative view. */
   zeroY: number
-  baselineLabel: string
+  /** What that line means, printed on it — null on the bar views, where the
+   *  bars stand on the line and are coloured by which side they fall, and the
+   *  axis already prints 0.00% against it. A label there would only sit on top
+   *  of the first bar. */
+  baselineLabel: string | null
   /** x positions as a percentage of the full viewBox width. */
   labels: { key: string; text: string; leftPct: number }[]
-  end: { x: number; y: number }
   /** One per REAL period, in plot order — the cumulative view's synthetic
    *  leading 0% point is not a day and has no mark. */
   marks: ChartMark[]
@@ -258,7 +300,11 @@ function sampleEvenly<T>(items: T[], max: number): { item: T; index: number }[] 
  *
  * The cumulative view gets a leading 0% point so the curve starts on the
  * baseline instead of jumping to day one's return; the daily and monthly views
- * plot each period's own return around a break-even line.
+ * draw each period's own return as a signed bar around a break-even line.
+ *
+ * Both kinds share the y scale, the ticks and the mark list, so only the
+ * horizontal placement differs: a line point sits ON its label (evenly spaced,
+ * first and last on the plot edges), a bar sits centred in its own slot.
  */
 export function buildChartModel(
   series: TrackRecordPoint[],
@@ -276,30 +322,64 @@ export function buildChartModel(
         }))
   if (points.length === 0) return null
 
+  const kind = CHART_KIND[mode]
   const withBaseline = mode === 'cumulative'
   const values = withBaseline ? [0, ...points.map((p) => p.value)] : points.map((p) => p.value)
 
-  // 0 always sits inside the range so the baseline is visible and the fill has
-  // something honest to anchor to.
+  // 0 always sits inside the range so the baseline is visible and the bars (or
+  // the fill) have something honest to anchor to.
   const ticks = axisTicks4(Math.min(0, ...values), Math.max(0, ...values))
   const yMin = ticks[0]
   const yMax = ticks[ticks.length - 1]
   const span = yMax - yMin || 1
   const yOf = (value: number) => PLOT_BOTTOM - ((value - yMin) / span) * (PLOT_BOTTOM - PAD_Y)
-
-  const path = linePath(values, PLOT_W, VB_H, PAD_Y, yMin, yMax)
   const zeroY = yOf(0)
 
   const step = ticks[1] - ticks[0]
   const tickDp = step >= 10 ? 0 : step >= 1 ? 1 : 2
 
+  const slot = PLOT_W / points.length
+  const barW = Math.max(BAR_MIN_W, Math.min(slot * BAR_SLOT_SHARE, BAR_MAX_W))
   const offset = withBaseline ? 1 : 0
   const stepX = PLOT_W / Math.max(values.length - 1, 1)
+  /** Where period `index` is drawn, in local coords. */
+  const xOf = (index: number) =>
+    kind === 'bar' ? slot * (index + 0.5) : (index + offset) * stepX
+
+  let line: ChartModel['line'] = null
+  if (kind === 'line') {
+    const path = linePath(values, PLOT_W, VB_H, PAD_Y, yMin, yMax)
+    line = {
+      path,
+      areaPath: `${path} L${PLOT_W},${zeroY.toFixed(1)} L0,${zeroY.toFixed(1)} Z`,
+      end: { x: PLOT_W, y: yOf(values[values.length - 1]) },
+    }
+  }
+
+  const bars: ChartBar[] =
+    kind === 'bar'
+      ? points.map((point, index) => {
+          const positive = point.value >= 0
+          const height = Math.max(Math.abs(yOf(point.value) - zeroY), BAR_MIN_H)
+          return {
+            x: xOf(index) - barW / 2,
+            // Measured back off the baseline rather than from the value's own
+            // y, so a bar held open by BAR_MIN_H still STANDS on break-even
+            // instead of straddling it — a flat day must not look like a loss.
+            y: positive ? zeroY - height : zeroY,
+            width: barW,
+            height,
+            positive,
+          }
+        })
+      : []
+
   const label = mode === 'monthly' ? fmtShortMonth : fmtShortDate
 
   return {
-    path,
-    areaPath: `${path} L${PLOT_W},${zeroY.toFixed(1)} L0,${zeroY.toFixed(1)} Z`,
+    kind,
+    line,
+    bars,
     ticks: [...ticks].reverse().map((value) => ({
       value,
       // Precision comes from the step, so every tick on one axis shows the
@@ -309,20 +389,15 @@ export function buildChartModel(
       topPct: (yOf(value) / VB_H) * 100,
     })),
     zeroY,
-    baselineLabel: withBaseline ? 'Capital invested' : 'Break-even',
+    baselineLabel: kind === 'bar' ? null : 'Capital invested',
     labels: sampleEvenly(points, MAX_X_LABELS).map(({ item, index }) => ({
       key: item.date,
       text: label(item.date),
-      leftPct: ((X0 + (index + offset) * stepX) / VB_W) * 100,
+      leftPct: ((X0 + xOf(index)) / VB_W) * 100,
     })),
-    end: {
-      x: PLOT_W,
-      y: yOf(values[values.length - 1]),
-    },
-    // Same x as the labels and the same y as the path, so the crosshair sits
-    // on the line rather than beside it.
+    // Same x as the labels, so the readout lines up with the period it names.
     marks: points.map((point, index) => ({
-      xFrac: (X0 + (index + offset) * stepX) / VB_W,
+      xFrac: (X0 + xOf(index)) / VB_W,
       yFrac: yOf(point.value) / VB_H,
       date: point.date,
       value: point.value,
