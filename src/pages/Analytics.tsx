@@ -16,6 +16,8 @@ import DayOfWeekCard from '../components/analytics/DayOfWeekCard'
 import CapitalFlowCard from '../components/analytics/CapitalFlowCard'
 import MonthlyBreakdownCard from '../components/analytics/MonthlyBreakdownCard'
 import StrategyAnalysisCard from '../components/analytics/StrategyAnalysisCard'
+import AnalyticsSkeleton from '../components/analytics/AnalyticsSkeleton'
+import Dimmable from '../components/analytics/Dimmable'
 import { useApiData } from '../hooks/useApiData'
 import { getAnalytics } from '../services/analytics'
 import { ApiError } from '../services/api'
@@ -100,15 +102,18 @@ export default function Analytics() {
     (value) => ({ value, label: value }),
   )
 
-  // Every metric below is server-filtered, so a filter change swaps the whole
-  // block — re-mount it to replay the reveal instead of hard-cutting.
-  const resultsKey = `${filters.exchange}-${filters.from}-${filters.to}-${symbolMode}:${symbolKey}-${strategyMode}:${strategyKey}`
-
   // Narrowing to a venue with nothing connected returns a page of legitimate
   // zeros, which reads as "the filter did nothing". Say so instead.
   const scopeLabel = activeExchangeLabel(filters.exchange)
   const noAccountsInScope =
     !!data && data.by_exchange.every((e) => e.accounts === 0)
+  // Nothing closed in this exchange / date / ticker selection: every
+  // trade-derived card would be dashes and $0.00, so those are tinted down.
+  const noTrades = !!data && data.trading_days === 0
+  const noFlows = !!data && Object.keys(data.daily_flows).length === 0
+  // A filter change keeps the current figures on screen until the new ones
+  // arrive, faded, rather than blanking the page to a spinner.
+  const refreshing = loading && !!data
 
   return (
     <DashboardLayout title="Performance Analytics">
@@ -135,17 +140,35 @@ export default function Analytics() {
         />
 
         {data ? (
+          // Deliberately not re-keyed or animated on a filter change: the
+          // figures update in place, so clicking a filter never replays a reveal.
           <div
-            key={resultsKey}
-            className="flex flex-col gap-stack animate-[fadeup_0.35s_ease-out]"
+            className={`relative flex flex-col gap-stack transition-opacity duration-200 ${
+              refreshing ? 'opacity-60' : ''
+            }`}
+            aria-busy={refreshing || undefined}
           >
-            {noAccountsInScope && (
+            {refreshing && (
+              <span className="pointer-events-none absolute left-1/2 -top-2 z-10 -translate-x-1/2 inline-flex items-center gap-2 rounded-pill border border-accent-line bg-surface px-3 py-1 text-[11.5px] font-bold text-accent shadow-[0_6px_20px_rgba(0,0,0,0.35)]">
+                <span className="h-3 w-3 rounded-full border-2 border-accent-line border-t-accent animate-spin" />
+                Updating…
+              </span>
+            )}
+            {noAccountsInScope ? (
               <p className="rounded-card border border-border bg-surface2 px-4 py-3 text-[13px] text-muted">
                 {filters.exchange === 'all'
                   ? 'No exchange accounts connected yet — every figure below is zero until you connect one.'
                   : `No ${scopeLabel} account connected, so every figure below is zero. Pick another exchange, or connect ${scopeLabel} from Exchange Accounts.`}
               </p>
+            ) : (
+              noTrades && (
+                <p className="rounded-card border border-border bg-surface2 px-4 py-3 text-[13px] text-muted">
+                  No closed trades in this view, so the trade figures below are dimmed.
+                  Widen the dates or clear a ticker or strategy filter.
+                </p>
+              )
             )}
+            <Dimmable dim={noTrades}>
             <AnalyticsKpis
               totalReturnPct={data.total_return_pct}
               totalReturnAbs={data.total_return_abs}
@@ -159,19 +182,29 @@ export default function Analytics() {
               worstDay={data.worst_day}
               fees={data.fees}
             />
+            </Dimmable>
 
             <div className="grid grid-cols-[1.25fr_1fr] gap-stack items-stretch max-[1100px]:grid-cols-1">
+              {/* Its Deposits & Withdrawals tab has something to show even
+                  without a trade, so it dims only when both are empty. */}
+              <Dimmable dim={noTrades && noFlows}>
               <PerformanceChartCard
                 dailyPnl={data.daily_pnl}
                 dailyPnlNet={data.daily_pnl_net}
                 dailyCapital={data.daily_capital}
                 dailyFlows={data.daily_flows}
+                dailyBalance={data.daily_balance}
+                initialDeposit={data.initial_deposit}
                 baseline={data.baseline}
                 feesSince={data.fees.trades_without_fee > 0 ? data.fees.since : null}
               />
-              <PositionDistributionCard bySymbol={data.by_symbol} />
+              </Dimmable>
+              <Dimmable dim={noTrades}>
+                <PositionDistributionCard bySymbol={data.by_symbol} />
+              </Dimmable>
             </div>
 
+            <Dimmable dim={noTrades} className="gap-stack">
             <PortfolioMetricsCard
               quality={data.quality}
               risk={data.risk}
@@ -185,24 +218,36 @@ export default function Analytics() {
               risk={data.risk}
               totalReturnAbs={data.total_return_abs}
             />
-            <UnrealizedByExchangeCard
-              byExchange={data.by_exchange}
-              totalUnrealized={data.total_unrealized}
-            />
-            <DayOfWeekCard dayOfWeek={data.day_of_week} />
+            </Dimmable>
+            {/* Open positions, not closed trades — dims only with no account. */}
+            <Dimmable dim={noAccountsInScope}>
+              <UnrealizedByExchangeCard
+                byExchange={data.by_exchange}
+                totalUnrealized={data.total_unrealized}
+              />
+            </Dimmable>
+            <Dimmable dim={noTrades}>
+              <DayOfWeekCard dayOfWeek={data.day_of_week} />
+            </Dimmable>
 
             <div className="grid grid-cols-2 gap-stack items-start max-[1100px]:grid-cols-1">
-              <MonthlyBreakdownCard monthly={data.monthly} />
-              <CapitalFlowCard
-                flows={data.flows}
-                currentCapital={data.current_capital}
-                baseline={data.baseline}
-              />
+              <Dimmable dim={noTrades}>
+                <MonthlyBreakdownCard monthly={data.monthly} />
+              </Dimmable>
+              <Dimmable dim={noAccountsInScope && noFlows}>
+                <CapitalFlowCard
+                  flows={data.flows}
+                  currentCapital={data.current_capital}
+                  initialDeposit={data.initial_deposit}
+                />
+              </Dimmable>
             </div>
           </div>
+        ) : loading ? (
+          <AnalyticsSkeleton />
         ) : (
           <DataState
-            loading={loading}
+            loading={false}
             error={error}
             onRetry={reload}
             label="analytics"

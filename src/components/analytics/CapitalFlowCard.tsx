@@ -13,7 +13,8 @@ import type { CapitalFlows } from '../../types/analytics'
 interface CapitalFlowCardProps {
   flows: CapitalFlows
   currentCapital: number
-  baseline: number
+  /** Absent on an older API; the tile then says so rather than guess. */
+  initialDeposit?: number
 }
 
 /** "Capital Flow Summary" — funding KPIs, deposit/withdrawal composition bar
@@ -21,7 +22,7 @@ interface CapitalFlowCardProps {
 export default function CapitalFlowCard({
   flows,
   currentCapital,
-  baseline,
+  initialDeposit,
 }: CapitalFlowCardProps) {
   const totalMovement = flows.deposits + flows.withdrawals
   const depPct = totalMovement > 0 ? (flows.deposits / totalMovement) * 100 : 0
@@ -81,10 +82,13 @@ export default function CapitalFlowCard({
           sub="Deposits − Withdrawals"
           icon={TrendingUp}
         />
+        {/* The account's balance before the first transfer we recorded.
+            This tile used to print the net flow — the tile beside it —
+            under a different name. */}
         <MetricTile
           label="Initial Deposit"
-          value={fmtMoney(baseline)}
-          sub="Starting capital"
+          value={initialDeposit === undefined ? '—' : fmtMoney(initialDeposit)}
+          sub="Held before the first recorded transfer"
           icon={PiggyBank}
         />
       </div>

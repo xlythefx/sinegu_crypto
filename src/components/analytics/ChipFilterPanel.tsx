@@ -139,11 +139,7 @@ export default function ChipFilterPanel({
         </div>
       )}
 
-      {/* Re-mounted per mode so the chips replay their reveal on a switch. */}
-      <div
-        key={mode}
-        className="flex flex-wrap gap-[7px] max-h-40 overflow-y-auto pr-1 animate-[fadeup_0.35s_ease-out]"
-      >
+      <div className="flex flex-wrap gap-[7px] max-h-40 overflow-y-auto pr-1">
         {visible.length === 0 ? (
           <p className="text-[13px] text-muted py-1.5">
             No {noun}s match “{query}”.

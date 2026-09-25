@@ -66,6 +66,12 @@ export async function getAnalytics(
     { auth: true },
   )
   // PHP serializes an empty keyed collection as [] — normalize to an object
-  if (Array.isArray(res.analytics.daily_pnl)) res.analytics.daily_pnl = {}
-  return res.analytics
+  // so the declared Record types are not a lie for an account with no history.
+  const a = res.analytics
+  if (Array.isArray(a.daily_pnl)) a.daily_pnl = {}
+  if (Array.isArray(a.daily_pnl_net)) a.daily_pnl_net = {}
+  if (Array.isArray(a.daily_capital)) a.daily_capital = {}
+  if (Array.isArray(a.daily_flows)) a.daily_flows = {}
+  if (Array.isArray(a.daily_balance)) a.daily_balance = {}
+  return a
 }

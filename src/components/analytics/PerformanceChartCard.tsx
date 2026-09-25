@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type PointerEvent } from 'react'
-import { LineChart, MoreVertical } from 'lucide-react'
+import { ArrowLeftRight, LineChart, MoreVertical, X } from 'lucide-react'
 import {
   fmtMediumDate,
   fmtMoney,
@@ -9,8 +9,15 @@ import {
   fmtSignedPct,
 } from '../../lib/format'
 import PnlBreakdown from '../ui/PnlBreakdown'
+import RangePresetMenu from './RangePresetMenu'
+import TransferSegmentsModal from './TransferSegmentsModal'
+import {
+  quickPresets,
+  transferSegments,
+  type RangePreset,
+} from '../../lib/rangePresets'
 
-type Tab = 'cumulative' | 'daily' | 'range'
+type Tab = 'cumulative' | 'daily' | 'capital' | 'range'
 type Period = 'Daily' | 'Weekly' | 'Monthly' | 'All Time'
 
 const PERIODS: Period[] = ['Daily', 'Weekly', 'Monthly', 'All Time']
@@ -72,6 +79,25 @@ interface Mark {
   /** The bucket's own P&L before / after fees; null on the seed point. */
   pnl: number | null
   pnlNet: number | null
+  /** Capital tab only: the day's net transfer and the running total after it. */
+  delta?: number
+  total?: number
+}
+
+/** A stepped capital line built from the transfer days alone. */
+interface CapitalView {
+  line: string
+  dots: { x: number; y: number; deposit: boolean }[]
+  marks: Mark[]
+  labels: string[]
+  deposits: number
+  withdrawals: number
+  net: number
+}
+
+/** Days between two 'YYYY-MM-DD' dates, for the capital chart's time axis. */
+function daysBetween(a: string, b: string): number {
+  return (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000
 }
 
 function bucketLabel(key: string, period: Period): string {
@@ -101,6 +127,12 @@ interface PerformanceChartCardProps {
   dailyPnlNet: Record<string, number>
   /** Capital traded on per day — the period return's denominator. */
   dailyCapital: Record<string, number>
+  /** Net transfer per day, signed; only days that moved money. */
+  dailyFlows: Record<string, number>
+  /** Balance each walked day closed on; absent on an older API. */
+  dailyBalance?: Record<string, number>
+  /** Capital held before any recorded transfer; absent on an older API. */
+  initialDeposit?: number
   baseline: number
   /** Set when some of the days carry no fee on record. */
   feesSince: string | null
@@ -113,6 +145,9 @@ export default function PerformanceChartCard({
   dailyPnl,
   dailyPnlNet,
   dailyCapital,
+  dailyFlows,
+  dailyBalance,
+  initialDeposit,
   baseline,
   feesSince,
 }: PerformanceChartCardProps) {
@@ -130,15 +165,16 @@ export default function PerformanceChartCard({
     [dailyPnl, dailyPnlNet],
   )
 
-  const [fromDate, setFromDate] = useState(() => {
+  // The range the tab opens on (the 30 days up to the last trade), kept so
+  // the clear button returns to exactly it.
+  const [defaultRange] = useState(() => {
     const last = entries[entries.length - 1]?.[0] ?? todayIso()
     const d = new Date(`${last}T00:00:00`)
     d.setDate(d.getDate() - 30)
-    return d.toISOString().slice(0, 10)
+    return { from: d.toISOString().slice(0, 10), to: last }
   })
-  const [toDate, setToDate] = useState(
-    () => entries[entries.length - 1]?.[0] ?? todayIso(),
-  )
+  const [fromDate, setFromDate] = useState(defaultRange.from)
+  const [toDate, setToDate] = useState(defaultRange.to)
 
   const view = useMemo(() => {
     const all = bucketize(entries, period)
@@ -193,29 +229,37 @@ export default function PerformanceChartCard({
             pnlNet: i === 0 ? null : windowed[i - 1].pnlNet,
           }))
 
-    // ----- daily (per-bucket P&L) series -----
-    let daily: { x: number; y: number; pos: boolean }[] = []
+    // ----- daily (per-bucket P&L) BARS, zero at the centre -----
+    // The scale is symmetric (±the largest absolute move) rather than
+    // min..max, so the zero line sits exactly halfway and a bar's direction
+    // is readable on its own: up is a green profit, down is a red loss. A
+    // min..max scale would put zero wherever the data happened to land and
+    // draw an all-winning month as if half of it had lost.
+    let bars: { x: number; w: number; y: number; h: number; pos: boolean }[] = []
     let dailyMarks: Mark[] = []
+    const top = PAD_TOP
+    const bottom = H - PAD_BOTTOM
+    const zeroY = (top + bottom) / 2
     if (windowed.length > 0) {
-      const values = windowed.map((b) => b.pnl)
-      let dMin = Math.min(...values)
-      let dMax = Math.max(...values)
-      if (dMin === dMax) {
-        dMin -= 1
-        dMax += 1
-      }
-      const yOf = (v: number) =>
-        H -
-        PAD_BOTTOM -
-        ((v - dMin) / (dMax - dMin)) * (H - PAD_TOP - PAD_BOTTOM)
-      const dStep = W / Math.max(1, windowed.length - 1)
-      daily = windowed.map((b, i) => ({
-        x: i * dStep,
-        y: yOf(b.pnl),
-        pos: b.pnl >= 0,
-      }))
+      const bound = Math.max(1e-9, ...windowed.map((b) => Math.abs(b.pnl)))
+      const half = (bottom - top) / 2
+      const yOf = (v: number) => zeroY - (v / bound) * half
+      const slot = W / windowed.length
+      const barW = Math.max(2, Math.min(16, slot * 0.6))
+      bars = windowed.map((b, i) => {
+        const y = yOf(b.pnl)
+        return {
+          x: i * slot + (slot - barW) / 2,
+          w: barW,
+          y: Math.min(y, zeroY),
+          // 1px floor so a flat day is still a visible tick on the axis
+          // rather than a gap that reads as a day with no trades.
+          h: Math.max(1, Math.abs(zeroY - y)),
+          pos: b.pnl >= 0,
+        }
+      })
       dailyMarks = windowed.map((b, i) => ({
-        xFrac: (i * dStep) / W,
+        xFrac: (i * slot + slot / 2) / W,
         yFrac: yOf(b.pnl) / H,
         label: bucketLabel(b.key, period),
         cum: series[i + 1],
@@ -224,20 +268,96 @@ export default function PerformanceChartCard({
         pnlNet: b.pnlNet,
       }))
     }
-    const dailyLine =
-      daily.length > 1
-        ? `M${daily.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L')}`
-        : ''
 
     return {
       cumulative,
       cumMarks,
-      daily,
+      bars,
+      zeroY,
       dailyMarks,
-      dailyLine,
       labels: axisLabels(windowed, period),
     }
   }, [entries, period, baseline])
+
+  /**
+   * Money in and out over time: cumulative deposits − withdrawals, drawn as a
+   * STEP. Capital genuinely is flat between transfers, so a straight line
+   * sloping from one deposit to the next would draw money as arriving
+   * gradually when it arrived on one day.
+   *
+   * Its own chart rather than a second line on the P&L views, and that is the
+   * point: the equity curves answer "what did trading do", so a withdrawal
+   * must never be able to draw itself as a crash on them. Here a withdrawal
+   * IS the subject, and reads as exactly what it was.
+   *
+   * The x axis is real time (first event → last), not one slot per transfer,
+   * so two deposits a day apart sit a day apart.
+   */
+  const capital: CapitalView = useMemo(() => {
+    const flows = Object.entries(dailyFlows)
+      .filter(([, amount]) => amount !== 0)
+      .sort(([a], [b]) => a.localeCompare(b))
+    const empty: CapitalView = {
+      line: '', dots: [], marks: [], labels: [],
+      deposits: 0, withdrawals: 0, net: 0,
+    }
+    if (flows.length === 0) return empty
+
+    const first = flows[0][0]
+    const lastTrade = entries[entries.length - 1]?.[0]
+    // Run the line out to the last thing that happened on the account, so a
+    // long quiet stretch after the final transfer is visible as one.
+    const last =
+      lastTrade && lastTrade > flows[flows.length - 1][0]
+        ? lastTrade
+        : flows[flows.length - 1][0]
+    const span = Math.max(1, daysBetween(first, last))
+    const xOf = (date: string) => (daysBetween(first, date) / span) * W
+
+    let running = 0
+    const totals = flows.map(([date, amount]) => {
+      running += amount
+      return { date, amount, total: running }
+    })
+    const peak = Math.max(...totals.map((t) => t.total), 0)
+    const floor = Math.min(...totals.map((t) => t.total), 0)
+    const range = Math.max(1e-9, peak - floor)
+    const yOf = (v: number) =>
+      H - PAD_BOTTOM - ((v - floor) / range) * (H - PAD_TOP - PAD_BOTTOM)
+
+    // Start on the axis at the first transfer, step up (or down) at each one,
+    // then hold the last level to the right edge.
+    let d = `M0,${yOf(0).toFixed(1)}`
+    for (const t of totals) {
+      const x = xOf(t.date).toFixed(1)
+      d += ` L${x},${yOf(t.total - t.amount).toFixed(1)} L${x},${yOf(t.total).toFixed(1)}`
+    }
+    d += ` L${W},${yOf(running).toFixed(1)}`
+
+    return {
+      line: d,
+      dots: totals.map((t) => ({
+        x: xOf(t.date),
+        y: yOf(t.total),
+        deposit: t.amount > 0,
+      })),
+      marks: totals.map((t) => ({
+        xFrac: xOf(t.date) / W,
+        yFrac: yOf(t.total) / H,
+        label: fmtMediumDate(t.date),
+        cum: t.total,
+        cumNet: t.total,
+        pnl: null,
+        pnlNet: null,
+        delta: t.amount,
+        total: t.total,
+      })),
+      labels: [first, last].map(fmtShortDate),
+      deposits: flows.reduce((sum, [, a]) => sum + (a > 0 ? a : 0), 0),
+      withdrawals: flows.reduce((sum, [, a]) => sum + (a < 0 ? -a : 0), 0),
+      net: running,
+    }
+  }, [dailyFlows, entries])
 
   /**
    * The window's figures. The percentage is TIME-WEIGHTED: each day's P&L over
@@ -282,18 +402,91 @@ export default function PerformanceChartCard({
       growthNet *= Math.max(0, 1 + pnlNet / capital)
       measured++
     }
+    // Transfers that landed inside the window, and every one after it.
+    let flowsInRange = 0
+    let flowsAfter = 0
+    for (const [date, amount] of Object.entries(dailyFlows)) {
+      if (date > toDate) flowsAfter += amount
+      else if (date >= fromDate) flowsInRange += amount
+    }
+
+    // The balance on a day = the capital walk as that day closed: seed +
+    // transfers up to it + P&L up to it. Nothing after the day may count —
+    // this card used to print the all-time net flow + P&L to date, so a
+    // range ending in August carried September's deposits and withdrawals.
+    const balanceOn = (date: string): number | null => {
+      if (!dailyBalance) return null
+      let last: number | null = null
+      for (const [day, value] of Object.entries(dailyBalance)) {
+        if (day <= date) last = value
+      }
+      return last ?? initialDeposit ?? 0
+    }
+    const endBalance = balanceOn(toDate)
+    const startBalance = balanceOn(dayBefore(fromDate))
+
     return {
       realized: inRange,
       realizedNet: inRangeNet,
-      wholeBalance: baseline + upToEnd,
+      // Older API (no daily_balance): at least take the later transfers back
+      // out. It still lacks initial_deposit, which only the API knows.
+      endBalance: endBalance ?? baseline - flowsAfter + upToEnd,
+      startBalance,
+      flowsInRange,
       pct: measured > 0 ? (growth - 1) * 100 : null,
       pctNet: measured > 0 ? (growthNet - 1) * 100 : null,
       measured,
       unmeasured,
     }
-  }, [entries, fromDate, toDate, baseline, dailyCapital])
+  }, [
+    entries,
+    fromDate,
+    toDate,
+    baseline,
+    dailyCapital,
+    dailyFlows,
+    dailyBalance,
+    initialDeposit,
+  ])
 
-  const marks = tab === 'cumulative' ? view.cumMarks : tab === 'daily' ? view.dailyMarks : []
+  const firstTradeDay = entries[0]?.[0] ?? null
+  const presets = useMemo(() => {
+    const today = todayIso()
+    const firstFlow = Object.keys(dailyFlows).sort()[0] ?? null
+    const firstDay =
+      firstTradeDay && firstFlow
+        ? firstTradeDay < firstFlow
+          ? firstTradeDay
+          : firstFlow
+        : (firstTradeDay ?? firstFlow)
+    return {
+      quick: quickPresets(firstDay, today),
+      segments: transferSegments(
+        dailyFlows,
+        firstTradeDay,
+        today,
+        fmtShortDate,
+        fmtSignedMoney,
+      ),
+    }
+  }, [dailyFlows, firstTradeDay])
+
+  const applyPreset = (p: RangePreset) => {
+    setFromDate(p.from)
+    setToDate(p.to)
+  }
+  const isActive = (p: RangePreset) => p.from === fromDate && p.to === toDate
+  const activeSegment = presets.segments.find(isActive)
+  const [segmentsOpen, setSegmentsOpen] = useState(false)
+
+  const marks =
+    tab === 'cumulative'
+      ? view.cumMarks
+      : tab === 'daily'
+        ? view.dailyMarks
+        : tab === 'capital'
+          ? capital.marks
+          : []
   const hovered = hoverIdx !== null ? (marks[hoverIdx] ?? null) : null
 
   /** Snap to the nearest plotted bucket horizontally — the readout only ever
@@ -337,7 +530,23 @@ export default function PerformanceChartCard({
         <div className="font-mono text-[10.5px] tracking-[0.4px] text-faint whitespace-nowrap">
           {hovered.label}
         </div>
-        {tab === 'cumulative' ? (
+        {tab === 'capital' ? (
+          <>
+            <div
+              className={`font-mono text-[15px] font-extrabold whitespace-nowrap ${
+                (hovered.delta ?? 0) < 0 ? 'text-red' : 'text-green'
+              }`}
+            >
+              {fmtSignedMoney(hovered.delta ?? 0)}
+              <span className="ml-1.5 text-[10.5px] font-semibold text-faint">
+                {(hovered.delta ?? 0) < 0 ? 'withdrawn' : 'deposited'}
+              </span>
+            </div>
+            <div className="font-mono text-[11px] text-muted whitespace-nowrap">
+              ${fmtNum(hovered.total ?? 0)} in the account after it
+            </div>
+          </>
+        ) : tab === 'cumulative' ? (
           <>
             <div className="font-mono text-[15px] font-extrabold whitespace-nowrap">
               ${fmtNum(hovered.cum)}
@@ -392,6 +601,7 @@ export default function PerformanceChartCard({
             </div>
           </div>
         </div>
+        {tab !== 'range' && (
         <div className="relative flex-none">
           <button
             type="button"
@@ -419,13 +629,16 @@ export default function PerformanceChartCard({
             </div>
           )}
         </div>
+        )}
       </div>
 
-      <div className="mb-stack self-start inline-flex gap-[3px] bg-surface2 border border-hair rounded-seg p-1">
+      <div className="mb-stack flex flex-wrap items-center justify-between gap-2.5">
+      <div className="self-start inline-flex gap-[3px] bg-surface2 border border-hair rounded-seg p-1">
         {(
           [
             ['cumulative', 'Cumulative P&L'],
             ['daily', 'Daily P&L'],
+            ['capital', 'Deposits & Withdrawals'],
             ['range', 'Date Range'],
           ] as [Tab, string][]
         ).map(([key, label]) => (
@@ -442,6 +655,57 @@ export default function PerformanceChartCard({
           </button>
         ))}
       </div>
+        {/* Range shortcuts live on the tab row, not above the dates, so the
+            Date Range view stays two inputs and three figures. */}
+        {tab === 'range' && (
+          <div className="flex flex-wrap items-center gap-2 ml-auto">
+            {presets.segments.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSegmentsOpen(true)}
+                className={`inline-flex h-[34px] items-center gap-1.5 rounded-btn border px-3 text-[12.5px] font-bold font-body cursor-pointer transition-colors ${
+                  activeSegment
+                    ? 'border-accent-line bg-accent-soft text-accent'
+                    : 'border-border bg-surface2 text-muted hover:text-text hover:border-accent-line'
+                }`}
+              >
+                <ArrowLeftRight size={14} />
+                {activeSegment ? activeSegment.label : 'Between transfers'}
+              </button>
+            )}
+            <RangePresetMenu
+              presets={presets.quick}
+              activeId={presets.quick.find(isActive)?.id ?? null}
+              onPick={applyPreset}
+            />
+            {(fromDate !== defaultRange.from || toDate !== defaultRange.to) && (
+              <button
+                type="button"
+                aria-label="Clear the date range"
+                title="Back to the last 30 days"
+                onClick={() => {
+                  setFromDate(defaultRange.from)
+                  setToDate(defaultRange.to)
+                }}
+                className="inline-flex h-[34px] w-[34px] items-center justify-center rounded-btn border border-border bg-surface2 text-muted cursor-pointer transition-colors hover:text-text hover:border-accent-line"
+              >
+                <X size={15} />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      <TransferSegmentsModal
+        open={segmentsOpen}
+        segments={presets.segments}
+        activeId={activeSegment?.id ?? null}
+        onPick={(p) => {
+          applyPreset(p)
+          setSegmentsOpen(false)
+        }}
+        onClose={() => setSegmentsOpen(false)}
+      />
 
       {tab === 'cumulative' && (
         <div>
@@ -519,28 +783,27 @@ export default function PerformanceChartCard({
               <line x1="0" y1="120" x2={W} y2="120" />
               <line x1="0" y1="180" x2={W} y2="180" />
             </g>
-            {view.dailyLine && (
-              <path
-                d={view.dailyLine}
-                fill="none"
-                stroke="var(--accent)"
-                strokeWidth="1.6"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-                opacity=".85"
-              />
-            )}
-            {view.daily.map((p, i) => (
-              <circle
+            {view.bars.map((b, i) => (
+              <rect
                 key={i}
-                cx={p.x}
-                cy={p.y}
-                r="3"
-                fill={p.pos ? 'var(--green)' : 'var(--red)'}
-                stroke="var(--surface)"
-                strokeWidth="1.4"
+                x={b.x}
+                y={b.y}
+                width={b.w}
+                height={b.h}
+                rx={Math.min(2, b.w / 2)}
+                fill={b.pos ? 'var(--green)' : 'var(--red)'}
+                opacity=".9"
               />
             ))}
+            {/* Drawn last so it reads on top of the bars that cross it. */}
+            <line
+              x1="0"
+              y1={view.zeroY}
+              x2={W}
+              y2={view.zeroY}
+              stroke="var(--muted)"
+              strokeWidth="1.2"
+            />
           </svg>
           {readout}
           </div>
@@ -558,6 +821,74 @@ export default function PerformanceChartCard({
               <span key={`${m}-${i}`}>{m}</span>
             ))}
           </div>
+        </div>
+      )}
+
+      {tab === 'capital' && (
+        <div>
+          {capital.dots.length === 0 ? (
+            <p className="text-[13px] text-muted py-10 text-center">
+              No deposits or withdrawals on record for the accounts in scope.
+            </p>
+          ) : (
+            <>
+              <div
+                ref={plotRef}
+                className="relative touch-pan-y"
+                onPointerMove={trackPointer}
+                onPointerLeave={() => setHoverIdx(null)}
+              >
+                <svg
+                  viewBox={`0 0 ${W} ${H}`}
+                  preserveAspectRatio="none"
+                  className="w-full h-[240px] block max-[640px]:h-[200px]"
+                >
+                  <g stroke="var(--hair)" strokeWidth="1">
+                    <line x1="0" y1="60" x2={W} y2="60" />
+                    <line x1="0" y1="120" x2={W} y2="120" />
+                    <line x1="0" y1="180" x2={W} y2="180" />
+                  </g>
+                  <path
+                    d={capital.line}
+                    fill="none"
+                    stroke="var(--accent)"
+                    strokeWidth="2"
+                    strokeLinejoin="miter"
+                    strokeLinecap="round"
+                  />
+                  {capital.dots.map((p, i) => (
+                    <circle
+                      key={i}
+                      cx={p.x}
+                      cy={p.y}
+                      r="3.5"
+                      fill={p.deposit ? 'var(--green)' : 'var(--red)'}
+                      stroke="var(--surface)"
+                      strokeWidth="1.4"
+                    />
+                  ))}
+                </svg>
+                {readout}
+              </div>
+              <div className="flex gap-stack mt-2 text-[11px] font-semibold text-muted [&>span]:inline-flex [&>span]:items-center [&>span]:gap-1.5 flex-wrap">
+                <span>
+                  <i className="w-2 h-2 rounded-full inline-block bg-green" /> Deposit ·{' '}
+                  {fmtMoney(capital.deposits)}
+                </span>
+                <span>
+                  <i className="w-2 h-2 rounded-full inline-block bg-red" /> Withdrawal ·{' '}
+                  {fmtMoney(capital.withdrawals)}
+                </span>
+                <span className="ml-auto font-mono text-text">
+                  Net {fmtSignedMoney(capital.net)}
+                </span>
+              </div>
+              <div className="font-mono flex text-[10.5px] text-faint mt-1.5">
+                <span className="flex-1 text-left">{capital.labels[0]}</span>
+                <span className="flex-1 text-right">{capital.labels[1]}</span>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -590,11 +921,50 @@ export default function PerformanceChartCard({
 
           <div className="border border-accent-line bg-[linear-gradient(160deg,var(--accentSoft),var(--surface))] rounded-rail py-[18px] px-5">
             <span className="text-[10.5px] font-extrabold tracking-[0.5px] text-faint uppercase">
-              Whole Balance
+              Balance on {fmtMediumDate(toDate)}
             </span>
             <div className="font-mono text-[30px] font-extrabold tracking-[-0.6px] mt-1.5">
-              {fmtMoney(range.wholeBalance)}
+              {fmtMoney(range.endBalance)}
             </div>
+            {/* The balance reconciled: where the range started, the money
+                moved in or out inside it, and what trading did (after fees).
+                Only with the API's balance walk — without it the start is
+                unknown and a "trading" line would be a guess. */}
+            {range.startBalance !== null && (
+              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 font-mono text-[12px] text-muted">
+                <span>
+                  Start {fmtMoney(range.startBalance)}
+                </span>
+                <span>
+                  Transfers{' '}
+                  <span
+                    className={
+                      range.flowsInRange > 0
+                        ? 'text-green'
+                        : range.flowsInRange < 0
+                          ? 'text-red'
+                          : ''
+                    }
+                  >
+                    {fmtSignedMoney(range.flowsInRange)}
+                  </span>
+                </span>
+                <span>
+                  Trading after fees{' '}
+                  <span
+                    className={
+                      range.endBalance - range.startBalance - range.flowsInRange < 0
+                        ? 'text-red'
+                        : 'text-green'
+                    }
+                  >
+                    {fmtSignedMoney(
+                      range.endBalance - range.startBalance - range.flowsInRange,
+                    )}
+                  </span>
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3 max-[640px]:grid-cols-1">
@@ -638,7 +1008,7 @@ export default function PerformanceChartCard({
               <div className="text-[11px] text-muted font-semibold">
                 {range.unmeasured > 0
                   ? `${range.measured} of ${range.measured + range.unmeasured} trading days measured`
-                  : 'Deposits & withdrawals excluded'}
+                  : 'Deposits & withdrawals never count as gains'}
               </div>
             </div>
           </div>
@@ -646,6 +1016,13 @@ export default function PerformanceChartCard({
       )}
     </section>
   )
+}
+
+/** 'YYYY-MM-DD' of the day before, in UTC like every day key on this page. */
+function dayBefore(iso: string): string {
+  return new Date(Date.parse(`${iso}T00:00:00Z`) - 86_400_000)
+    .toISOString()
+    .slice(0, 10)
 }
 
 function todayIso(): string {

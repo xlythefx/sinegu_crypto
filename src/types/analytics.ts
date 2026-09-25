@@ -148,10 +148,18 @@ export interface Analytics {
    */
   daily_capital: Record<string, number>
   /**
+   * The same walk one step later: what each of those days CLOSED on, after
+   * its transfers and its P&L (after fees). The Date Range card's balance on
+   * its end date. Optional only while an older API is still deployed.
+   */
+  daily_balance?: Record<string, number>
+  /**
    * Net transfer per day, signed — deposit positive, withdrawal negative,
    * netted when both land on one day. Only days that moved money.
    */
   daily_flows: Record<string, number>
+  /** Capital held before any recorded transfer — the walk's seed. NOT in `baseline`. */
+  initial_deposit?: number
   day_of_week: Record<Weekday, DayOfWeekStat>
   monthly: MonthlyStat[]
   by_symbol: SymbolStat[]

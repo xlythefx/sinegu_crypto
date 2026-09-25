@@ -1256,6 +1256,11 @@ When it grows into a full dashboard, migrate to `features/<domain>/` folders
 
 - **Scroll reveals:** use **AOS** (`aos` package) — `data-aos="fade-up"` + `AOS.init({ duration: 700, once: true, offset: 80, easing: 'ease-out-cubic' })` on page mount, `data-aos-delay` for staggering. Do not hand-roll IntersectionObserver reveals.
 - **Filter / category switches always animate:** whenever changing a tab, category, or filter swaps the content that's already on screen (tables, lists, grids), the new content must replay a short reveal — never a hard cut. Wrap the switched region in a container whose `key` includes the active tab + every filter value (e.g. `key={`${tab}-${exchange}-${ticker}`}`) so React re-mounts it, and give it `className="animate-[fadeup_0.35s_ease-out]"` (the `fadeup` keyframe in `index.css`). Pattern reference: Positions page (`/dashboard/positions`) tables. AOS is for first scroll-in; this is for in-place re-renders on filter change.
+  **Exception — Performance Analytics** (`/dashboard/analytics`, 2026-09-25): its
+  figures update IN PLACE on a filter change — the current cards fade while the
+  new payload loads ("Updating…"), no re-keyed reveal; cards with nothing to
+  measure in the view are tinted down (`Dimmable`), and the first load shows
+  `AnalyticsSkeleton`.
 - **Confirmation modals:** every significant/destructive action (delete, stop bot, disconnect exchange, irreversible submit) must be confirmed with the standard yes/no modal `src/components/ui/ConfirmModal.tsx` before executing.
 - **Proper spacing:** give every element room to breathe — consistent padding/margins from the design-token spacing scale, no text touching or clipping against container edges, buttons, or icons (e.g. a title crowding a popover's close button), and comfortable gaps between rows, cards, and controls. Cramped layouts are a bug; fix spacing before shipping.
 - **This is a PWA — responsiveness is non-negotiable:** every page and component must work and look right from small mobile screens up to desktop. Always design mobile-first, use fluid/responsive layouts (flex/grid, relative units, sensible breakpoints), keep tap targets comfortable, and verify each screen at mobile, tablet, and desktop widths before shipping. Never ship a layout that only works at desktop width.

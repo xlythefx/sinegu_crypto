@@ -227,8 +227,7 @@ export default function AnalyticsFilterPanel({
         ))}
       </div>
 
-      {/* Re-mounted per tab so the swapped controls reveal instead of cutting. */}
-      <div key={tab} className="animate-[fadeup_0.35s_ease-out]">
+      <div>
         {tab === 'scope' && (
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
             <div className="flex flex-col gap-2">
