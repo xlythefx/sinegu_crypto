@@ -65,6 +65,38 @@ def refresh_balances():
     return jsonify({"success": bool(result), "result": result, "scoped": api_keys is not None})
 
 
+@admin_bp.route("/ledger", methods=["POST"])
+def account_ledger():
+    """One account's full income ledger, reconciled to its wallet (ledger.py).
+
+    READ-ONLY at the exchange and writes nothing anywhere: the API asks for
+    this to preview a transfer backfill, and decides what to store itself.
+    Body: ``{"api_key": "..."}``. Costs one weight-30 call per 1000 ledger
+    rows, so it is an admin action, never a poller step on a healthy account.
+    """
+    if not _authorized():
+        return jsonify({"error": "Unauthorized"}), 403
+    from binance_abcd.accounts_api import fetch_accounts  # deferred: pulls in the http client
+    from binance_abcd.exchanges import client_for, exchange_of
+
+    api_key = str((request.get_json(silent=True) or {}).get("api_key") or "")
+    if not api_key:
+        return jsonify({"error": "api_key is required"}), 400
+    account = next((a for a in fetch_accounts() if a.get("api_key") == api_key), None)
+    if account is None:
+        # Only accounts the engine may trade are known to it: enabled, not a
+        # sandbox, owner not suspended.
+        return jsonify({"error": "ACCOUNT_NOT_TRADED", "message": "The engine does not trade this account."}), 404
+    client = client_for(account)
+    if not hasattr(client, "ledger"):
+        return jsonify({"error": "NOT_SUPPORTED", "message": f"No ledger read for {exchange_of(account)} yet."}), 400
+    payload = client.ledger()
+    if payload is None:
+        return jsonify({"error": "LEDGER_UNAVAILABLE",
+                        "message": "The exchange's history could not be read completely. Try again in a minute."}), 502
+    return jsonify({"success": True, "exchange": exchange_of(account), "ledger": payload})
+
+
 _TG_TAGS = re.compile(r"</?(?:b|i|u|s|code|pre)>")
 
 

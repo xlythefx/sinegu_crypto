@@ -18,6 +18,7 @@ from binance_abcd.binance_api import (
     invalidate_position_mode,
     mark_position_mode_verified,
 )
+from binance_abcd import ledger
 from binance_abcd.exchange_api import mode_key, want_hedge
 from binance_abcd.hooks import POSITION_MODE
 
@@ -221,6 +222,12 @@ class BinanceAdapter:
         if positions is None:
             return None
         return [row for row in (position_row(p) for p in positions) if row]
+
+    def ledger(self) -> Optional[dict]:
+        """The account's whole income ledger reconciled to its wallet — see
+        ledger.py. Binance only: no other adapter has this method, and callers
+        check for it rather than assume it."""
+        return ledger.read(self.api)
 
     def transfers_since(self, since_ms: int) -> Optional[list[dict]]:
         """TRANSFER income rows -> transactions rows.

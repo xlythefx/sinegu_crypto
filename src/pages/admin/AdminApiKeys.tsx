@@ -12,6 +12,7 @@ import {
 import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
 import ConfirmModal from '../../components/ui/ConfirmModal'
+import ApiKeyLedgerModal from '../../components/admin/ApiKeyLedgerModal'
 import ApiKeyEditModal from '../../components/admin/ApiKeyEditModal'
 import ApiKeyStatCards from '../../components/admin/ApiKeyStatCards'
 import ApiKeyActionsMenu from '../../components/admin/ApiKeyActionsMenu'
@@ -117,6 +118,7 @@ export default function AdminApiKeys() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [rechecking, setRechecking] = useState<string | null>(null)
+  const [ledgerTarget, setLedgerTarget] = useState<AdminApiKey | null>(null)
 
   const keys = useMemo(() => data?.keys ?? [], [data])
   const counts = data?.counts
@@ -520,6 +522,7 @@ export default function AdminApiKeys() {
                     setEditing(k)
                   }}
                   onRecheck={() => runRecheck(k)}
+                  onLedger={() => setLedgerTarget(k)}
                   onDelete={() => setDeleteTarget({ kind: 'one', key: k })}
                   onPurge={() => setPurgeTarget(k)}
                   onViewOwner={() =>
@@ -565,6 +568,16 @@ export default function AdminApiKeys() {
           </div>
         )}
       </section>
+
+      <ApiKeyLedgerModal
+        apiKey={ledgerTarget}
+        onClose={() => setLedgerTarget(null)}
+        onApplied={(key, message) => {
+          setLedgerTarget(null)
+          setNotice(`${key.name}: ${message}`)
+          reload()
+        }}
+      />
 
       <ApiKeyEditModal
         apiKey={editing}
@@ -630,6 +643,7 @@ interface KeyRowProps {
   onToggle: () => void
   onEdit: () => void
   onRecheck: () => void
+  onLedger: () => void
   onDelete: () => void
   onPurge: () => void
   onViewOwner: () => void
@@ -642,6 +656,7 @@ function KeyRow({
   onToggle,
   onEdit,
   onRecheck,
+  onLedger,
   onDelete,
   onPurge,
   onViewOwner,
@@ -770,6 +785,7 @@ function KeyRow({
             onViewOwner={onViewOwner}
             onRecheck={onRecheck}
             onEdit={onEdit}
+            onLedger={onLedger}
             onDisconnect={onDelete}
             onPurge={onPurge}
           />

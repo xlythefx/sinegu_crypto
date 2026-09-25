@@ -441,6 +441,16 @@ class BinanceAPI:
         data = self._request_get("/fapi/v1/income", params)
         return data if isinstance(data, list) else []
 
+    def get_income_page(self, start_time: int, limit: int = 1000) -> Optional[List[Dict[str, Any]]]:
+        """One page of EVERY income type from `start_time`, ascending. Weight 30.
+
+        Unlike get_income_history, a failed read is None: the ledger built from
+        these pages decides an account's opening balance, and a missing page
+        read as "no income" would put that money in the wrong place.
+        """
+        data = self._request_get("/fapi/v1/income", {"startTime": start_time, "limit": min(limit, 1000)})
+        return data if isinstance(data, list) else None
+
     # --- position mode --------------------------------------------------------
 
     def get_dual_side_position(self) -> Optional[bool]:

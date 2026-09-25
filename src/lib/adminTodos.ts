@@ -18,6 +18,23 @@ import type { AdminTodo } from '../types/adminTodos'
  *    the note and the date it was settled stay readable.
  */
 export const ADMIN_TODOS: AdminTodo[] = [
+  // ── Transfer history from the exchange ledger (2026-09-25) ──────────────
+  {
+    id: 'ledger-backfill-existing-accounts',
+    feature: 'Transfer history',
+    kind: 'action',
+    title: 'Apply the Binance transfer history to every existing Binance account',
+    added: '2026-09-25',
+    why: 'New accounts now get their starting balance from Binance\'s own records automatically, but accounts connected before this change still carry the old figure. On 25 Sep two customer accounts were counted at about twice their real capital (their deposit stored once as the starting balance and again as a transfer), and the master was missing its March–May transfers. Binance keeps roughly six months of history, so older transfers disappear from it for good — do this soon.',
+    steps: [
+      'Admin → API Keys → filter Binance.',
+      'For each connected account, starting with the master: Actions → Transfer history. Read the preview: which transfers will be added and how the starting balance and total deposited change.',
+      'If it lists problems (a transfer we store that Binance does not know, or a non-USDT balance), do not apply — look into that account first.',
+      'Otherwise Apply and confirm. Nothing changes on issued invoices; analytics, the deposit gate and future invoices use the corrected figures.',
+    ],
+    envKeys: [],
+    links: [{ label: 'Admin → API Keys', href: '/admin/api-keys' }],
+  },
   // ── Sign in with Discord + server roles (2026-09-21) ────────────────────
   {
     id: 'discord-register-app',

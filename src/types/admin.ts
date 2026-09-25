@@ -20,6 +20,38 @@ export interface ApiKeyRef {
   id: number
 }
 
+/** One transfer from the exchange's own ledger, and whether we store it. */
+export interface LedgerTransfer {
+  tran_id: string
+  type: 'DEPOSIT' | 'WITHDRAWAL'
+  amount: number
+  /** ISO-8601, UTC. */
+  at: string
+  stored: boolean
+}
+
+/** What applying an account's exchange ledger would change (preview). */
+export interface LedgerPlan {
+  exchange: ExchangeKind
+  account_id: number
+  wallet_balance: number
+  /** Oldest row the exchange still keeps. */
+  ledger_start: string | null
+  ledger_rows: number
+  sums: Record<string, number>
+  unclassified_types: string[]
+  transfers: LedgerTransfer[]
+  missing_count: number
+  /** Stored transfers the exchange does not know — block the apply. */
+  unknown_stored: { tran_id: string; type: string; amount: number; at: string }[]
+  initial_deposit: { before: number | null; after: number }
+  total_deposit: { before: number; after: number }
+  invoices: number
+  /** Non-empty = the apply is refused, and says why. */
+  problems: string[]
+  changes: boolean
+}
+
 /** The `?exchange=` scope an admin read runs under. */
 export type AdminExchangeScope = 'all' | ExchangeKind
 

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   Eye,
+  History,
   MoreHorizontal,
   Pencil,
   PlugZap,
@@ -28,6 +29,7 @@ interface ApiKeyActionsMenuProps {
   onViewOwner: () => void
   onRecheck: () => void
   onEdit: () => void
+  onLedger: () => void
   onDisconnect: () => void
   onPurge: () => void
 }
@@ -52,6 +54,7 @@ export default function ApiKeyActionsMenu({
   onViewOwner,
   onRecheck,
   onEdit,
+  onLedger,
   onDisconnect,
   onPurge,
 }: ApiKeyActionsMenuProps) {
@@ -82,6 +85,18 @@ export default function ApiKeyActionsMenu({
             hint: 'A fixed IP allow-list clears the fault immediately',
             icon: RefreshCw,
             onSelect: onRecheck,
+          },
+        ]
+      : []),
+    // Binance only: it is the one venue whose full ledger the engine reads.
+    ...(!gone && k.exchange === 'binance'
+      ? [
+          {
+            key: 'ledger',
+            label: 'Transfer history',
+            hint: 'Match deposits and the starting balance to Binance',
+            icon: History,
+            onSelect: onLedger,
           },
         ]
       : []),

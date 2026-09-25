@@ -10,6 +10,7 @@ import type {
   AdminEngineStatus,
   AdminExchangeScope,
   ApiKeyRef,
+  LedgerPlan,
   AdminPastTradeUpdate,
   AdminPerformance,
   AdminPositionsData,
@@ -559,6 +560,36 @@ export async function updateAdminApiKey(
 }
 
 /** Disconnect one account (soft delete — the trade history survives). */
+/**
+ * Preview an account's transfer history from the exchange's own ledger. Writes
+ * nothing, but spends exchange calls (made by the engine) — only on a click.
+ */
+export async function getAdminApiKeyLedger(key: ApiKeyRef): Promise<LedgerPlan> {
+  const res = await apiFetch<{ success: boolean; plan: LedgerPlan }>(
+    `/admin/api-keys/${key.exchange}/${key.id}/ledger`,
+    { auth: true },
+  )
+  return res.plan
+}
+
+/**
+ * Apply the previewed ledger. The server re-reads the exchange and refuses
+ * (409 LEDGER_CHANGED) unless it still matches what was confirmed.
+ */
+export async function applyAdminApiKeyLedger(
+  key: ApiKeyRef,
+  plan: LedgerPlan,
+): Promise<{ message: string; inserted: number; key: AdminApiKey }> {
+  return apiFetch(`/admin/api-keys/${key.exchange}/${key.id}/ledger`, {
+    method: 'POST',
+    auth: true,
+    body: {
+      expected_initial: plan.initial_deposit.after,
+      expected_missing: plan.transfers.filter((t) => !t.stored).map((t) => t.tran_id),
+    },
+  })
+}
+
 export async function deleteAdminApiKey(key: ApiKeyRef): Promise<void> {
   await apiFetch(`/admin/api-keys/${key.exchange}/${key.id}`, {
     method: 'DELETE',

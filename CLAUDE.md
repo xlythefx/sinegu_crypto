@@ -1102,7 +1102,7 @@ for the overlay's `position: fixed` and trap it inside.
   `SYNC_POSITION_MODE_ON_STARTUP`. Config-only fix, no code, no test gate:
   `python .claude/deploy_sinegualcrypto.py sync-engine-env` (upserts + restarts).
 - **Commands:** `python -m binance_abcd.main` (waitress), `python -m pytest
-  tests/ -q` (447 tests, no network), `python webhook_tester.py` (Tkinter GUI
+  tests/ -q` (457 tests, no network), `python webhook_tester.py` (Tkinter GUI
   trade sender — local or prod target, red banner on prod).
 - **Naming trap:** root `src/` is the React app; the engine package is
   `binance_abcd/`, deliberately not named `src`. Python and TypeScript
@@ -1476,6 +1476,42 @@ method, different boundary, so the two will not tie out to the decimal.
 `baseline` itself is unchanged (still net flows, still omitting
 `initial_deposit`, unlike the dashboard and invoices) and so is every other
 figure on the page. Pinned by `AnalyticsPeriodReturnTest`.
+The same walk read at each day's CLOSE ships as `analytics.daily_balance`
+(+ `initial_deposit`, the seed), and the Date Range card's balance is that
+walk on its end date (2026-09-25). It used to print `baseline` + P&L to date —
+the ALL-TIME net flow, so a range ending in August carried September's
+transfers, and without `initial_deposit`. `baseline` is net flows alone and is
+never a balance; Capital Flow's "Initial Deposit" tile had also been printing
+it. The tab's presets (`lib/rangePresets.ts`) include one window per stretch
+between transfers, in which contributed capital is constant.
+
+**Capital comes from the exchange's LEDGER, and `initial_deposit` is only
+what predates it (2026-09-25).** Binance keeps ~6 months of `/fapi/v1/income`
+(every TRANSFER, REALIZED_PNL, COMMISSION, FUNDING_FEE), and on the master
+11,321 rows summed to its walletBalance to the cent. So `binance_abcd/ledger.py`
+computes `opening balance = wallet − Σ every income row` (0 for any account
+younger than the retention), and `App\Services\Exchanges\TransferLedger` stores
+every transfer the ledger lists and sets `initial_deposit` to that opening
+balance minus any stored transfer older than the window. Two faults it fixed,
+both on prod: `initial_deposit` was the WALLET at the first poll, which already
+held the deposit the 3-day transfers poller then stored too (two customers at
+~2× their capital); and the master's pre-connection transfers were never stored.
+Rules:
+- **A new Binance account is seeded from its ledger by the balance poller**
+  (`POST /engine/{exchange}/ledger`, fills an UNSET figure only). An unreadable
+  ledger leaves it unset — the deposit gate fails closed — and never falls back
+  to the wallet. MEXC/Bybit still use the wallet snapshot (no ledger read yet,
+  same double-count exposure: the MEXC demo row has it).
+- **`initial_deposit = 0` is an answer, not "unset".** `updateBalances` fills
+  only NULL; until 2026-09-25 it also refilled 0, which after a backfill would
+  have overwritten 0 with the whole wallet.
+- **Existing accounts are corrected by an admin**: Admin → API Keys → Actions →
+  Transfer history (preview, then apply). The apply re-reads the exchange and
+  409s if it no longer matches the preview; a stored transfer the exchange does
+  not know, or a non-USDT balance, blocks it. Issued invoices keep their snapshot.
+- **Transfers are dated when the money moved** (`created_at` = the exchange's
+  `transaction_time`), not when the poller saw it — every reader buckets flows
+  by `created_at`. Rows stored before this keep their poll time.
 
 **Timestamps are UTC in the DB and rendered in the READER's zone**
 (`fmtDateTime`, `lib/format.ts`). The API runs on `'timezone' => 'UTC'`, but a

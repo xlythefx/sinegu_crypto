@@ -141,7 +141,10 @@ def test_balances_are_posted_per_exchange_with_mexc_wallet_as_equity_minus_unrea
     posts = _posts(fb, [BIN, MEX, MEX_DEMO])
     by_ex = {ex: payload["rows"] for path, ex, payload in posts}
     assert set(by_ex) == {"binance", "mexc"}
-    assert by_ex["binance"] == [{"api_key": "b-1", "balance": 1000.0, "unrealized_pnl": 5.0, "initial_deposit": 1000.0}]
+    # No wallet-as-initial-deposit for Binance: its starting capital comes from
+    # the ledger (test_ledger.py), never from a wallet that already holds the
+    # deposit the transfers poller stores.
+    assert by_ex["binance"] == [{"api_key": "b-1", "balance": 1000.0, "unrealized_pnl": 5.0}]
     # The demo row is polled too — against the testnet host (FakeMexc answers either).
     assert [r["api_key"] for r in by_ex["mexc"]] == ["m-1", "m-9"]
     assert by_ex["mexc"][0] == {"api_key": "m-1", "balance": pytest.approx(515.75), "unrealized_pnl": -3.25,

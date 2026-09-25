@@ -1,8 +1,10 @@
 """Balance poller: one account read per account -> POST /balances, per exchange.
 
-Sends balance + unrealized PnL; initial_deposit rides along and the backend
-only applies it when the account has none yet. Rows are grouped by exchange
-and posted to each venue's own /engine/{exchange}/balances.
+Sends balance + unrealized PnL. An account with no starting capital yet gets
+it from its exchange ledger (Binance) or, on venues without one, from the
+wallet snapshot, which the backend applies only when the account has none.
+Rows are grouped by exchange and posted to each venue's own
+/engine/{exchange}/balances.
 """
 
 from __future__ import annotations
@@ -53,6 +55,30 @@ def _settle_trade_verdict(account: dict, client) -> None:
         )
 
 
+def _seed_from_ledger(account: dict, client) -> None:
+    """Send a new account's ledger to the backend, which stores its transfers
+    and sets `initial_deposit` to what the account held before them (0 for any
+    account younger than the exchange's history). The backend applies it only
+    while the account still has no figure, so a repeat is harmless.
+
+    Best-effort: an unreadable ledger leaves the figure unset, the deposit
+    gate fails closed on an unknown deposit, and the next tick tries again —
+    never falls back to the wallet, which is exactly the double count."""
+    try:
+        payload = client.ledger()
+    except Exception:  # noqa: BLE001 - a seed must never break the balance sync
+        log.exception("[balances] ledger read crashed for %s", account.get("name"))
+        return
+    if payload is None:
+        log.warning("[balances] ledger unreadable for %s — starting capital stays unset", account.get("name"))
+        return
+    engine_client.post_json(
+        "ledger",
+        {"api_key": account["api_key"], "ledger": payload},
+        exchange=exchange_of(account),
+    )
+
+
 def fetch_and_save(api_keys: list[str] | None = None) -> dict | None:
     """Sync balances to the backend.
 
@@ -89,12 +115,23 @@ def fetch_and_save(api_keys: list[str] | None = None) -> dict | None:
             # it would never notice the key was fixed.
             _settle_trade_verdict(account, client)
         wallet, unrealized = balance
-        rows_by_exchange.setdefault(exchange_of(account), []).append({
+        row = {
             "api_key": account["api_key"],
             "balance": wallet,
             "unrealized_pnl": unrealized,
-            "initial_deposit": wallet,  # backend applies only when unset
-        })
+        }
+        if account.get("initial_deposit") is None:
+            if hasattr(client, "ledger"):
+                # A fresh account's starting capital comes from its LEDGER, not
+                # its wallet: the wallet at connect already contains the
+                # deposit the transfers poller is about to store, and taking
+                # both counted that money twice (two customers on 2026-09-25).
+                _seed_from_ledger(account, client)
+            else:
+                # Venues without a ledger read keep the old snapshot; the
+                # backend applies it only while the account has none.
+                row["initial_deposit"] = wallet
+        rows_by_exchange.setdefault(exchange_of(account), []).append(row)
 
     if not rows_by_exchange:
         return None
