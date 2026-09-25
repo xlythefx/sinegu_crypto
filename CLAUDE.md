@@ -215,7 +215,11 @@ mother-style: per-user `realized_percentage × realized + unrealized_percentage 
 (defaults 20% / 6% on `user_credentials`). Endpoints: user `GET /invoices`,`/invoices/{id}`;
 admin `GET/POST/PUT/DELETE /admin/invoices*`. **Admin Invoice History** (`/admin/invoices`)
 lists/filters/settles/deletes; **Admin Sandbox → Invoice Testing** generates an invoice from
-a user's closed P&L and marks it paid (manual charging). Still deferred, both reusing
+a user's closed P&L and marks it paid (manual charging).
+**The master account is never invoiced** (owner, 2026-09-25):
+`InvoiceService::notInvoiceableReason` refuses it inside `generateForAccount`, so
+the admin screen (422 `NOT_INVOICEABLE`) and the future monthly run agree;
+`SBXINV-` scenario accounts stay exempt. Still deferred, both reusing
 `InvoiceService::settle`: monthly auto-generation and off-session auto-charge.
 
 **Direct USDT-TRC20 payments — THE rail customers pay on (2026-09-23).**
