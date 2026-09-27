@@ -36,7 +36,23 @@ function appendChips(
   params.set(modeKey, mode ?? 'include')
 }
 
-export async function getAnalytics(
+export function getAnalytics(filters?: AnalyticsFilters): Promise<Analytics> {
+  return fetchAnalytics('/analytics', filters)
+}
+
+/**
+ * The same payload for any user (admin only) — the admin dashboard's Master
+ * Account tab reads the master's analytics through it.
+ */
+export function getAdminUserAnalytics(
+  uniId: string,
+  filters?: AnalyticsFilters,
+): Promise<Analytics> {
+  return fetchAnalytics(`/admin/users/${encodeURIComponent(uniId)}/analytics`, filters)
+}
+
+async function fetchAnalytics(
+  path: string,
   filters?: AnalyticsFilters,
 ): Promise<Analytics> {
   const params = new URLSearchParams()
@@ -62,7 +78,7 @@ export async function getAnalytics(
 
   const qs = params.toString()
   const res = await apiFetch<{ success: boolean; analytics: Analytics }>(
-    qs ? `/analytics?${qs}` : '/analytics',
+    qs ? `${path}?${qs}` : path,
     { auth: true },
   )
   // PHP serializes an empty keyed collection as [] — normalize to an object

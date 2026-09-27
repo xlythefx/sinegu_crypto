@@ -50,6 +50,7 @@ import type {
   SqlQueryInput,
   SqlQueryResult,
   StrategiesData,
+  StrategyScope,
   TableRowsData,
   TableRowsParams,
   TableStructure,
@@ -202,9 +203,21 @@ export async function deleteAsset(assetId: number): Promise<void> {
   })
 }
 
-export async function getStrategies(): Promise<StrategiesData> {
+/**
+ * Tagged closed trades from every exchange, real money only. `scope`:
+ * `master` = the master account alone (the strategy's true result),
+ * `customers` = every customer pooled, `all` (default) = both.
+ */
+export async function getStrategies(
+  scope: StrategyScope = 'all',
+  exchange: AdminExchangeScope = 'all',
+): Promise<StrategiesData> {
+  const params = new URLSearchParams()
+  if (scope !== 'all') params.set('scope', scope)
+  if (exchange !== 'all') params.set('exchange', exchange)
+  const qs = params.toString()
   const res = await apiFetch<{ success: boolean } & StrategiesData>(
-    '/admin/strategies',
+    qs ? `/admin/strategies?${qs}` : '/admin/strategies',
     { auth: true },
   )
   return { enabled: res.enabled, trades: res.trades }

@@ -1,16 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Percent, TrendingUp, Zap } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
-import MetricCards from '../../components/admin/strategy-detail/MetricCards'
-import EquityCurveCard from '../../components/admin/strategy-detail/EquityCurveCard'
-import WinLossCard from '../../components/admin/strategy-detail/WinLossCard'
-import RollingCard from '../../components/admin/strategy-detail/RollingCard'
-import ConcentrationCard from '../../components/admin/strategy-detail/ConcentrationCard'
-import SeasonalityCard from '../../components/admin/strategy-detail/SeasonalityCard'
-import HeatmapAssetsCard from '../../components/admin/strategy-detail/HeatmapAssetsCard'
-import TradesTable from '../../components/admin/strategy-detail/TradesTable'
+import StrategyDetailBody from '../../components/admin/strategy-detail/StrategyDetailBody'
 import { useApiData } from '../../hooks/useApiData'
 import { getStrategies } from '../../services/admin'
 import { ApiError } from '../../services/api'
@@ -33,7 +26,6 @@ export default function AdminStrategyDetail() {
   const decodedKey = decodeURIComponent(key)
   const navigate = useNavigate()
   const { data, loading, error, reload } = useApiData(getStrategies)
-  const [assetFilter, setAssetFilter] = useState<string | null>(null)
 
   const stats = useMemo(() => {
     if (!data) return null
@@ -93,7 +85,7 @@ export default function AdminStrategyDetail() {
             {decodedKey}
           </h1>
           <p className="mt-[3px] text-[13px] text-muted">
-            {stats.totalTrades.toLocaleString()} closed trades · Binance · PF {pf}
+            {stats.totalTrades.toLocaleString()} closed trades · every exchange · PF {pf}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -114,28 +106,7 @@ export default function AdminStrategyDetail() {
         </div>
       </div>
 
-      <MetricCards stats={stats} />
-
-      <div className="grid gap-4 mb-4 grid-cols-[2fr_1fr] max-[1000px]:grid-cols-1">
-        <EquityCurveCard equitySeries={stats.equitySeries} />
-        <WinLossCard stats={stats} />
-      </div>
-
-      <div className="grid gap-4 mb-4 grid-cols-2 max-[1000px]:grid-cols-1">
-        <RollingCard rolling={stats.rolling} />
-        <ConcentrationCard stats={stats} />
-      </div>
-
-      <SeasonalityCard stats={stats} />
-
-      <HeatmapAssetsCard stats={stats} onOpenAsset={setAssetFilter} />
-
-      <TradesTable
-        trades={stats.trades}
-        assets={stats.byAsset}
-        assetFilter={assetFilter}
-        onAssetFilter={setAssetFilter}
-      />
+      <StrategyDetailBody stats={stats} />
     </AdminLayout>
   )
 }

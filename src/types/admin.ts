@@ -86,6 +86,9 @@ export interface AdminUser {
 
 import type { StrategyTrade } from '../lib/strategyStats'
 
+/** Whose trades a strategy is measured on. */
+export type StrategyScope = 'master' | 'customers' | 'all'
+
 /** GET /admin/strategies — global toggle map + tagged closed trades. */
 export interface StrategiesData {
   /** strategy_key → enabled; a missing key means enabled. */

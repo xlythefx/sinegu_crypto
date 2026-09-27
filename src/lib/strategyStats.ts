@@ -17,6 +17,11 @@ export interface StrategyTrade {
   /** The fee already taken out of `realized_pnl`; null/absent when none is recorded. */
   exchange_fee?: number | string | null
   closed_at: string
+  /** Which venue's table the row came from (every exchange since 2026-09-27). */
+  exchange?: string
+  uni_id?: string
+  /** Stacked entries this close covered (`increments_closed`, 1 when unrecorded). */
+  increments?: number
 }
 
 /** The trade's P&L before fees — what the strategy made. */

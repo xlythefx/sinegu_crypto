@@ -370,6 +370,33 @@ the invoice bills the wrong month. The scenario suite catches this.
 role comes from the auth payload (`AuthUser.type`) in the stored session. Client gating is
 cosmetic — real enforcement must be added as admin middleware in `sinegutrade-api`.
 
+## Admin Dashboard tabs (2026-09-27)
+
+`/admin` is tabbed via `?tab=` (`pages/admin/AdminDashboard.tsx`, shared
+`components/ui/Tabs.tsx`): **Overview** (needs-attention list), **Master
+Account** (the old dashboard + the full Performance Analytics view for the
+master, via `GET /admin/users/{uniId}/analytics` → `AnalyticsController::forUser`,
+rendered by the shared `components/analytics/AnalyticsView.tsx`),
+**Strategies**, **Customers**, **Money**, **System**. Data:
+`GET /admin/insights/{overview,customers,money,system,strategies}`
+(`AdminInsightsController` → `App\Services\Admin\AdminInsights`, cached 60s,
+DB reads only — never an exchange call). Rules:
+- **A customer is `type = 'user'`**; staff/master/developer never count, and
+  demo, sandbox and `SBXINV-` accounts are never business. Every venue via
+  `ExchangeSchema::supported()`.
+- `GET /admin/strategies` now reads **every exchange** and takes
+  `?scope=master|customers|all` (default all) + `?exchange=`; the tab defaults
+  to **master** — the strategy's true result. Stats stay client-side
+  (`lib/strategyStats.ts`, `lib/strategyLeaderboard.ts`).
+- "Customers vs master" `participation` = customer trades (increments) ÷ the
+  master's on the same strategy and window; `return_pct` is over TODAY's
+  balance — a like-for-like comparison, never a track record.
+- The funnel's "deposited the minimum" reads `services.engine.min_deposit`
+  (`ENGINE_MIN_DEPOSIT`, default 1000) — keep it equal to the engine's
+  `BINANCE_ABCD_MIN_DEPOSIT`.
+- Skip reasons are shown in plain English via `lib/insightLabels.ts`; a new
+  engine reason needs a line there.
+
 ## Owner to-do list — Admin → To be Done (`/admin/todo`, 2026-09-21)
 
 **Whenever a feature leaves work only the OWNER can do — register at a third
