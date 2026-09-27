@@ -1,5 +1,5 @@
 import { apiFetch } from './api'
-import type { MarketTicker } from '../types/market'
+import type { MarketTicker, OrderBook } from '../types/market'
 
 /**
  * How often the landing strip re-reads the quotes. The API caches its upstream
@@ -26,5 +26,26 @@ export async function getMarketTicker(): Promise<MarketTicker> {
     quotes: Array.isArray(res.quotes) ? res.quotes : [],
     funding: res.funding ?? null,
     updated_at: res.updated_at,
+  }
+}
+
+/**
+ * How often the hero re-reads the book. The API caches its depth read for the
+ * same interval, so this is the cadence the card actually moves at.
+ */
+export const ORDER_BOOK_REFRESH_MS = 5_000
+
+/**
+ * The live order book behind the hero card — `GET /api/public/order-book`.
+ * Raw levels; `lib/orderBook` turns them into a readable ladder.
+ */
+export async function getOrderBook(): Promise<OrderBook> {
+  const res = await apiFetch<OrderBook>('/public/order-book')
+
+  return {
+    ...res,
+    available: Boolean(res.available),
+    bids: Array.isArray(res.bids) ? res.bids : [],
+    asks: Array.isArray(res.asks) ? res.asks : [],
   }
 }

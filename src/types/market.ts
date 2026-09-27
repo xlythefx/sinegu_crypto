@@ -43,3 +43,32 @@ export interface MarketTicker {
   funding: MarketFunding | null
   updated_at: string
 }
+
+/** One price level as the exchange publishes it: `[price, size]`. */
+export type BookLevel = [number, number]
+
+/**
+ * `GET /api/public/order-book` — the landing hero's live book.
+ *
+ * Levels arrive RAW (100 a side) and are bucketed on the client, because how a
+ * book is grouped is a display choice: five consecutive BTCUSDT levels span
+ * about forty cents, which is true and unreadable as a ladder. `lib/orderBook`
+ * owns that derivation.
+ */
+export interface OrderBook {
+  available: boolean
+  symbol: string
+  /** What the card prints — `BTC-PERP`. Server-configured. */
+  label: string
+  bids: BookLevel[]
+  asks: BookLevel[]
+  /** Last traded price, 24h move and 24h quote volume. Null when that read
+   *  failed — the card drops those lines and still draws the book. */
+  price: number | null
+  change_pct: number | null
+  quote_volume: number | null
+  /** The EXCHANGE's own stamp for this book, which is what the live dot
+   *  answers to. Null when the venue sent none. */
+  book_at: string | null
+  updated_at: string
+}

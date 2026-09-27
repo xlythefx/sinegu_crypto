@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useApiData } from '../../hooks/useApiData'
+import { usePoll } from '../../hooks/usePoll'
 import { getMarketTicker, MARKET_REFRESH_MS } from '../../services/market'
 import { fmtNum, fmtSignedPct } from '../../lib/format'
 import { trailingReturnPct } from '../../lib/trackRecord'
@@ -89,16 +90,12 @@ export default function Ticker({ stats = null, series = [] }: TickerProps) {
   const { data, reload } = useApiData(getMarketTicker)
   const [now, setNow] = useState(() => Date.now())
 
-  // One interval does both jobs: re-read the quotes and advance the funding
+  // One tick does both jobs: re-read the quotes and advance the funding
   // countdown. A second timer would only make them disagree.
-  useEffect(() => {
-    const id = setInterval(() => {
-      setNow(Date.now())
-      reload()
-    }, MARKET_REFRESH_MS)
-
-    return () => clearInterval(id)
-  }, [reload])
+  usePoll(() => {
+    setNow(Date.now())
+    reload()
+  }, MARKET_REFRESH_MS)
 
   const items: Item[] = []
 
