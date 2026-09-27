@@ -5,8 +5,10 @@ import { getOrderBook, ORDER_BOOK_REFRESH_MS } from '../../services/market'
 import { fmtNum, fmtSignedPct } from '../../lib/format'
 import { bookIsLive, buildBookModel, fmtCompactUsd } from '../../lib/orderBook'
 
+// `h-full` so this face fills the shared grid cell HeroCard stacks it in —
+// both faces are the same height, and the card never resizes mid-turn.
 const CARD =
-  'relative bg-surface border border-border rounded-[20px] overflow-hidden shadow-[0_30px_80px_rgba(0,0,0,0.18)] animate-[fadeup_0.8s_cubic-bezier(0.2,0.7,0.2,1)_0.15s_both]'
+  'h-full relative bg-surface border border-border rounded-[20px] overflow-hidden shadow-[0_30px_80px_rgba(0,0,0,0.18)]'
 const ROW = 'flex justify-between py-[3px] relative'
 const SIZE = 'text-muted'
 const COLUMN_HEAD = 'text-faint text-[10px] flex justify-between mb-2'

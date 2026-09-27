@@ -2,11 +2,18 @@ import { useNavigate } from 'react-router-dom'
 import { useSessionUser } from '../../hooks/useSessionUser'
 import { SECTION_IDS, scrollToSection } from '../../lib/scroll'
 import { REGISTER_PATH } from '../../lib/routes'
-import OrderBook from './OrderBook'
+import HeroCard from './HeroCard'
+import type { TrackRecordPoint, TrackRecordStats } from '../../types/publicStats'
 
 const CONTAINER = 'max-w-[1280px] mx-auto px-10 max-[560px]:px-5'
 
-export default function Hero() {
+interface HeroProps {
+  /** The page's one track-record fetch, for the card's second face. */
+  stats: TrackRecordStats | null
+  series: TrackRecordPoint[]
+}
+
+export default function Hero({ stats, series }: HeroProps) {
   const navigate = useNavigate()
   const user = useSessionUser()
   return (
@@ -46,7 +53,7 @@ export default function Hero() {
           <span>◆ Funds stay on your exchange</span>
         </div>
       </div>
-      <OrderBook />
+      <HeroCard stats={stats} series={series} />
     </section>
   )
 }
