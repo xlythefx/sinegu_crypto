@@ -442,6 +442,15 @@ nothing else, and no write control anywhere.
   {date}" footer. It forces AOS nodes visible for the capture and retries
   without embedded fonts if the Google Fonts embed fails. The trader's own
   `/dashboard/analytics` passes no `capture` and is unchanged.
+- **"P&L card" button on user detail, every staff role** (2026-09-28,
+  `components/admin/pnl-card/`, math in `lib/pnlCard.ts`): a shareable PNG
+  for Today / This week / This month / All time — chained return %, a return
+  curve, win rate, current win streak (all history), W/L, best day. Built
+  client-side from the calendar days the page already loads (each day's `pct`
+  = P&L over the balance it started with, after fees; UTC days), under the
+  page's exchange pill. **It is posted publicly, so: percentages and counts
+  only, no name, no dollar figure** — the `/api/public/*` rule. Fixed
+  colours, never theme tokens (it is an image, like the invoice document).
 
 ## Owner to-do list — Admin → To be Done (`/admin/todo`, 2026-09-21)
 

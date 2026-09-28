@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, BarChart3, LayoutDashboard, Wallet, type LucideIcon } from 'lucide-react'
+import { ArrowLeft, BarChart3, ImageDown, LayoutDashboard, Wallet, type LucideIcon } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
 import AdminPnlCalendar from '../../components/admin/AdminPnlCalendar'
@@ -18,6 +18,8 @@ import UserReferralsTable from '../../components/admin/user-detail/UserReferrals
 import UserSettingsCard from '../../components/admin/user-detail/UserSettingsCard'
 import UserPositionsTab from '../../components/admin/user-detail/UserPositionsTab'
 import AnalyticsView from '../../components/analytics/AnalyticsView'
+import PnlCardModal from '../../components/admin/pnl-card/PnlCardModal'
+import { EXCHANGE_META } from '../../components/exchanges/meta'
 import { useApiData } from '../../hooks/useApiData'
 import { useSessionUser } from '../../hooks/useSessionUser'
 import { isCollaborator } from '../../lib/roles'
@@ -31,6 +33,8 @@ import { getAdminUserAnalytics, type AnalyticsFilters } from '../../services/ana
 
 const BACK_BTN =
   'inline-flex items-center gap-[7px] mb-3.5 py-2 px-[13px] border border-border rounded-field bg-surface text-muted text-[13px] font-semibold cursor-pointer transition-colors hover:bg-accent-soft hover:border-accent-line hover:text-accent'
+const CARD_BTN =
+  'inline-flex items-center gap-1.5 h-9 px-3.5 rounded-btn border border-accent-line bg-accent-soft text-accent text-[12.5px] font-semibold cursor-pointer transition-colors hover:bg-accent hover:text-on-accent disabled:opacity-50 disabled:cursor-not-allowed'
 const TAB_BTN =
   'inline-flex items-center gap-1.5 text-[12.5px] font-semibold py-[7px] px-4 rounded-btn cursor-pointer transition-colors duration-150'
 
@@ -72,6 +76,7 @@ export default function AdminUserDetail() {
 
   const [tab, setTab] = useState<Tab>('overview')
   const [exchange, setExchange] = useState<ExchangePillValue>('all')
+  const [cardOpen, setCardOpen] = useState(false)
 
   const fetchDetail = useCallback(() => getAdminUserDetail(uniId), [uniId])
   const fetchSummary = useCallback(
@@ -148,11 +153,31 @@ export default function AdminUserDetail() {
             </button>
           ))}
         </div>
-        {/* Analytics carries its own exchange filter inside the view. */}
-        {tab !== 'analytics' && (
-          <ExchangeFilterPill value={exchange} onChange={setExchange} />
-        )}
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Every staff role, collaborators included: a shareable, name-free,
+              percentage-only card built from the calendar days below. */}
+          <button
+            type="button"
+            className={CARD_BTN}
+            onClick={() => setCardOpen(true)}
+            disabled={!days}
+          >
+            <ImageDown size={15} />
+            P&L card
+          </button>
+          {/* Analytics carries its own exchange filter inside the view. */}
+          {tab !== 'analytics' && (
+            <ExchangeFilterPill value={exchange} onChange={setExchange} />
+          )}
+        </div>
       </div>
+
+      <PnlCardModal
+        open={cardOpen}
+        onClose={() => setCardOpen(false)}
+        days={days ?? {}}
+        venue={exchange === 'all' ? 'All exchanges' : EXCHANGE_META[exchange].label}
+      />
 
       <div data-aos="fade-up" data-aos-delay="150">
         {/* keyed re-mount replays the reveal on every tab / filter switch */}
