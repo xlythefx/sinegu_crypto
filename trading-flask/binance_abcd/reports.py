@@ -34,6 +34,13 @@ master has no real account on answers ``available: false`` and posts nothing
 — a "No trades closed" for a venue nobody trades would be noise. State is
 kept per (kind, exchange), so one venue's failed fetch retries alone.
 
+**The DAILY recap's figures are the sum of the closes it recaps** (2026-09-28,
+:func:`with_published_closes`): return, trade count and asset ranking come
+from the PnL lines the channel posted that day (``published_closes``), so a
+reader adding up the channel gets the recap's number. The track record is the
+fallback for a day with no recorded close, and still the whole source of the
+weekly and monthly recaps.
+
 Two details worth keeping:
 
 * **Windows are calendar days in the SERIES' timezone, ending TODAY.** The
@@ -63,7 +70,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time as dtime, timedelta, timezone
 from typing import Any, Optional
 
-from binance_abcd import discord_notify, exchanges, hooks, notify, win_card
+from binance_abcd import discord_notify, exchanges, hooks, notify, published_closes, win_card
 from binance_abcd.http_client import get_session
 
 log = logging.getLogger(__name__)
@@ -329,6 +336,48 @@ def rank_assets(window: list) -> list[dict]:
     return sorted(by_symbol.values(), key=lambda a: (-a["pct"], a["symbol"]))
 
 
+def with_published_closes(summary: dict, exchange: str, tzinfo) -> dict:
+    """The DAILY summary restated as the sum of the PnL lines the channel
+    posted that day (`published_closes`), so the recap adds up to the closes
+    above it to the thousandth. Return, trades and the asset ranking all come
+    from those lines together — a ranking from one source under a return from
+    another would not add up either.
+
+    Falls back to the track record untouched when no close was recorded for
+    the day (a day before this ledger existed, or an out/ that was wiped): a
+    recap from the website's series beats no recap."""
+    try:
+        day = date.fromisoformat(str(summary.get("end")))
+    except ValueError:
+        return summary
+    published = published_closes.day_summary(exchange, day, tzinfo)
+    if published is None:
+        return summary
+    pct = published["return_pct"]
+    return {
+        **summary,
+        "return_pct": pct,
+        "trading_days": 1,
+        "winning_days": 1 if pct > 0 else 0,
+        "losing_days": 1 if pct < 0 else 0,
+        "trades": published["trades"],
+        "best_pct": pct,
+        "worst_pct": pct,
+        "assets": published["assets"],
+    }
+
+
+def daily_or_period_summary(schedule: "Schedule", fire: datetime, payload: dict, exchange: str) -> dict:
+    """The summary one recap posts: the track record's window, and for the
+    daily, the published closes on top (:func:`with_published_closes`)."""
+    tzinfo = series_timezone(payload)
+    start, end = period_window(schedule, fire, tzinfo)
+    summary = summarize(payload.get("series") or [], start, end)
+    if schedule.kind == "daily":
+        summary = with_published_closes(summary, exchange, tzinfo)
+    return summary
+
+
 def build_win_card(series: list, summary: dict, venue: str) -> "win_card.WinCard":
     """The daily win card's figures, out of the SAME public series the recap
     was built from — so the card cannot say anything the recap could not.
@@ -456,9 +505,9 @@ def _publish(schedule: Schedule, fire: datetime, exchange: str) -> bool:
         log.info("[reports] %s/%s skipped — no track record published yet", schedule.kind, exchange)
         return True
 
-    start, end = period_window(schedule, fire, series_timezone(payload))
     series = payload.get("series") or []
-    summary = summarize(series, start, end)
+    summary = daily_or_period_summary(schedule, fire, payload, exchange)
+    start, end = summary["start"], summary["end"]
     notify.notify_report(schedule.kind, summary, exchange=exchanges.label(exchange))
     if schedule.kind == "daily" and notify.is_daily_win(summary) and discord_notify.wins_enabled():
         card = build_win_card(series, summary, exchanges.label(exchange))
@@ -657,8 +706,7 @@ def preview(kind: str, now: Optional[datetime] = None, on: Optional[date] = None
         if not payload.get("available"):
             log.info("[reports] preview %s/%s — no track record published", kind, exchange)
             continue
-        start, end = period_window(schedule, now, series_timezone(payload))
-        summary = summarize(payload.get("series") or [], start, end)
+        summary = daily_or_period_summary(schedule, now, payload, exchange)
         rendered.append(notify.preview_report(kind, summary, exchange=exchanges.label(exchange)))
     return rendered
 
@@ -678,9 +726,9 @@ def preview_win_card(on: Optional[date] = None) -> list[str]:
         payload = fetch_track_record(exchange)
         if not payload or not payload.get("available"):
             continue
-        start, end = period_window(schedule, now, series_timezone(payload))
         series = payload.get("series") or []
-        summary = summarize(series, start, end)
+        summary = daily_or_period_summary(schedule, now, payload, exchange)
+        end = summary["end"]
         if not summary["trading_days"]:
             log.info("[reports] win card %s — no trades on %s", exchange, end)
             continue

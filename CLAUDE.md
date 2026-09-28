@@ -1156,7 +1156,13 @@ for the overlay's `position: fixed` and trap it inside.
     past-positions backfill and the endpoint's 5-min cache allow. A published
     percentage is still never reposted or revised.
   - **Chained, not summed** — same time-weighted math as the endpoint's own
-    total, so a mid-period deposit cannot inflate it.
+    total, so a mid-period deposit cannot inflate it. **Except the DAILY
+    (2026-09-28, owner's request):** its return, trade count and asset ranking
+    are the SUM of the `PnL:` lines the channel posted that day
+    (`binance_abcd/published_closes.py` → `out/published_closes.jsonl`, stored
+    rounded as printed), so a lone +2.224% close recaps as +2.224% — the track
+    record's walked capital had it at +2.189%. A day with no recorded close
+    falls back to the track record; weekly/monthly still chain it.
   - **The DAILY recap ranks every asset traded** (`reports.rank_assets` +
     `notify._asset_ranking`, 2026-09-14) from the `assets` list each series
     point carries: per symbol, its realized P&L over the SAME capital as the

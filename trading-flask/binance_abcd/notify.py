@@ -53,7 +53,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Optional
 
-from binance_abcd import discord_notify, exchanges, hooks, key_status
+from binance_abcd import discord_notify, exchanges, hooks, key_status, published_closes
 from binance_abcd.http_client import get_session
 
 log = logging.getLogger(__name__)
@@ -367,6 +367,7 @@ def report_exit_fill(
             "balance": balance,
             "increments": increments,
             "max_increments": max_increments,
+            "exchange": str(exchange).lower() if exchange else None,
             # Omitted, never False, when the caller does not know — an absent
             # key is how `_master_reports` tells "not the master" apart from
             # "this API cannot say". bool() would collapse the two.
@@ -550,6 +551,17 @@ def _flush_exit_batch(batch_id: str) -> None:
     pct = _pnl_percent(batch.reports)
     if pct is not None:
         lines.append(f"PnL: {_fmt_pct(pct)}")
+        # The daily recap is the sum of these lines (`published_closes`), so
+        # it can never disagree with the closes it recaps. Recorded under the
+        # venue whose reports produced the figure; an ambiguous batch (several
+        # venues, no master to pick one) is left out rather than guessed.
+        scoped = _master_reports(batch.reports) or batch.reports
+        venues = {r.get("exchange") for r in scoped if r.get("exchange")}
+        if len(venues) == 1:
+            published_closes.record(
+                venues.pop(), batch.ticker, pct,
+                increments=_modal([r.get("increments") for r in depth_reports]),
+            )
 
     # The side bar is the sign of the PnL line, judged on the same rounding
     # `_fmt_pct` prints — a -0.0001 that reads "+0.000%" is not a red card.

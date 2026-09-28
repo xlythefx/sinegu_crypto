@@ -58,6 +58,15 @@ def _isolate_report_state(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_published_closes(tmp_path, monkeypatch):
+    """Keep test closes out of the real out/published_closes.jsonl — the live
+    daily recap SUMS that file, so a stray test row would move its Return."""
+    import binance_abcd.published_closes as published_closes
+
+    monkeypatch.setattr(published_closes, "LEDGER_FILE", tmp_path / "published_closes.jsonl")
+
+
+@pytest.fixture(autouse=True)
 def _isolate_watermarks(tmp_path, monkeypatch):
     """Keep poller tests from reading or advancing the real out/last_*_sync.json —
     a test that stamped a fresh closes or fee watermark would make the live
