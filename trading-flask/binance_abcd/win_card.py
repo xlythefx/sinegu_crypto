@@ -300,7 +300,7 @@ def _render(card: WinCard) -> bytes:
     _text(draw, (398, 43), card.venue, _body(11), MUTED, anchor="ra")
 
     # Hero figure, with its glow drawn on a blurred layer beneath it.
-    _text(draw, (22, 82), "RETURN · AFTER EXCHANGE FEES", _mono(10, bold=False), MUTED, spacing=1.6)
+    _text(draw, (22, 82), "RETURN", _mono(10, bold=False), MUTED, spacing=1.6)
     # Three decimals, like the recap posted beside it — the two must read alike.
     figure = fmt_signed_pct(card.return_pct, 3)
     glow = Image.new("RGBA", size, (0, 0, 0, 0))
@@ -342,8 +342,8 @@ def _render(card: WinCard) -> bytes:
     else:
         _tile(draw, (right[0], row2[0], right[1], row2[1]), "Top asset", "—", TEXT)
 
-    # Brand band on the gold.
-    _text(draw, (20, 511), "pixel alpha", _display(22), ON_ACCENT, anchor="lm")
+    # Brand band on the gold — the site only; the owner dropped the wordmark
+    # (2026-09-28), the header already names Pixel Alpha.
     _text(draw, (400, 497), "Automated crypto trading", _body(11), ON_ACCENT, anchor="ra")
     _text(draw, (400, 512), "pixel-alpha.com", _body(11, "ExtraBold"), ON_ACCENT, anchor="ra")
 

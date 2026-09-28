@@ -219,14 +219,19 @@ def post(text: str, *, color: int) -> None:
 
 
 def post_win(text: str, png: Optional[bytes]) -> None:
-    """The daily win to the WINS channel: a green embed with the card as its
-    image, or the embed alone when the card could not be drawn. Only
+    """The daily win to the WINS channel: the card ALONE in a green embed — no
+    title, no text (the owner's call, 2026-09-28: the card says it all). The
+    text is only the fallback, posted when the card could not be drawn. Only
     ``notify.notify_daily_win`` calls this, with public recap text."""
     if not wins_enabled() or not text.strip():
         return
-    embed = build_embed(text, GREEN)
     if png is not None:
-        embed["image"] = {"url": f"attachment://{WIN_CARD_FILENAME}"}
+        embed: dict[str, Any] = {
+            "color": GREEN,
+            "image": {"url": f"attachment://{WIN_CARD_FILENAME}"},
+        }
+    else:
+        embed = build_embed(text, GREEN)
     payload = {"embeds": [embed]}
     url = str(hooks.DISCORD_WINS_WEBHOOK_URL)
     try:

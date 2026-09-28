@@ -676,7 +676,7 @@ def notify_daily_win(summary: dict, png: Optional[bytes], exchange: Optional[str
     day = _fmt_day_range(summary.get("start"), summary.get("end"))
     text = (
         f"🏆 <b>Winning day — {day}{venue}</b>\n"
-        f"Return: <b>{_fmt_pct(summary.get('return_pct'))}</b> after exchange fees"
+        f"Return: <b>{_fmt_pct(summary.get('return_pct'))}</b>"
     )
     discord_notify.post_win(text, png)
 

@@ -178,8 +178,11 @@ def test_the_card_is_uploaded_and_shown_in_a_green_embed(transport):
     name, body, mime = call["files"]["files[0]"]
     assert (name, body, mime) == (discord_notify.WIN_CARD_FILENAME, b"PNG", "image/png")
     (embed,) = json.loads(call["data"]["payload_json"])["embeds"]
-    assert embed["color"] == discord_notify.GREEN
-    assert embed["image"] == {"url": f"attachment://{discord_notify.WIN_CARD_FILENAME}"}
+    # The card alone — no title, no description (owner, 2026-09-28).
+    assert embed == {
+        "color": discord_notify.GREEN,
+        "image": {"url": f"attachment://{discord_notify.WIN_CARD_FILENAME}"},
+    }
 
 
 def test_without_a_card_it_still_posts_the_embed(transport):

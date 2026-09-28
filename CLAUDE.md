@@ -1071,7 +1071,9 @@ for the overlay's `position: fixed` and trap it inside.
   series as the recap (`reports.build_win_card`: day return, trades, month-to-
   date curve + %, green-day streak, top asset), so it cannot say more than the
   recap. "Positive" is judged on the recap's 3-dp rounding; per venue; daily
-  only. A render failure (or no Pillow) posts the embed without the image.
+  only. The post is the card ALONE (green embed, no title/text — owner's call,
+  and the card drops the bottom wordmark and "after exchange fees"); the text
+  embed is only the fallback when rendering fails (or Pillow is missing).
   Preview locally with `python -m binance_abcd.reports wincard [YYYY-MM-DD]`
   → `out/win_card_<exchange>.png`, posted nowhere.
   **`Increment (2/3)` is the stack depth this entry reached** = pre-entry
