@@ -375,11 +375,11 @@ cosmetic — real enforcement must be added as admin middleware in `sinegutrade-
 `/admin` is tabbed via `?tab=` (`pages/admin/AdminDashboard.tsx`, shared
 `components/ui/Tabs.tsx`): **Overview** (sub-tabbed via `?view=`, 2026-09-28:
 **Platform** — every user combined — and **Needs attention**, the old
-Overview, in `insights/AttentionPane.tsx`), **Master
-Account** (the old dashboard + the full Performance Analytics view for the
-master, via `GET /admin/users/{uniId}/analytics` → `AnalyticsController::forUser`,
-rendered by the shared `components/analytics/AnalyticsView.tsx`),
-**Strategies**, **Customers**, **Money**, **System**. Data:
+Overview, in `insights/AttentionPane.tsx`), **Customers**, **Money**,
+**System**. The **Master Account** and **Strategies** tabs were removed at the
+owner's request on 2026-09-28; their components (`insights/MasterTab.tsx`,
+`insights/StrategiesTab.tsx`) are kept but unmounted, and the Strategies view
+lost its "Customers vs master" card for "By exchange" in the same change. Data:
 `GET /admin/insights/{overview,customers,money,system,strategies}`
 (`AdminInsightsController` → `App\Services\Admin\AdminInsights`, cached 60s,
 DB reads only — never an exchange call). Rules:
@@ -390,9 +390,6 @@ DB reads only — never an exchange call). Rules:
   `?scope=master|customers|all` (default all) + `?exchange=`; the tab defaults
   to **master** — the strategy's true result. Stats stay client-side
   (`lib/strategyStats.ts`, `lib/strategyLeaderboard.ts`).
-- "Customers vs master" `participation` = customer trades (increments) ÷ the
-  master's on the same strategy and window; `return_pct` is over TODAY's
-  balance — a like-for-like comparison, never a track record.
 - The funnel's "deposited the minimum" reads `services.engine.min_deposit`
   (`ENGINE_MIN_DEPOSIT`, default 1000) — keep it equal to the engine's
   `BINANCE_ABCD_MIN_DEPOSIT`.

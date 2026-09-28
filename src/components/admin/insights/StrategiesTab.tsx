@@ -5,7 +5,7 @@ import DataState from '../../dashboard/DataState'
 import ExchangeFilterPill, { type ExchangePillValue } from '../user-detail/ExchangeFilterPill'
 import StrategyDetailBody from '../strategy-detail/StrategyDetailBody'
 import StrategyLeaderboard from './StrategyLeaderboard'
-import { CustomersVsMasterCard, ExchangeSplitCard, SignalReliabilityCard } from './StrategyExtraCards'
+import { ExchangeSplitCard, SignalReliabilityCard } from './StrategyExtraCards'
 import { GRID_2 } from './parts'
 import { useApiData } from '../../../hooks/useApiData'
 import { getStrategies } from '../../../services/admin'
@@ -132,10 +132,8 @@ export default function StrategiesTab() {
 
               <div className={GRID_2}>
                 <SignalReliabilityCard data={insights?.reliability[selected]} />
-                <CustomersVsMasterCard data={insights?.compare[selected]} />
+                <ExchangeSplitCard rows={split} />
               </div>
-
-              <ExchangeSplitCard rows={split} />
 
               <div>
                 <StrategyDetailBody stats={detail} />
