@@ -177,6 +177,23 @@ export const ADMIN_TODOS: AdminTodo[] = [
       { label: 'Cloudflare DNS', href: 'https://dash.cloudflare.com/' },
     ],
   },
+  {
+    id: 'email-templates-approval',
+    feature: 'Account emails',
+    kind: 'decision',
+    title: 'Approve the draft emails, and the day unpaid accounts are paused (day 5 or day 7)',
+    added: '2026-09-28',
+    why: 'Nine emails are designed but not sent: welcome, weekly summary, new invoice, the day-2 / day-3 / day-5 payment reminders, thank-you-for-paying, and the team notices for exchange connected / invoice issued / unpaid / paid. Each needs its wording approved before it is switched on. The reminders also assume trading pauses on day 5, but the code today pauses the day after the due date — the 8th of the month after the invoice period, roughly day 7.',
+    steps: [
+      'Open Admin → Sandbox → Email Templates. Read each email at Phone and Desktop width, or use "All" to mail every one to yourself as [Preview] copies.',
+      'Write the wording changes, or "approved", in this item\'s note — per email.',
+      'Decide the pause day: day 5 (the reminders\' wording) or keep today\'s day 7. Day 5 means moving the invoice due date in InvoiceService, which changes when overdue accounts stop trading.',
+      'Decide when the weekly summary goes out (e.g. Monday morning Manila time) and whether customers can switch it off.',
+      'Once approved, the senders get wired one by one; each flips from Draft to Live on that page when it does.',
+    ],
+    envKeys: ['MAIL_ADMIN_ADDRESS'],
+    links: [{ label: 'Email Templates', href: '/admin/sandbox/emails' }],
+  },
 
   // ── MEXC (live on prod since 2026-09-17) ─────────────────────────────────
   {

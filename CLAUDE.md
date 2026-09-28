@@ -66,6 +66,25 @@ as best-effort (the row is the fact, the mail is the telling), and
 `storage/app/mail-previews/` from the real Mailables so a design can be
 reviewed without mailing anyone.
 
+**Every email lives in ONE catalogue (2026-09-28):**
+`App\Services\Notifications\EmailCatalogue` — slug, audience (customer / team),
+trigger, `live` flag and a Mailable built from sample data. It feeds both
+`mail:preview` and **Admin → Sandbox → Email Templates**
+(`/admin/sandbox/emails/:slug`, `SandboxEmailController`), which renders each
+email in an iframe at phone/desktop width and mails `[Preview]` copies to a
+reviewer (one or all; sample data only). Every Mailable extends
+`App\Mail\PixelMail` (scalars, never models; subject through `subjectLine()` so
+the preview prefix survives Laravel re-applying the envelope). **Only three are
+LIVE** — sign-up notice, approval, password reset. The rest (welcome, weekly
+summary with $ P&L, invoice, reminders day 2/3/5, thank-you, and team notices
+for exchange connected / invoice issued / unpaid / paid) are DRAFTS awaiting
+the owner's wording approval (to-do `email-templates-approval`); wiring one
+means sending it best-effort like `AccountMail` and flipping its `live` in the
+same change. `MAIL_ADMIN_ADDRESS` is a comma-separated team list
+(`AccountMail::teamRecipients()`) — support@ plus Dmitri
+(dmitri@feature-digital.com), who asked for sign-ups, exchange connections and
+payments.
+
 **Pixel Alpha is the ONLY name and the Bangkok office the ONLY address a
 customer ever sees (2026-09-20).** `COMPANY.name` + `OFFICE.addressLines` /
 `OFFICE.country` in `company.ts` feed the Contact page, the legal pages'

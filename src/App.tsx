@@ -35,6 +35,7 @@ import AdminApiKeys from './pages/admin/AdminApiKeys'
 import AdminUserDetail from './pages/admin/AdminUserDetail'
 import AdminStrategies from './pages/admin/AdminStrategies'
 import AdminSandbox from './pages/admin/AdminSandbox'
+import AdminEmailTemplates from './pages/admin/AdminEmailTemplates'
 import AdminManualTrade from './pages/admin/AdminManualTrade'
 import AdminStrategyDetail from './pages/admin/AdminStrategyDetail'
 import AdminPositions from './pages/admin/AdminPositions'
@@ -92,6 +93,8 @@ function App() {
             <Route path="/admin/referrals/release/:referrerUniId" element={<AdminReleasePayment />} />
             <Route path="/admin/referrals" element={<AdminReferrals />} />
             <Route path="/admin/sandbox/manual-trade" element={<AdminManualTrade />} />
+            <Route path="/admin/sandbox/emails" element={<AdminEmailTemplates />} />
+            <Route path="/admin/sandbox/emails/:slug" element={<AdminEmailTemplates />} />
             <Route path="/admin/sandbox" element={<AdminSandbox />} />
             <Route path="/admin/resources" element={<AdminResources />} />
             <Route path="/admin/database" element={<AdminDatabase />} />

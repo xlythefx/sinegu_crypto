@@ -5,6 +5,7 @@ import {
   ArrowRight,
   CheckCircle2,
   FlaskConical,
+  Mail,
   Plus,
   Trash2,
   UserPlus,
@@ -170,7 +171,7 @@ export default function AdminSandbox() {
     <AdminLayout title="Sandbox" subtitle="Create test data to exercise the platform.">
       {/* ============ launchers ============ */}
       <section
-        className="grid grid-cols-3 max-[980px]:grid-cols-2 max-[720px]:grid-cols-1 gap-4 mb-4"
+        className="grid grid-cols-4 max-[1280px]:grid-cols-2 max-[720px]:grid-cols-1 gap-4 mb-4"
         data-aos="fade-up"
       >
         {[
@@ -191,6 +192,12 @@ export default function AdminSandbox() {
             title: 'Manual Trade',
             sub: 'Fire a real signal at the trading engine and watch it fan out.',
             to: '/admin/sandbox/manual-trade',
+          },
+          {
+            icon: <Mail size={17} />,
+            title: 'Email Templates',
+            sub: 'Preview every email customers and the team receive, and send yourself a copy.',
+            to: '/admin/sandbox/emails',
           },
         ].map((tile) => {
           const inner = (
