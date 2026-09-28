@@ -16,15 +16,20 @@ export interface BlockedKeyRow {
   days_left: number | null
 }
 
+/**
+ * Keys marked optional are ABSENT for a read-only collaborator (the API's
+ * AdminInsightsController::LIMITED_HIDDEN_OVERVIEW_KEYS): billing and key
+ * health are admin business.
+ */
 export interface OverviewInsights {
   attention: {
-    blocked_keys: BlockedKeyRow[]
-    blocked_keys_count: number
+    blocked_keys?: BlockedKeyRow[]
+    blocked_keys_count?: number
     pending_users: { uni_id: string; name: string; email: string; created_at: string | null }[]
     pending_users_count: number
-    overdue_invoices: { count: number; amount: number }
-    unpaid_invoices: { count: number; amount: number }
-    unmatched_transfers: number
+    overdue_invoices?: { count: number; amount: number }
+    unpaid_invoices?: { count: number; amount: number }
+    unmatched_transfers?: number
     signals_today: {
       signals: number
       with_problems: number
@@ -34,7 +39,7 @@ export interface OverviewInsights {
       /** Engine skip reason (or "order failed") → accounts. */
       reasons: Record<string, number>
     }
-    paused_for_payment: number
+    paused_for_payment?: number
   }
   headline: {
     /** null = no real master account on record. */
@@ -43,7 +48,7 @@ export interface OverviewInsights {
     master_today_trades: number
     active_traders_today: number
     customers_live: number
-    collected_this_month: number
+    collected_this_month?: number
   }
 }
 

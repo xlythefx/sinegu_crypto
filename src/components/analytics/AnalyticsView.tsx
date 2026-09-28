@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import DataState from '../dashboard/DataState'
 import AnalyticsFilterPanel, {
@@ -17,6 +17,7 @@ import MonthlyBreakdownCard from './MonthlyBreakdownCard'
 import StrategyAnalysisCard from './StrategyAnalysisCard'
 import AnalyticsSkeleton from './AnalyticsSkeleton'
 import Dimmable from './Dimmable'
+import Capturable from '../ui/Capturable'
 import { useApiData } from '../../hooks/useApiData'
 import type { AnalyticsFilters as AnalyticsQuery } from '../../services/analytics'
 import { ApiError } from '../../services/api'
@@ -44,6 +45,12 @@ interface AnalyticsViewProps {
   sourceKey?: string
   /** Strategy Analysis self-fetches the SIGNED-IN user's trades, so only their own page shows it. */
   showStrategyCard?: boolean
+  /**
+   * Adds a "Download as PNG" button to every card, footed with this name
+   * (the admin's read of one user). Absent on the trader's own page, which
+   * then renders exactly as before.
+   */
+  capture?: { name: string }
 }
 
 /**
@@ -55,7 +62,18 @@ export default function AnalyticsView({
   fetchAnalytics,
   sourceKey = '',
   showStrategyCard = true,
+  capture,
 }: AnalyticsViewProps) {
+  /** Wrap one card in the screenshot control — only when `capture` is set. */
+  const cap = (title: string, card: ReactNode) =>
+    capture ? (
+      <Capturable name={title} subject={capture.name}>
+        {card}
+      </Capturable>
+    ) : (
+      card
+    )
+
   const [filters, setFilters] = useState<AnalyticsFilters>({
     exchange: 'all',
     from: '',
@@ -185,77 +203,101 @@ export default function AnalyticsView({
             )
           )}
           <Dimmable dim={noTrades}>
-          <AnalyticsKpis
-            totalReturnPct={data.total_return_pct}
-            totalReturnAbs={data.total_return_abs}
-            totalReturnAbsNet={data.total_return_abs_net}
-            returnOnDeposit={data.return_on_deposit}
-            filtered={data.filters.filtered}
-            avgDailyPnl={data.avg_daily_pnl}
-            avgDailyPnlNet={data.avg_daily_pnl_net}
-            tradingDays={data.trading_days}
-            bestDay={data.best_day}
-            worstDay={data.worst_day}
-            fees={data.fees}
-          />
+            {cap(
+              'Key Metrics',
+              <AnalyticsKpis
+                totalReturnPct={data.total_return_pct}
+                totalReturnAbs={data.total_return_abs}
+                totalReturnAbsNet={data.total_return_abs_net}
+                returnOnDeposit={data.return_on_deposit}
+                filtered={data.filters.filtered}
+                avgDailyPnl={data.avg_daily_pnl}
+                avgDailyPnlNet={data.avg_daily_pnl_net}
+                tradingDays={data.trading_days}
+                bestDay={data.best_day}
+                worstDay={data.worst_day}
+                fees={data.fees}
+              />,
+            )}
           </Dimmable>
 
           <div className="grid grid-cols-[1.25fr_1fr] gap-stack items-stretch max-[1100px]:grid-cols-1">
             {/* Its Deposits & Withdrawals tab has something to show even
                 without a trade, so it dims only when both are empty. */}
             <Dimmable dim={noTrades && noFlows}>
-            <PerformanceChartCard
-              dailyPnl={data.daily_pnl}
-              dailyPnlNet={data.daily_pnl_net}
-              dailyCapital={data.daily_capital}
-              dailyFlows={data.daily_flows}
-              dailyBalance={data.daily_balance}
-              initialDeposit={data.initial_deposit}
-              baseline={data.baseline}
-              feesSince={data.fees.trades_without_fee > 0 ? data.fees.since : null}
-            />
+              {cap(
+                'Performance Analytics',
+                <PerformanceChartCard
+                  dailyPnl={data.daily_pnl}
+                  dailyPnlNet={data.daily_pnl_net}
+                  dailyCapital={data.daily_capital}
+                  dailyFlows={data.daily_flows}
+                  dailyBalance={data.daily_balance}
+                  initialDeposit={data.initial_deposit}
+                  baseline={data.baseline}
+                  feesSince={data.fees.trades_without_fee > 0 ? data.fees.since : null}
+                />,
+              )}
             </Dimmable>
             <Dimmable dim={noTrades}>
-              <PositionDistributionCard bySymbol={data.by_symbol} />
+              {cap(
+                'Position Distribution by Asset',
+                <PositionDistributionCard bySymbol={data.by_symbol} />,
+              )}
             </Dimmable>
           </div>
 
           <Dimmable dim={noTrades} className="gap-stack">
-          <PortfolioMetricsCard
-            quality={data.quality}
-            risk={data.risk}
-            totalReturnAbs={data.total_return_abs}
-            totalReturnAbsNet={data.total_return_abs_net}
-            totalReturnPct={data.total_return_pct}
-            feesSince={data.fees.trades_without_fee > 0 ? data.fees.since : null}
-          />
-          <TradeQualityCard quality={data.quality} />
-          <RiskMetricsCard
-            risk={data.risk}
-            totalReturnAbs={data.total_return_abs}
-          />
+            {cap(
+              'Portfolio Performance Metrics',
+              <PortfolioMetricsCard
+                quality={data.quality}
+                risk={data.risk}
+                totalReturnAbs={data.total_return_abs}
+                totalReturnAbsNet={data.total_return_abs_net}
+                totalReturnPct={data.total_return_pct}
+                feesSince={data.fees.trades_without_fee > 0 ? data.fees.since : null}
+              />,
+            )}
+            {cap('Trade Quality Metrics', <TradeQualityCard quality={data.quality} />)}
+            {cap(
+              'Risk-Adjusted Performance',
+              <RiskMetricsCard risk={data.risk} totalReturnAbs={data.total_return_abs} />,
+            )}
           </Dimmable>
           {/* Open positions, not closed trades — dims only with no account. */}
           <Dimmable dim={noAccountsInScope}>
-            <UnrealizedByExchangeCard
-              byExchange={data.by_exchange}
-              totalUnrealized={data.total_unrealized}
-            />
+            {cap(
+              'Unrealized P&L by Exchange',
+              <UnrealizedByExchangeCard
+                byExchange={data.by_exchange}
+                totalUnrealized={data.total_unrealized}
+              />,
+            )}
           </Dimmable>
           <Dimmable dim={noTrades}>
-            <DayOfWeekCard dayOfWeek={data.day_of_week} />
+            {cap(
+              'Performance by Day of Week',
+              <DayOfWeekCard dayOfWeek={data.day_of_week} />,
+            )}
           </Dimmable>
 
           <div className="grid grid-cols-2 gap-stack items-start max-[1100px]:grid-cols-1">
             <Dimmable dim={noTrades}>
-              <MonthlyBreakdownCard monthly={data.monthly} />
+              {cap(
+                'Monthly Performance Breakdown',
+                <MonthlyBreakdownCard monthly={data.monthly} />,
+              )}
             </Dimmable>
             <Dimmable dim={noAccountsInScope && noFlows}>
-              <CapitalFlowCard
-                flows={data.flows}
-                currentCapital={data.current_capital}
-                initialDeposit={data.initial_deposit}
-              />
+              {cap(
+                'Capital Flow Summary',
+                <CapitalFlowCard
+                  flows={data.flows}
+                  currentCapital={data.current_capital}
+                  initialDeposit={data.initial_deposit}
+                />,
+              )}
             </Dimmable>
           </div>
         </div>

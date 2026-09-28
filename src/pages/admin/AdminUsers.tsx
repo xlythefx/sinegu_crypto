@@ -17,11 +17,12 @@ import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import CreateUserModal from '../../components/admin/CreateUserModal'
-import { BADGE, StatusBadge } from '../../components/admin/badges'
+import { BADGE, RoleBadge, StatusBadge } from '../../components/admin/badges'
 import RolePicker from '../../components/admin/RolePicker'
 import { EXCHANGE_META } from '../../components/exchanges/meta'
 import { useApiData } from '../../hooks/useApiData'
 import { useSessionUser } from '../../hooks/useSessionUser'
+import { isCollaborator } from '../../lib/roles'
 import {
   acceptUser,
   createAdminUser,
@@ -53,6 +54,7 @@ const ROLE_FILTERS: { key: RoleFilter; label: string }[] = [
   { key: 'master', label: 'Master' },
   { key: 'admin', label: 'Admin' },
   { key: 'developer', label: 'Developer' },
+  { key: 'collaborator', label: 'Collaborator' },
   { key: 'user', label: 'User' },
 ]
 
@@ -90,11 +92,16 @@ const ROLE_EFFECT: Record<UserRole, string> = {
   master: 'This is the house account the master stats and public track record are read from.',
   developer:
     'They get the admin portal plus the database console, and their invoice payments run against the providers’ sandbox instead of real money.',
+  collaborator:
+    'They get a read-only view of the admin portal — the dashboard overview, users and strategies — and can change nothing.',
 }
 
 export default function AdminUsers() {
   const navigate = useNavigate()
   const sessionUser = useSessionUser()
+  // Read-only staff: no approvals, no role changes, no account creation. The
+  // API refuses every write for this role; the UI simply does not offer one.
+  const readOnly = isCollaborator(sessionUser?.type)
   const { data, loading, error, reload } = useApiData(getAdminUsers)
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -242,9 +249,12 @@ export default function AdminUsers() {
   }
 
   return (
-    <AdminLayout title="User Management" subtitle="Approve sign-ups and manage accounts.">
+    <AdminLayout
+      title="User Management"
+      subtitle={readOnly ? 'Browse accounts — view only.' : 'Approve sign-ups and manage accounts.'}
+    >
       {/* Pending approvals — action queue so new sign-ups are never missed */}
-      {pendingUsers.length > 0 && (
+      {!readOnly && pendingUsers.length > 0 && (
         <section
           className="mb-[18px] overflow-hidden rounded-card border border-accent-line bg-gradient-to-br from-accent-soft to-surface"
           data-aos="fade-up"
@@ -417,18 +427,20 @@ export default function AdminUsers() {
                   ))}
                 </select>
               </label>
-              <button
-                type="button"
-                className="inline-flex h-9 flex-none items-center gap-1.5 rounded-pill bg-accent px-4 text-[12.5px] font-bold text-on-accent cursor-pointer hover:brightness-110"
-                onClick={() => {
-                  setCreateError(null)
-                  setCreatedEmail(null)
-                  setCreateOpen(true)
-                }}
-              >
-                <UserPlus size={15} />
-                New User
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  className="inline-flex h-9 flex-none items-center gap-1.5 rounded-pill bg-accent px-4 text-[12.5px] font-bold text-on-accent cursor-pointer hover:brightness-110"
+                  onClick={() => {
+                    setCreateError(null)
+                    setCreatedEmail(null)
+                    setCreateOpen(true)
+                  }}
+                >
+                  <UserPlus size={15} />
+                  New User
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -467,6 +479,7 @@ export default function AdminUsers() {
                     user={u}
                     expanded={isExpanded}
                     actionLoading={actionLoading}
+                    readOnly={readOnly}
                     isSelf={u.uni_id === sessionUser?.uni_id}
                     onToggle={() => toggleExpanded(u.uni_id)}
                     onAccept={() => setPendingAction({ user: u, action: 'accept' })}
@@ -516,7 +529,7 @@ export default function AdminUsers() {
       </section>
 
       <CreateUserModal
-        open={createOpen}
+        open={!readOnly && createOpen}
         saving={creating}
         error={createError}
         onSubmit={runCreate}
@@ -570,6 +583,8 @@ interface UserRowsProps {
   user: AdminUser
   expanded: boolean
   actionLoading: boolean
+  /** Collaborator view: role shown as a badge, no approve/reject, no API keys. */
+  readOnly: boolean
   /** The signed-in admin's own row — self-demotion to `user` is refused. */
   isSelf: boolean
   onToggle: () => void
@@ -584,6 +599,7 @@ function UserRows({
   user,
   expanded,
   actionLoading,
+  readOnly,
   isSelf,
   onToggle,
   onAccept,
@@ -591,6 +607,8 @@ function UserRows({
   onView,
   onRoleSelect,
 }: UserRowsProps) {
+  // May be omitted from a read-only (collaborator) payload.
+  const accounts = user.accounts ?? []
   return (
     <>
       <tr className={user.status === 'pending' ? 'bg-accent-soft' : undefined}>
@@ -613,11 +631,19 @@ function UserRows({
         </td>
         <td className={`${TD} text-muted`}>{user.email}</td>
         <td className={TD}>
-          <RolePicker
-            role={user.type}
-            isSelf={isSelf}
-            onSelect={(role) => onRoleSelect(role)}
-          />
+          {readOnly ? (
+            user.type === 'user' ? (
+              <span className="text-[12px] text-muted">User</span>
+            ) : (
+              <RoleBadge role={user.type} />
+            )
+          ) : (
+            <RolePicker
+              role={user.type}
+              isSelf={isSelf}
+              onSelect={(role) => onRoleSelect(role)}
+            />
+          )}
         </td>
         <td className={TD}>
           <StatusBadge status={user.status} />
@@ -627,7 +653,7 @@ function UserRows({
         </td>
         <td className={`${TD} text-right`}>
           <div className="flex flex-wrap justify-end gap-2">
-            {user.status === 'pending' && (
+            {!readOnly && user.status === 'pending' && (
               <>
                 <button
                   type="button"
@@ -660,13 +686,13 @@ function UserRows({
         <tr>
           <td className="bg-surface2" />
           <td className="bg-surface2 py-3 px-3.5" colSpan={6}>
-            {user.accounts.length === 0 ? (
+            {accounts.length === 0 ? (
               <p className="py-1 text-[12.5px] text-muted">
                 No exchange accounts yet.
               </p>
             ) : (
               <div className="flex flex-col gap-1.5">
-                {user.accounts.map((a) => (
+                {accounts.map((a) => (
                   <div
                     className={`flex flex-wrap items-center gap-4 rounded-[10px] border border-hair bg-surface px-2.5 py-[7px] text-[12.5px] ${
                       a.deleted_at ? 'opacity-[.55]' : ''
@@ -692,9 +718,11 @@ function UserRows({
                       />
                       {EXCHANGE_META[a.exchange]?.label ?? a.exchange}
                     </span>
-                    <span className="font-mono text-[12px] text-muted">
-                      {a.api_key ?? '—'}
-                    </span>
+                    {!readOnly && (
+                      <span className="font-mono text-[12px] text-muted">
+                        {a.api_key ?? '—'}
+                      </span>
+                    )}
                     <span className="flex gap-1.5">
                       <span className={`${BADGE} bg-surface2 border-border text-muted`}>
                         {a.demo ? 'Demo' : 'Live'}

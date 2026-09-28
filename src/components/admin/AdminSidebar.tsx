@@ -21,7 +21,8 @@ import {
 } from 'lucide-react'
 import { usePortalSwitch } from '../ui/PortalSwitchOverlay'
 import { getUser } from '../../lib/session'
-import { isDeveloper } from '../../lib/roles'
+import { isCollaborator, isDeveloper } from '../../lib/roles'
+import type { UserRole } from '../../types/auth'
 import {
   RAIL,
   BRAND,
@@ -46,15 +47,28 @@ export interface AdminNavItem {
   icon: LucideIcon
   /** Hidden from admin/master — only `developer` accounts see it. */
   developerOnly?: boolean
+  /**
+   * Visible to the read-only `collaborator` role. Everything else is hidden
+   * from them (and AdminLayout redirects those paths) — keep this in step
+   * with `collaboratorMayOpen` in lib/roles.ts.
+   */
+  collaborator?: boolean
+}
+
+/** One per-item rule for who sees a nav entry, so the filter is not re-spelled. */
+function visibleTo(item: AdminNavItem, role: UserRole | undefined): boolean {
+  if (item.developerOnly && !isDeveloper(role)) return false
+  if (isCollaborator(role) && !item.collaborator) return false
+  return true
 }
 
 export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
-  { label: 'Admin Dashboard', url: '/admin', icon: LayoutDashboard },
+  { label: 'Admin Dashboard', url: '/admin', icon: LayoutDashboard, collaborator: true },
   // The owner's list of things only they can do or decide (lib/adminTodos.ts).
   { label: 'To be Done', url: '/admin/todo', icon: ListTodo },
-  { label: 'User Management', url: '/admin/users', icon: UserCog },
+  { label: 'User Management', url: '/admin/users', icon: UserCog, collaborator: true },
   { label: 'API Keys', url: '/admin/api-keys', icon: KeyRound },
-  { label: 'Strategies', url: '/admin/strategies', icon: Target },
+  { label: 'Strategies', url: '/admin/strategies', icon: Target, collaborator: true },
   { label: 'Trading Assets', url: '/admin/assets', icon: Coins },
   { label: 'Sandbox', url: '/admin/sandbox', icon: FlaskConical },
   { label: 'Trading Positions', url: '/admin/positions', icon: Bell },
@@ -81,8 +95,8 @@ interface AdminSidebarProps {
 /** Admin variant of the icon-rail sidebar — same chrome, admin nav + portal switch. */
 export default function AdminSidebar({ onLogout }: AdminSidebarProps) {
   const switchPortal = usePortalSwitch()
-  const developer = isDeveloper(getUser()?.type)
-  const navItems = ADMIN_NAV_ITEMS.filter((item) => developer || !item.developerOnly)
+  const role = getUser()?.type
+  const navItems = ADMIN_NAV_ITEMS.filter((item) => visibleTo(item, role))
 
   return (
     <aside className={RAIL}>

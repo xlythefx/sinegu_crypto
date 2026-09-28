@@ -32,18 +32,18 @@ export default function UserSettingsCard({
 }: UserSettingsCardProps) {
   const sessionUser = useSessionUser()
 
-  const [realized, setRealized] = useState(String(user.realized_percentage))
-  const [unrealized, setUnrealized] = useState(String(user.unrealized_percentage))
-  const [affiliate, setAffiliate] = useState(String(user.affiliate_percentage))
+  const [realized, setRealized] = useState(String(user.realized_percentage ?? ''))
+  const [unrealized, setUnrealized] = useState(String(user.unrealized_percentage ?? ''))
+  const [affiliate, setAffiliate] = useState(String(user.affiliate_percentage ?? ''))
   const [confirm, setConfirm] = useState<PendingConfirm>(null)
   const [busy, setBusy] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   // Re-sync the inputs whenever fresh user data arrives (e.g. after a save)
   useEffect(() => {
-    setRealized(String(user.realized_percentage))
-    setUnrealized(String(user.unrealized_percentage))
-    setAffiliate(String(user.affiliate_percentage))
+    setRealized(String(user.realized_percentage ?? ''))
+    setUnrealized(String(user.unrealized_percentage ?? ''))
+    setAffiliate(String(user.affiliate_percentage ?? ''))
   }, [user])
 
   const isMaster = user.type === 'master'

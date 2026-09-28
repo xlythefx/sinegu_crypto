@@ -15,7 +15,7 @@ import {
   Shield,
 } from 'lucide-react'
 import { getUser } from '../../lib/session'
-import { canSeeAdmin } from '../../lib/roles'
+import { canSeeAdminPortal } from '../../lib/roles'
 import { usePortalSwitch } from '../ui/PortalSwitchOverlay'
 import {
   RAIL,
@@ -69,8 +69,9 @@ interface TraderSidebarProps {
  */
 export default function TraderSidebar({ onLogout }: TraderSidebarProps) {
   const switchPortal = usePortalSwitch()
-  // Only staff rows (master/admin/developer) see the admin switch.
-  const showAdmin = canSeeAdmin(getUser()?.type)
+  // Only staff rows (master/admin/developer + read-only collaborator) see the
+  // admin switch.
+  const showAdmin = canSeeAdminPortal(getUser()?.type)
 
   return (
     <aside className={RAIL}>

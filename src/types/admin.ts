@@ -77,11 +77,12 @@ export interface AdminUser {
   email: string
   status: UserStatus
   type: UserRole
-  realized_percentage: number
-  unrealized_percentage: number
+  realized_percentage?: number
+  unrealized_percentage?: number
   created_at: string | null
   last_activity: string | null
-  accounts: AdminUserAccount[]
+  /** Omitted for a read-only collaborator — read it as `accounts ?? []`. */
+  accounts?: AdminUserAccount[]
 }
 
 import type { StrategyTrade } from '../lib/strategyStats'
@@ -429,22 +430,27 @@ export interface AdminUserDetailAccount extends AdminUserAccount {
   hwm: number | null
 }
 
-/** GET /admin/users/{uniId} — one user with profile, fee shares and accounts. */
+/**
+ * GET /admin/users/{uniId} — one user with profile, fee shares and accounts.
+ * For a read-only collaborator the API OMITS the fee shares and the accounts
+ * (they carry api-key fields), so every one of those is optional here.
+ */
 export interface AdminUserDetail {
   uni_id: string
   name: string
   email: string
   status: UserStatus
   type: UserRole
-  realized_percentage: number
-  unrealized_percentage: number
-  affiliate_percentage: number
+  realized_percentage?: number
+  unrealized_percentage?: number
+  affiliate_percentage?: number
   user_profile: string | null
   user_banner: string | null
   created_at: string | null
   last_activity: string | null
-  referrals_count: number
-  accounts: AdminUserDetailAccount[]
+  /** Absent for a read-only collaborator — the header then hides the stat. */
+  referrals_count?: number
+  accounts?: AdminUserDetailAccount[]
 }
 
 /**
@@ -464,7 +470,8 @@ export interface AdminUserSummary {
   net_deposits: number
   /** Base for percentage displays (net deposits, falling back to equity). */
   pct_base: number
-  hwm: number
+  /** Absent for a read-only collaborator (invoice data). */
+  hwm?: number
   metrics: {
     total_trades: number
     wins: number
@@ -485,8 +492,8 @@ export interface AdminUserSummary {
     /** Initial deposit + net flow. */
     capital: number
   }
-  /** Sums of `invoices.total_fee` for this user. */
-  commissions: {
+  /** Sums of `invoices.total_fee` for this user. Absent for a collaborator. */
+  commissions?: {
     this_month: number
     all_time: number
     all_time_paid: number

@@ -30,7 +30,8 @@ interface StrategyCardProps {
   enabled: boolean
   saving: boolean
   excluded: Set<string>
-  onToggle: () => void
+  /** Omitted for a read-only viewer (collaborator): the state shows, the switch does not. */
+  onToggle?: () => void
   onToggleTicker: (ticker: string) => void
   onClearExcluded: () => void
 }
@@ -111,19 +112,21 @@ export default function StrategyCard({
               {saving ? 'Saving…' : 'Global'}
             </span>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={enabled}
-            aria-label={`Toggle ${stats.key}`}
-            className={`relative w-10 h-[22px] border rounded-pill cursor-pointer transition-[background,border-color] duration-150 disabled:opacity-[0.55] disabled:cursor-not-allowed ${enabled ? 'border-accent bg-accent' : 'border-border bg-surface'}`}
-            disabled={saving}
-            onClick={onToggle}
-          >
-            <span
-              className={`absolute left-0.5 top-0.5 w-4 h-4 rounded-pill transition-[transform,background] duration-150 ${enabled ? 'translate-x-[18px] bg-on-accent' : 'bg-muted'}`}
-            />
-          </button>
+          {onToggle && (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={enabled}
+              aria-label={`Toggle ${stats.key}`}
+              className={`relative w-10 h-[22px] border rounded-pill cursor-pointer transition-[background,border-color] duration-150 disabled:opacity-[0.55] disabled:cursor-not-allowed ${enabled ? 'border-accent bg-accent' : 'border-border bg-surface'}`}
+              disabled={saving}
+              onClick={onToggle}
+            >
+              <span
+                className={`absolute left-0.5 top-0.5 w-4 h-4 rounded-pill transition-[transform,background] duration-150 ${enabled ? 'translate-x-[18px] bg-on-accent' : 'bg-muted'}`}
+              />
+            </button>
+          )}
         </div>
       </div>
 

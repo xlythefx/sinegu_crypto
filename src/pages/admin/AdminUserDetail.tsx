@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, LayoutDashboard, Wallet } from 'lucide-react'
+import { ArrowLeft, BarChart3, LayoutDashboard, Wallet, type LucideIcon } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
 import AdminPnlCalendar from '../../components/admin/AdminPnlCalendar'
@@ -17,23 +17,43 @@ import UserInvoicesTable from '../../components/admin/user-detail/UserInvoicesTa
 import UserReferralsTable from '../../components/admin/user-detail/UserReferralsTable'
 import UserSettingsCard from '../../components/admin/user-detail/UserSettingsCard'
 import UserPositionsTab from '../../components/admin/user-detail/UserPositionsTab'
+import AnalyticsView from '../../components/analytics/AnalyticsView'
 import { useApiData } from '../../hooks/useApiData'
+import { useSessionUser } from '../../hooks/useSessionUser'
+import { isCollaborator } from '../../lib/roles'
 import {
   getAdminUserDailyPnl,
   getAdminUserDetail,
   getAdminUserSummary,
 } from '../../services/admin'
 import { ApiError } from '../../services/api'
+import { getAdminUserAnalytics, type AnalyticsFilters } from '../../services/analytics'
 
 const BACK_BTN =
   'inline-flex items-center gap-[7px] mb-3.5 py-2 px-[13px] border border-border rounded-field bg-surface text-muted text-[13px] font-semibold cursor-pointer transition-colors hover:bg-accent-soft hover:border-accent-line hover:text-accent'
 const TAB_BTN =
   'inline-flex items-center gap-1.5 text-[12.5px] font-semibold py-[7px] px-4 rounded-btn cursor-pointer transition-colors duration-150'
 
-type Tab = 'overview' | 'positions'
+type Tab = 'overview' | 'positions' | 'analytics'
+
+const TABS: { key: Tab; label: string; Icon: LucideIcon }[] = [
+  { key: 'overview', label: 'Overview', Icon: LayoutDashboard },
+  { key: 'positions', label: 'Positions', Icon: Wallet },
+  { key: 'analytics', label: 'Performance Analytics', Icon: BarChart3 },
+]
+
+/** A read-only collaborator never sees Positions (the API 403s it). */
+const COLLABORATOR_TABS: readonly Tab[] = ['overview', 'analytics']
 
 /**
- * Admin drill-down into one user: Overview stats + Positions.
+ * Admin drill-down into one user: Overview stats, Positions, and the user's
+ * full Performance Analytics (the same `AnalyticsView` the trader sees, read
+ * through the admin endpoint, with a PNG download on every card).
+ *
+ * A read-only collaborator gets Overview + Performance Analytics only, and the
+ * Overview without the cards whose reads they may not make (exchange
+ * accounts, invoices, referrals, fees/suspend) — those are not rendered at
+ * all, so their requests never fire.
  *
  * The exchange pill is the page's DATA SCOPE, not a display filter: it goes
  * to the API as `?exchange=` on every read (summary, calendar, positions,
@@ -47,6 +67,8 @@ type Tab = 'overview' | 'positions'
 export default function AdminUserDetail() {
   const { uniId = '' } = useParams<{ uniId: string }>()
   const navigate = useNavigate()
+  const readOnly = isCollaborator(useSessionUser()?.type)
+  const tabs = readOnly ? TABS.filter((t) => COLLABORATOR_TABS.includes(t.key)) : TABS
 
   const [tab, setTab] = useState<Tab>('overview')
   const [exchange, setExchange] = useState<ExchangePillValue>('all')
@@ -68,6 +90,10 @@ export default function AdminUserDetail() {
     fetchSummary,
   ])
   const { data: days } = useApiData(fetchDays, [fetchDays])
+  const fetchAnalytics = useCallback(
+    (query: AnalyticsFilters) => getAdminUserAnalytics(uniId, query),
+    [uniId],
+  )
 
   if (error instanceof ApiError && error.status === 401) {
     return <Navigate to="/auth" replace />
@@ -101,53 +127,51 @@ export default function AdminUserDetail() {
         data-aos-delay="100"
       >
         <div
-          className="inline-flex gap-1 rounded-[12px] border border-border bg-surface p-1"
+          className="inline-flex max-w-full flex-wrap gap-1 rounded-[12px] border border-border bg-surface p-1"
           role="tablist"
         >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'overview'}
-            className={`${TAB_BTN} ${
-              tab === 'overview'
-                ? 'bg-accent text-on-accent'
-                : 'bg-transparent text-muted hover:text-text'
-            }`}
-            onClick={() => setTab('overview')}
-          >
-            <LayoutDashboard size={13} />
-            Overview
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'positions'}
-            className={`${TAB_BTN} ${
-              tab === 'positions'
-                ? 'bg-accent text-on-accent'
-                : 'bg-transparent text-muted hover:text-text'
-            }`}
-            onClick={() => setTab('positions')}
-          >
-            <Wallet size={13} />
-            Positions
-          </button>
+          {tabs.map(({ key, label, Icon }) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={tab === key}
+              className={`${TAB_BTN} ${
+                tab === key
+                  ? 'bg-accent text-on-accent'
+                  : 'bg-transparent text-muted hover:text-text'
+              }`}
+              onClick={() => setTab(key)}
+            >
+              <Icon size={13} />
+              {label}
+            </button>
+          ))}
         </div>
-        <ExchangeFilterPill value={exchange} onChange={setExchange} />
+        {/* Analytics carries its own exchange filter inside the view. */}
+        {tab !== 'analytics' && (
+          <ExchangeFilterPill value={exchange} onChange={setExchange} />
+        )}
       </div>
 
       <div data-aos="fade-up" data-aos-delay="150">
         {/* keyed re-mount replays the reveal on every tab / filter switch */}
         <div
-          key={`${tab}-${exchange}`}
+          key={tab === 'analytics' ? tab : `${tab}-${exchange}`}
           className="animate-[fadeup_0.35s_ease-out]"
         >
           {tab === 'overview' ? (
             <>
               <UserBalanceCard summary={summary} loading={summaryLoading} />
 
-              <div className="grid grid-cols-3 gap-stack mb-stack max-[1500px]:grid-cols-2 max-[1100px]:grid-cols-1">
-                <UserAccountCards accounts={user.accounts} exchange={exchange} />
+              <div
+                className={`grid gap-stack mb-stack max-[1100px]:grid-cols-1 ${
+                  readOnly ? 'grid-cols-2' : 'grid-cols-3 max-[1500px]:grid-cols-2'
+                }`}
+              >
+                {!readOnly && (
+                  <UserAccountCards accounts={user.accounts ?? []} exchange={exchange} />
+                )}
                 <UserPerformanceMetrics
                   summary={summary}
                   loading={summaryLoading}
@@ -170,13 +194,24 @@ export default function AdminUserDetail() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-stack mb-stack max-[1100px]:grid-cols-1">
-                <UserInvoicesTable uniId={uniId} exchange={exchange} />
-                <UserReferralsTable uniId={uniId} />
-              </div>
+              {!readOnly && (
+                <>
+                  <div className="grid grid-cols-2 gap-stack mb-stack max-[1100px]:grid-cols-1">
+                    <UserInvoicesTable uniId={uniId} exchange={exchange} />
+                    <UserReferralsTable uniId={uniId} />
+                  </div>
 
-              <UserSettingsCard user={user} onUpdated={reload} />
+                  <UserSettingsCard user={user} onUpdated={reload} />
+                </>
+              )}
             </>
+          ) : tab === 'analytics' ? (
+            <AnalyticsView
+              fetchAnalytics={fetchAnalytics}
+              sourceKey={uniId}
+              showStrategyCard={false}
+              capture={{ name: user.name || uniId }}
+            />
           ) : (
             <UserPositionsTab
               uniId={uniId}

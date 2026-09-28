@@ -2,9 +2,10 @@ export type UserStatus = 'pending' | 'active' | 'suspended'
 
 /**
  * `user_credentials.type`. `developer` is staff too, plus the Database console
- * and test-mode payments — see `lib/roles.ts`.
+ * and test-mode payments; `collaborator` is READ-ONLY staff limited to the
+ * dashboard overview, users and strategies — see `lib/roles.ts`.
  */
-export type UserRole = 'user' | 'admin' | 'master' | 'developer'
+export type UserRole = 'user' | 'admin' | 'master' | 'developer' | 'collaborator'
 
 export interface AuthUser {
   uni_id: string

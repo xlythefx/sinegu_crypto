@@ -26,6 +26,7 @@
   --color-accent-line: var(--accentLine);
   --color-green: var(--green);
   --color-red: var(--red);
+  --color-teal: var(--teal);
   --color-on-accent: var(--onAccent);
 
   --font-display: 'Bricolage Grotesque', sans-serif;
@@ -131,6 +132,8 @@
   --accentLine: #4a3c1c;
   --green: #2fd67a;
   --red: #ff5a5a;
+  /* Collaborator role badge — distinct from accent/green/red. */
+  --teal: #2cc5c9;
   --glow: rgba(217, 173, 85, 0.16);
   --glowAuth: rgba(217, 173, 85, 0.22);
   --onAccent: #0a0c11;
@@ -153,6 +156,7 @@
   --accentLine: #ecd9ab;
   --green: #0fae76;
   --red: #e0492b;
+  --teal: #0e8f99;
   --glow: rgba(184, 134, 42, 0.12);
   --glowAuth: rgba(184, 134, 42, 0.18);
   --onAccent: #ffffff;

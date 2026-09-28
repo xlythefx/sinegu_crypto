@@ -59,7 +59,9 @@ export default function UserBalanceCard({
             {fmtMoney(summary.balance)}
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-2.5 border-t border-hair pt-4 sm:grid-cols-3 xl:grid-cols-5">
+          <div
+            className={`mt-4 grid grid-cols-2 gap-2.5 border-t border-hair pt-4 sm:grid-cols-3 ${summary.commissions ? 'xl:grid-cols-5' : ''}`}
+          >
             <MetricTile
               label="Total P&L"
               value={fmtSignedMoney(summary.total_pnl)}
@@ -79,18 +81,23 @@ export default function UserBalanceCard({
               tone={toneOf(summary.realized_pnl)}
               sub="From closed positions"
             />
-            <MetricTile
-              label="Commission this month"
-              value={fmtMoney(summary.commissions.this_month)}
-              tone="accent"
-              sub="Invoiced fees"
-            />
-            <MetricTile
-              label="All-time commission"
-              value={fmtMoney(summary.commissions.all_time)}
-              tone="accent"
-              sub={`${fmtMoney(summary.commissions.all_time_paid)} collected`}
-            />
+            {/* Invoice figures — absent for a read-only collaborator. */}
+            {summary.commissions && (
+              <>
+                <MetricTile
+                  label="Commission this month"
+                  value={fmtMoney(summary.commissions.this_month)}
+                  tone="accent"
+                  sub="Invoiced fees"
+                />
+                <MetricTile
+                  label="All-time commission"
+                  value={fmtMoney(summary.commissions.all_time)}
+                  tone="accent"
+                  sub={`${fmtMoney(summary.commissions.all_time_paid)} collected`}
+                />
+              </>
+            )}
           </div>
         </>
       )}

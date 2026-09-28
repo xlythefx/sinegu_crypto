@@ -29,6 +29,11 @@ const ROLES: { value: UserRole; label: string; hint: string }[] = [
     label: 'Master',
     hint: 'The house account the master stats and public track record read from. Only one may exist.',
   },
+  {
+    value: 'collaborator',
+    label: 'Collaborator',
+    hint: 'Read-only staff: dashboard overview, users and strategies. Cannot change anything.',
+  },
 ]
 
 const STATUSES: { value: UserStatus; label: string; hint: string }[] = [
@@ -254,7 +259,9 @@ export default function CreateUserModal({
           <p className="flex items-start gap-2 rounded-field border border-accent-line bg-accent-soft px-3 py-2.5 text-[12.5px] text-text">
             <ShieldAlert size={15} className="mt-px flex-none text-accent" />
             <span>
-              This account gets admin-portal access as soon as it is created.
+              {role === 'collaborator'
+                ? 'This account gets read-only admin-portal access (overview, users, strategies) as soon as it is created.'
+                : 'This account gets admin-portal access as soon as it is created.'}
             </span>
           </p>
         )}

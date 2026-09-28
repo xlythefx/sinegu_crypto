@@ -6,6 +6,8 @@ import DataState from '../../components/dashboard/DataState'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import StrategyCard from '../../components/admin/StrategyCard'
 import { useApiData } from '../../hooks/useApiData'
+import { useSessionUser } from '../../hooks/useSessionUser'
+import { isCollaborator } from '../../lib/roles'
 import { getStrategies, setStrategyEnabled } from '../../services/admin'
 import { ApiError, getApiErrorMessage } from '../../services/api'
 import {
@@ -15,6 +17,8 @@ import {
 
 export default function AdminStrategies() {
   const { data, loading, error, reload } = useApiData(getStrategies)
+  // Read-only collaborator: the Active/Paused state shows, the switch does not.
+  const readOnly = isCollaborator(useSessionUser()?.type)
 
   const [selected, setSelected] = useState<string | null>(null)
   const [excluded, setExcluded] = useState<Record<string, string[]>>({})
@@ -183,8 +187,10 @@ export default function AdminStrategies() {
                 enabled={isEnabled(s.key)}
                 saving={savingKey === s.key}
                 excluded={new Set(excluded[s.key] ?? [])}
-                onToggle={() =>
-                  setConfirmTarget({ key: s.key, next: !isEnabled(s.key) })
+                onToggle={
+                  readOnly
+                    ? undefined
+                    : () => setConfirmTarget({ key: s.key, next: !isEnabled(s.key) })
                 }
                 onToggleTicker={(t) => toggleTicker(s.key, t)}
                 onClearExcluded={() =>
@@ -197,7 +203,7 @@ export default function AdminStrategies() {
       )}
 
       <ConfirmModal
-        open={confirmTarget !== null}
+        open={!readOnly && confirmTarget !== null}
         title={
           confirmTarget?.next
             ? `Activate ${confirmTarget?.key}?`

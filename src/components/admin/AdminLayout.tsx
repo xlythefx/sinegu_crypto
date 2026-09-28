@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState, type ReactNode } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Menu } from 'lucide-react'
 import AOS from 'aos'
 import 'aos/dist/aos.css'
@@ -9,7 +9,11 @@ import ConfirmModal from '../ui/ConfirmModal'
 import UserAvatar from '../ui/UserAvatar'
 import { useTheme } from '../../theme'
 import { useSessionUser } from '../../hooks/useSessionUser'
-import { canSeeAdmin } from '../../lib/roles'
+import {
+  canSeeAdminPortal,
+  collaboratorMayOpen,
+  isCollaborator,
+} from '../../lib/roles'
 import { logout } from '../../services/auth'
 import {
   TOPBAR,
@@ -65,8 +69,10 @@ function AdminTopBar({ title, subtitle }: { title: string; subtitle?: string }) 
 }
 
 /**
- * Chrome + client-side guard for admin pages. Only user_credentials rows with
- * type master/admin/developer may enter; plain users bounce to their dashboard.
+ * Chrome + client-side guard for admin pages. Only staff rows
+ * (master/admin/developer, plus the read-only collaborator) may enter; plain
+ * users bounce to their dashboard. A collaborator on a path outside
+ * `collaboratorMayOpen` lands on /admin instead.
  * (Cosmetic gate only — real enforcement lives in the API's admin middleware.)
  */
 export default function AdminLayout({
@@ -77,13 +83,17 @@ export default function AdminLayout({
   const navigate = useNavigate()
   const [confirmLogout, setConfirmLogout] = useState(false)
   const user = useSessionUser()
+  const { pathname } = useLocation()
 
   useEffect(() => {
     AOS.init({ duration: 700, once: true, offset: 80, easing: 'ease-out-cubic' })
   }, [])
 
-  if (user && !canSeeAdmin(user.type)) {
+  if (user && !canSeeAdminPortal(user.type)) {
     return <Navigate to="/dashboard" replace />
+  }
+  if (user && isCollaborator(user.type) && !collaboratorMayOpen(pathname)) {
+    return <Navigate to="/admin" replace />
   }
 
   return (

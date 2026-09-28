@@ -19,6 +19,8 @@ import { useApiData } from '../../../hooks/useApiData'
 import { getOverviewInsights } from '../../../services/adminInsights'
 import { fmtMoney, fmtSignedMoney } from '../../../lib/format'
 import { reasonLabel } from '../../../lib/insightLabels'
+import { useSessionUser } from '../../../hooks/useSessionUser'
+import { collaboratorMayOpen, isCollaborator } from '../../../lib/roles'
 import type { OverviewInsights } from '../../../types/adminInsights'
 
 interface AttentionItem {
@@ -33,12 +35,14 @@ interface AttentionItem {
 /** One line per thing that is costing money or customers right now. */
 function attentionItems(a: OverviewInsights['attention']): AttentionItem[] {
   const items: AttentionItem[] = []
-  if (a.blocked_keys_count > 0) {
-    const soonest = a.blocked_keys[0]?.days_left
+  // Billing and key-health keys are absent for a read-only collaborator.
+  const blockedCount = a.blocked_keys_count ?? 0
+  if (blockedCount > 0) {
+    const soonest = a.blocked_keys?.[0]?.days_left
     items.push({
       key: 'keys',
       icon: KeyRound,
-      text: `${a.blocked_keys_count} API ${a.blocked_keys_count === 1 ? 'key is' : 'keys are'} refused by the exchange`,
+      text: `${blockedCount} API ${blockedCount === 1 ? 'key is' : 'keys are'} refused by the exchange`,
       detail:
         soonest !== null && soonest !== undefined
           ? `Those accounts take no trades. The first is disconnected ${soonest <= 0 ? 'on the next daily run' : `in ${soonest} day${soonest === 1 ? '' : 's'}`}.`
@@ -47,24 +51,27 @@ function attentionItems(a: OverviewInsights['attention']): AttentionItem[] {
       urgent: true,
     })
   }
-  if (a.overdue_invoices.count > 0) {
+  const overdue = a.overdue_invoices
+  const paused = a.paused_for_payment ?? 0
+  if (overdue && overdue.count > 0) {
     items.push({
       key: 'overdue',
       icon: Receipt,
-      text: `${a.overdue_invoices.count} overdue ${a.overdue_invoices.count === 1 ? 'invoice' : 'invoices'} · ${fmtMoney(a.overdue_invoices.amount)}`,
+      text: `${overdue.count} overdue ${overdue.count === 1 ? 'invoice' : 'invoices'} · ${fmtMoney(overdue.amount)}`,
       detail:
-        a.paused_for_payment > 0
-          ? `${a.paused_for_payment} account${a.paused_for_payment === 1 ? ' is' : 's are'} paused until paid.`
+        paused > 0
+          ? `${paused} account${paused === 1 ? ' is' : 's are'} paused until paid.`
           : 'Unpaid past the due date.',
       to: '/admin/invoices',
       urgent: true,
     })
   }
-  if (a.unmatched_transfers > 0) {
+  const unmatched = a.unmatched_transfers ?? 0
+  if (unmatched > 0) {
     items.push({
       key: 'transfers',
       icon: Wallet,
-      text: `${a.unmatched_transfers} crypto ${a.unmatched_transfers === 1 ? 'payment' : 'payments'} could not be matched to an invoice`,
+      text: `${unmatched} crypto ${unmatched === 1 ? 'payment' : 'payments'} could not be matched to an invoice`,
       detail: 'Money arrived, but no invoice was settled. Attribute or ignore it.',
       to: '/admin/tron-transfers',
       urgent: true,
@@ -93,9 +100,17 @@ function attentionItems(a: OverviewInsights['attention']): AttentionItem[] {
   return items
 }
 
+const ROW = 'flex items-start gap-3 rounded-row border border-border bg-surface2 px-4 py-3'
+const ROW_LINK = `${ROW} transition-colors hover:border-accent-line hover:bg-accent-soft`
+
 /** Overview → Needs attention: what is costing money or customers right now. */
 export default function AttentionPane() {
   const { data, loading, error, reload } = useApiData(getOverviewInsights)
+  // A read-only collaborator may not open most of the pages these rows point
+  // at (Signal Log, API Keys, invoices…), so those render as plain text.
+  const collaborator = isCollaborator(useSessionUser()?.type)
+  const mayOpen = (to: string) => !collaborator || collaboratorMayOpen(to)
+  const cardLink = (to: string, label: string) => (mayOpen(to) ? { to, label } : undefined)
 
   if (!data) {
     return <DataState loading={loading} error={error} onRetry={reload} label="overview" />
@@ -108,7 +123,15 @@ export default function AttentionPane() {
 
   return (
     <div className="flex flex-col gap-stack">
-      <div className={TILES}>
+      {/* Three tiles when "Collected this month" is absent (collaborator) —
+          no empty fourth column. */}
+      <div
+        className={
+          h.collected_this_month === undefined
+            ? 'grid grid-cols-3 gap-2.5 max-[900px]:grid-cols-2 max-[480px]:grid-cols-1'
+            : TILES
+        }
+      >
         <MetricTile
           label="Master balance"
           icon={Wallet}
@@ -126,17 +149,19 @@ export default function AttentionPane() {
           value={String(h.active_traders_today)}
           sub={`of ${h.customers_live} customer${h.customers_live === 1 ? '' : 's'} connected`}
         />
-        <MetricTile
-          label="Collected this month"
-          icon={BadgeDollarSign}
-          value={fmtMoney(h.collected_this_month)}
-          tone={h.collected_this_month > 0 ? 'pos' : ''}
-          sub={
-            a.unpaid_invoices.count > 0
-              ? `${fmtMoney(a.unpaid_invoices.amount)} still unpaid`
-              : 'Nothing unpaid'
-          }
-        />
+        {h.collected_this_month !== undefined && (
+          <MetricTile
+            label="Collected this month"
+            icon={BadgeDollarSign}
+            value={fmtMoney(h.collected_this_month)}
+            tone={h.collected_this_month > 0 ? 'pos' : ''}
+            sub={
+              a.unpaid_invoices && a.unpaid_invoices.count > 0
+                ? `${fmtMoney(a.unpaid_invoices.amount)} still unpaid`
+                : 'Nothing unpaid'
+            }
+          />
+        )}
         <MetricTile
           label="Signals today"
           icon={Radio}
@@ -162,12 +187,9 @@ export default function AttentionPane() {
           </div>
         ) : (
           <ul className="flex flex-col gap-2">
-            {items.map(({ key, icon: Icon, text, detail, to, urgent }) => (
-              <li key={key}>
-                <Link
-                  to={to}
-                  className="flex items-start gap-3 rounded-row border border-border bg-surface2 px-4 py-3 transition-colors hover:border-accent-line hover:bg-accent-soft"
-                >
+            {items.map(({ key, icon: Icon, text, detail, to, urgent }) => {
+              const body = (
+                <>
                   <Icon
                     size={17}
                     className={`mt-0.5 flex-none ${urgent ? 'text-red' : 'text-accent'}`}
@@ -178,19 +200,30 @@ export default function AttentionPane() {
                       <span className="mt-0.5 block text-[12.5px] text-muted">{detail}</span>
                     )}
                   </span>
-                </Link>
-              </li>
-            ))}
+                </>
+              )
+              return (
+                <li key={key}>
+                  {mayOpen(to) ? (
+                    <Link to={to} className={ROW_LINK}>
+                      {body}
+                    </Link>
+                  ) : (
+                    <div className={ROW}>{body}</div>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         )}
       </InsightCard>
 
-      <div className={GRID_2}>
+      <div className={a.blocked_keys ? GRID_2 : 'flex flex-col gap-stack'}>
         <InsightCard
           icon={Radio}
           title="Why accounts missed today's trades"
           subtitle="Each account passed over on a signal, by reason"
-          link={{ to: '/admin/trade-logs', label: 'Signal Log' }}
+          link={cardLink('/admin/trade-logs', 'Signal Log')}
         >
           {reasons.length === 0 ? (
             <EmptyNote>No account was passed over today.</EmptyNote>
@@ -203,11 +236,12 @@ export default function AttentionPane() {
           )}
         </InsightCard>
 
+        {a.blocked_keys && (
         <InsightCard
           icon={Clock}
           title="Keys running out of time"
           subtitle="Refused keys, soonest disconnection first"
-          link={{ to: '/admin/api-keys', label: 'API Keys' }}
+          link={cardLink('/admin/api-keys', 'API Keys')}
         >
           {a.blocked_keys.length === 0 ? (
             <EmptyNote>Every connected key works.</EmptyNote>
@@ -218,13 +252,24 @@ export default function AttentionPane() {
                   key={`${k.exchange}-${k.id}`}
                   className="flex items-center justify-between gap-3 py-2.5 text-[13px]"
                 >
-                  <Link to={`/admin/users/${k.uni_id}`} className="min-w-0 hover:text-accent">
-                    <span className="block truncate font-semibold">{k.owner}</span>
-                    <span className="block truncate text-[12px] text-muted">
-                      {EXCHANGE_META[k.exchange]?.label ?? k.exchange} · {k.account}
-                      {k.demo ? ' · demo' : ''}
-                    </span>
-                  </Link>
+                  {(() => {
+                    const owner = (
+                      <>
+                        <span className="block truncate font-semibold">{k.owner}</span>
+                        <span className="block truncate text-[12px] text-muted">
+                          {EXCHANGE_META[k.exchange]?.label ?? k.exchange} · {k.account}
+                          {k.demo ? ' · demo' : ''}
+                        </span>
+                      </>
+                    )
+                    return collaborator ? (
+                      <span className="min-w-0">{owner}</span>
+                    ) : (
+                      <Link to={`/admin/users/${k.uni_id}`} className="min-w-0 hover:text-accent">
+                        {owner}
+                      </Link>
+                    )
+                  })()}
                   <span
                     className={`flex-none rounded-pill px-2.5 py-1 font-mono text-[11.5px] font-bold ${
                       (k.days_left ?? 9) <= 1 ? 'bg-red/15 text-red' : 'bg-surface2 text-muted'
@@ -241,6 +286,7 @@ export default function AttentionPane() {
             </ul>
           )}
         </InsightCard>
+        )}
       </div>
     </div>
   )

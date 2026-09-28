@@ -408,6 +408,41 @@ DB reads only — never an exchange call). Rules:
   The money-under-management card is shared with the Money tab
   (`insights/UnderManagementCard.tsx`).
 
+## Collaborator role — read-only staff (2026-09-28)
+
+`user_credentials.type = 'collaborator'` opens the admin portal READ-ONLY:
+the dashboard Overview, User Management (list + user detail) and Strategies —
+nothing else, and no write control anywhere.
+- **The API is the enforcement.** `EnsureStaff` / the `staff` route group holds
+  exactly the GETs a collaborator may call (insights overview + platform,
+  users list/detail/summary/daily-pnl/analytics, strategies reads). **New
+  collaborator-visible data = a GET route in the staff group, never widening
+  `EnsureAdmin::ROLES`.** `GET /admin/users/{uniId}` omits the fee shares and
+  the exchange accounts / key fields for this role, so those are optional in
+  `types/admin.ts` and read as `accounts ?? []`.
+- **Client twin: `lib/roles.ts`.** `ADMIN_ROLES` / `canSeeAdmin` still mean FULL
+  admin (they also gate staff-only exchanges and the calendar edit gesture —
+  a collaborator must not get those). `STAFF_ROLES` / `canSeeAdminPortal` admit
+  the portal (trader sidebar button, `AdminLayout`); `isCollaborator` hides
+  writes; `collaboratorMayOpen(pathname)` is the path allowlist (`/admin`
+  exactly, `/admin/users[/*]`, `/admin/strategies[/*]`) — `AdminLayout`
+  redirects anything else to `/admin`, and `AdminSidebar` items opt in with
+  `collaborator: true`. Keep the two in step.
+- What a collaborator does not see: dashboard tabs other than Overview; links
+  from Needs attention to forbidden pages (rendered as plain rows); New User,
+  approve/reject, the role picker (a `RoleBadge` instead) and key hints on
+  Users; the strategy on/off switch; and on user detail the Positions tab plus
+  the account cards, invoices, referrals and settings/fees cards — NOT
+  RENDERED, so their requests never fire (they would 403).
+- **User detail has a "Performance Analytics" tab for all staff** — the shared
+  `AnalyticsView` over `GET /admin/users/{uniId}/analytics`, with
+  `capture={{ name }}`: every card gets a camera button
+  (`components/ui/Capturable.tsx`, `html-to-image`) that downloads it as
+  `pixel-alpha-{user}-{card}-{yyyy-mm-dd}.png` with a "Pixel Alpha · {user} ·
+  {date}" footer. It forces AOS nodes visible for the capture and retries
+  without embedded fonts if the Google Fonts embed fails. The trader's own
+  `/dashboard/analytics` passes no `capture` and is unchanged.
+
 ## Owner to-do list — Admin → To be Done (`/admin/todo`, 2026-09-21)
 
 **Whenever a feature leaves work only the OWNER can do — register at a third

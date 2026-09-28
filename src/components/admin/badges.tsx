@@ -1,4 +1,4 @@
-import { Code2, Crown, Shield } from 'lucide-react'
+import { Code2, Crown, Handshake, Shield } from 'lucide-react'
 import type { UserRole, UserStatus } from '../../types/admin'
 
 /** Base pill badge shared across admin tables and cards. */
@@ -15,8 +15,8 @@ export const STATUS_BADGE: Record<UserStatus, string> = {
 }
 
 /**
- * Crown for master, shield for admin, angle-brackets for developer — plain
- * users get no badge.
+ * Crown for master, shield for admin, angle-brackets for developer,
+ * handshake for the read-only collaborator — plain users get no badge.
  */
 export function RoleBadge({ role }: { role: UserRole }) {
   if (role === 'master') {
@@ -46,6 +46,16 @@ export function RoleBadge({ role }: { role: UserRole }) {
       >
         <Code2 size={11} />
         Developer
+      </span>
+    )
+  }
+  if (role === 'collaborator') {
+    return (
+      <span
+        className={`${BADGE} gap-[5px] bg-[color-mix(in_srgb,var(--teal)_12%,transparent)] border-[color-mix(in_srgb,var(--teal)_38%,transparent)] text-teal`}
+      >
+        <Handshake size={11} />
+        Collaborator
       </span>
     )
   }
