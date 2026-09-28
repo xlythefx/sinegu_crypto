@@ -941,10 +941,12 @@ export default function PerformanceChartCard({
             <div className="font-mono text-[30px] font-extrabold tracking-[-0.6px] mt-1.5">
               {fmtMoney(range.endBalance)}
             </div>
-            {/* The balance reconciled: where the range started, the money
-                moved in or out inside it, and what trading did (after fees).
+            {/* The balance reconciled: where the range started and the money
+                moved in or out inside it. What trading did is the Total
+                Realized Gains tile below (after fees) — printing it here too
+                was a second, differently-labelled copy of the same figure.
                 Only with the API's balance walk — without it the start is
-                unknown and a "trading" line would be a guess. */}
+                unknown. */}
             {range.startBalance !== null && (
               <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 font-mono text-[12px] text-muted">
                 <span>
@@ -964,25 +966,6 @@ export default function PerformanceChartCard({
                     {fmtSignedMoney(range.flowsInRange)}
                   </span>
                 </span>
-                {(() => {
-                  // Whatever the balance moved that transfers and the
-                  // estimated fees do not explain — i.e. the trades, after
-                  // every fee we have on record. Derived from the walk so the
-                  // line always adds up to the balance above it.
-                  const trading =
-                    range.endBalance -
-                    range.startBalance -
-                    range.flowsInRange +
-                    range.unrecordedFees
-                  return (
-                    <span>
-                      Trading{' '}
-                      <span className={trading < 0 ? 'text-red' : 'text-green'}>
-                        {fmtSignedMoney(trading)}
-                      </span>
-                    </span>
-                  )
-                })()}
                 {range.unrecordedFees >= 0.005 && (
                   <span title="Trades closed before exchange fees were recorded keep their fee-free P&L. The exchange still charged a fee on them, so an estimate is taken off the balance here.">
                     Est. fees{feesSince ? ` before ${fmtShortDate(feesSince)}` : ''}{' '}
@@ -1001,11 +984,14 @@ export default function PerformanceChartCard({
                 Total Realized Gains
               </span>
               <div
-                className={`font-mono text-[24px] font-extrabold tracking-[-0.6px] mt-1.5 ${range.realized < 0 ? 'text-red' : 'text-green'}`}
+                className={`font-mono text-[24px] font-extrabold tracking-[-0.6px] mt-1.5 ${range.realizedNet < 0 ? 'text-red' : 'text-green'}`}
               >
-                {/* hoverOnly: the breakdown still opens on hover, but without
-                    the dotted underline the figure carried — the card is meant
-                    to read as three clean numbers. */}
+                {/* AFTER fees (2026-09-28): the figure has to tie out to the
+                    P&L calendar, whose cells are after fees — before fees it
+                    read 376.87 against the calendar's 336.87 for the same
+                    days. Before fees is still one hover away.
+                    hoverOnly: the breakdown opens on hover, without the dotted
+                    underline, so the card reads as clean numbers. */}
                 <PnlBreakdown
                   gross={range.realized}
                   net={range.realizedNet}
@@ -1013,7 +999,7 @@ export default function PerformanceChartCard({
                   heading={`${fmtMediumDate(fromDate)} — ${fmtMediumDate(toDate)}`}
                   hoverOnly
                 >
-                  {fmtSignedMoney(range.realized)}
+                  {fmtSignedMoney(range.realizedNet)}
                 </PnlBreakdown>
               </div>
             </div>
@@ -1022,22 +1008,23 @@ export default function PerformanceChartCard({
                 Period Return
               </span>
               <div
-                className={`font-mono text-[24px] font-extrabold tracking-[-0.6px] mt-1.5 mb-1 ${(range.pct ?? 0) < 0 ? 'text-red' : 'text-accent'}`}
+                className={`font-mono text-[24px] font-extrabold tracking-[-0.6px] mt-1.5 mb-1 ${(range.pctNet ?? 0) < 0 ? 'text-red' : 'text-accent'}`}
                 title={
-                  range.pctNet === null
+                  range.pct === null
                     ? undefined
-                    : `After exchange fees: ${fmtSignedPct(range.pctNet, 2)}`
+                    : `Before exchange fees: ${fmtSignedPct(range.pct, 2)}`
                 }
               >
-                {range.pct === null ? '—' : fmtSignedPct(range.pct, 2)}
+                {/* After fees, like the gains tile beside it — one basis per
+                    pair, or the two read as disagreeing. */}
+                {range.pctNet === null ? '—' : fmtSignedPct(range.pctNet, 2)}
               </div>
-              {/* The one line kept on this card: it is the answer to "why did
-                  my percentage drop when I funded the account". */}
-              <div className="text-[11px] text-muted font-semibold">
-                {range.unmeasured > 0
-                  ? `${range.measured} of ${range.measured + range.unmeasured} trading days measured`
-                  : 'Deposits & withdrawals never count as gains'}
-              </div>
+              {/* Only when part of the window could not be measured. */}
+              {range.unmeasured > 0 && (
+                <div className="text-[11px] text-muted font-semibold">
+                  {`${range.measured} of ${range.measured + range.unmeasured} trading days measured`}
+                </div>
+              )}
             </div>
           </div>
         </div>
