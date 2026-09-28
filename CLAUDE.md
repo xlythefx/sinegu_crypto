@@ -373,7 +373,9 @@ cosmetic — real enforcement must be added as admin middleware in `sinegutrade-
 ## Admin Dashboard tabs (2026-09-27)
 
 `/admin` is tabbed via `?tab=` (`pages/admin/AdminDashboard.tsx`, shared
-`components/ui/Tabs.tsx`): **Overview** (needs-attention list), **Master
+`components/ui/Tabs.tsx`): **Overview** (sub-tabbed via `?view=`, 2026-09-28:
+**Platform** — every user combined — and **Needs attention**, the old
+Overview, in `insights/AttentionPane.tsx`), **Master
 Account** (the old dashboard + the full Performance Analytics view for the
 master, via `GET /admin/users/{uniId}/analytics` → `AnalyticsController::forUser`,
 rendered by the shared `components/analytics/AnalyticsView.tsx`),
@@ -396,6 +398,18 @@ DB reads only — never an exchange call). Rules:
   `BINANCE_ABCD_MIN_DEPOSIT`.
 - Skip reasons are shown in plain English via `lib/insightLabels.ts`; a new
   engine reason needs a line there.
+- **Overview → Platform** (`insights/PlatformPane.tsx`) pools every account
+  into one portfolio: `GET /admin/insights/platform` (money under management,
+  P&L today / 7d / month / all, after fees with gross on hover) and
+  `/admin/insights/platform/daily-pnl` (a pooled P&L calendar), both taking
+  `?scope=all|customers|master`. **LIVE accounts only** (`deleted_at IS
+  NULL`), unlike the master's track record: it pairs P&L with capital, and a
+  disconnected account's capital is no longer on record. The calendar is
+  `UserStatsService::calendarDays` (the same method every per-user calendar
+  uses) over the pooled accounts, so a cell's % is the pooled P&L ÷ the
+  pooled balance the day started with; its trades carry the owner's `name`.
+  The money-under-management card is shared with the Money tab
+  (`insights/UnderManagementCard.tsx`).
 
 ## Owner to-do list — Admin → To be Done (`/admin/todo`, 2026-09-21)
 

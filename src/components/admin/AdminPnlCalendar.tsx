@@ -319,6 +319,12 @@ export default function AdminPnlCalendar({
                             {t.strategy}
                           </span>
                         )}
+                        {/* Only a calendar pooling several users names owners. */}
+                        {t.name && (
+                          <span className="text-[11.5px] font-semibold text-muted">
+                            {t.name}
+                          </span>
+                        )}
                       </div>
                       <div className="flex flex-col items-end gap-[3px] shrink-0">
                         <span

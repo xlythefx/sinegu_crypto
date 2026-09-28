@@ -111,6 +111,9 @@ export interface DailyPnlTrade {
   side: string
   strategy: string | null
   closed_at: string
+  /** Owner — only on a calendar pooling several users (the admin Platform view). */
+  uni_id?: string
+  name?: string
 }
 
 /** One day's aggregate + its trades (after fees; before fees beside it). */

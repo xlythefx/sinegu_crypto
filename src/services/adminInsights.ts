@@ -1,9 +1,11 @@
 import { apiFetch } from './api'
-import type { AdminExchangeScope } from '../types/admin'
+import type { AdminExchangeScope, DailyPnlMap } from '../types/admin'
 import type {
   CustomerInsights,
   MoneyInsights,
   OverviewInsights,
+  PlatformInsights,
+  PlatformScope,
   StrategyInsights,
   SystemInsights,
 } from '../types/adminInsights'
@@ -21,6 +23,16 @@ export const getOverviewInsights = () => getInsight<OverviewInsights>('overview'
 export const getCustomerInsights = () => getInsight<CustomerInsights>('customers')
 export const getMoneyInsights = () => getInsight<MoneyInsights>('money')
 export const getSystemInsights = () => getInsight<SystemInsights>('system')
+
+export const getPlatformInsights = (scope: PlatformScope) =>
+  getInsight<PlatformInsights>(`platform?scope=${scope}`)
+
+/** The pooled P&L calendar — same days map as /admin/daily-pnl, trades named. */
+export async function getPlatformDailyPnl(scope: PlatformScope): Promise<DailyPnlMap> {
+  const { days } = await getInsight<{ days: DailyPnlMap }>(`platform/daily-pnl?scope=${scope}`)
+  // PHP serializes an empty map as [] — normalize to an object
+  return Array.isArray(days) ? {} : days
+}
 
 export function getStrategyInsights(
   exchange: AdminExchangeScope = 'all',

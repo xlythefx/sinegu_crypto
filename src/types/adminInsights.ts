@@ -68,6 +68,16 @@ export interface CustomerInsights {
   most_missed_7d: { uni_id: string; name: string; missed: number; top_reason: string | null }[]
 }
 
+/** Live balances on connected accounts — the Money tab's and the Platform view's card. */
+export interface UnderManagement {
+  customers: number
+  customer_accounts: number
+  master: number
+  /** Deposits/withdrawals of the accounts in scope, last 30 days. */
+  deposits_30d: number
+  withdrawals_30d: number
+}
+
 export interface MoneyInsights {
   monthly: { month: string; invoiced: number; collected: number; outstanding: number; count: number }[]
   totals: { invoiced: number; collected: number; outstanding: number }
@@ -84,13 +94,7 @@ export interface MoneyInsights {
     due_date: string | null
     days_late: number
   }[]
-  under_management: {
-    customers: number
-    customer_accounts: number
-    master: number
-    deposits_30d: number
-    withdrawals_30d: number
-  }
+  under_management: UnderManagement
   transfers: { unmatched: number; ignored: number; settled: number }
 }
 
@@ -158,4 +162,32 @@ export interface StrategyCompare {
 export interface StrategyInsights {
   reliability: Record<string, StrategyReliability>
   compare: Record<string, StrategyCompare>
+}
+
+/** Whose money the Overview's Platform view pools. */
+export type PlatformScope = 'all' | 'customers' | 'master'
+
+/** One realized-P&L window: after fees (`net`), before fees and the fees between. */
+export interface PnlWindow {
+  net: number
+  gross: number
+  fees: number
+  trades: number
+}
+
+/** GET /admin/insights/platform?scope= — live real-money accounts pooled. */
+export interface PlatformInsights {
+  scope: PlatformScope
+  under_management: UnderManagement & {
+    balance: number
+    unrealized: number
+    equity: number
+    by_exchange: { exchange: ExchangeKind; accounts: number; balance: number }[]
+  }
+  pnl: { today: PnlWindow; d7: PnlWindow; month: PnlWindow; all: PnlWindow }
+  /** Percent of closes in profit after fees; null with no closes. */
+  win_rate: number | null
+  accounts_live: number
+  owners: number
+  traders_today: number
 }

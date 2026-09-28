@@ -1,11 +1,8 @@
 import { Link } from 'react-router-dom'
 import {
-  ArrowDownToLine,
-  ArrowUpFromLine,
   BadgeDollarSign,
   CalendarClock,
   Clock,
-  Landmark,
   Receipt,
   Timer,
   Wallet,
@@ -14,6 +11,7 @@ import DataState from '../../dashboard/DataState'
 import MetricTile from '../../analytics/MetricTile'
 import { EXCHANGE_META } from '../../exchanges/meta'
 import { EmptyNote, GRID_2, InsightCard, TILES } from './parts'
+import UnderManagementCard from './UnderManagementCard'
 import { useApiData } from '../../../hooks/useApiData'
 import { getMoneyInsights } from '../../../services/adminInsights'
 import { fmtMoney, fmtShortMonth } from '../../../lib/format'
@@ -71,9 +69,6 @@ export default function MoneyTab() {
     return <DataState loading={loading} error={error} onRetry={reload} label="money stats" />
   }
 
-  const aum = data.under_management
-  const net30 = aum.deposits_30d - aum.withdrawals_30d
-
   return (
     <div className="flex flex-col gap-stack">
       <div className={TILES}>
@@ -110,24 +105,7 @@ export default function MoneyTab() {
           <RevenueBars months={data.monthly} />
         </InsightCard>
 
-        <InsightCard
-          icon={Landmark}
-          title="Money under management"
-          subtitle="Live balances on connected exchange accounts"
-        >
-          <div className="grid grid-cols-2 gap-2.5 max-[480px]:grid-cols-1">
-            <MetricTile label="Customers" icon={Wallet} value={fmtMoney(aum.customers)} sub={`${aum.customer_accounts} live account${aum.customer_accounts === 1 ? '' : 's'}`} />
-            <MetricTile label="Master" icon={Wallet} value={fmtMoney(aum.master)} sub="the published track record" />
-            <MetricTile label="Deposited" icon={ArrowDownToLine} value={fmtMoney(aum.deposits_30d)} tone="pos" sub="by customers, last 30 days" />
-            <MetricTile
-              label="Withdrawn"
-              icon={ArrowUpFromLine}
-              value={fmtMoney(aum.withdrawals_30d)}
-              tone={aum.withdrawals_30d > 0 ? 'neg' : ''}
-              sub={`net ${net30 < 0 ? '−' : '+'}${fmtMoney(net30)} in 30 days`}
-            />
-          </div>
-        </InsightCard>
+        <UnderManagementCard aum={data.under_management} />
       </div>
 
       <div className={GRID_2}>
