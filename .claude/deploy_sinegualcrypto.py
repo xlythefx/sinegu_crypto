@@ -1348,6 +1348,7 @@ MIRRORED_ENGINE_ENV_KEYS = (
     # it lives in the gitignored .env and reaches prod only through this upsert.
     "BINANCE_ABCD_DISCORD_ENABLED",
     "BINANCE_ABCD_DISCORD_WEBHOOK_URL",
+    "BINANCE_ABCD_DISCORD_WINS_WEBHOOK_URL",
     # The scheduled recap timetable. Same category: WHEN the public channel gets
     # its daily/weekly/monthly report is a product decision, not a property of
     # the box, so prod running a different schedule from local is a mistake.

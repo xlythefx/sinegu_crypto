@@ -254,6 +254,10 @@ TELEGRAM_PNL_WAIT_SECONDS = _env_float("TELEGRAM_PNL_WAIT_SECONDS", 25.0)
 # channel — so it lives in the gitignored .env only.
 DISCORD_ENABLED = _env_bool("DISCORD_ENABLED", True)
 DISCORD_WEBHOOK_URL = _env_str("DISCORD_WEBHOOK_URL", "")  # secret — .env only
+# The "wins" channel: when a DAILY recap closes positive, that venue's day is
+# also posted there as an image card (win_card.py). Nothing else ever goes to
+# it. Off while empty; a credential like the URL above.
+DISCORD_WINS_WEBHOOK_URL = _env_str("DISCORD_WINS_WEBHOOK_URL", "")  # secret — .env only
 
 # --- Scheduled performance reports (public channel) ---------------------------
 # Recaps posted on a clock rather than in response to a signal. They are built

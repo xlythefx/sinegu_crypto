@@ -4,6 +4,9 @@ requests>=2.28
 certifi>=2023
 python-dotenv>=1.0
 waitress>=3.0
+# Draws the daily win card for the Discord wins channel (win_card.py). Optional
+# at runtime — without it the win is posted as a plain embed.
+Pillow>=10.0
 # zoneinfo has no tz database to read on Windows, so ZoneInfo("Asia/Manila")
 # raises there without this. The scheduled reports run on a local timezone.
 tzdata>=2024.1; sys_platform == "win32"

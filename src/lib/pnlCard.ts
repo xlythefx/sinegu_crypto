@@ -37,7 +37,8 @@ export interface PnlCardStats {
   to: string
   /** Chained return over the window, %; null when no day has a capital base. */
   returnPct: number | null
-  /** Cumulative chained return after each trading day, starting at 0. */
+  /** Cumulative chained return after each close (each trading day ends on its
+   *  chained figure), starting at 0. */
   curve: number[]
   trades: number
   wins: number
@@ -98,8 +99,20 @@ export function buildPnlCard(
   const curve = [0]
   let bestDayPct: number | null = null
   for (const d of inWindow) {
-    const pct = days[d].pct
+    const { pct, total } = days[d]
     if (pct !== null && pct !== undefined) {
+      // One point per CLOSE, not per day, so a single day still draws a path.
+      // Each trade takes its share of the day's % by its share of the day's
+      // P&L — the shares add up to the day's %, so the line still ends on the
+      // chained return and nothing is compounded twice.
+      const dayTrades = [...days[d].trades].sort((a, b) => a.closed_at.localeCompare(b.closed_at))
+      if (total !== 0 && dayTrades.length > 1) {
+        let running = 0
+        for (const t of dayTrades.slice(0, -1)) {
+          running += t.realized_pnl
+          curve.push((factor * (1 + (pct * (running / total)) / 100) - 1) * 100)
+        }
+      }
       factor *= 1 + pct / 100
       measured = true
       bestDayPct = bestDayPct === null ? pct : Math.max(bestDayPct, pct)

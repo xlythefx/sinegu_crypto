@@ -43,11 +43,12 @@ so tests can monkeypatch it; independent of the Telegram keys.
 from __future__ import annotations
 
 import html
+import json
 import logging
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+from typing import Any, Optional
 
 from binance_abcd import hooks
 from binance_abcd.http_client import get_session
@@ -69,6 +70,8 @@ DESCRIPTION_LIMIT = 4096
 TIMEOUT_SECONDS = 10
 # The longest a 429 may hold the (single) worker before the retry.
 MAX_RETRY_AFTER_SECONDS = 5.0
+# The attachment name the wins embed points its image at.
+WIN_CARD_FILENAME = "pixel-alpha-daily.png"
 
 # The only markup notify.py emits. Split with the capture group so the tags
 # come back as their own tokens, in order.
@@ -84,6 +87,13 @@ _LINE_START_LIST_RE = re.compile(r"^(\d+)\.(?= )", re.MULTILINE)
 
 def enabled() -> bool:
     url = str(hooks.DISCORD_WEBHOOK_URL or "")
+    return bool(hooks.DISCORD_ENABLED and url.startswith("https://"))
+
+
+def wins_enabled() -> bool:
+    """The "wins" channel: a second webhook that only ever receives the daily
+    win card. Same master switch as the mirror, its own URL."""
+    url = str(hooks.DISCORD_WINS_WEBHOOK_URL or "")
     return bool(hooks.DISCORD_ENABLED and url.startswith("https://"))
 
 
@@ -140,14 +150,14 @@ def build_embed(text: str, color: int) -> dict[str, Any]:
 # --- Transport ----------------------------------------------------------------
 
 def _redact(message: str) -> str:
-    """Scrub the webhook URL and its bare token out of anything logged."""
-    url = str(hooks.DISCORD_WEBHOOK_URL or "")
-    if not url:
-        return message
-    token = url.rstrip("/").rsplit("/", 1)[-1]
-    for secret in (url, token):
-        if secret:
-            message = message.replace(secret, "***")
+    """Scrub every webhook URL and its bare token out of anything logged."""
+    for url in (str(hooks.DISCORD_WEBHOOK_URL or ""), str(hooks.DISCORD_WINS_WEBHOOK_URL or "")):
+        if not url:
+            continue
+        token = url.rstrip("/").rsplit("/", 1)[-1]
+        for secret in (url, token):
+            if secret:
+                message = message.replace(secret, "***")
     return message
 
 
@@ -166,15 +176,30 @@ def _retry_after(response: Any) -> float:
     return min(max(wait, 0.0), MAX_RETRY_AFTER_SECONDS)
 
 
-def _post_sync(payload: dict[str, Any]) -> None:
-    url = str(hooks.DISCORD_WEBHOOK_URL or "")
+def _post_sync(
+    payload: dict[str, Any], url: Optional[str] = None, png: Optional[bytes] = None
+) -> None:
+    """One webhook post. With `png`, it is a multipart upload (``payload_json``
+    + ``files[0]``) so the embed can show the image as ``attachment://``."""
+    url = url or str(hooks.DISCORD_WEBHOOK_URL or "")
+
+    def send():
+        if png is None:
+            return get_session().post(url, json=payload, timeout=TIMEOUT_SECONDS)
+        return get_session().post(
+            url,
+            data={"payload_json": json.dumps(payload)},
+            files={"files[0]": (WIN_CARD_FILENAME, png, "image/png")},
+            timeout=TIMEOUT_SECONDS,
+        )
+
     try:
-        response = get_session().post(url, json=payload, timeout=TIMEOUT_SECONDS)
+        response = send()
         if response.status_code == 429:
             wait = _retry_after(response)
             log.info("discord rate limited, retrying in %.1fs", wait)
             time.sleep(wait)
-            response = get_session().post(url, json=payload, timeout=TIMEOUT_SECONDS)
+            response = send()
         if not response.ok:
             log.warning("discord send failed: %s %.200s", response.status_code, _redact(response.text))
     except Exception as exc:  # noqa: BLE001 - a notification must never raise
@@ -191,3 +216,20 @@ def post(text: str, *, color: int) -> None:
         _executor.submit(_post_sync, payload)
     except RuntimeError:
         _post_sync(payload)  # pool shut down (process exiting) — best effort
+
+
+def post_win(text: str, png: Optional[bytes]) -> None:
+    """The daily win to the WINS channel: a green embed with the card as its
+    image, or the embed alone when the card could not be drawn. Only
+    ``notify.notify_daily_win`` calls this, with public recap text."""
+    if not wins_enabled() or not text.strip():
+        return
+    embed = build_embed(text, GREEN)
+    if png is not None:
+        embed["image"] = {"url": f"attachment://{WIN_CARD_FILENAME}"}
+    payload = {"embeds": [embed]}
+    url = str(hooks.DISCORD_WINS_WEBHOOK_URL)
+    try:
+        _executor.submit(_post_sync, payload, url, png)
+    except RuntimeError:
+        _post_sync(payload, url, png)

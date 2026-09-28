@@ -35,6 +35,7 @@ os.environ.setdefault("BINANCE_ABCD_TELEGRAM_CHAT_ID", "")
 os.environ.setdefault("BINANCE_ABCD_TELEGRAM_ADMIN_CHAT_ID", "")
 os.environ.setdefault("BINANCE_ABCD_DISCORD_ENABLED", "false")
 os.environ.setdefault("BINANCE_ABCD_DISCORD_WEBHOOK_URL", "")
+os.environ.setdefault("BINANCE_ABCD_DISCORD_WINS_WEBHOOK_URL", "")
 
 import pytest  # noqa: E402
 

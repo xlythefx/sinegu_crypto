@@ -659,6 +659,28 @@ def notify_report(kind: str, summary: dict, exchange: Optional[str] = None) -> N
     _send_public(render_report(kind, summary, exchange), color=discord_notify.BLUE)
 
 
+def is_daily_win(summary: dict) -> bool:
+    """Does this daily recap go to the wins channel? Positive on the SAME
+    rounding the recap prints, so a +0.0004% day that reads "+0.000%" is not
+    celebrated. A day with no priced trade is never a win."""
+    pct = summary.get("return_pct")
+    return summary.get("trading_days", 0) > 0 and pct is not None and round(float(pct), 3) > 0
+
+
+def notify_daily_win(summary: dict, png: Optional[bytes], exchange: Optional[str] = None) -> None:
+    """A positive daily recap to the Discord WINS channel, as an image card
+    (``win_card.py``) under a short embed. Same public ``summary`` as the recap
+    itself, so the same privacy rule holds by construction. No Telegram twin:
+    the public channel already carries the full recap."""
+    venue = f" · {_esc(exchange)}" if exchange else ""
+    day = _fmt_day_range(summary.get("start"), summary.get("end"))
+    text = (
+        f"🏆 <b>Winning day — {day}{venue}</b>\n"
+        f"Return: <b>{_fmt_pct(summary.get('return_pct'))}</b> after exchange fees"
+    )
+    discord_notify.post_win(text, png)
+
+
 def preview_report(kind: str, summary: dict, exchange: Optional[str] = None) -> str:
     """The recap exactly as :func:`notify_report` would post it, sent to the
     ADMIN chat with a test banner instead of to the public channel — for

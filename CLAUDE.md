@@ -1063,6 +1063,17 @@ for the overlay's `position: fixed` and trap it inside.
   do not trip Discord's 5-per-2-s bucket. The URL is a credential (last path
   segment = token): gitignored `.env` only, in `MIRRORED_ENGINE_ENV_KEYS`, and
   scrubbed from every log line — a `requests` error quotes the request path.
+  **A positive DAILY recap is also posted to the Discord "wins" channel as an
+  image card** (2026-09-28, `BINANCE_ABCD_DISCORD_WINS_WEBHOOK_URL`, mirrored,
+  secret like the other). `binance_abcd/win_card.py` draws the admin P&L card's
+  design with Pillow (fonts + logo bundled in `binance_abcd/assets/`, OFL) —
+  keep it in step with `PnlShareCard.tsx`. Figures come from the SAME public
+  series as the recap (`reports.build_win_card`: day return, trades, month-to-
+  date curve + %, green-day streak, top asset), so it cannot say more than the
+  recap. "Positive" is judged on the recap's 3-dp rounding; per venue; daily
+  only. A render failure (or no Pillow) posts the embed without the image.
+  Preview locally with `python -m binance_abcd.reports wincard [YYYY-MM-DD]`
+  → `out/win_card_<exchange>.png`, posted nowhere.
   **`Increment (2/3)` is the stack depth this entry reached** = pre-entry
   `stacks_now + 1`, over `assets.max_increments` (`(#2)` when the asset has no
   cap). Derived from the batched `positions/check` read the fan-out already

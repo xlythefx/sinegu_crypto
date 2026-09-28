@@ -63,7 +63,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time as dtime, timedelta, timezone
 from typing import Any, Optional
 
-from binance_abcd import exchanges, hooks, notify
+from binance_abcd import discord_notify, exchanges, hooks, notify, win_card
 from binance_abcd.http_client import get_session
 
 log = logging.getLogger(__name__)
@@ -329,6 +329,62 @@ def rank_assets(window: list) -> list[dict]:
     return sorted(by_symbol.values(), key=lambda a: (-a["pct"], a["symbol"]))
 
 
+def build_win_card(series: list, summary: dict, venue: str) -> "win_card.WinCard":
+    """The daily win card's figures, out of the SAME public series the recap
+    was built from — so the card cannot say anything the recap could not.
+
+    * the curve is the month to date, chained day by day from 0 (one point per
+      trading day), so it ends on the month-to-date tile;
+    * the green streak counts consecutive trading days in profit ending on
+      the recap's day — days with no trade are not in the series, so a quiet
+      weekend neither breaks nor extends it.
+    """
+    end = str(summary.get("end"))
+    month = summarize(series, end[:8] + "01", end)
+
+    points = sorted(
+        (p for p in series if isinstance(p, dict) and p.get("date") and str(p["date"]) <= end),
+        key=lambda p: str(p["date"]),
+    )
+    curve, growth = [0.0], 1.0
+    for point in points:
+        if str(point["date"]) < end[:8] + "01":
+            continue
+        pct = _as_float(point.get("pct"))
+        if pct is None:
+            continue
+        growth *= max(0.0, 1 + pct / 100)
+        curve.append((growth - 1) * 100)
+
+    streak = 0
+    for point in reversed(points):
+        pct = _as_float(point.get("pct"))
+        if pct is None:
+            continue
+        if round(pct, 3) <= 0:
+            break
+        streak += 1
+
+    top = (summary.get("assets") or [None])[0]
+    try:
+        label = date.fromisoformat(end).strftime("%b %d, %Y").replace(" 0", " ")
+    except ValueError:
+        label = end
+    return win_card.WinCard(
+        date_label=label,
+        venue=venue,
+        return_pct=float(summary.get("return_pct") or 0.0),
+        trades=int(summary.get("trades") or 0),
+        curve=curve,
+        green_streak=streak,
+        month_pct=month.get("return_pct"),
+        month_green=month.get("winning_days", 0),
+        month_days=month.get("trading_days", 0),
+        top_symbol=top.get("symbol") if top else None,
+        top_pct=top.get("pct") if top else None,
+    )
+
+
 # --- Track record source ----------------------------------------------------------
 
 def fetch_track_record(exchange: Optional[str] = None) -> Optional[dict]:
@@ -401,8 +457,12 @@ def _publish(schedule: Schedule, fire: datetime, exchange: str) -> bool:
         return True
 
     start, end = period_window(schedule, fire, series_timezone(payload))
-    summary = summarize(payload.get("series") or [], start, end)
+    series = payload.get("series") or []
+    summary = summarize(series, start, end)
     notify.notify_report(schedule.kind, summary, exchange=exchanges.label(exchange))
+    if schedule.kind == "daily" and notify.is_daily_win(summary) and discord_notify.wins_enabled():
+        card = build_win_card(series, summary, exchanges.label(exchange))
+        notify.notify_daily_win(summary, win_card.render(card), exchange=exchanges.label(exchange))
     log.info(
         "[reports] posted %s/%s for %s..%s (%s trading days, %s trades)",
         schedule.kind, exchange, start, end, summary["trading_days"], summary["trades"],
@@ -603,11 +663,44 @@ def preview(kind: str, now: Optional[datetime] = None, on: Optional[date] = None
     return rendered
 
 
+def preview_win_card(on: Optional[date] = None) -> list[str]:
+    """Render the daily win card for every enabled exchange to
+    ``out/win_card_<exchange>.png`` — posted NOWHERE, so the design can be
+    checked against real figures. Drawn even for a losing day (the scheduler
+    would skip it); returns the paths written."""
+    from zoneinfo import ZoneInfo
+
+    tzinfo = ZoneInfo(hooks.REPORT_TIMEZONE)
+    schedule = Schedule("daily", 23, 55)
+    now = _at(schedule, on, tzinfo) if on else datetime.now(tzinfo)
+    written: list[str] = []
+    for exchange in exchanges.enabled():
+        payload = fetch_track_record(exchange)
+        if not payload or not payload.get("available"):
+            continue
+        start, end = period_window(schedule, now, series_timezone(payload))
+        series = payload.get("series") or []
+        summary = summarize(series, start, end)
+        if not summary["trading_days"]:
+            log.info("[reports] win card %s — no trades on %s", exchange, end)
+            continue
+        png = win_card.render(build_win_card(series, summary, exchanges.label(exchange)))
+        if png:
+            path = hooks.OUT_DIR / f"win_card_{exchange}.png"
+            path.write_bytes(png)
+            written.append(str(path))
+    return written
+
+
 if __name__ == "__main__":
     import sys
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     args = sys.argv[1:]
+    if args[:1] == ["wincard"]:
+        paths = preview_win_card(date.fromisoformat(args[1]) if len(args) > 1 else None)
+        print("\n".join(paths) or "(no card — no exchange traded that day)")
+        raise SystemExit(0)
     usage = "usage: python -m binance_abcd.reports preview <daily|weekly|monthly> [YYYY-MM-DD]"
     if len(args) not in (2, 3) or args[0] != "preview" or args[1] not in ("daily", "weekly", "monthly"):
         raise SystemExit(usage)
