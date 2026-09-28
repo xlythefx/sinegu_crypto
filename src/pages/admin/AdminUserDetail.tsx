@@ -176,7 +176,7 @@ export default function AdminUserDetail() {
         open={cardOpen}
         onClose={() => setCardOpen(false)}
         days={days ?? {}}
-        venue={exchange === 'all' ? 'All exchanges' : EXCHANGE_META[exchange].label}
+        venue={exchange === 'all' ? null : EXCHANGE_META[exchange].label}
       />
 
       <div data-aos="fade-up" data-aos-delay="150">

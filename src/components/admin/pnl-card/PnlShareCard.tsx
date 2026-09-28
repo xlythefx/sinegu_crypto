@@ -1,5 +1,5 @@
 import { forwardRef, type ReactNode } from 'react'
-import { PNL_CARD_PERIODS, type PnlCardStats } from '../../../lib/pnlCard'
+import type { PnlCardPeriod, PnlCardStats } from '../../../lib/pnlCard'
 import { fmtMediumDate, fmtSignedPct } from '../../../lib/format'
 
 /**
@@ -143,8 +143,16 @@ function Tile({ label, value, tone, children }: { label: string; value: ReactNod
 
 interface PnlShareCardProps {
   stats: PnlCardStats
-  /** "All exchanges" / "Binance" — which venue the figures cover. */
-  venue: string
+  /** The venue the figures cover; null = every exchange (nothing printed). */
+  venue: string | null
+}
+
+/** The header says what the card is; the brand name is in the gold band. */
+const TITLES: Record<PnlCardPeriod, string> = {
+  today: "Today's results",
+  week: 'Weekly results',
+  month: 'Monthly results',
+  all: 'All-time results',
 }
 
 const PnlShareCard = forwardRef<HTMLDivElement, PnlShareCardProps>(function PnlShareCard(
@@ -154,7 +162,6 @@ const PnlShareCard = forwardRef<HTMLDivElement, PnlShareCardProps>(function PnlS
   const r = stats.returnPct
   const up = (r ?? 0) >= 0
   const tone = r === null ? C.muted : up ? C.green : C.red
-  const periodLabel = PNL_CARD_PERIODS.find((p) => p.key === stats.period)?.label ?? ''
   const range =
     stats.from === stats.to
       ? fmtMediumDate(stats.to)
@@ -197,26 +204,14 @@ const PnlShareCard = forwardRef<HTMLDivElement, PnlShareCardProps>(function PnlS
             style={{ borderRadius: 10, boxShadow: `0 0 0 1px ${rgba(C.accent, 0.35)}` }}
           />
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 17, lineHeight: 1.1 }}>Pixel Alpha</div>
-            <span
-              style={{
-                display: 'inline-block',
-                marginTop: 5,
-                padding: '2px 9px',
-                borderRadius: 999,
-                fontSize: 10.5,
-                fontWeight: 700,
-                color: C.accent,
-                background: rgba(C.accent, 0.14),
-                border: `1px solid ${rgba(C.accent, 0.3)}`,
-              }}
-            >
-              {periodLabel}
-            </span>
+            {/* What the card IS — the brand name lives in the gold band only. */}
+            <div style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 17, lineHeight: 1.1 }}>
+              {TITLES[stats.period]}
+            </div>
           </div>
           <div style={{ textAlign: 'right', fontSize: 11, color: C.muted, lineHeight: 1.55 }}>
             <div style={{ color: C.text, fontWeight: 600 }}>{range}</div>
-            <div>{venue}</div>
+            {venue && <div>{venue}</div>}
           </div>
         </div>
 
@@ -257,15 +252,17 @@ const PnlShareCard = forwardRef<HTMLDivElement, PnlShareCardProps>(function PnlS
             value={stats.winStreak > 0 ? `🔥 ${stats.winStreak}` : '0'}
             tone={stats.winStreak > 0 ? C.accent : undefined}
           >
-            <div style={{ fontSize: 10.5, color: C.faint }}>trades in a row</div>
+            {/* Counted over ALL history, not the period — say so, or a 19
+                beside a 5-trade week reads as a mistake. */}
+            <div style={{ fontSize: 10.5, color: C.faint }}>trades in a row · all time</div>
           </Tile>
           <Tile
-            label="Trades"
+            label="Wins / Losses"
             value={
               <span>
-                <span style={{ color: stats.wins ? C.green : C.muted }}>{stats.wins}W</span>
-                <span style={{ color: C.faint }}> · </span>
-                <span style={{ color: stats.losses ? C.red : C.muted }}>{stats.losses}L</span>
+                <span style={{ color: stats.wins ? C.green : C.muted }}>{stats.wins}</span>
+                <span style={{ color: C.faint }}> / </span>
+                <span style={{ color: stats.losses ? C.red : C.muted }}>{stats.losses}</span>
               </span>
             }
           >
@@ -294,10 +291,7 @@ const PnlShareCard = forwardRef<HTMLDivElement, PnlShareCardProps>(function PnlS
         }}
       >
         <div style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 22, letterSpacing: -0.3 }}>pixel alpha</div>
-        <div style={{ textAlign: 'right', fontSize: 11, lineHeight: 1.4 }}>
-          <div>Automated crypto trading</div>
-          <div style={{ fontWeight: 800 }}>pixel-alpha.com</div>
-        </div>
+        <div style={{ fontSize: 12, fontWeight: 800 }}>pixel-alpha.com</div>
       </div>
     </div>
   )

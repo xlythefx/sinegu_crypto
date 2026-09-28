@@ -12,7 +12,7 @@ interface PnlCardModalProps {
   /** The user's calendar days (same map the page's P&L calendar shows). */
   days: Record<string, PnlCardDay>
   /** Which venue those days cover, printed on the card. */
-  venue: string
+  venue: string | null
 }
 
 const CHIP =
