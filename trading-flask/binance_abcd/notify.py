@@ -469,8 +469,13 @@ def _pnl_percent(reports: list[dict]) -> Optional[float]:
     """Realized PnL AFTER exchange commission, as a percent of the balance it
     was sized against — the MASTER account's, see :func:`_master_reports`.
 
-    The denominator is `balance - net` — the balance BEFORE this close landed.
-    Returns None when nothing reported a PnL (or there is no balance to divide
+    The denominator is `balance` AS REPORTED — the account's wallet from the
+    fan-out's account list, loaded before the order was placed, so it is
+    already the balance BEFORE this close landed. Until 2026-09-28 it was
+    `balance - net`, which took the close out of a balance that never held it:
+    the denominator came out short by the P&L, overstating every win and
+    understating every loss (27 Sep: +2.224% published against the recap's
+    +2.189%; +2.175% on the true pre-close wallet). Returns None when nothing reported a PnL (or there is no balance to divide
     by): the channel publishes percentages only, never USDT amounts.
 
     **After fees since 2026-09-23.** The venue reports gross; every screen we
@@ -503,9 +508,8 @@ def _pnl_percent(reports: list[dict]) -> Optional[float]:
             balance = float(report["balance"])
         except (TypeError, ValueError, KeyError):
             continue
-        before = balance - pnl
-        if before > 0:
-            denom += before
+        if balance > 0:
+            denom += balance
     if not saw_pnl or denom <= 0:
         return None
     return total / denom * 100

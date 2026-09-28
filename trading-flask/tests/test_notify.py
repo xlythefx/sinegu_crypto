@@ -148,8 +148,8 @@ def test_exit_flushes_once_every_account_reports(sent):
     # qty-weighted: (110100*0.02 + 110200*0.01) / 0.03
     assert "Exit Price: 110,133.33" in text
     # AFTER the round-trip taker fee: 30 - 2.202 and 10 - 1.102 = 36.696 net,
-    # over (1030-27.798)+(510-8.898) = 1503.304 of pre-trade capital.
-    assert "PnL: +2.441%" in text
+    # over 1030 + 510 = 1540 — the balances are the pre-close wallets already.
+    assert "PnL: +2.383%" in text
     assert "Realized" not in text  # percentage only — no USDT amount
     assert "Accounts" not in text  # counts are not public on exits either
     assert batch_id not in notify._batches
@@ -197,8 +197,8 @@ def test_exit_reports_arriving_before_the_seal_still_flush(sent):
     assert sent == []
     notify.seal_exit_batch(batch_id, expected=1)
     assert "Closing Short Positions — ETHUSDT" in sent[0][0]
-    # -5 gross, -0.3 fee: -5.3 over 1000.3
-    assert "PnL: -0.530%" in sent[0][0]
+    # -5 gross, -0.3 fee: -5.3 over 995
+    assert "PnL: -0.533%" in sent[0][0]
 
 
 def test_exit_pnl_is_published_after_exchange_fees(sent):
@@ -211,8 +211,8 @@ def test_exit_pnl_is_published_after_exchange_fees(sent):
     # 100 units at 61 = 6,100 notional -> 6.10 round trip on a 100 gross profit.
     notify.report_exit_fill(batch_id, realized_pnl=100.0, exit_price=61.0,
                             quantity=100, balance=10_000.0, exchange="binance")
-    # 93.90 net over 10,000 - 93.90; gross would have published +1.010%.
-    assert "PnL: +0.948%" in sent[0][0]
+    # 93.90 net over 10,000; gross would have published +1.000%.
+    assert "PnL: +0.939%" in sent[0][0]
 
 
 def test_exit_pnl_is_the_masters_alone_when_the_flag_is_present(sent):
@@ -230,7 +230,7 @@ def test_exit_pnl_is_the_masters_alone_when_the_flag_is_present(sent):
                             balance=20_000.0, exchange="binance", is_master=False,
                             increments=1, max_increments=3)
     text = sent[0][0]
-    assert "PnL: +0.948%" in text          # the master's, exactly as if alone
+    assert "PnL: +0.939%" in text          # the master's, exactly as if alone
     assert "Increments Closed (2/3)" in text  # the master's depth, not the mode
 
 
@@ -257,8 +257,8 @@ def test_exit_pools_when_the_api_cannot_say_who_the_master_is(sent):
                             balance=10_000.0, exchange="binance")
     notify.report_exit_fill(batch_id, realized_pnl=20.0, exit_price=61.0, quantity=20,
                             balance=20_000.0, exchange="binance")
-    # 112.68 net over (10,000-93.90) + (20,000-18.78) = 29,887.32
-    assert "PnL: +0.377%" in sent[0][0]
+    # 112.68 net over 10,000 + 20,000
+    assert "PnL: +0.376%" in sent[0][0]
 
 
 def test_exit_pnl_stays_gross_when_the_fee_cannot_be_computed(sent):
@@ -269,7 +269,7 @@ def test_exit_pnl_stays_gross_when_the_fee_cannot_be_computed(sent):
     notify.seal_exit_batch(batch_id, expected=1)
     notify.report_exit_fill(batch_id, realized_pnl=100.0, exit_price=None,
                             quantity=100, balance=10_000.0, exchange="binance")
-    assert "PnL: +1.010%" in sent[0][0]
+    assert "PnL: +1.000%" in sent[0][0]
 
 
 def test_mexc_nets_at_its_own_taker_rate(sent):
@@ -279,8 +279,8 @@ def test_mexc_nets_at_its_own_taker_rate(sent):
     notify.seal_exit_batch(batch_id, expected=1)
     notify.report_exit_fill(batch_id, realized_pnl=100.0, exit_price=61.0,
                             quantity=100, balance=10_000.0, exchange="mexc")
-    # 2.44 of fee, not 6.10: 97.56 net over 9,902.44
-    assert "PnL: +0.985%" in sent[0][0]
+    # 2.44 of fee, not 6.10: 97.56 net over 10,000
+    assert "PnL: +0.976%" in sent[0][0]
 
 
 def test_exit_with_nothing_closed_sends_nothing(sent):
@@ -469,7 +469,7 @@ def test_discord_alone_is_a_public_destination(mirrored, monkeypatch):
     assert telegram == []
     (text, color) = mirrored[0]
     assert "Closing Long Positions — BTCUSDT" in text
-    assert "PnL: +2.774%" in text  # 27.798 net over 1002.202
+    assert "PnL: +2.699%" in text  # 27.798 net over 1030
     assert color == discord_notify.GREEN
 
 
