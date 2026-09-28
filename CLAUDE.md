@@ -82,8 +82,10 @@ the owner's wording approval (to-do `email-templates-approval`); wiring one
 means sending it best-effort like `AccountMail` and flipping its `live` in the
 same change. `MAIL_ADMIN_ADDRESS` is a comma-separated team list
 (`AccountMail::teamRecipients()`) — support@ plus Dmitri
-(dmitri@feature-digital.com), who asked for sign-ups, exchange connections and
-payments.
+(dmitri@feature-digital.com; asked for sign-ups, exchange connections and
+payments) and Christian (christian@feature-digital.com; asked for sign-ups).
+One list for every team notice — if they ever want different notices, split
+it per notice rather than dropping someone.
 
 **Pixel Alpha is the ONLY name and the Bangkok office the ONLY address a
 customer ever sees (2026-09-20).** `COMPANY.name` + `OFFICE.addressLines` /
