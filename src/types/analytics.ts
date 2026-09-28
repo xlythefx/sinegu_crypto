@@ -154,6 +154,14 @@ export interface Analytics {
    */
   daily_balance?: Record<string, number>
   /**
+   * Estimated commission per day on trades closed before fees were recorded
+   * (2026-09-11). Those rows keep their fee-free P&L; the exchange still took
+   * the fee, so `daily_balance` already has it deducted — this breaks it out
+   * so the Date Range card can show it as its own line. Only days with such a
+   * fee. Optional only while an older API is still deployed.
+   */
+  daily_unrecorded_fees?: Record<string, number>
+  /**
    * Net transfer per day, signed — deposit positive, withdrawal negative,
    * netted when both land on one day. Only days that moved money.
    */

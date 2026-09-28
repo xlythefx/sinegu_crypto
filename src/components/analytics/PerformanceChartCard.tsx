@@ -131,6 +131,9 @@ interface PerformanceChartCardProps {
   dailyFlows: Record<string, number>
   /** Balance each walked day closed on; absent on an older API. */
   dailyBalance?: Record<string, number>
+  /** Estimated fees on pre-cutoff trades, per day — already inside
+   *  `dailyBalance`; absent on an older API. */
+  dailyUnrecordedFees?: Record<string, number>
   /** Capital held before any recorded transfer; absent on an older API. */
   initialDeposit?: number
   baseline: number
@@ -147,6 +150,7 @@ export default function PerformanceChartCard({
   dailyCapital,
   dailyFlows,
   dailyBalance,
+  dailyUnrecordedFees,
   initialDeposit,
   baseline,
   feesSince,
@@ -409,6 +413,15 @@ export default function PerformanceChartCard({
       if (date > toDate) flowsAfter += amount
       else if (date >= fromDate) flowsInRange += amount
     }
+    // Estimated commission on trades closed before fees were recorded. Those
+    // trades keep their fee-free P&L, but the balance walk has the fee taken
+    // off (it is what the exchange charged) — so it gets its own line, or the
+    // "trading" figure silently carries it and disagrees with the realized
+    // P&L beside it (−984 against −157 for August on the master).
+    let unrecordedFees = 0
+    for (const [date, fee] of Object.entries(dailyUnrecordedFees ?? {})) {
+      if (date >= fromDate && date <= toDate) unrecordedFees += fee
+    }
 
     // The balance on a day = the capital walk as that day closed: seed +
     // transfers up to it + P&L up to it. Nothing after the day may count —
@@ -433,6 +446,7 @@ export default function PerformanceChartCard({
       endBalance: endBalance ?? baseline - flowsAfter + upToEnd,
       startBalance,
       flowsInRange,
+      unrecordedFees,
       pct: measured > 0 ? (growth - 1) * 100 : null,
       pctNet: measured > 0 ? (growthNet - 1) * 100 : null,
       measured,
@@ -446,6 +460,7 @@ export default function PerformanceChartCard({
     dailyCapital,
     dailyFlows,
     dailyBalance,
+    dailyUnrecordedFees,
     initialDeposit,
   ])
 
@@ -949,20 +964,33 @@ export default function PerformanceChartCard({
                     {fmtSignedMoney(range.flowsInRange)}
                   </span>
                 </span>
-                <span>
-                  Trading after fees{' '}
-                  <span
-                    className={
-                      range.endBalance - range.startBalance - range.flowsInRange < 0
-                        ? 'text-red'
-                        : 'text-green'
-                    }
-                  >
-                    {fmtSignedMoney(
-                      range.endBalance - range.startBalance - range.flowsInRange,
-                    )}
+                {(() => {
+                  // Whatever the balance moved that transfers and the
+                  // estimated fees do not explain — i.e. the trades, after
+                  // every fee we have on record. Derived from the walk so the
+                  // line always adds up to the balance above it.
+                  const trading =
+                    range.endBalance -
+                    range.startBalance -
+                    range.flowsInRange +
+                    range.unrecordedFees
+                  return (
+                    <span>
+                      Trading{' '}
+                      <span className={trading < 0 ? 'text-red' : 'text-green'}>
+                        {fmtSignedMoney(trading)}
+                      </span>
+                    </span>
+                  )
+                })()}
+                {range.unrecordedFees >= 0.005 && (
+                  <span title="Trades closed before exchange fees were recorded keep their fee-free P&L. The exchange still charged a fee on them, so an estimate is taken off the balance here.">
+                    Est. fees{feesSince ? ` before ${fmtShortDate(feesSince)}` : ''}{' '}
+                    <span className="text-red">
+                      {fmtSignedMoney(-range.unrecordedFees)}
+                    </span>
                   </span>
-                </span>
+                )}
               </div>
             )}
           </div>
