@@ -117,6 +117,11 @@ export interface DailyPnlTrade {
 export interface DailyPnlDay {
   total: number
   total_gross: number
+  /** Balance the day started with; the denominator of `pct` (null = none on record). */
+  start_balance: number | null
+  /** `total` over `start_balance`, in percent. */
+  pct: number | null
+  pct_gross: number | null
   fees: number
   wins: number
   losses: number

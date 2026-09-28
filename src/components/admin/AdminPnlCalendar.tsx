@@ -9,7 +9,7 @@ import {
 import { useApiData } from '../../hooks/useApiData'
 import { getAdminDailyPnl } from '../../services/admin'
 import { displaySymbol } from '../../lib/chart'
-import { fmtMediumDate, fmtSignedMoney } from '../../lib/format'
+import { fmtMediumDate, fmtMoney, fmtSignedMoney, fmtSignedPct } from '../../lib/format'
 import type { DailyPnlDay, DailyPnlMap } from '../../types/admin'
 import FeeLine from '../positions/FeeLine'
 
@@ -204,18 +204,28 @@ export default function AdminPnlCalendar({
               disabled={!c.data}
             >
               <span className="text-[11px] font-bold text-faint">{c.day}</span>
-              <span
-                className={`font-mono text-[12px] max-w-full overflow-hidden text-ellipsis ${
-                  pnl > 0
-                    ? 'font-extrabold text-green'
-                    : pnl < 0
-                      ? 'font-extrabold text-red'
-                      : 'font-semibold text-faint'
-                }`}
-              >
-                {pnl === 0
-                  ? '—'
-                  : `${pnl > 0 ? '+' : '−'}$${Math.abs(pnl).toFixed(0)}`}
+              <span className="flex flex-col items-start max-w-full">
+                <span
+                  className={`font-mono text-[12px] leading-tight max-w-full overflow-hidden text-ellipsis ${
+                    pnl > 0
+                      ? 'font-extrabold text-green'
+                      : pnl < 0
+                        ? 'font-extrabold text-red'
+                        : 'font-semibold text-faint'
+                  }`}
+                >
+                  {pnl === 0
+                    ? '—'
+                    : `${pnl > 0 ? '+' : '−'}$${Math.abs(pnl).toFixed(0)}`}
+                </span>
+                {/* Over the balance the day started with, not today's. */}
+                {c.data?.pct != null && pnl !== 0 && (
+                  <span
+                    className={`font-mono text-[10.5px] font-semibold leading-tight opacity-80 max-[700px]:text-[9px] ${pnl > 0 ? 'text-green' : 'text-red'}`}
+                  >
+                    {fmtSignedPct(c.data.pct, 2)}
+                  </span>
+                )}
               </span>
               {c.data && c.data.trades.length > 0 && (
                 <span className="absolute top-1.5 right-1.5 min-w-4 h-4 px-1 inline-flex items-center justify-center rounded-pill bg-surface border border-border font-mono text-[9.5px] font-bold text-muted">
@@ -255,8 +265,14 @@ export default function AdminPnlCalendar({
                       className={`font-mono ${selectedDay.total < 0 ? 'text-red' : 'text-green'}`}
                     >
                       {fmtSignedMoney(selectedDay.total)}
+                      {selectedDay.pct !== null && ` (${fmtSignedPct(selectedDay.pct, 2)})`}
                     </span>
                   </div>
+                  {selectedDay.start_balance !== null && selectedDay.start_balance > 0 && (
+                    <div className="text-[11.5px] text-faint mt-0.5 font-mono">
+                      of {fmtMoney(selectedDay.start_balance)} balance at the start of the day
+                    </div>
+                  )}
                   {selectedDay.fees !== 0 && (
                     <div className="text-[11.5px] text-faint mt-0.5 font-mono">
                       before fees{' '}

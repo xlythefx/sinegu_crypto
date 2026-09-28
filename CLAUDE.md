@@ -1475,7 +1475,12 @@ own job). The rule per surface:
   basis too — one basis per page, or the drawdown would not match the curve
   above it. Analytics has an **Exchange Fees** KPI card of its own.
 - **The calendar keeps AFTER fees on the cell** — a day is what landed — with
-  before fees on hover and in the day popup's header.
+  before fees on hover and in the day popup's header. Every cell also shows
+  its **percentage of the balance that day STARTED with** (2026-09-28,
+  `start_balance` / `pct` / `pct_gross` per day from `dailyPnlDays`, via the
+  same `UserStatsService::capitalWalk` Analytics uses for `daily_capital`) —
+  never today's balance, which let a deposit rewrite every earlier day. `pct`
+  is null when no capital is on record; the old Amount/% toggle is gone.
 - **Positions page and admin user detail keep `realized_pnl` / `total_pnl`
   (after fees)**: a total beside a list of net trades must sum to them.
 The switch is server-side, once: `UserStatsService::withFeeBasis()` stamps

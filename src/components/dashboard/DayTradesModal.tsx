@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, Pencil, Trash2, X } from 'lucide-react'
 import { displaySymbol } from '../../lib/chart'
-import { fmtDateTime, fmtMediumDate, fmtNum, fmtSignedMoney } from '../../lib/format'
+import {
+  fmtDateTime,
+  fmtMediumDate,
+  fmtMoney,
+  fmtNum,
+  fmtSignedMoney,
+  fmtSignedPct,
+} from '../../lib/format'
 import { useTapUnlock } from '../../hooks/useTapUnlock'
 import type { DayPnl, DayTrade } from '../../types/dashboard'
 import FeeLine from '../positions/FeeLine'
@@ -99,8 +106,14 @@ export default function DayTradesModal({
                 className={`font-mono ${day.total < 0 ? 'text-red' : 'text-green'}`}
               >
                 {fmtSignedMoney(day.total)}
+                {day.pct !== null && ` (${fmtSignedPct(day.pct, 2)})`}
               </span>
             </div>
+            {day.start_balance !== null && day.start_balance > 0 && (
+              <div className="text-[11.5px] text-faint mt-[3px] font-mono">
+                of {fmtMoney(day.start_balance)} balance at the start of the day
+              </div>
+            )}
             {/* The day the strategy had, before the exchange took its cut —
                 the same three lines the calendar cell shows on hover, here
                 for the tap that opened this on a phone. */}

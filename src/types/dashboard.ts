@@ -188,6 +188,13 @@ export interface DayPnl {
   /** After fees. */
   total: number
   total_gross: number
+  /** The balance the day STARTED with (after its transfers, before its
+   *  trades) — the denominator of `pct`. Null when no capital is on record. */
+  start_balance: number | null
+  /** `total` over `start_balance`, in percent; null without a balance. */
+  pct: number | null
+  /** `total_gross` over the same balance. */
+  pct_gross: number | null
   fees: number
   wins: number
   losses: number

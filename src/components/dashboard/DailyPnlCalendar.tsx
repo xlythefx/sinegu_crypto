@@ -8,7 +8,7 @@ import { getApiErrorMessage } from '../../services/api'
 import { canSeeAdmin } from '../../lib/roles'
 import { getUser } from '../../lib/session'
 import { displaySymbol } from '../../lib/chart'
-import { fmtMediumDate } from '../../lib/format'
+import { fmtMediumDate, fmtSignedPct } from '../../lib/format'
 import type { PositionRow } from '../../lib/adminPositionRows'
 import DayTradesModal from './DayTradesModal'
 import PositionEditModal, {
@@ -24,11 +24,20 @@ const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 const cellBase =
   'relative min-h-[58px] border border-hair rounded-btn py-[7px] px-2 flex flex-col items-start justify-between bg-surface2 text-left transition-[transform,box-shadow,border-color] duration-150 ease-[ease] max-[900px]:min-h-[46px] max-[900px]:py-[5px] max-[900px]:px-1.5'
 
-type DisplayMode = 'amount' | 'percentage'
+const cellValue =
+  'font-mono text-[11.5px] font-bold leading-tight max-[900px]:text-[9.5px]'
+const cellPct =
+  'font-mono text-[10px] font-semibold leading-tight opacity-80 max-[900px]:text-[8.5px]'
+
+const toneText = (n: number) => (n > 0 ? 'text-green' : n < 0 ? 'text-red' : 'text-faint')
+
+/** "+$42" / "−$9" — whole dollars; a cell has no room for cents. */
+function cellAmount(pnl: number): string {
+  if (pnl === 0) return '—'
+  return `${pnl > 0 ? '+' : '−'}$${Math.abs(pnl).toFixed(0)}`
+}
 
 interface DailyPnlCalendarProps {
-  /** Equity base used for the % display mode. */
-  balance: number
   /** The top-bar scope — the days come from that venue's tables (or all). */
   exchange?: ExchangeFilter
 }
@@ -85,9 +94,10 @@ function toEditableRow(t: DayTrade): PositionRow {
 }
 
 /** Daily P&L calendar — month grid tinted by P&L sign + magnitude, with month
- *  navigation, an Amount/% toggle, and a click-to-open trades modal per day. */
+ *  navigation and a click-to-open trades modal per day. Each cell carries the
+ *  day's amount and its percentage of the balance that day STARTED with
+ *  (server-computed, so a later deposit never rewrites an earlier day). */
 export default function DailyPnlCalendar({
-  balance,
   exchange = 'all',
 }: DailyPnlCalendarProps) {
   const { data: days, reload } = useApiData(
@@ -108,7 +118,6 @@ export default function DailyPnlCalendar({
   const [view, setView] = useState(
     () => new Date(now.getFullYear(), now.getMonth(), 1)
   )
-  const [mode, setMode] = useState<DisplayMode>('amount')
   const [selected, setSelected] = useState<string | null>(null)
 
   const daysMap = days ?? {}
@@ -163,13 +172,6 @@ export default function DailyPnlCalendar({
     }
   }
 
-  const display = (pnl: number) => {
-    if (pnl === 0) return '—'
-    if (mode === 'percentage')
-      return `${pnl > 0 ? '+' : ''}${balance > 0 ? ((pnl / balance) * 100).toFixed(2) : '0.00'}%`
-    return `${pnl > 0 ? '+' : '−'}$${Math.abs(pnl).toFixed(0)}`
-  }
-
   return (
     <section
       className="rounded-card p-card border border-border bg-surface grow basis-[480px] min-w-0"
@@ -190,54 +192,36 @@ export default function DailyPnlCalendar({
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="flex items-center justify-center w-[30px] h-[30px] rounded-btn border border-border bg-surface text-accent cursor-pointer disabled:text-faint disabled:opacity-60 disabled:cursor-not-allowed"
-              onClick={() =>
-                setView(
-                  (v) => new Date(v.getFullYear(), v.getMonth() - 1, 1)
-                )
-              }
-              aria-label="Previous month"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <span className="min-w-[116px] text-center text-[13px] font-extrabold">
-              {monthLabel}
-            </span>
-            <button
-              type="button"
-              className="flex items-center justify-center w-[30px] h-[30px] rounded-btn border border-border bg-surface text-accent cursor-pointer disabled:text-faint disabled:opacity-60 disabled:cursor-not-allowed"
-              disabled={!canGoNext}
-              onClick={() =>
-                canGoNext &&
-                setView(
-                  (v) => new Date(v.getFullYear(), v.getMonth() + 1, 1)
-                )
-              }
-              aria-label="Next month"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-          <div className="flex gap-[3px] bg-surface2 border border-hair rounded-seg p-1">
-            {(['amount', 'percentage'] as DisplayMode[]).map((m) => (
-              <button
-                key={m}
-                type="button"
-                className={`font-body py-[5px] px-2.5 text-[11.5px] rounded-btn border ${
-                  mode === m
-                    ? 'bg-surface border-border text-text font-bold'
-                    : 'border-transparent bg-transparent text-muted font-semibold'
-                }`}
-                onClick={() => setMode(m)}
-              >
-                {m === 'amount' ? 'Amount' : '%'}
-              </button>
-            ))}
-          </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="flex items-center justify-center w-[30px] h-[30px] rounded-btn border border-border bg-surface text-accent cursor-pointer disabled:text-faint disabled:opacity-60 disabled:cursor-not-allowed"
+            onClick={() =>
+              setView(
+                (v) => new Date(v.getFullYear(), v.getMonth() - 1, 1)
+              )
+            }
+            aria-label="Previous month"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <span className="min-w-[116px] text-center text-[13px] font-extrabold">
+            {monthLabel}
+          </span>
+          <button
+            type="button"
+            className="flex items-center justify-center w-[30px] h-[30px] rounded-btn border border-border bg-surface text-accent cursor-pointer disabled:text-faint disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={!canGoNext}
+            onClick={() =>
+              canGoNext &&
+              setView(
+                (v) => new Date(v.getFullYear(), v.getMonth() + 1, 1)
+              )
+            }
+            aria-label="Next month"
+          >
+            <ChevronRight size={16} />
+          </button>
         </div>
       </div>
 
@@ -312,16 +296,19 @@ export default function DailyPnlCalendar({
                   heading={fmtMediumDate(c.iso)}
                   note={c.data.fees === 0 ? 'No exchange fee on record for this day.' : undefined}
                 >
-                  <span
-                    className={`font-mono text-[11.5px] font-bold max-[900px]:text-[9.5px] ${pnl > 0 ? 'text-green' : pnl < 0 ? 'text-red' : 'text-faint'}`}
-                  >
-                    {display(pnl)}
+                  <span className="flex flex-col items-start">
+                    <span className={`${cellValue} ${toneText(pnl)}`}>
+                      {cellAmount(pnl)}
+                    </span>
+                    {c.data.pct !== null && pnl !== 0 && (
+                      <span className={`${cellPct} ${toneText(pnl)}`}>
+                        {fmtSignedPct(c.data.pct, 2)}
+                      </span>
+                    )}
                   </span>
                 </PnlBreakdown>
               ) : (
-                <span className="font-mono text-[11.5px] font-bold max-[900px]:text-[9.5px] text-faint">
-                  {display(pnl)}
-                </span>
+                <span className={`${cellValue} text-faint`}>{cellAmount(pnl)}</span>
               )}
               {count > 0 && (
                 <span className="absolute top-[5px] right-[5px] min-w-[15px] h-[15px] px-1 inline-flex items-center justify-center rounded-pill bg-surface border border-border font-mono text-[9px] font-bold text-muted">

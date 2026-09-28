@@ -91,7 +91,7 @@ export default function Dashboard() {
           </div>
 
           <div className="flex gap-stack mb-stack flex-wrap">
-            <DailyPnlCalendar balance={data.equity} exchange={exchange} />
+            <DailyPnlCalendar exchange={exchange} />
             <div className="w-[344px] max-w-[344px] grow basis-[300px] flex flex-col gap-stack max-[900px]:max-w-none max-[900px]:w-full">
               <PnlBreakdownCard
                 breakdown={data.pnl_breakdown}
