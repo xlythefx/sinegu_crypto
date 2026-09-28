@@ -1510,9 +1510,17 @@ def _upsert_remote_env(ssh, path: str, key: str, value: str) -> None:
 
     Delete-then-append rather than `sed s|old|new|`: a Coinsbuy webhook secret is
     base64 and contains '/' and '=', which collides with any sed delimiter.
+
+    The readers strip the value's quotes, so they are put back here whenever
+    dotenv needs them: `MAIL_FROM_NAME=Pixel Alpha` unquoted makes Laravel
+    reject the WHOLE file ("unexpected whitespace"), and on 2026-09-28 that took
+    the API down between config:clear and config:cache.
     """
+    import re
     import shlex
 
+    if re.search(r'[\s#"\'\\]', value):
+        value = '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
     line = shlex.quote(f"{key}={value}")
     sh(ssh, f"sed -i '/^{key}=/d' {path} && printf '%s\\n' {line} >> {path}")
 
