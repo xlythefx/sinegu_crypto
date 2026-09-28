@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-interface ApiDataState<T> {
+export interface ApiDataState<T> {
   data: T | null
   loading: boolean
   error: unknown

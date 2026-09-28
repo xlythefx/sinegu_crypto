@@ -426,6 +426,14 @@ DB reads only — never an exchange call). Rules:
   pooled balance the day started with; its trades carry the owner's `name`.
   The money-under-management card is shared with the Money tab
   (`insights/UnderManagementCard.tsx`).
+- **Pending sign-ups are approved FROM the Overview** (2026-09-28, owner's
+  request — they were buried as one line). `OverviewTab` owns the overview
+  fetch so Platform shows a "N new users need to be approved" strip (click →
+  Needs attention) and the Needs attention tab carries the count as a badge;
+  Needs attention opens with `insights/PendingApprovalsCard.tsx` (approve /
+  reject through ConfirmModal, first 10, rest on User Management; read-only
+  for a collaborator). `resolvePending` forgets the cached `overview` and
+  `customers` answers, so an approved user never lingers for the cache minute.
 
 ## Collaborator role — read-only staff (2026-09-28)
 

@@ -7,7 +7,6 @@ import {
   KeyRound,
   Radio,
   Receipt,
-  UserPlus,
   Users,
   Wallet,
 } from 'lucide-react'
@@ -15,8 +14,8 @@ import DataState from '../../dashboard/DataState'
 import MetricTile from '../../analytics/MetricTile'
 import { EXCHANGE_META } from '../../exchanges/meta'
 import { BarRow, EmptyNote, GRID_2, InsightCard, TILES } from './parts'
-import { useApiData } from '../../../hooks/useApiData'
-import { getOverviewInsights } from '../../../services/adminInsights'
+import PendingApprovalsCard from './PendingApprovalsCard'
+import type { ApiDataState } from '../../../hooks/useApiData'
 import { fmtMoney, fmtSignedMoney } from '../../../lib/format'
 import { reasonLabel } from '../../../lib/insightLabels'
 import { useSessionUser } from '../../../hooks/useSessionUser'
@@ -87,25 +86,24 @@ function attentionItems(a: OverviewInsights['attention']): AttentionItem[] {
       urgent: true,
     })
   }
-  if (a.pending_users_count > 0) {
-    items.push({
-      key: 'pending',
-      icon: UserPlus,
-      text: `${a.pending_users_count} sign-up${a.pending_users_count === 1 ? '' : 's'} waiting for approval`,
-      detail: a.pending_users.slice(0, 3).map((u) => u.name).join(', '),
-      to: '/admin/users',
-      urgent: false,
-    })
-  }
+  // Pending sign-ups are not a row here: they get their own card above,
+  // with the approve / reject buttons (PendingApprovalsCard).
   return items
 }
 
 const ROW = 'flex items-start gap-3 rounded-row border border-border bg-surface2 px-4 py-3'
 const ROW_LINK = `${ROW} transition-colors hover:border-accent-line hover:bg-accent-soft`
 
-/** Overview → Needs attention: what is costing money or customers right now. */
-export default function AttentionPane() {
-  const { data, loading, error, reload } = useApiData(getOverviewInsights)
+/**
+ * Overview → Needs attention: what is costing money or customers right now.
+ * The payload is fetched by OverviewTab (the Platform strip reads it too).
+ */
+export default function AttentionPane({
+  data,
+  loading,
+  error,
+  reload,
+}: ApiDataState<OverviewInsights>) {
   // A read-only collaborator may not open most of the pages these rows point
   // at (Signal Log, API Keys, invoices…), so those render as plain text.
   const collaborator = isCollaborator(useSessionUser()?.type)
@@ -123,6 +121,15 @@ export default function AttentionPane() {
 
   return (
     <div className="flex flex-col gap-stack">
+      {a.pending_users_count > 0 && (
+        <PendingApprovalsCard
+          users={a.pending_users}
+          count={a.pending_users_count}
+          readOnly={collaborator}
+          onResolved={reload}
+        />
+      )}
+
       {/* Three tiles when "Collected this month" is absent (collaborator) —
           no empty fourth column. */}
       <div
@@ -183,7 +190,9 @@ export default function AttentionPane() {
         {items.length === 0 ? (
           <div className="flex items-center gap-2.5 rounded-row border border-border bg-surface2 px-4 py-4 text-[13.5px]">
             <CheckCircle2 size={18} className="flex-none text-green" />
-            Nothing needs you right now.
+            {a.pending_users_count > 0
+              ? 'Nothing else needs you right now.'
+              : 'Nothing needs you right now.'}
           </div>
         ) : (
           <ul className="flex flex-col gap-2">
