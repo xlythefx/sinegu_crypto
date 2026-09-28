@@ -4,6 +4,8 @@
  * blocked-key grace period are engine and API rules, not marketing copy. If
  * a rule changes, the answer changes with it.
  */
+import { SUPPORT_EMAIL, SUPPORT_TELEGRAM_HANDLE } from './company'
+
 export interface FaqEntry {
   q: string
   a: string
@@ -26,7 +28,7 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'Which exchanges can I use?',
-        a: 'Binance and MEXC today; Bybit is coming soon. There are no other supported venues. Each exchange has its own connect flow in the dashboard because their API key screens and rules differ.',
+        a: 'Binance, for now. More exchanges are coming soon.',
       },
       {
         q: 'Do you hold my money?',
@@ -34,7 +36,7 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'Can I try it without real money first?',
-        a: 'On Binance, yes: connect a key from the Binance Futures Testnet and choose "Demo" in the connect wizard. The engine then trades play money on the testnet with the same signals. MEXC has no testnet, so a MEXC connection is always live.',
+        a: 'On Binance, yes: connect a key from the Binance Futures Testnet and choose "Demo" in the connect wizard. The engine then trades play money on the testnet with the same signals.',
       },
       {
         q: 'Is there a minimum?',
@@ -48,7 +50,7 @@ export const FAQ: FaqGroup[] = [
     entries: [
       {
         q: 'What does it cost?',
-        a: 'Nothing to connect, nothing per month. We charge 20% of the profit your account makes above its previous high-water mark, invoiced monthly, plus a smaller share on gains still open at month end as the Terms describe. A month with no new profit produces no invoice.',
+        a: '20% of the profit we make for you — nothing else. Nothing to connect, nothing per month, and no profit means no invoice.',
       },
       {
         q: 'What is the high-water mark?',
@@ -56,15 +58,15 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'How do I pay?',
-        a: 'Invoices appear under Billing & Invoices in the dashboard. You can pay in crypto through our checkout; a direct USDT payment option is being rolled out. Card payments are not available yet.',
+        a: 'Invoices appear under Billing & Invoices in the dashboard, and you pay them in USDT (TRC-20). Card payments are not available yet.',
       },
       {
         q: 'What happens if I don\'t pay?',
-        a: 'An invoice that goes past due disables new entries on your account until it is paid. Open positions are still closed when the strategy exits — an unpaid invoice never traps a position. Paying re-enables the account automatically.',
+        a: `After a few days without payment, your account is disconnected automatically. To continue the service, pay the overdue invoice and contact our support at ${SUPPORT_EMAIL} or ${SUPPORT_TELEGRAM_HANDLE} to reactivate your account. Reactivation can take some time, and your account cannot make profit while it is off — which is why we suggest paying every invoice on time.`,
       },
       {
         q: 'Does the exchange charge fees too?',
-        a: 'Yes. The exchange takes its own trading commission and funding payments on every trade, regardless of outcome. Those are separate from our fee and go to the exchange, not to us. Your dashboard shows profit both before and after them.',
+        a: 'Yes. The exchange takes its own trading commission and funding payments on every trade, regardless of outcome. Those go to the exchange, not to us. To keep it fair, our 20% is taken on your profit AFTER exchange fees, never before. Your dashboard shows profit both before and after them.',
       },
     ],
   },
