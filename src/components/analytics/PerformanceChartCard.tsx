@@ -84,20 +84,15 @@ interface Mark {
   total?: number
 }
 
-/** A stepped capital line built from the transfer days alone. */
+/** One bar per transfer day, built from the transfer days alone. */
 interface CapitalView {
-  line: string
-  dots: { x: number; y: number; deposit: boolean }[]
+  bars: { x: number; w: number; y: number; h: number; deposit: boolean }[]
+  zeroY: number
   marks: Mark[]
   labels: string[]
   deposits: number
   withdrawals: number
   net: number
-}
-
-/** Days between two 'YYYY-MM-DD' dates, for the capital chart's time axis. */
-function daysBetween(a: string, b: string): number {
-  return (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000
 }
 
 function bucketLabel(key: string, period: Period): string {
@@ -284,70 +279,61 @@ export default function PerformanceChartCard({
   }, [entries, period, baseline])
 
   /**
-   * Money in and out over time: cumulative deposits − withdrawals, drawn as a
-   * STEP. Capital genuinely is flat between transfers, so a straight line
-   * sloping from one deposit to the next would draw money as arriving
-   * gradually when it arrived on one day.
+   * Money in and out: one BAR per transfer day, deposits up in green,
+   * withdrawals down in red, each as tall as the amount that moved that day.
+   * The running total is in the hover readout and the net in the legend.
    *
-   * Its own chart rather than a second line on the P&L views, and that is the
+   * Its own chart rather than a series on the P&L views, and that is the
    * point: the equity curves answer "what did trading do", so a withdrawal
    * must never be able to draw itself as a crash on them. Here a withdrawal
    * IS the subject, and reads as exactly what it was.
    *
-   * The x axis is real time (first event → last), not one slot per transfer,
-   * so two deposits a day apart sit a day apart.
+   * One slot per transfer day (like the Daily P&L bars), not real time:
+   * transfers cluster, and on a time axis two a day apart would draw as one.
+   * The zero line sits where the data puts it (largest deposit above, largest
+   * withdrawal below), so an account that only ever deposited uses the whole
+   * height instead of leaving the lower half empty.
    */
   const capital: CapitalView = useMemo(() => {
     const flows = Object.entries(dailyFlows)
       .filter(([, amount]) => amount !== 0)
       .sort(([a], [b]) => a.localeCompare(b))
     const empty: CapitalView = {
-      line: '', dots: [], marks: [], labels: [],
+      bars: [], zeroY: 0, marks: [], labels: [],
       deposits: 0, withdrawals: 0, net: 0,
     }
     if (flows.length === 0) return empty
-
-    const first = flows[0][0]
-    const lastTrade = entries[entries.length - 1]?.[0]
-    // Run the line out to the last thing that happened on the account, so a
-    // long quiet stretch after the final transfer is visible as one.
-    const last =
-      lastTrade && lastTrade > flows[flows.length - 1][0]
-        ? lastTrade
-        : flows[flows.length - 1][0]
-    const span = Math.max(1, daysBetween(first, last))
-    const xOf = (date: string) => (daysBetween(first, date) / span) * W
 
     let running = 0
     const totals = flows.map(([date, amount]) => {
       running += amount
       return { date, amount, total: running }
     })
-    const peak = Math.max(...totals.map((t) => t.total), 0)
-    const floor = Math.min(...totals.map((t) => t.total), 0)
-    const range = Math.max(1e-9, peak - floor)
-    const yOf = (v: number) =>
-      H - PAD_BOTTOM - ((v - floor) / range) * (H - PAD_TOP - PAD_BOTTOM)
-
-    // Start on the axis at the first transfer, step up (or down) at each one,
-    // then hold the last level to the right edge.
-    let d = `M0,${yOf(0).toFixed(1)}`
-    for (const t of totals) {
-      const x = xOf(t.date).toFixed(1)
-      d += ` L${x},${yOf(t.total - t.amount).toFixed(1)} L${x},${yOf(t.total).toFixed(1)}`
-    }
-    d += ` L${W},${yOf(running).toFixed(1)}`
+    const up = Math.max(0, ...flows.map(([, a]) => a))
+    const down = Math.max(0, ...flows.map(([, a]) => -a))
+    const top = PAD_TOP
+    const bottom = H - PAD_BOTTOM
+    const scale = (bottom - top) / Math.max(1e-9, up + down)
+    const zeroY = top + up * scale
+    const yOf = (v: number) => zeroY - v * scale
+    const slot = W / flows.length
+    const barW = Math.max(2, Math.min(28, slot * 0.6))
 
     return {
-      line: d,
-      dots: totals.map((t) => ({
-        x: xOf(t.date),
-        y: yOf(t.total),
-        deposit: t.amount > 0,
-      })),
-      marks: totals.map((t) => ({
-        xFrac: xOf(t.date) / W,
-        yFrac: yOf(t.total) / H,
+      bars: totals.map((t, i) => {
+        const y = yOf(t.amount)
+        return {
+          x: i * slot + (slot - barW) / 2,
+          w: barW,
+          y: Math.min(y, zeroY),
+          h: Math.max(1, Math.abs(zeroY - y)),
+          deposit: t.amount > 0,
+        }
+      }),
+      zeroY,
+      marks: totals.map((t, i) => ({
+        xFrac: (i * slot + slot / 2) / W,
+        yFrac: yOf(t.amount) / H,
         label: fmtMediumDate(t.date),
         cum: t.total,
         cumNet: t.total,
@@ -356,12 +342,15 @@ export default function PerformanceChartCard({
         delta: t.amount,
         total: t.total,
       })),
-      labels: [first, last].map(fmtShortDate),
+      labels: axisLabels(
+        flows.map(([key, a]) => ({ key, pnl: a, pnlNet: a })),
+        'Daily',
+      ),
       deposits: flows.reduce((sum, [, a]) => sum + (a > 0 ? a : 0), 0),
       withdrawals: flows.reduce((sum, [, a]) => sum + (a < 0 ? -a : 0), 0),
       net: running,
     }
-  }, [dailyFlows, entries])
+  }, [dailyFlows])
 
   /**
    * The window's figures. The percentage is TIME-WEIGHTED: each day's P&L over
@@ -841,7 +830,7 @@ export default function PerformanceChartCard({
 
       {tab === 'capital' && (
         <div>
-          {capital.dots.length === 0 ? (
+          {capital.bars.length === 0 ? (
             <p className="text-[13px] text-muted py-10 text-center">
               No deposits or withdrawals on record for the accounts in scope.
             </p>
@@ -863,25 +852,26 @@ export default function PerformanceChartCard({
                     <line x1="0" y1="120" x2={W} y2="120" />
                     <line x1="0" y1="180" x2={W} y2="180" />
                   </g>
-                  <path
-                    d={capital.line}
-                    fill="none"
-                    stroke="var(--accent)"
-                    strokeWidth="2"
-                    strokeLinejoin="miter"
-                    strokeLinecap="round"
-                  />
-                  {capital.dots.map((p, i) => (
-                    <circle
+                  {capital.bars.map((b, i) => (
+                    <rect
                       key={i}
-                      cx={p.x}
-                      cy={p.y}
-                      r="3.5"
-                      fill={p.deposit ? 'var(--green)' : 'var(--red)'}
-                      stroke="var(--surface)"
-                      strokeWidth="1.4"
+                      x={b.x}
+                      y={b.y}
+                      width={b.w}
+                      height={b.h}
+                      rx={Math.min(2, b.w / 2)}
+                      fill={b.deposit ? 'var(--green)' : 'var(--red)'}
+                      opacity=".9"
                     />
                   ))}
+                  <line
+                    x1="0"
+                    y1={capital.zeroY}
+                    x2={W}
+                    y2={capital.zeroY}
+                    stroke="var(--muted)"
+                    strokeWidth="1.2"
+                  />
                 </svg>
                 {readout}
               </div>
@@ -898,9 +888,10 @@ export default function PerformanceChartCard({
                   Net {fmtSignedMoney(capital.net)}
                 </span>
               </div>
-              <div className="font-mono flex text-[10.5px] text-faint mt-1.5">
-                <span className="flex-1 text-left">{capital.labels[0]}</span>
-                <span className="flex-1 text-right">{capital.labels[1]}</span>
+              <div className="font-mono flex text-[10.5px] text-faint mt-1.5 [&>span]:flex-1 [&>span]:text-center">
+                {capital.labels.map((m, i) => (
+                  <span key={`${m}-${i}`}>{m}</span>
+                ))}
               </div>
             </>
           )}
