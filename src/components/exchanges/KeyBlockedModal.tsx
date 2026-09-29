@@ -2,8 +2,6 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   AlertTriangle,
-  Check,
-  Copy,
   ExternalLink,
   Loader2,
   RefreshCw,
@@ -12,6 +10,7 @@ import {
   Unplug,
   X,
 } from 'lucide-react'
+import CopyState from '../ui/CopyState'
 import { FALLBACK_SERVER_IP } from '../../lib/serverIp'
 import type { ExchangeAccount, ExchangeKind } from '../../types/exchanges'
 import { EXCHANGE_COPY, keyFault } from './exchangeCopy'
@@ -181,8 +180,7 @@ export default function KeyBlockedModal({
                   className="inline-flex flex-none items-center gap-1.5 rounded-btn border border-border bg-surface px-2.5 py-1.5 text-[11.5px] font-bold text-text transition-[border-color] duration-150 hover:border-accent"
                   onClick={copyIp}
                 >
-                  {copied ? <Check size={13} /> : <Copy size={13} />}
-                  {copied ? 'Copied' : 'Copy'}
+                  <CopyState copied={copied} />
                 </button>
               </div>
 

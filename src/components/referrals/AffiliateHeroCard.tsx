@@ -12,6 +12,7 @@ import {
   Ticket,
   Wallet,
 } from 'lucide-react'
+import CopyState from '../ui/CopyState'
 import { createReferralCode } from '../../services/referrals'
 import { setMainPayoutMethod } from '../../services/payoutMethods'
 import { getApiErrorMessage } from '../../services/api'
@@ -156,8 +157,7 @@ function InviteLinkBlock({ code }: { code: string }) {
           className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-field border border-border bg-surface2 text-text text-[12.5px] font-bold cursor-pointer flex-none transition-[border-color,color] duration-150 hover:border-accent-line hover:text-accent"
           onClick={() => copy(link)}
         >
-          {copied ? <Check size={14} className="text-green" /> : <Copy size={14} />}
-          {copied ? 'Copied' : 'Copy link'}
+          <CopyState copied={copied} size={14} label="Copy link" checkClassName="text-green" />
         </button>
       </div>
       <p className="text-[11.5px] text-faint mt-1.5">

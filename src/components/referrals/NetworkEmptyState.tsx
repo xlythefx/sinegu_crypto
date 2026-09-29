@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Check, Copy, Users } from 'lucide-react'
+import { Users } from 'lucide-react'
+import CopyState from '../ui/CopyState'
 
 interface NetworkEmptyStateProps {
   /** Full invite link, or null when no referral code exists yet. */
@@ -33,8 +34,7 @@ export default function NetworkEmptyState({ inviteLink }: NetworkEmptyStateProps
           className="inline-flex items-center gap-2 mt-5 py-[10px] px-5 rounded-pill border-0 bg-accent text-on-accent text-[13px] font-bold cursor-pointer shadow-[0_10px_24px_var(--glow)] transition-[filter] duration-150 hover:brightness-[1.06]"
           onClick={copy}
         >
-          {copied ? <Check size={15} /> : <Copy size={15} />}
-          {copied ? 'Link copied' : 'Copy invite link'}
+          <CopyState copied={copied} size={15} label="Copy invite link" copiedLabel="Link copied" />
         </button>
       ) : (
         <p className="text-[12.5px] text-faint mt-4">

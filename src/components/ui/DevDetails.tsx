@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Check, ChevronRight, Copy, TerminalSquare } from 'lucide-react'
+import { ChevronRight, TerminalSquare } from 'lucide-react'
+import CopyState from './CopyState'
 import type { ApiErrorDebug } from '../../services/api'
 
 interface DevDetailsProps {
@@ -79,8 +80,7 @@ export default function DevDetails({
           onClick={copy}
           aria-label="Copy diagnostic JSON"
         >
-          {copied ? <Check size={12} /> : <Copy size={12} />}
-          {copied ? 'Copied' : 'Copy'}
+          <CopyState copied={copied} size={12} />
         </button>
       </div>
 

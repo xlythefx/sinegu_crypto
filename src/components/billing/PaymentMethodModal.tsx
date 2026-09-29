@@ -5,7 +5,6 @@ import {
   ArrowRight,
   CalendarDays,
   Check,
-  Copy,
   CreditCard,
   ExternalLink,
   FlaskConical,
@@ -18,6 +17,7 @@ import {
   Wallet,
   X,
 } from 'lucide-react'
+import CopyState from '../ui/CopyState'
 import { fmtMoney, fmtSignedMoney, fmtSignedPct, formatDate } from '../../lib/format'
 import { daysUntilDue, type Invoice } from '../../lib/billing'
 import {
@@ -546,8 +546,7 @@ export default function PaymentMethodModal({
                     className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-btn border border-border bg-surface py-1.5 px-2.5 text-[11.5px] font-bold text-text cursor-pointer transition-[border-color] duration-150 hover:border-accent"
                     onClick={copyAddress}
                   >
-                    {copied ? <Check size={13} /> : <Copy size={13} />}
-                    {copied ? 'Copied' : 'Copy'}
+                    <CopyState copied={copied} />
                   </button>
                 </div>
               </div>

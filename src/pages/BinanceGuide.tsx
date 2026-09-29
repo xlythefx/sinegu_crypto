@@ -4,7 +4,6 @@ import {
   BookOpen,
   Check,
   ChevronRight,
-  Copy,
   ExternalLink,
   Lightbulb,
   PartyPopper,
@@ -14,6 +13,7 @@ import {
   X,
   ZoomIn,
 } from 'lucide-react'
+import CopyState from '../components/ui/CopyState'
 import AOS from 'aos'
 import 'aos/dist/aos.css'
 import Nav from '../components/landing/Nav'
@@ -117,8 +117,7 @@ function IpBlock() {
           onClick={copy}
           className="inline-flex flex-none items-center gap-1.5 rounded-btn border border-border bg-surface px-3 py-2 text-[12px] font-bold text-text transition-colors hover:border-accent"
         >
-          {copied ? <Check size={13} /> : <Copy size={13} />}
-          {copied ? 'Copied' : 'Copy'}
+          <CopyState copied={copied} />
         </button>
       </div>
     </div>

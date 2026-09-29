@@ -1,7 +1,5 @@
 import { useState } from 'react'
 import {
-  Check,
-  Copy,
   ExternalLink,
   Eye,
   EyeOff,
@@ -9,6 +7,7 @@ import {
   ShieldCheck,
   TriangleAlert,
 } from 'lucide-react'
+import CopyState from '../../ui/CopyState'
 import type { ExchangeKind } from '../../../types/exchanges'
 import { EXCHANGE_COPY } from '../exchangeCopy'
 import { EXCHANGE_META } from '../meta'
@@ -171,8 +170,7 @@ export default function KeysStep({
                     className="inline-flex flex-none items-center gap-1.5 rounded-btn border border-border bg-surface px-2.5 py-1.5 text-[11.5px] font-bold text-text transition-[border-color] duration-150 hover:border-accent"
                     onClick={copyIp}
                   >
-                    {copied ? <Check size={13} /> : <Copy size={13} />}
-                    {copied ? 'Copied' : 'Copy'}
+                    <CopyState copied={copied} />
                   </button>
                 </div>
                 <p className="mt-2 text-[11.5px] leading-[1.5] text-faint">
