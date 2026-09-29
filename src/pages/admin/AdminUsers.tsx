@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Building2,
   Check,
@@ -9,10 +9,13 @@ import {
   Clock,
   Eye,
   Search,
+  ShieldCheck,
   UserCog,
   UserPlus,
+  Users,
   X,
 } from 'lucide-react'
+import Tabs, { type TabItem } from '../../components/ui/Tabs'
 import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
 import ConfirmModal from '../../components/ui/ConfirmModal'
@@ -49,13 +52,21 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: 'suspended', label: 'Suspended' },
 ]
 
+/**
+ * Customers and staff are two lists: a customer is `type = 'user'` (the rule
+ * the admin dashboard counts by), everyone else is staff. Customers first —
+ * they are who this page is mostly for.
+ */
+type Group = 'users' | 'staff'
+const isStaff = (u: AdminUser) => u.type !== 'user'
+
+/** Staff roles only — the Users tab holds a single role, so it has no picker. */
 const ROLE_FILTERS: { key: RoleFilter; label: string }[] = [
   { key: 'all', label: 'All roles' },
   { key: 'master', label: 'Master' },
   { key: 'admin', label: 'Admin' },
   { key: 'developer', label: 'Developer' },
   { key: 'collaborator', label: 'Collaborator' },
-  { key: 'user', label: 'User' },
 ]
 
 const USERS_PER_PAGE = 10
@@ -118,27 +129,57 @@ export default function AdminUsers() {
   const [createError, setCreateError] = useState<string | null>(null)
   const [createdEmail, setCreatedEmail] = useState<string | null>(null)
 
+  // The tab lives in the URL so "Back to Users" from a staff member's
+  // detail page returns to the Staff tab rather than resetting to Users.
+  const [params, setParams] = useSearchParams()
+  const group: Group = params.get('group') === 'staff' ? 'staff' : 'users'
+
   const users = useMemo(() => data ?? [], [data])
 
+  // Every sign-up waiting for approval, whichever tab is open — the queue
+  // above the table must never be hidden by a tab.
   const pendingUsers = useMemo(
     () => users.filter((u) => u.status === 'pending'),
     [users],
   )
 
-  const statusCounts = useMemo(
-    () => ({
-      all: users.length,
-      pending: pendingUsers.length,
-      active: users.filter((u) => u.status === 'active').length,
-      suspended: users.filter((u) => u.status === 'suspended').length,
-    }),
-    [users, pendingUsers],
+  const inGroup = useMemo(
+    () => users.filter((u) => (group === 'staff') === isStaff(u)),
+    [users, group],
   )
 
-  // Search + status + role filters; pending users float to the top so
-  // approvals are never missed (API already orders pending-first).
+  const groupTabs: TabItem<Group>[] = useMemo(
+    () => [
+      {
+        key: 'users',
+        label: `Users · ${users.filter((u) => !isStaff(u)).length}`,
+        Icon: Users,
+        badge: users.filter((u) => !isStaff(u) && u.status === 'pending').length,
+      },
+      {
+        key: 'staff',
+        label: `Staff · ${users.filter(isStaff).length}`,
+        Icon: ShieldCheck,
+        badge: users.filter((u) => isStaff(u) && u.status === 'pending').length,
+      },
+    ],
+    [users],
+  )
+
+  const statusCounts = useMemo(
+    () => ({
+      all: inGroup.length,
+      pending: inGroup.filter((u) => u.status === 'pending').length,
+      active: inGroup.filter((u) => u.status === 'active').length,
+      suspended: inGroup.filter((u) => u.status === 'suspended').length,
+    }),
+    [inGroup],
+  )
+
+  // Search + status + role filters within the open tab; pending users float
+  // to the top so approvals are never missed (API already orders pending-first).
   const filtered = useMemo(() => {
-    let list = users
+    let list = inGroup
     const q = search.trim().toLowerCase()
     if (q) {
       list = list.filter(
@@ -149,11 +190,11 @@ export default function AdminUsers() {
     if (statusFilter !== 'all') {
       list = list.filter((u) => u.status === statusFilter)
     }
-    if (roleFilter !== 'all') {
+    if (group === 'staff' && roleFilter !== 'all') {
       list = list.filter((u) => u.type === roleFilter)
     }
     return list
-  }, [users, search, statusFilter, roleFilter])
+  }, [inGroup, group, search, statusFilter, roleFilter])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / USERS_PER_PAGE))
   const safePage = Math.min(page, totalPages)
@@ -170,6 +211,13 @@ export default function AdminUsers() {
     fn()
     setPage(1)
   }
+
+  /** Switch tab; the status chips carry over, the staff-only role filter does not. */
+  const setGroup = (next: Group) =>
+    setFilterAndResetPage(() => {
+      setRoleFilter('all')
+      setParams(next === 'staff' ? { group: 'staff' } : {}, { replace: true })
+    })
 
   const toggleExpanded = (uniId: string) => {
     setExpanded((prev) => {
@@ -213,6 +261,7 @@ export default function AdminUsers() {
         setStatusFilter('all')
         setRoleFilter('all')
       })
+      setGroup(user.type === 'user' ? 'users' : 'staff')
       setCreatedEmail(user.email)
       reload()
     } catch (err) {
@@ -315,9 +364,11 @@ export default function AdminUsers() {
             <button
               type="button"
               className="w-full border-t border-accent-line p-2.5 text-[12.5px] font-bold text-accent cursor-pointer hover:bg-accent-soft"
-              onClick={() =>
-                setFilterAndResetPage(() => setStatusFilter('pending'))
-              }
+              onClick={() => {
+                // Sign-ups are customers until an admin gives them a role.
+                setGroup('users')
+                setStatusFilter('pending')
+              }}
             >
               +{pendingUsers.length - 6} more — view all pending
             </button>
@@ -359,8 +410,9 @@ export default function AdminUsers() {
         data-aos="fade-up"
         data-aos-delay="100"
       >
-        {/* Search + filters */}
+        {/* Users / Staff, then search + filters within the open tab */}
         <div className="flex flex-col gap-3 border-b border-hair px-5 py-[18px]">
+          <Tabs tabs={groupTabs} active={group} onChange={setGroup} label="Customers or staff" />
           <label className="flex items-center gap-[9px] h-10 rounded-[11px] border border-border bg-surface2 px-[13px] text-muted">
             <Search size={14} />
             <input
@@ -408,25 +460,27 @@ export default function AdminUsers() {
               })}
             </div>
             <div className="ml-auto flex flex-wrap items-center gap-2">
-              <label className="flex items-center gap-2 h-9 flex-none rounded-full border border-border bg-surface2 px-3 text-muted">
-                <UserCog size={14} />
-                <select
-                  value={roleFilter}
-                  onChange={(e) =>
-                    setFilterAndResetPage(() =>
-                      setRoleFilter(e.target.value as RoleFilter),
-                    )
-                  }
-                  aria-label="Filter by role"
-                  className="cursor-pointer border-0 bg-transparent text-[12.5px] font-semibold text-text outline-none"
-                >
-                  {ROLE_FILTERS.map((r) => (
-                    <option key={r.key} value={r.key} className="bg-surface text-text">
-                      {r.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {group === 'staff' && (
+                <label className="flex items-center gap-2 h-9 flex-none rounded-full border border-border bg-surface2 px-3 text-muted">
+                  <UserCog size={14} />
+                  <select
+                    value={roleFilter}
+                    onChange={(e) =>
+                      setFilterAndResetPage(() =>
+                        setRoleFilter(e.target.value as RoleFilter),
+                      )
+                    }
+                    aria-label="Filter by role"
+                    className="cursor-pointer border-0 bg-transparent text-[12.5px] font-semibold text-text outline-none"
+                  >
+                    {ROLE_FILTERS.map((r) => (
+                      <option key={r.key} value={r.key} className="bg-surface text-text">
+                        {r.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               {!readOnly && (
                 <button
                   type="button"
@@ -447,7 +501,7 @@ export default function AdminUsers() {
 
         {/* Users table — re-mounts on filter/page switch to replay the reveal */}
         <div
-          key={`${statusFilter}-${roleFilter}-${safePage}`}
+          key={`${group}-${statusFilter}-${roleFilter}-${safePage}`}
           className="overflow-x-auto animate-[fadeup_0.35s_ease-out]"
         >
           <table className="w-full border-collapse text-[13px]">
@@ -465,9 +519,9 @@ export default function AdminUsers() {
               {paginated.length === 0 && (
                 <tr>
                   <td colSpan={7} className="py-10 text-center text-muted">
-                    {users.length === 0
-                      ? 'No users yet.'
-                      : 'No users match your filters.'}
+                    {inGroup.length === 0
+                      ? group === 'staff' ? 'No staff accounts yet.' : 'No users yet.'
+                      : 'No accounts match your filters.'}
                   </td>
                 </tr>
               )}
@@ -499,7 +553,7 @@ export default function AdminUsers() {
             <span className="text-[12.5px] text-muted">
               Showing {(safePage - 1) * USERS_PER_PAGE + 1}–
               {Math.min(safePage * USERS_PER_PAGE, filtered.length)} of{' '}
-              {filtered.length} users
+              {filtered.length} {group === 'staff' ? 'staff' : 'users'}
             </span>
             <div className="flex items-center gap-2.5">
               <button

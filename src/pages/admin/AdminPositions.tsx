@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   DollarSign,
+  HelpCircle,
   RefreshCw,
   Users,
 } from 'lucide-react'
@@ -23,6 +24,7 @@ import PositionEditModal, {
   type PositionEditPayload,
 } from '../../components/admin/positions/PositionEditModal'
 import ConfirmModal from '../../components/ui/ConfirmModal'
+import InfoModal from '../../components/ui/InfoModal'
 import { useApiData } from '../../hooks/useApiData'
 import {
   deleteAdminPastTrade,
@@ -68,6 +70,7 @@ export default function AdminPositions() {
   const [deleting, setDeleting] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [syncHelpOpen, setSyncHelpOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<{
     row: PositionRow
     kind: PositionEditKind
@@ -340,6 +343,14 @@ export default function AdminPositions() {
             </button>
             <button
               type="button"
+              className="grid h-9 w-9 place-items-center rounded-full border border-border bg-surface text-muted cursor-pointer transition-colors hover:border-accent-line hover:text-accent"
+              onClick={() => setSyncHelpOpen(true)}
+              aria-label="How positions are kept up to date"
+            >
+              <HelpCircle size={16} />
+            </button>
+            <button
+              type="button"
               className="inline-flex items-center gap-[7px] py-2 px-3.5 border border-accent-line rounded-field bg-accent-soft text-accent text-[13px] font-bold cursor-pointer transition-colors hover:bg-accent hover:text-on-accent disabled:opacity-60 disabled:cursor-wait"
               onClick={refresh}
               disabled={refreshing}
@@ -474,6 +485,16 @@ export default function AdminPositions() {
         danger
         onConfirm={runDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <InfoModal
+        open={syncHelpOpen}
+        icon={<RefreshCw size={28} />}
+        title="How positions stay up to date"
+        message="The engine re-reads every account's open positions from its exchange automatically, about every 5 minutes. Between those syncs the prices and unrealized P&L here can be a few minutes old. Refresh asks the engine to read every exchange right now, then reloads this page."
+        ctaLabel="Got it"
+        onCta={() => setSyncHelpOpen(false)}
+        onDismiss={() => setSyncHelpOpen(false)}
       />
     </AdminLayout>
   )

@@ -112,7 +112,9 @@ export default function AdminUserDetail() {
     return <Navigate to="/auth" replace />
   }
 
-  const back = () => navigate('/admin/users')
+  // Back to the tab this person is listed under (User Management: Users / Staff).
+  const back = () =>
+    navigate(user && user.type !== 'user' ? '/admin/users?group=staff' : '/admin/users')
 
   // Suspended AND nothing connected: every stat below is an empty zero, so the
   // cards are greyed out rather than reading like a real $0.00 account. A
