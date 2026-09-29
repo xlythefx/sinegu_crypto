@@ -18,8 +18,17 @@ from binance_abcd.exchanges import client_for, exchange_of, tradeable
 log = logging.getLogger(__name__)
 
 
-def fetch_and_save() -> dict | None:
+def fetch_and_save(api_keys: list[str] | None = None) -> dict | None:
+    """Sync open positions to the backend.
+
+    ``api_keys`` narrows the run to specific accounts (an admin's "Refresh"
+    on one user); None — the poller's and Admin → Trading Positions' call —
+    means every tradeable account.
+    """
     accounts = fetch_accounts()
+    if api_keys is not None:
+        wanted = set(api_keys)
+        accounts = [a for a in (accounts or []) if a.get("api_key") in wanted]
     if not accounts:
         log.info("[positions] no accounts")
         return None

@@ -28,6 +28,7 @@ import {
   deleteAdminPastTrade,
   deleteAdminPosition,
   getAdminPositions,
+  refreshAdminPositions,
   updateAdminPastTrade,
   updateAdminPosition,
 } from '../../services/admin'
@@ -66,6 +67,7 @@ export default function AdminPositions() {
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
   const [editTarget, setEditTarget] = useState<{
     row: PositionRow
     kind: PositionEditKind
@@ -163,6 +165,26 @@ export default function AdminPositions() {
       setPendingEdit(null)
     } finally {
       setSaving(false)
+    }
+  }
+
+  /**
+   * The page reads the DB, which the engine's positions poller rewrites only
+   * every 5 minutes — so the engine reads every account's open positions
+   * first, then the page re-reads. A failed engine call still re-reads.
+   */
+  const refresh = async () => {
+    setRefreshing(true)
+    setActionError(null)
+    try {
+      await refreshAdminPositions()
+    } catch (err) {
+      setActionError(
+        getApiErrorMessage(err, 'Could not reach the trading engine — showing the last synced positions.'),
+      )
+    } finally {
+      setRefreshing(false)
+      reload()
     }
   }
 
@@ -318,11 +340,12 @@ export default function AdminPositions() {
             </button>
             <button
               type="button"
-              className="inline-flex items-center gap-[7px] py-2 px-3.5 border border-accent-line rounded-field bg-accent-soft text-accent text-[13px] font-bold cursor-pointer transition-colors hover:bg-accent hover:text-on-accent"
-              onClick={reload}
+              className="inline-flex items-center gap-[7px] py-2 px-3.5 border border-accent-line rounded-field bg-accent-soft text-accent text-[13px] font-bold cursor-pointer transition-colors hover:bg-accent hover:text-on-accent disabled:opacity-60 disabled:cursor-wait"
+              onClick={refresh}
+              disabled={refreshing}
             >
-              <RefreshCw size={14} />
-              Refresh
+              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+              {refreshing ? 'Refreshing…' : 'Refresh'}
             </button>
           </div>
         </div>

@@ -241,6 +241,11 @@ export async function getAdminPositions(): Promise<AdminPositionsData> {
   return { positions: res.positions, trades: res.trades }
 }
 
+/** Ask the engine to read every account's open positions now (poller: 300 s). */
+export async function refreshAdminPositions(): Promise<void> {
+  await apiFetch<{ success: boolean }>('/admin/positions/refresh', { method: 'POST', auth: true })
+}
+
 export async function deleteAdminPosition(id: number): Promise<void> {
   await apiFetch<{ success: boolean }>(`/admin/positions/${id}`, {
     method: 'DELETE',
@@ -389,6 +394,23 @@ export async function updateAdminUser(
     user: Omit<AdminUserDetail, 'accounts'>
   }>(`/admin/users/${uniId}`, { method: 'PUT', body: input, auth: true })
   return res.user
+}
+
+/** Permanently delete a suspended user with nothing on record. */
+export async function deleteAdminUser(uniId: string): Promise<void> {
+  await apiFetch<{ success: boolean }>(`/admin/users/${uniId}`, { method: 'DELETE', auth: true })
+}
+
+/**
+ * Read this user's connected accounts from their exchanges now (balance +
+ * open positions). Resolves with the API's message; the caller re-reads.
+ */
+export async function refreshAdminUser(uniId: string): Promise<string> {
+  const res = await apiFetch<{ success: boolean; message: string }>(
+    `/admin/users/${uniId}/refresh`,
+    { method: 'POST', auth: true },
+  )
+  return res.message
 }
 
 /* ============ invoices ============ */

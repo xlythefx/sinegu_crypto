@@ -16,6 +16,7 @@ import UserPerformanceChart from '../../components/admin/user-detail/UserPerform
 import UserInvoicesTable from '../../components/admin/user-detail/UserInvoicesTable'
 import UserReferralsTable from '../../components/admin/user-detail/UserReferralsTable'
 import UserSettingsCard from '../../components/admin/user-detail/UserSettingsCard'
+import UserHeaderActions from '../../components/admin/user-detail/UserHeaderActions'
 import UserPositionsTab from '../../components/admin/user-detail/UserPositionsTab'
 import AnalyticsView from '../../components/analytics/AnalyticsView'
 import PnlCardModal from '../../components/admin/pnl-card/PnlCardModal'
@@ -32,7 +33,7 @@ import { ApiError } from '../../services/api'
 import { getAdminUserAnalytics, type AnalyticsFilters } from '../../services/analytics'
 
 const BACK_BTN =
-  'inline-flex items-center gap-[7px] mb-3.5 py-2 px-[13px] border border-border rounded-field bg-surface text-muted text-[13px] font-semibold cursor-pointer transition-colors hover:bg-accent-soft hover:border-accent-line hover:text-accent'
+  'inline-flex items-center gap-[7px] py-2 px-[13px] border border-border rounded-field bg-surface text-muted text-[13px] font-semibold cursor-pointer transition-colors hover:bg-accent-soft hover:border-accent-line hover:text-accent'
 const CARD_BTN =
   'inline-flex items-center gap-1.5 h-9 px-3.5 rounded-btn border border-accent-line bg-accent-soft text-accent text-[12.5px] font-semibold cursor-pointer transition-colors hover:bg-accent hover:text-on-accent disabled:opacity-50 disabled:cursor-not-allowed'
 const TAB_BTN =
@@ -77,15 +78,22 @@ export default function AdminUserDetail() {
   const [tab, setTab] = useState<Tab>('overview')
   const [exchange, setExchange] = useState<ExchangePillValue>('all')
   const [cardOpen, setCardOpen] = useState(false)
+  // Bumped by the header's Refresh / status actions: every fetcher below
+  // depends on it, so one bump re-reads the whole page (calendar included).
+  const [version, setVersion] = useState(0)
+  const rereadAll = useCallback(() => setVersion((v) => v + 1), [])
 
-  const fetchDetail = useCallback(() => getAdminUserDetail(uniId), [uniId])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` is the re-read trigger
+  const fetchDetail = useCallback(() => getAdminUserDetail(uniId), [uniId, version])
   const fetchSummary = useCallback(
     () => getAdminUserSummary(uniId, exchange),
-    [uniId, exchange],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` is the re-read trigger
+    [uniId, exchange, version],
   )
   const fetchDays = useCallback(
     () => getAdminUserDailyPnl(uniId, exchange),
-    [uniId, exchange],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` is the re-read trigger
+    [uniId, exchange, version],
   )
 
   const { data: user, loading, error, reload } = useApiData(fetchDetail, [
@@ -106,6 +114,15 @@ export default function AdminUserDetail() {
 
   const back = () => navigate('/admin/users')
 
+  // Suspended AND nothing connected: every stat below is an empty zero, so the
+  // cards are greyed out rather than reading like a real $0.00 account. A
+  // collaborator's payload has no account list, so this needs `accounts`.
+  const dormant =
+    !!user &&
+    user.status === 'suspended' &&
+    user.accounts !== undefined &&
+    !user.accounts.some((a) => !a.deleted_at)
+
   if (!user) {
     return (
       <AdminLayout title="User Details" subtitle="Individual statistics.">
@@ -119,9 +136,12 @@ export default function AdminUserDetail() {
       title="User Details"
       subtitle={user.name || 'Individual statistics.'}
     >
-      <button type="button" className={BACK_BTN} onClick={back}>
-        <ArrowLeft size={16} /> Back to Users
-      </button>
+      <div className="mb-3.5 flex flex-wrap items-start justify-between gap-3">
+        <button type="button" className={BACK_BTN} onClick={back}>
+          <ArrowLeft size={16} /> Back to Users
+        </button>
+        {!readOnly && <UserHeaderActions user={user} onChanged={rereadAll} />}
+      </div>
 
       <UserProfileHeader user={user} referralsCount={user.referrals_count} />
 
@@ -187,36 +207,46 @@ export default function AdminUserDetail() {
         >
           {tab === 'overview' ? (
             <>
-              <UserBalanceCard summary={summary} loading={summaryLoading} />
-
+              {dormant && (
+                <p className="mb-3 rounded-[10px] border border-dashed border-border bg-surface2 px-3.5 py-2.5 text-[12.5px] text-muted">
+                  Suspended, with no exchange account connected — these stats have nothing to measure.
+                </p>
+              )}
               <div
-                className={`grid gap-stack mb-stack max-[1100px]:grid-cols-1 ${
-                  readOnly ? 'grid-cols-2' : 'grid-cols-3 max-[1500px]:grid-cols-2'
-                }`}
+                className={dormant ? 'pointer-events-none select-none opacity-45 grayscale' : ''}
+                aria-disabled={dormant || undefined}
               >
-                {!readOnly && (
-                  <UserAccountCards accounts={user.accounts ?? []} exchange={exchange} />
-                )}
-                <UserPerformanceMetrics
-                  summary={summary}
-                  loading={summaryLoading}
-                />
-                <UserCapitalFlow summary={summary} loading={summaryLoading} />
-              </div>
+                <UserBalanceCard summary={summary} loading={summaryLoading} />
 
-              <div className="mb-stack">
-                <UserPerformanceChart
-                  days={days ?? {}}
-                  initialDeposit={summary?.capital_flow.initial_deposit ?? 0}
-                />
-              </div>
+                <div
+                  className={`grid gap-stack mb-stack max-[1100px]:grid-cols-1 ${
+                    readOnly ? 'grid-cols-2' : 'grid-cols-3 max-[1500px]:grid-cols-2'
+                  }`}
+                >
+                  {!readOnly && (
+                    <UserAccountCards accounts={user.accounts ?? []} exchange={exchange} />
+                  )}
+                  <UserPerformanceMetrics
+                    summary={summary}
+                    loading={summaryLoading}
+                  />
+                  <UserCapitalFlow summary={summary} loading={summaryLoading} />
+                </div>
 
-              <div className="mb-stack">
-                <AdminPnlCalendar
-                  fetchDays={fetchDays}
-                  subtitle={`Daily results for ${user.name || 'this user'} · click a day for its trades`}
-                  aosDelay={0}
-                />
+                <div className="mb-stack">
+                  <UserPerformanceChart
+                    days={days ?? {}}
+                    initialDeposit={summary?.capital_flow.initial_deposit ?? 0}
+                  />
+                </div>
+
+                <div className="mb-stack">
+                  <AdminPnlCalendar
+                    fetchDays={fetchDays}
+                    subtitle={`Daily results for ${user.name || 'this user'} · click a day for its trades`}
+                    aosDelay={0}
+                  />
+                </div>
               </div>
 
               {!readOnly && (

@@ -65,6 +65,29 @@ def refresh_balances():
     return jsonify({"success": bool(result), "result": result, "scoped": api_keys is not None})
 
 
+@admin_bp.route("/refresh-positions", methods=["POST"])
+def refresh_positions():
+    """Sync open positions now, instead of at the poller's next tick (300 s).
+
+    Same contract as /refresh-balances: an optional ``api_keys`` list narrows
+    the run, an empty list is refused rather than read as "everything". An
+    account whose read fails keeps its rows (the poller's rule — a failed read
+    is never synced as flat).
+    """
+    if not _authorized():
+        return jsonify({"error": "Unauthorized"}), 403
+    from binance_abcd.fetch_positions import fetch_and_save  # deferred: poller pulls in accounts
+
+    body = request.get_json(silent=True) or {}
+    raw = body.get("api_keys")
+    api_keys = [str(k) for k in raw if k] if isinstance(raw, list) else None
+    if api_keys is not None and not api_keys:
+        return jsonify({"error": "api_keys was empty"}), 400
+
+    result = fetch_and_save(api_keys)
+    return jsonify({"success": bool(result), "result": result, "scoped": api_keys is not None})
+
+
 @admin_bp.route("/ledger", methods=["POST"])
 def account_ledger():
     """One account's full income ledger, reconciled to its wallet (ledger.py).

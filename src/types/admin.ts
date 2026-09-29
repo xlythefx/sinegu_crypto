@@ -451,6 +451,8 @@ export interface AdminUserDetail {
   /** Absent for a read-only collaborator — the header then hides the stat. */
   referrals_count?: number
   accounts?: AdminUserDetailAccount[]
+  /** Why this user may not be deleted; empty = deletable. Absent for a collaborator. */
+  delete_blockers?: string[]
 }
 
 /**

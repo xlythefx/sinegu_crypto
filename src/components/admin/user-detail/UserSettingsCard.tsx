@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Ban, RotateCcw, Save, SlidersHorizontal } from 'lucide-react'
+import { Ban, Save, SlidersHorizontal } from 'lucide-react'
 import ConfirmModal from '../../ui/ConfirmModal'
 import { useSessionUser } from '../../../hooks/useSessionUser'
 import { updateAdminUser } from '../../../services/admin'
@@ -12,7 +12,7 @@ const LABEL = 'flex flex-col gap-[6px] text-[12px] font-semibold text-muted'
 const BTN =
   'inline-flex items-center gap-1.5 rounded-pill py-[9px] px-4 text-[12.5px] font-bold cursor-pointer transition disabled:opacity-[.55] disabled:cursor-not-allowed'
 
-type PendingConfirm = 'save' | 'suspend' | 'reactivate' | null
+type PendingConfirm = 'save' | 'suspend' | null
 
 interface UserSettingsCardProps {
   user: AdminUserDetail
@@ -22,7 +22,8 @@ interface UserSettingsCardProps {
 
 /**
  * Admin-editable settings: the three fee percentages and (where allowed)
- * suspend / reactivate. Every mutation goes through ConfirmModal. The status
+ * suspend. Reactivate and delete sit at the top of the page for a suspended
+ * user (UserHeaderActions). Every mutation goes through ConfirmModal. The status
  * control is hidden for master accounts, pending users (the approval queue
  * owns those) and the admin's own account — mirroring the API guards.
  */
@@ -89,9 +90,7 @@ export default function UserSettingsCard({
           affiliate_percentage: parsePct(affiliate)!,
         })
       } else {
-        await updateAdminUser(user.uni_id, {
-          status: action === 'suspend' ? 'suspended' : 'active',
-        })
+        await updateAdminUser(user.uni_id, { status: 'suspended' })
       }
       onUpdated()
     } catch (err) {
@@ -118,12 +117,6 @@ export default function UserSettingsCard({
         'The account will be blocked from signing in until it is reactivated.',
       label: 'Yes, suspend',
       danger: true,
-    },
-    reactivate: {
-      title: `Reactivate ${user.name || 'this user'}?`,
-      message: 'The account becomes active and can sign in again.',
-      label: 'Yes, reactivate',
-      danger: false,
     },
   }
 
@@ -204,15 +197,10 @@ export default function UserSettingsCard({
 
         {canToggleStatus ? (
           user.status === 'suspended' ? (
-            <button
-              type="button"
-              className={`${BTN} border border-[color-mix(in_srgb,var(--green)_40%,transparent)] bg-transparent text-green enabled:hover:bg-[color-mix(in_srgb,var(--green)_10%,transparent)]`}
-              disabled={busy}
-              onClick={() => setConfirm('reactivate')}
-            >
-              <RotateCcw size={13} />
-              Reactivate account
-            </button>
+            // Reactivate / Delete live at the top of the page (UserHeaderActions).
+            <span className="text-[12px] text-faint">
+              Suspended — reactivate or delete it from the top of the page.
+            </span>
           ) : (
             <button
               type="button"
