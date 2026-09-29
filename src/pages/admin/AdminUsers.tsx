@@ -410,9 +410,8 @@ export default function AdminUsers() {
         data-aos="fade-up"
         data-aos-delay="100"
       >
-        {/* Users / Staff, then search + filters within the open tab */}
+        {/* Search, then status chips (left) + Users / Staff tabs (right) */}
         <div className="flex flex-col gap-3 border-b border-hair px-5 py-[18px]">
-          <Tabs tabs={groupTabs} active={group} onChange={setGroup} label="Customers or staff" />
           <label className="flex items-center gap-[9px] h-10 rounded-[11px] border border-border bg-surface2 px-[13px] text-muted">
             <Search size={14} />
             <input
@@ -459,7 +458,8 @@ export default function AdminUsers() {
                 )
               })}
             </div>
-            <div className="ml-auto flex flex-wrap items-center gap-2">
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+              <Tabs tabs={groupTabs} active={group} onChange={setGroup} label="Customers or staff" />
               {group === 'staff' && (
                 <label className="flex items-center gap-2 h-9 flex-none rounded-full border border-border bg-surface2 px-3 text-muted">
                   <UserCog size={14} />
