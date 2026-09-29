@@ -59,11 +59,15 @@ export const EXCHANGE_COPY: Record<ExchangeKind, ExchangeCopy> = {
     marketName: 'Binance futures',
     liveKeysUrl: 'https://www.binance.com/en/my/settings/api-management',
     liveKeysLabel: 'Open Binance API Management',
+    // Same order as the public guide (/docs/binance, lib/binanceGuide.ts):
+    // Futures must be open BEFORE the key exists, and Binance deletes a key
+    // that can trade without an IP restriction — so the IP is not optional.
     liveSteps: [
-      'Open Binance → API Management and create a new API key.',
-      'Enable Futures. Leave withdrawals OFF — we never need them, and a key that cannot withdraw cannot lose you funds.',
-      'If you restrict the key by IP, add our server address below. A key locked to your own IP looks connected here but silently takes no trades.',
-      'Copy the API key and secret key into the fields below.',
+      'First, open your Futures account on Binance (Futures → USDⓈ-M Futures → Open Now). A key made before that can never trade futures.',
+      'Move USDT from Spot to your USDⓈ-M Futures wallet (Wallet → Transfer) — the bot only sees the futures wallet.',
+      'Open API Management → Create API → System generated, and name the key “Pixel Alpha”.',
+      'Edit restrictions: choose “Restrict access to trusted IPs only”, paste our server IP below and confirm, THEN tick Enable Futures. Leave withdrawals OFF. Save.',
+      'Copy the API key and secret key into the fields here.',
     ],
     demoSite: 'testnet.binancefuture.com',
     demoKeysUrl: 'https://testnet.binancefuture.com',

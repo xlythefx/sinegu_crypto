@@ -176,9 +176,11 @@ export default function KeysStep({
                   </button>
                 </div>
                 <p className="mt-2 text-[11.5px] leading-[1.5] text-faint">
-                  {EXCHANGE_META[kind].hasTestnet
-                    ? `Only needed if you tick “${copy.ipSettingName}”.`
-                    : `Paste it under “${copy.ipSettingName}” — a bound key never expires.`}
+                  {kind === 'binance'
+                    ? `Paste it under “${copy.ipSettingName}” — Binance deletes a key that can trade without one.`
+                    : EXCHANGE_META[kind].hasTestnet
+                      ? `Only needed if you tick “${copy.ipSettingName}”.`
+                      : `Paste it under “${copy.ipSettingName}” — a bound key never expires.`}
                 </p>
               </>
             ) : (

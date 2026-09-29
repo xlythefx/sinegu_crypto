@@ -6,75 +6,32 @@
  * goes stale, this file and the PNG in `public/binance-guide/` change — the
  * page component does not.
  *
- * `**bold**` inside a body string is rendered as emphasis; nothing else is
- * parsed.
+ * `**bold**` inside any string is rendered as emphasis; nothing else is
+ * parsed. Bold is reserved for the words the reader will see on Binance's
+ * screen (button and menu names), so they can match them at a glance.
  */
 export interface GuideStep {
-  number: number
+  /**
+   * Stable slug — the reader's ticked-off state is saved under it, so it is
+   * never renamed once shipped (a rename silently un-ticks the step).
+   */
+  id: string
   title: string
-  /** One paragraph per entry. */
-  body: string[]
-  image: string
-  /** Rendered as a copyable mono block under the paragraphs. */
+  /** One or two plain sentences: what this step achieves and why. */
+  summary: string
+  /** The clicks, in order. Rendered as a numbered list. */
+  actions: string[]
+  /** Screenshots, in the order the actions reach them. */
+  images?: string[]
+  /** Rendered as a copyable mono block under the actions. */
   ip?: boolean
-  /** Amber callout under the paragraphs — the mistakes that cost people money. */
+  /** Amber callout — the mistakes that cost people money or time. */
   warning?: string
+  /** Quiet reassurance under the actions. */
+  tip?: string
+  /** A button that opens the right screen; `to` is an in-app route. */
+  link?: { label: string; href?: string; to?: string }
 }
-
-export const GUIDE_STEPS: GuideStep[] = [
-  {
-    number: 1,
-    title: 'Open Account → API Management',
-    body: [
-      'Log in to your account at **binance.com**. Open the profile menu in the top-right corner, choose **Account**, then open **API Management** from the account menu.',
-      'This is the page where Binance creates and manages the keys that let an outside application — Pixel Alpha, in this case — trade on your behalf. Nothing you do here moves any funds.',
-    ],
-    image: '/binance-guide/first.png',
-  },
-  {
-    number: 2,
-    title: 'Create a new API key',
-    body: [
-      'Click **Create API**. Give the key a label you will recognise later — **Pixel Alpha** is the obvious one, and a named key is far easier to revoke confidently a year from now.',
-      'Binance will ask you to confirm with your usual security checks (email code, SMS, or authenticator) before it creates the key.',
-    ],
-    image: '/binance-guide/newsecond.png',
-  },
-  {
-    number: 3,
-    title: 'Choose HMAC as the signature type',
-    body: [
-      'Binance offers several signature types. Select **HMAC** — the **System generated** option — and continue.',
-      'This is the signing method our engine uses. A key created as Ed25519 or with a self-supplied RSA key cannot be used to trade your account through Pixel Alpha, and there is no way to convert one afterwards: you would have to create a new key.',
-    ],
-    image: '/binance-guide/third.png',
-    warning:
-      'If you pick the wrong signature type here, the key will be rejected the moment we try to use it. Create a fresh HMAC key rather than trying to fix the old one.',
-  },
-  {
-    number: 4,
-    title: 'Set permissions and allow-list our IP',
-    body: [
-      'In the key’s edit screen, enable **Enable Futures** — that is the permission the bot needs to open and close positions.',
-      'Leave **Enable Withdrawals** switched OFF. We never need it, and a key that cannot withdraw cannot lose you funds no matter who holds it. Any service that asks you to enable withdrawals should be refused, ours included.',
-      'If you tick **Restrict access to trusted IPs only** — recommended — you must add our server address to the list, otherwise Binance will refuse every request we make and your account will look connected while silently taking no trades.',
-      'Save the key. Binance shows the **secret key exactly once**, at creation. Copy both the API key and the secret now; if you lose the secret, you create a new key rather than recovering the old one.',
-    ],
-    image: '/binance-guide/fourth.png',
-    ip: true,
-    warning:
-      'This is the step that goes wrong most often. A key restricted to your own home IP address, with ours missing, produces no error you would notice — the account reads "connected", the balance freezes, and no trades arrive.',
-  },
-  {
-    number: 5,
-    title: 'Fund your USD-M Futures wallet',
-    body: [
-      'The bot trades USD-M futures, so your capital has to be in the futures wallet — funds sitting in the Spot wallet cannot be traded and will not be seen.',
-      'In Binance, go to **Wallet → Spot**, click **Transfer**, and move **USDT** from **Spot Wallet** to **USDT-M Futures**. The transfer is internal to your own account and is instant.',
-    ],
-    image: '/binance-guide/fifth.png',
-  },
-]
 
 /**
  * Minimum deposited capital before the engine will open a position. Must match
@@ -82,3 +39,115 @@ export const GUIDE_STEPS: GuideStep[] = [
  * produces a customer whose bot silently never trades.
  */
 export const MIN_DEPOSIT_USDT = '1,000'
+
+export const API_MANAGEMENT_URL = 'https://www.binance.com/en/my/settings/api-management'
+
+export const GUIDE_STEPS: GuideStep[] = [
+  {
+    id: 'open-futures',
+    title: 'Turn on Futures on your Binance account',
+    summary:
+      'Do this before anything else. Binance only lets an API key trade futures if your Futures account was already open when the key was created.',
+    actions: [
+      'Log in to **binance.com** (or the Binance app).',
+      'In the top menu, open **Futures → USDⓈ-M Futures**. On the app, tap the **Futures** tab.',
+      'Press **Open Now** (sometimes called **Open Futures Account**) and answer Binance’s short futures quiz.',
+      'When you can see the futures trading screen, your Futures account is open.',
+    ],
+    warning:
+      'Made an API key before opening Futures? Its **Enable Futures** box will be greyed out or will not save. Delete that key and make a new one after this step.',
+    link: { label: 'Open Binance Futures', href: 'https://www.binance.com/en/futures/BTCUSDT' },
+  },
+  {
+    id: 'move-funds',
+    title: 'Move USDT from Spot to Futures',
+    summary:
+      'The bot only trades the money in your USDⓈ-M Futures wallet. Anything left in Spot is invisible to it.',
+    actions: [
+      'Go to **Wallet → Overview** (on the app: **Assets**) and press **Transfer**.',
+      'Set **From: Fiat and Spot** and **To: USDⓈ-M Futures**.',
+      `Pick **USDT**, type the amount — at least **${MIN_DEPOSIT_USDT} USDT** — and press **Confirm**.`,
+    ],
+    tip: 'This is a move between two wallets inside your own Binance account. It is instant and free, and the money never leaves Binance.',
+    images: ['/binance-guide/fifth.png'],
+  },
+  {
+    id: 'api-management',
+    title: 'Open API Management',
+    summary:
+      'This is the page where Binance makes the key that lets Pixel Alpha place trades for you. Nothing here moves your money.',
+    actions: [
+      'Click your **profile icon** in the top-right corner.',
+      'Choose **Account → API Management**. On the app, search for **API Management**.',
+    ],
+    images: ['/binance-guide/first.png'],
+    link: { label: 'Open API Management', href: API_MANAGEMENT_URL },
+  },
+  {
+    id: 'create-key',
+    title: 'Create a “System generated” key',
+    summary: 'Binance offers two kinds of key. Pixel Alpha works with the first one only.',
+    actions: [
+      'Press **Create API**.',
+      'Choose **System generated** and press **Next**.',
+    ],
+    warning:
+      'Do not pick **Self-generated** (Ed25519 / RSA). Pixel Alpha cannot use those keys, and a key’s type can never be changed — you would have to start again.',
+    images: ['/binance-guide/newsecond.png', '/binance-guide/third.png'],
+  },
+  {
+    id: 'name-key',
+    title: 'Name the key “Pixel Alpha”',
+    summary:
+      'The name is just a label for you — it makes the key easy to find if you ever want to switch it off.',
+    actions: [
+      'Under **Label API Key to proceed**, type **Pixel Alpha**.',
+      'Press **Next**.',
+      'Finish Binance’s security check (email code, SMS or authenticator app). Your new key now appears in the list.',
+    ],
+    images: ['/binance-guide/label.png'],
+  },
+  {
+    id: 'permissions',
+    title: 'Lock the key to our server and allow Futures',
+    summary:
+      'The step that matters most. Follow it in this order — Binance only allows futures trading once the key is locked to an IP address.',
+    actions: [
+      'Next to your **Pixel Alpha** key, press **Edit restrictions**.',
+      'Under **IP access restrictions**, choose **Restrict access to trusted IPs only**.',
+      'Paste our server IP (below) into the box and press **Confirm**.',
+      'Tick **Enable Futures**. Leave **Enable Reading** ticked.',
+      'Leave every other box **unticked** — above all **Enable Withdrawals**.',
+      'Press **Save** and finish the security check.',
+    ],
+    ip: true,
+    warning:
+      'Binance deletes any key that can trade without an IP restriction. And a key locked to YOUR IP instead of ours looks connected in Pixel Alpha but never places a trade.',
+    tip: 'With withdrawals off, the key can open and close trades — nothing else. No one holding it can take money out of your account, including us.',
+    images: ['/binance-guide/fourth.png'],
+  },
+  {
+    id: 'copy-keys',
+    title: 'Copy your API Key and Secret Key',
+    summary: 'You need both for the last step.',
+    actions: [
+      'Copy the **API Key**.',
+      'Copy the **Secret Key**. Binance shows it **only once**, right after the key is created.',
+      'Keep them somewhere private until the next step. Never send them by chat or email — not even to us.',
+    ],
+    warning:
+      'Lost the Secret Key? It cannot be shown again. Delete the key and repeat steps 4–7 to make a new one.',
+  },
+  {
+    id: 'connect',
+    title: 'Paste them into Pixel Alpha',
+    summary: 'Last step — this is where the bot gets connected.',
+    actions: [
+      'In your Pixel Alpha dashboard, open **Exchange Accounts → Connect exchange**.',
+      'Choose **Binance**, then **Live account**.',
+      'Paste the API Key and Secret Key, check the summary, and press **Connect**.',
+    ],
+    tip: `Once connected, the bot trades your futures balance on the next signal — as long as at least ${MIN_DEPOSIT_USDT} USDT is in your Futures wallet.`,
+    link: { label: 'Connect Binance', to: '/dashboard/exchanges/connect' },
+  },
+]
