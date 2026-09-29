@@ -29,7 +29,7 @@ export default function Hero({ stats, series }: HeroProps) {
         </h1>
         <p className="text-lg leading-[1.6] text-muted max-w-[480px] mb-8">
           Pixel Alpha runs battle-tested strategies on{' '}
-          <b className="text-text">your own</b> Binance, Bybit or MEXC account.
+          <b className="text-text">your own</b> Binance account.
           Free to start — you only pay{' '}
           <b className="text-accent">20% of the profit</b> you actually make.
         </p>

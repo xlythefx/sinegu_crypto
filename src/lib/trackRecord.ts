@@ -121,6 +121,50 @@ const toneOf = (value: number | null | undefined): StatCard['tone'] =>
 const pct = (value: number | null | undefined, dp: number): string =>
   value === null || value === undefined ? DASH : fmtSignedPct(value, dp)
 
+export interface PlainStat {
+  value: string
+  text: string
+}
+
+/**
+ * The same record in words a first-time visitor reads without a glossary —
+ * "58 of 90 days", "$100 made $12.34" — for the landing page's Binance strip.
+ * The "$100" is a hypothetical stake scaling return on capital, not an amount
+ * anyone holds, so the `/public/*` no-money rule is kept. Empty until the
+ * record has a trading day to describe.
+ */
+export function plainStats(stats: TrackRecordStats | null): PlainStat[] {
+  if (!stats || stats.trading_days === 0) return []
+  const out: PlainStat[] = [
+    {
+      value: `${stats.winning_days} of ${stats.trading_days}`,
+      text: 'trading days ended in profit',
+    },
+  ]
+  const roc = stats.return_on_capital_pct
+  if (roc != null) {
+    out.push({
+      value: `$100 → $${(100 + roc).toFixed(2)}`,
+      text: 'what every $100 invested has become so far',
+    })
+  }
+  out.push({
+    value: stats.trades.toLocaleString('en-US'),
+    text: `trades closed since ${fmtMonthYear(stats.first_trade_at)}`,
+  })
+  return out
+}
+
+/** "May 2026" from the leading YYYY-MM — zone-free, so no browser shifts it. */
+const fmtMonthYear = (date: string): string => {
+  const [y, m] = date.slice(0, 7).split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+}
+
 /**
  * The six headline cards. Every figure is a percentage or a count — the API
  * never publishes balances, so there is nothing here to format as money.

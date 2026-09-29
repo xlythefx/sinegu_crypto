@@ -72,7 +72,7 @@ export default function Landing() {
             the only track record the page may publish is the verified one above.
             The component stays put; render it again to bring it back. */}
         <HowItWorks />
-        <Exchanges />
+        <Exchanges stats={record?.stats ?? null} />
         <FinalCta />
         <Footer />
       </div>

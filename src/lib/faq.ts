@@ -4,8 +4,6 @@
  * blocked-key grace period are engine and API rules, not marketing copy. If
  * a rule changes, the answer changes with it.
  */
-import { SUPPORT_EMAIL, SUPPORT_TELEGRAM_HANDLE } from './company'
-
 export interface FaqEntry {
   q: string
   a: string
@@ -28,7 +26,7 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'Which exchanges can I use?',
-        a: 'Binance, for now. More exchanges are coming soon.',
+        a: 'Binance, for now. Bybit and MEXC are coming soon.',
       },
       {
         q: 'Do you hold my money?',
@@ -58,11 +56,11 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'How do I pay?',
-        a: 'Invoices appear under Billing & Invoices in the dashboard, and you pay them in USDT (TRC-20). Card payments are not available yet.',
+        a: 'Invoices appear under Billing & Invoices in the dashboard. You pay them in USDT on the TRON network (TRC-20): send the exact amount shown to our wallet, and the invoice is marked paid automatically once the transfer lands. Card payments are not available yet.',
       },
       {
         q: 'What happens if I don\'t pay?',
-        a: `After a few days without payment, your account is disconnected automatically. To continue the service, pay the overdue invoice and contact our support at ${SUPPORT_EMAIL} or ${SUPPORT_TELEGRAM_HANDLE} to reactivate your account. Reactivation can take some time, and your account cannot make profit while it is off — which is why we suggest paying every invoice on time.`,
+        a: 'Once an invoice is past its due date, the bot stops opening new trades on your account. Positions already open are still closed normally. As soon as you pay, trading turns back on by itself — no need to contact support. While trading is paused your account cannot make profit, so we suggest paying every invoice on time.',
       },
       {
         q: 'Does the exchange charge fees too?',
