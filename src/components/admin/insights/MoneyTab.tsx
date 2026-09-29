@@ -12,6 +12,7 @@ import MetricTile from '../../analytics/MetricTile'
 import { EXCHANGE_META } from '../../exchanges/meta'
 import { EmptyNote, GRID_2, InsightCard, TILES } from './parts'
 import UnderManagementCard from './UnderManagementCard'
+import FutureInvoiceCard from './FutureInvoiceCard'
 import { useApiData } from '../../../hooks/useApiData'
 import { getMoneyInsights } from '../../../services/adminInsights'
 import { fmtMoney, fmtShortMonth } from '../../../lib/format'
@@ -94,6 +95,8 @@ export default function MoneyTab() {
           tone={data.on_time_share !== null && data.on_time_share < 70 ? 'neg' : ''}
         />
       </div>
+
+      <FutureInvoiceCard forecast={data.forecast} />
 
       <div className={GRID_2}>
         <InsightCard

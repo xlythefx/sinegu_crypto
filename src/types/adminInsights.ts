@@ -101,6 +101,36 @@ export interface MoneyInsights {
   }[]
   under_management: UnderManagement
   transfers: { unmatched: number; ignored: number; settled: number }
+  forecast: InvoiceForecast
+}
+
+/**
+ * "Future invoice": the running month's REALIZED fee if it were billed now —
+ * the invoice's own math (InvoiceService::computeForAccount), nothing written.
+ */
+export interface InvoiceForecast {
+  /** YYYY-MM being forecast. */
+  month: string
+  as_of: string
+  total: number
+  realized_pnl: number
+  billable_accounts: number
+  accounts: {
+    uni_id: string
+    name: string
+    account: string
+    exchange: ExchangeKind
+    realized_pnl: number
+    /** The customer's realized fee percentage (e.g. 20). */
+    rate: number
+    hwm: number
+    equity: number
+    fee: number
+    /** below_hwm = a profitable month, but equity is not above the high-water mark. */
+    status: 'billable' | 'below_hwm' | 'no_profit'
+  }[]
+  /** Customer accounts on a venue invoicing cannot read yet (MEXC, Bybit). */
+  not_supported: { exchange: ExchangeKind; accounts: number }[]
 }
 
 export interface SystemInsights {
