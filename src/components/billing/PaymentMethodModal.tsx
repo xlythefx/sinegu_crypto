@@ -5,7 +5,6 @@ import {
   ArrowRight,
   CalendarDays,
   Check,
-  CreditCard,
   ExternalLink,
   FlaskConical,
   Landmark,
@@ -39,6 +38,8 @@ import type {
 import DevDetails from '../ui/DevDetails'
 import ExchangeBadge from './ExchangeBadge'
 import TronAddressModal from './TronAddressModal'
+import CardPayButton from './CardPayButton'
+import ConfirmModal from '../ui/ConfirmModal'
 import PaymentSuccess from './PaymentSuccess'
 
 /**
@@ -101,6 +102,10 @@ export default function PaymentMethodModal({
   const [phase, setPhase] = useState<'idle' | 'creating' | 'redirecting'>('idle')
   /** The card rail's own progress — it leaves the page, the crypto rails do not. */
   const [cardPhase, setCardPhase] = useState<'idle' | 'creating' | 'redirecting'>('idle')
+  /** Which developer card button is in flight (test card vs real charge). */
+  const [cardMode, setCardMode] = useState<'test' | 'live' | null>(null)
+  /** Developer asked for a REAL charge — confirm before any money moves. */
+  const [confirmLive, setConfirmLive] = useState(false)
   const [error, setError] = useState<string | null>(null)
   /** Set only on the Enterprise-wallet path — a bare address to send to. */
   const [deposit, setDeposit] = useState<CoinsbuyDeposit | null>(null)
@@ -144,6 +149,7 @@ export default function PaymentMethodModal({
     // Escape closes the topmost dialog only: the address one first.
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
+      if (confirmLive) return // ConfirmModal handles its own Escape
       if (addressOpen) setAddressOpen(false)
       else onClose()
     }
@@ -155,7 +161,7 @@ export default function PaymentMethodModal({
       window.removeEventListener('keydown', onKey)
       document.body.style.overflow = prev
     }
-  }, [open, onClose, addressOpen])
+  }, [open, onClose, addressOpen, confirmLive])
 
   // Fresh state per open, and the provider list straight from the API — the
   // server decides which coins it accepts and whether it is in sandbox mode.
@@ -163,6 +169,8 @@ export default function PaymentMethodModal({
     if (!open) return
     setPhase('idle')
     setCardPhase('idle')
+    setCardMode(null)
+    setConfirmLive(false)
     setError(null)
     setDeposit(null)
     setPickedProvider('coinsbuy')
@@ -260,24 +268,30 @@ export default function PaymentMethodModal({
    * here, and returning to the invoice does not settle it — the signed webhook
    * does; the invoice page only polls to notice.
    */
-  const startCardPayment = useCallback(async () => {
-    if (!invoice) return
-    setCardPhase('creating')
-    setError(null)
-    setErrorDebug(null)
-    try {
-      const session = await createStripeCheckout({
-        invoiceId: invoice.id,
-        amount: invoice.totalFee,
-      })
-      setCardPhase('redirecting')
-      window.location.href = session.checkoutUrl
-    } catch (err) {
-      setError(getApiErrorMessage(err, 'Could not start the card payment.'))
-      setErrorDebug(getApiErrorDebug(err))
-      setCardPhase('idle')
-    }
-  }, [invoice])
+  const startCardPayment = useCallback(
+    async (mode?: 'test' | 'live') => {
+      if (!invoice) return
+      setCardMode(mode ?? null)
+      setCardPhase('creating')
+      setError(null)
+      setErrorDebug(null)
+      try {
+        const session = await createStripeCheckout({
+          invoiceId: invoice.id,
+          amount: invoice.totalFee,
+          mode,
+        })
+        setCardPhase('redirecting')
+        window.location.href = session.checkoutUrl
+      } catch (err) {
+        setError(getApiErrorMessage(err, 'Could not start the card payment.'))
+        setErrorDebug(getApiErrorDebug(err))
+        setCardPhase('idle')
+        setCardMode(null)
+      }
+    },
+    [invoice],
+  )
 
   const copyAddress = useCallback(async () => {
     if (!deposit?.destination) return
@@ -314,6 +328,8 @@ export default function PaymentMethodModal({
   /** Server-decided: a secret key AND a webhook secret exist for this mode. */
   const cardEnabled = CARD_PAYMENTS_ENABLED && methods?.stripe.enabled === true
   const cardTestMode = cardEnabled && methods?.stripe.mode !== 'live'
+  /** Developer accounts: pick test card (sandbox) or a real charge (live). */
+  const devCardModes = cardEnabled ? methods?.stripe.modes : undefined
 
   /**
    * Whether to offer the direct-wallet rail at all. The server is the authority
@@ -739,43 +755,58 @@ export default function PaymentMethodModal({
             {/* Card — still offered after a TRON amount is reserved: an unused
                 reservation simply expires, and whichever rail pays first
                 settles the invoice (settle() is idempotent). */}
-            {cardEnabled && !deposit && (
-              <button
-                type="button"
-                className={`w-full flex items-center gap-3 text-left rounded-[14px] border border-border bg-surface2 p-4 max-[420px]:p-3.5 cursor-pointer transition-[border-color] duration-150 hover:border-accent disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:border-border ${
-                  cryptoRail ? 'mt-2.5' : ''
-                }`}
-                onClick={startCardPayment}
+            {cardEnabled && !deposit && !devCardModes && (
+              /* Everyone but developers: one button, in the box's own mode. */
+              <CardPayButton
+                className={cryptoRail ? 'mt-2.5' : ''}
+                tone={cardTestMode ? 'test' : 'normal'}
+                title={`Pay ${fmtMoney(invoice.totalFee)} by card`}
+                subtitle={
+                  cardTestMode
+                    ? 'Stripe test checkout — use card 4242 4242 4242 4242, no money moves.'
+                    : 'Visa, Mastercard and more — entered on Stripe’s secure page, never here.'
+                }
+                loading={cardPhase !== 'idle'}
+                loadingLabel={cardPhase === 'redirecting' ? 'Redirecting to Stripe…' : 'Opening secure checkout…'}
                 disabled={busy}
-              >
-                <span className="w-9 h-9 flex-shrink-0 grid place-items-center rounded-[10px] border border-accent-line bg-[var(--bubble)] text-accent">
-                  {cardPhase !== 'idle' ? (
-                    <Loader2 size={16} className="animate-[dstate-spin_0.8s_linear_infinite]" />
-                  ) : (
-                    <CreditCard size={16} />
-                  )}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2 flex-wrap text-[13.5px] font-bold text-text">
-                    {cardPhase === 'creating'
-                      ? 'Opening secure checkout…'
-                      : cardPhase === 'redirecting'
-                        ? 'Redirecting to Stripe…'
-                        : `Pay ${fmtMoney(invoice.totalFee)} by card`}
-                    {cardTestMode && (
-                      <span className="inline-flex items-center gap-1 rounded-pill border border-accent-line bg-[var(--bubble)] py-0.5 px-2 text-[10px] font-bold uppercase tracking-[0.08em] text-accent">
-                        <FlaskConical size={10} /> Test mode
-                      </span>
-                    )}
-                  </span>
-                  <span className="block text-[11.5px] text-muted mt-0.5">
-                    {cardTestMode
-                      ? 'Stripe test checkout — use card 4242 4242 4242 4242, no money moves.'
-                      : 'Visa, Mastercard and more — entered on Stripe’s secure page, never here.'}
-                  </span>
-                </span>
-                <ExternalLink size={15} className="flex-shrink-0 text-faint" />
-              </button>
+                onClick={() => void startCardPayment()}
+              />
+            )}
+
+            {cardEnabled && !deposit && devCardModes && (
+              /* Developers choose: a sandbox rehearsal or a REAL charge. */
+              <div className={`flex flex-col gap-2 ${cryptoRail ? 'mt-2.5' : ''}`}>
+                <p className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-accent flex items-center gap-1.5">
+                  <FlaskConical size={12} /> Developer · card payment
+                </p>
+                {devCardModes.test && (
+                  <CardPayButton
+                    tone="test"
+                    title={`Test card — ${fmtMoney(invoice.totalFee)}`}
+                    subtitle="Stripe sandbox: card 4242 4242 4242 4242, any future date, any CVC. No money moves; the invoice still settles."
+                    loading={cardPhase !== 'idle' && cardMode === 'test'}
+                    loadingLabel="Opening sandbox checkout…"
+                    disabled={busy}
+                    onClick={() => void startCardPayment('test')}
+                  />
+                )}
+                {devCardModes.live ? (
+                  <CardPayButton
+                    tone="live"
+                    title={`Real card — ${fmtMoney(invoice.totalFee)}`}
+                    subtitle="Live Stripe checkout. Your real card is charged exactly like a customer's would be."
+                    loading={cardPhase !== 'idle' && cardMode === 'live'}
+                    loadingLabel="Opening live checkout…"
+                    disabled={busy}
+                    onClick={() => setConfirmLive(true)}
+                  />
+                ) : (
+                  <p className="text-[11px] text-faint leading-[1.45]">
+                    Real card payments are not available on this server — it needs
+                    the live Stripe webhook secret and must be the production box.
+                  </p>
+                )}
+              </div>
             )}
 
             {error && (
@@ -877,6 +908,21 @@ export default function PaymentMethodModal({
         renewing={phase === 'creating'}
       />
     )}
+
+    {/* A developer's REAL charge is real money — confirm it, per convention. */}
+    <ConfirmModal
+      open={confirmLive}
+      title="Charge a real card?"
+      message={`This opens a LIVE Stripe checkout for ${fmtMoney(invoice.totalFee)}. Your real card is charged and this invoice is settled with that money. For a rehearsal, use the Test card button instead.`}
+      confirmLabel="Yes, charge real card"
+      cancelLabel="Cancel"
+      danger
+      onConfirm={() => {
+        setConfirmLive(false)
+        void startCardPayment('live')
+      }}
+      onCancel={() => setConfirmLive(false)}
+    />
     </>,
     document.body,
   )

@@ -16,7 +16,12 @@ interface ApiPaymentMethods {
   success: boolean
   environment: string
   test_account: boolean
-  stripe: { enabled: boolean; mode: string; reason: string | null }
+  stripe: {
+    enabled: boolean
+    mode: string
+    reason: string | null
+    modes?: { test: boolean; live: boolean }
+  }
   coinsbuy: {
     enabled: boolean
     mode: string
@@ -115,10 +120,14 @@ export async function createCoinsbuyDeposit(params: {
  * rails, the charged amount comes from the invoice row server-side and `amount`
  * is only the stale-tab guard; the invoice settles on Stripe's signed webhook,
  * never on the trader's return.
+ *
+ * `mode` is honoured for developer accounts only (test card vs a real charge);
+ * the server ignores it for everyone else.
  */
 export async function createStripeCheckout(params: {
   invoiceId: string | number
   amount?: number
+  mode?: 'test' | 'live'
 }): Promise<{ checkoutUrl: string; sessionId: string; mode: string }> {
   const res = await apiFetch<{
     success: boolean
@@ -129,7 +138,7 @@ export async function createStripeCheckout(params: {
   }>('/payments/stripe/checkout-session', {
     method: 'POST',
     auth: true,
-    body: { invoice_id: Number(params.invoiceId), amount: params.amount },
+    body: { invoice_id: Number(params.invoiceId), amount: params.amount, mode: params.mode },
   })
   return { checkoutUrl: res.checkout_url, sessionId: res.session_id, mode: res.mode }
 }

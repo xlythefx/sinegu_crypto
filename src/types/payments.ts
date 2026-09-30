@@ -17,6 +17,12 @@ export interface PaymentMethods {
     mode: ProviderMode
     /** Why the mode was downgraded, when it was. */
     reason: string | null
+    /**
+     * Developer accounts only: which card modes they may pick on this box —
+     * `test` (test cards, no money) and `live` (a REAL charge). Absent for
+     * everyone else, who always pay in the mode the box resolves to.
+     */
+    modes?: { test: boolean; live: boolean }
   }
   coinsbuy: {
     enabled: boolean

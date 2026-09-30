@@ -374,8 +374,21 @@ Rules:
 - **The mother's endpoint also receives our events** (one account) and answers
   them 400 (no `broker` metadata). Harmless to both products, noisy in Stripe's
   delivery log; the fix, if wanted, is a separate Stripe account.
-- Live keys still need https callbacks (`PaymentEnvironment`), and a `developer`
-  pays with test cards everywhere (4242 4242 4242 4242), like the other rails.
+- Live keys still need https callbacks (`PaymentEnvironment`).
+- **A developer picks test card OR real card** (2026-09-30): `GET /payments/methods`
+  gives developers `stripe.modes {test, live}` (each = that mode's secret key AND
+  webhook secret), and `POST /payments/stripe/checkout-session` takes
+  `mode: test|live` from developers ONLY (default test; a trader's `mode` is
+  ignored). `live` merely stops pinning them to test keys — the machine verdict
+  still decides, so a dev box answers `STRIPE_LIVE_UNAVAILABLE`. The real-charge
+  button goes through ConfirmModal.
+- **The webhook verifies against BOTH secrets** (`constructEventAnyMode`), because
+  a delivery carries no user and so always resolved to LIVE on prod — a
+  developer's test-card payment could never settle there. The price of that is
+  the rule in `StripeWebhookController`: **on the live box a `livemode: false`
+  event settles only a developer's invoice** (`test_mode_refused` otherwise) —
+  `livemode` is inside the signed payload. Same pairing as Coinsbuy's
+  sandbox-signed callback. Never drop one half without the other.
 - Saved cards / off-session auto-charge are NOT built yet — the Customer and the
   reusable PaymentMethod are captured now so that phase needs no re-entry.
 
