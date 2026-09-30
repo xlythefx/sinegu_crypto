@@ -26,6 +26,7 @@ import InvoiceDocumentModal from '../components/billing/InvoiceDocumentModal'
 import PaymentMethodModal from '../components/billing/PaymentMethodModal'
 import { EXCHANGE_META } from '../components/exchanges/meta'
 import { getInvoice } from '../services/billing'
+import { getPaymentMethods } from '../services/payments'
 import { ApiError } from '../services/api'
 import { hasFee, type Invoice } from '../lib/billing'
 import { fmtMoney, fmtSignedMoney, fmtSignedPct, formatDate } from '../lib/format'
@@ -65,10 +66,27 @@ function Tile({
 
 export default function InvoiceDetail() {
   const { id } = useParams()
-  // Developer accounts pay with the providers' test credentials — the button
-  // says so before it is pressed, and the API decides it again server-side.
+  // A developer's button says which network the payment will run on before it
+  // is pressed. Not assumed from the role: TRON follows TRON_DEVELOPER_NETWORK,
+  // which is mainnet during a real-money rehearsal, so it is read off the
+  // server's own answer (null until it arrives — the button then claims neither).
   const sessionUser = useSessionUser()
   const developer = isDeveloper(sessionUser?.type)
+  const [devNetwork, setDevNetwork] = useState<string | null>(null)
+  useEffect(() => {
+    if (!developer) return
+    let cancelled = false
+    getPaymentMethods()
+      .then((m) => {
+        if (!cancelled) setDevNetwork(m.tron.network || null)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [developer])
+  const devTest = developer && devNetwork !== null && devNetwork !== 'mainnet'
+  const devReal = developer && devNetwork === 'mainnet'
   const [searchParams, setSearchParams] = useSearchParams()
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [loading, setLoading] = useState(true)
@@ -315,12 +333,20 @@ export default function InvoiceDetail() {
                     className="inline-flex items-center gap-[9px] rounded-[14px] py-[15px] px-7 text-[14.5px] font-bold cursor-pointer text-on-accent bg-accent shadow-[0_12px_28px_-12px_var(--glow)] transition-[filter,transform] duration-150 hover:brightness-[1.07] active:translate-y-px"
                     onClick={() => setPayOpen(true)}
                   >
-                    {developer ? <FlaskConical size={18} /> : <Wallet size={18} />}
-                    {developer ? 'Test pay (no real money)' : 'Pay with crypto'}
+                    {devTest ? <FlaskConical size={18} /> : <Wallet size={18} />}
+                    {devTest ? 'Test pay (no real money)' : 'Pay with crypto'}
                   </button>
                   {developer && (
-                    <span className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-accent">
-                      Developer · sandbox credentials
+                    <span
+                      className={`font-mono text-[10.5px] uppercase tracking-[0.08em] ${
+                        devReal ? 'text-red' : 'text-accent'
+                      }`}
+                    >
+                      {devReal
+                        ? 'Developer · mainnet — real USDT'
+                        : devTest
+                          ? `Developer · ${devNetwork} testnet`
+                          : 'Developer account'}
                     </span>
                   )}
                 </div>

@@ -285,9 +285,13 @@ export default function PaymentMethodModal({
   /**
    * Whether this sheet is about to move REAL money. With Coinsbuy hidden, the
    * provider's own sandbox flag says nothing — what decides it is the chain the
-   * address lives on.
+   * address lives on. Not the role: a developer is pinned to Coinsbuy's
+   * sandbox, but on TRON follows TRON_DEVELOPER_NETWORK, which is flipped to
+   * mainnet for a real-money rehearsal.
    */
-  const testMode = testAccount || (COINSBUY_ENABLED ? sandbox : tronIsTestnet)
+  const testMode = COINSBUY_ENABLED ? testAccount || sandbox : tronIsTestnet
+  /** A developer about to send real funds — the one case the banner must not call a test. */
+  const developerOnMainnet = testAccount && !testMode
   /** No rail left to offer: say so instead of rendering an empty "Pay with". */
   const noRail = !tronVisible && (!COINSBUY_ENABLED || !cryptoEnabled)
 
@@ -354,12 +358,20 @@ export default function PaymentMethodModal({
 
         {/* ── body ──────────────────────────────────────────────── */}
         <div className="min-h-0 overflow-y-auto p-5 max-[420px]:p-4 flex flex-col gap-[18px]">
-          {testAccount && (
+          {testAccount && testMode && (
             <p className="flex items-start gap-2 text-[12px] font-semibold text-accent rounded-[12px] border border-accent-line bg-accent-soft py-2.5 px-3.5 leading-[1.45]">
               <FlaskConical size={15} className="flex-shrink-0 mt-px" />
               Developer account — this is a TEST payment. It runs the real
               checkout and the real webhook against the provider's sandbox, so
               no money moves and the invoice settles with test funds.
+            </p>
+          )}
+          {developerOnMainnet && (
+            <p className="flex items-start gap-2 text-[12px] font-semibold text-red rounded-[12px] border border-[color-mix(in_srgb,var(--red)_35%,transparent)] bg-[color-mix(in_srgb,var(--red)_8%,transparent)] py-2.5 px-3.5 leading-[1.45]">
+              <AlertTriangle size={15} className="flex-shrink-0 mt-px" />
+              Developer account on MAINNET — this is a REAL payment. The address
+              below is the live receiving wallet: send real USDT and the invoice
+              settles when the transfer confirms on the chain.
             </p>
           )}
 
@@ -749,7 +761,7 @@ export default function PaymentMethodModal({
                 {phase === 'idle' ? (
                   provider === 'tron' ? (
                     <>
-                      {testAccount ? <FlaskConical size={16} /> : <Landmark size={16} />}
+                      {testMode ? <FlaskConical size={16} /> : <Landmark size={16} />}
                       Show payment address
                     </>
                   ) : (
