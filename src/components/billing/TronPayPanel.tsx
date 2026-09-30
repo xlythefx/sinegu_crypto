@@ -1,33 +1,30 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Check, Copy, FlaskConical, Loader2, TriangleAlert } from 'lucide-react'
 import { getTronIntentStatus, simulateTronPayment } from '../../services/payments'
 import { getApiErrorMessage } from '../../services/api'
 import { useInterval } from '../../hooks/useInterval'
 import type { TronIntent, TronIntentStatus, TronSettlement } from '../../types/payments'
 import DevDetails from '../ui/DevDetails'
+import TronPaymentStatus, { type TronStage } from './TronPaymentStatus'
 
 interface TronPayPanelProps {
   intent: TronIntent
   developer: boolean
   /** Fired once the chain (or the dev button) has settled the invoice. */
   onSettled: (settlement: TronSettlement) => void
+  /** Reserve a fresh amount + address once this one has expired. */
+  onRenew?: () => void
+  renewing?: boolean
 }
 
-/** Stop polling after this many ticks — roughly seven minutes at 10s. */
-const MAX_POLLS = 40
+/** How often to ask whether the payment has landed. */
+const POLL_MS = 10000
 
 const FIELD_LABEL = 'text-[10.5px] uppercase tracking-[0.1em] text-faint mb-1.5'
 const FIELD_BOX =
   'flex items-center gap-2 rounded-[10px] border border-accent-line bg-surface2 py-2.5 px-3'
 const COPY_BTN =
   'flex-shrink-0 inline-flex items-center gap-1.5 rounded-btn border border-border bg-surface py-1.5 px-2.5 text-[11.5px] font-bold text-text cursor-pointer transition-[border-color] duration-150 hover:border-accent'
-
-function countdown(seconds: number): string {
-  if (seconds <= 0) return 'expired'
-  const m = Math.floor(seconds / 60)
-  const s = seconds % 60
-  return `${m}:${String(s).padStart(2, '0')}`
-}
 
 /**
  * "Send exactly this, to this address." The whole rail's UI.
@@ -41,24 +38,36 @@ function countdown(seconds: number): string {
  *  - the NETWORK warning. USDT exists on several chains; sending on any of them
  *    other than TRON reaches an address nobody controls and the money is gone.
  *
- * Polling is bounded (see MAX_POLLS) and stops with an honest message rather
- * than spinning forever — and if the watcher itself has stalled, it says so,
- * because a payment nobody is scanning for will never settle on its own.
+ * Polling runs for as long as the quote is valid (and past it once a transfer
+ * has been spotted, so a confirmation is never missed). It used to stop after
+ * ~7 minutes with a quiet line of text, which read as "nothing is happening"
+ * to someone whose exchange was still releasing the withdrawal.
  *
  * Success is NOT rendered here: it is handed up via {@link onSettled} so the
  * sheet can replace itself with a proper confirmation.
  */
-export default function TronPayPanel({ intent, developer, onSettled }: TronPayPanelProps) {
+export default function TronPayPanel({
+  intent,
+  developer,
+  onSettled,
+  onRenew,
+  renewing,
+}: TronPayPanelProps) {
   const [status, setStatus] = useState<TronIntentStatus | null>(null)
-  const [polls, setPolls] = useState(0)
   const [remaining, setRemaining] = useState(intent.secondsRemaining)
   const [copied, setCopied] = useState<'address' | 'amount' | null>(null)
   const [simulating, setSimulating] = useState(false)
   const [simError, setSimError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
+  /** Wall clock, ticked every second so the timers below move. */
+  const [now, setNow] = useState(() => Date.now())
+  const shownAt = useRef(Date.now())
+  const [checkedAt, setCheckedAt] = useState<number | null>(null)
 
   const seen = status?.transfer != null
-  const watching = !done && polls < MAX_POLLS
+  const expired = remaining <= 0 && !seen
+  const watching = !done && !expired
+  const stage: TronStage = expired ? 'expired' : seen ? 'confirming' : 'waiting'
 
   const settle = useCallback(
     (txHash: string | null, explorerUrl: string | null, simulated: boolean) => {
@@ -79,6 +88,7 @@ export default function TronPayPanel({ intent, developer, onSettled }: TronPayPa
     try {
       const next = await getTronIntentStatus(intent.invoiceId)
       setStatus(next)
+      setCheckedAt(Date.now())
       if (next.intent) setRemaining(next.intent.secondsRemaining)
       if (next.invoiceStatus === 'paid') {
         settle(next.transfer?.txHash ?? null, next.transfer?.explorerUrl ?? null, false)
@@ -89,24 +99,26 @@ export default function TronPayPanel({ intent, developer, onSettled }: TronPayPa
     }
   }, [intent.invoiceId, settle])
 
-  useInterval(
-    () => {
-      setPolls((n) => n + 1)
-      void load()
-    },
-    watching ? 10000 : null,
-  )
+  useInterval(() => void load(), watching ? POLL_MS : null)
 
-  // A local tick so the countdown moves between polls.
-  useInterval(() => setRemaining((s) => Math.max(0, s - 1)), watching ? 1000 : null)
+  // A local tick so the countdown and the "waiting" timer move between polls.
+  useInterval(() => {
+    setNow(Date.now())
+    setRemaining((s) => Math.max(0, s - 1))
+  }, done ? null : 1000)
 
+  // Fresh state per reserved amount, and one check straight away so "last
+  // check" is filled in without waiting for the first interval.
   useEffect(() => {
     setStatus(null)
-    setPolls(0)
     setDone(false)
     setSimError(null)
+    setCheckedAt(null)
     setRemaining(intent.secondsRemaining)
-  }, [intent.intentId, intent.secondsRemaining])
+    shownAt.current = Date.now()
+    setNow(Date.now())
+    void load()
+  }, [intent.intentId, intent.secondsRemaining, load])
 
   const copy = useCallback(async (value: string, which: 'address' | 'amount') => {
     try {
@@ -132,90 +144,80 @@ export default function TronPayPanel({ intent, developer, onSettled }: TronPayPa
   }, [intent.invoiceId, settle])
 
   return (
-    <div className="rounded-[14px] border border-accent bg-accent-soft p-4 max-[420px]:p-3.5">
-      <p className="text-[13.5px] font-bold text-text mb-1">
-        Send {intent.asset} on {intent.chainLabel}
-      </p>
-      <p className="text-[11.5px] text-muted leading-[1.5] mb-3">
-        Send the exact amount below to this wallet. The invoice settles on its own
-        within about a minute of the transfer confirming.
-      </p>
+    <div className="flex flex-col gap-4">
+      <TronPaymentStatus
+        stage={stage}
+        amount={intent.amount}
+        asset={intent.asset}
+        remaining={remaining}
+        elapsed={(now - shownAt.current) / 1000}
+        checkedAgo={checkedAt == null ? null : Math.max(0, Math.round((now - checkedAt) / 1000))}
+        scanStale={status?.scanStale ?? false}
+        explorerUrl={status?.transfer?.explorerUrl ?? null}
+        onRenew={onRenew}
+        renewing={renewing}
+      />
 
-      {/* The amount identifies the payment — most customers pay from an
-          exchange, where the on-chain sender is the exchange, not them. */}
-      <p className={FIELD_LABEL}>Exact amount</p>
-      <div className={`${FIELD_BOX} mb-3`}>
-        <code className="flex-1 min-w-0 font-mono text-[15px] font-bold text-text break-all">
-          {intent.amount}
-        </code>
-        <span className="flex-shrink-0 font-mono text-[11.5px] text-muted">{intent.asset}</span>
-        <button type="button" className={COPY_BTN} onClick={() => copy(intent.amount, 'amount')}>
-          {copied === 'amount' ? <Check size={13} /> : <Copy size={13} />}
-          {copied === 'amount' ? 'Copied' : 'Copy'}
-        </button>
-      </div>
+      {/* An expired address must not keep inviting a transfer. */}
+      {!expired && (
+        <div className="rounded-[14px] border border-accent bg-accent-soft p-4 max-[420px]:p-3.5">
+          <p className="text-[13.5px] font-bold text-text mb-1">
+            Send {intent.asset} on {intent.chainLabel}
+          </p>
+          <p className="text-[11.5px] text-muted leading-[1.5] mb-3">
+            Copy the exact amount and the address into your wallet or exchange
+            withdrawal.
+          </p>
 
-      <p className={FIELD_LABEL}>To this address</p>
-      <div className={FIELD_BOX}>
-        <code className="flex-1 min-w-0 font-mono text-[11.5px] text-text break-all">
-          {intent.address}
-        </code>
-        <button type="button" className={COPY_BTN} onClick={() => copy(intent.address, 'address')}>
-          {copied === 'address' ? <Check size={13} /> : <Copy size={13} />}
-          {copied === 'address' ? 'Copied' : 'Copy'}
-        </button>
-      </div>
+          {/* The amount identifies the payment — most customers pay from an
+              exchange, where the on-chain sender is the exchange, not them. */}
+          <p className={FIELD_LABEL}>Exact amount</p>
+          <div className={`${FIELD_BOX} mb-3`}>
+            <code className="flex-1 min-w-0 font-mono text-[15px] font-bold text-text break-all">
+              {intent.amount}
+            </code>
+            <span className="flex-shrink-0 font-mono text-[11.5px] text-muted">{intent.asset}</span>
+            <button type="button" className={COPY_BTN} onClick={() => copy(intent.amount, 'amount')}>
+              {copied === 'amount' ? <Check size={13} /> : <Copy size={13} />}
+              {copied === 'amount' ? 'Copied' : 'Copy'}
+            </button>
+          </div>
 
-      {/* Unrecoverable if ignored: USDT exists on several chains and only the
-          TRON one reaches this address. */}
-      <p className="flex items-start gap-2 text-[11.5px] font-semibold text-red rounded-[10px] border border-[color-mix(in_srgb,var(--red)_40%,transparent)] bg-[color-mix(in_srgb,var(--red)_10%,transparent)] py-2.5 px-3 leading-[1.45] mt-3">
-        <TriangleAlert size={14} className="flex-shrink-0 mt-px" />
-        {/* One span, or the flex row splits the sentence into columns. */}
-        <span className="min-w-0">
-          Send on the <strong>TRON (TRC-20)</strong> network only. {intent.asset} sent
-          over any other chain cannot be recovered.
-        </span>
-      </p>
+          <p className={FIELD_LABEL}>To this address</p>
+          <div className={FIELD_BOX}>
+            <code className="flex-1 min-w-0 font-mono text-[11.5px] text-text break-all">
+              {intent.address}
+            </code>
+            <button type="button" className={COPY_BTN} onClick={() => copy(intent.address, 'address')}>
+              {copied === 'address' ? <Check size={13} /> : <Copy size={13} />}
+              {copied === 'address' ? 'Copied' : 'Copy'}
+            </button>
+          </div>
 
-      <p className="text-[11.5px] text-muted leading-[1.5] mt-3 pt-3 border-t border-accent-line">
-        If your exchange charges a withdrawal fee it comes out of the amount you
-        send — we allow up to ${intent.tolerance.shortfallUsd.toFixed(2)} short, so you
-        can enter the figure above as-is.
-      </p>
-
-      <div className="flex items-center gap-2 mt-3">
-        {watching ? (
-          <>
-            <Loader2 size={14} className="text-accent animate-[dstate-spin_0.8s_linear_infinite]" />
-            <span className="text-[11.5px] text-muted">
-              {seen
-                ? 'Transfer spotted — confirming on chain…'
-                : `Watching for your payment… quote expires in ${countdown(remaining)}`}
+          {/* Unrecoverable if ignored: USDT exists on several chains and only the
+              TRON one reaches this address. */}
+          <p className="flex items-start gap-2 text-[11.5px] font-semibold text-red rounded-[10px] border border-[color-mix(in_srgb,var(--red)_40%,transparent)] bg-[color-mix(in_srgb,var(--red)_10%,transparent)] py-2.5 px-3 leading-[1.45] mt-3">
+            <TriangleAlert size={14} className="flex-shrink-0 mt-px" />
+            {/* One span, or the flex row splits the sentence into columns. */}
+            <span className="min-w-0">
+              Send on the <strong>TRON (TRC-20)</strong> network only. {intent.asset} sent
+              over any other chain cannot be recovered.
             </span>
-          </>
-        ) : (
-          <span className="text-[11.5px] text-muted">
-            Still waiting. You can close this — the invoice settles on its own once
-            the transfer confirms.
-          </span>
-        )}
-      </div>
+          </p>
 
-      {/* Polling is the ONLY way a TRON payment is noticed. If the watcher has
-          stopped, say so rather than letting the spinner imply progress. */}
-      {status?.scanStale && (
-        <p className="flex items-start gap-2 text-[11.5px] font-semibold text-red mt-2.5">
-          <AlertTriangle size={13} className="flex-shrink-0 mt-px" />
-          Our payment watcher has not run recently. Your transfer is safe — it will
-          be picked up once the watcher resumes.
-        </p>
+          <p className="text-[11.5px] text-muted leading-[1.5] mt-3 pt-3 border-t border-accent-line">
+            If your exchange charges a withdrawal fee it comes out of the amount you
+            send — we allow up to ${intent.tolerance.shortfallUsd.toFixed(2)} short, so you
+            can enter the figure above as-is.
+          </p>
+        </div>
       )}
 
       {/* Developer test button. Only rendered when the SERVER says this network
           may be simulated, and the endpoint enforces the same rule again — the
           network that carries real money can never be settled this way. */}
-      {intent.simulatable && (
-        <div className="mt-3 pt-3 border-t border-dashed border-accent-line">
+      {intent.simulatable && !expired && (
+        <div className="pt-3 border-t border-dashed border-accent-line">
           <button
             type="button"
             className="w-full inline-flex items-center justify-center gap-2 rounded-pill border border-dashed border-accent-line bg-[var(--bubble)] py-2.5 px-4 text-[12.5px] font-bold text-accent cursor-pointer transition-[border-color,filter] duration-150 hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed"
@@ -263,6 +265,7 @@ export default function TronPayPanel({ intent, developer, onSettled }: TronPayPa
             },
           }}
           defaultOpen={false}
+          className=""
         />
       )}
     </div>

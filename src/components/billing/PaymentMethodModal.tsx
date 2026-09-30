@@ -873,6 +873,8 @@ export default function PaymentMethodModal({
         developer={developer}
         onClose={() => setAddressOpen(false)}
         onSettled={setSettled}
+        onRenew={startTronPayment}
+        renewing={phase === 'creating'}
       />
     )}
     </>,

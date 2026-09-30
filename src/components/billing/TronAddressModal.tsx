@@ -10,6 +10,9 @@ interface TronAddressModalProps {
   developer: boolean
   onClose: () => void
   onSettled: (settlement: TronSettlement) => void
+  /** Reserve a fresh amount + address once this one has expired. */
+  onRenew?: () => void
+  renewing?: boolean
 }
 
 /**
@@ -26,6 +29,8 @@ export default function TronAddressModal({
   developer,
   onClose,
   onSettled,
+  onRenew,
+  renewing,
 }: TronAddressModalProps) {
   return createPortal(
     <div
@@ -48,10 +53,10 @@ export default function TronAddressModal({
           </span>
           <div className="min-w-0">
             <h3 className="font-display text-[17px] font-extrabold tracking-[-0.01em] leading-tight">
-              Payment address
+              Pay with USDT (TRC-20)
             </h3>
             <p className="text-[11.5px] text-muted mt-0.5">
-              Close this any time — you can open it again from the invoice.
+              Keep this window open until your payment is confirmed.
             </p>
           </div>
           <button
@@ -65,7 +70,13 @@ export default function TronAddressModal({
         </header>
 
         <div className="min-h-0 overflow-y-auto p-5 max-[420px]:p-4">
-          <TronPayPanel intent={intent} developer={developer} onSettled={onSettled} />
+          <TronPayPanel
+            intent={intent}
+            developer={developer}
+            onSettled={onSettled}
+            onRenew={onRenew}
+            renewing={renewing}
+          />
         </div>
 
         <footer className="flex-shrink-0 border-t border-hair p-4 flex justify-end">
