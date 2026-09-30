@@ -487,6 +487,8 @@ export interface GenerateInvoiceInput {
   exchange?: string
   month_year: string
   invoice_demo?: boolean
+  /** Admin → Sandbox only: lets the master account be billed (it never is otherwise). */
+  sandbox?: boolean
 }
 
 export async function generateInvoices(
@@ -504,6 +506,8 @@ export interface ManualInvoiceInput {
   account_id: number
   month_year: string
   amount: number
+  /** Admin → Sandbox only: lets the master account be billed (it never is otherwise). */
+  sandbox?: boolean
 }
 
 /** One invoice at a typed fee; replaces that month's unpaid invoice, refuses a paid one. */

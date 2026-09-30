@@ -100,6 +100,8 @@ export default function SandboxInvoiceCard({ users }: { users: AdminUser[] }) {
         uni_id: uniId,
         month_year: month,
         invoice_demo: true,
+        // Sandbox is the one place the master may be billed (payment rehearsal).
+        sandbox: true,
       })
       setPreview(created)
       if (created.length === 0) {
@@ -130,6 +132,7 @@ export default function SandboxInvoiceCard({ users }: { users: AdminUser[] }) {
         account_id: account.id,
         month_year: month,
         amount: Math.round(fee * 100) / 100,
+        sandbox: true,
       })
       setPreview([inv])
     } catch (e) {

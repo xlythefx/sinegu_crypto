@@ -249,7 +249,12 @@ account the same night. Regenerating from P&L resets `fee_source` to 'pnl'.
 **The master account is never invoiced** (owner, 2026-09-25):
 `InvoiceService::notInvoiceableReason` refuses it inside `generateForAccount`, so
 the admin screen (422 `NOT_INVOICEABLE`) and the future monthly run agree;
-`SBXINV-` scenario accounts stay exempt. Still deferred, both reusing
+`SBXINV-` scenario accounts stay exempt. **Exception (2026-09-30): Admin →
+Sandbox → Invoice Testing may bill the master** — it sends `sandbox: true` to
+`/admin/invoices/generate|manual`, an explicit per-request opt-in that nothing
+else sends. Its safety half: **`engine:mark-overdue` never disables a master's
+account** (the invoice still goes overdue), so a rehearsal left unpaid cannot
+stop the house trading. Still deferred, both reusing
 `InvoiceService::settle`: monthly auto-generation and off-session auto-charge.
 
 **Direct USDT-TRC20 payments — THE rail customers pay on (2026-09-23).**
