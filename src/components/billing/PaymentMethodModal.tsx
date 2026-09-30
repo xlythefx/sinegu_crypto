@@ -760,7 +760,7 @@ export default function PaymentMethodModal({
               <CardPayButton
                 className={cryptoRail ? 'mt-2.5' : ''}
                 tone={cardTestMode ? 'test' : 'normal'}
-                title={`Pay ${fmtMoney(invoice.totalFee)} with Stripe`}
+                title={`Pay ${fmtMoney(invoice.totalFee)} by card`}
                 subtitle={
                   cardTestMode
                     ? 'Stripe test checkout — use card 4242 4242 4242 4242, no money moves.'
@@ -780,7 +780,7 @@ export default function PaymentMethodModal({
                 {devCardModes.live && (
                   <CardPayButton
                     tone="normal"
-                    title={`Pay ${fmtMoney(invoice.totalFee)} with Stripe`}
+                    title={`Pay ${fmtMoney(invoice.totalFee)} by card`}
                     subtitle="Visa, Mastercard and more — entered on Stripe’s secure page, never here."
                     loading={cardPhase !== 'idle' && cardMode === 'live'}
                     loadingLabel="Opening secure checkout…"
@@ -907,7 +907,7 @@ export default function PaymentMethodModal({
     {/* A developer's REAL charge is real money — confirm it, per convention. */}
     <ConfirmModal
       open={confirmLive}
-      title={`Pay ${fmtMoney(invoice.totalFee)} with Stripe`}
+      title={`Pay ${fmtMoney(invoice.totalFee)} by card`}
       message="You'll be taken to Stripe's secure checkout to complete your payment. Your card details are entered on Stripe and never stored by us."
       confirmLabel="Continue to Stripe"
       cancelLabel="Cancel"

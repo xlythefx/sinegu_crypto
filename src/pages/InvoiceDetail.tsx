@@ -405,7 +405,7 @@ export default function InvoiceDetail() {
                       disabled={cardBusy !== null}
                     >
                       {cardBusy ? <Loader2 size={18} className="animate-[dstate-spin_0.8s_linear_infinite]" /> : <CreditCard size={18} />}
-                      {cardBusy ? 'Opening Stripe…' : 'Pay with Stripe'}
+                      {cardBusy ? 'Opening Stripe…' : 'Pay with card'}
                     </button>
                   )}
                   {devCardModes?.live && (
@@ -418,7 +418,7 @@ export default function InvoiceDetail() {
                       {cardBusy === 'live' ? <Loader2 size={18} className="animate-[dstate-spin_0.8s_linear_infinite]" /> : <CreditCard size={18} />}
                       {/* Same label a customer sees — the confirmation, not the
                           button, is where a developer is told it is real money. */}
-                      {cardBusy === 'live' ? 'Opening Stripe…' : 'Pay with Stripe'}
+                      {cardBusy === 'live' ? 'Opening Stripe…' : 'Pay with card'}
                     </button>
                   )}
                   </div>
@@ -691,7 +691,7 @@ export default function InvoiceDetail() {
       {/* A developer's REAL card charge is real money — confirm it first. */}
       <ConfirmModal
         open={confirmLiveCard}
-        title={`Pay ${fmtMoney(invoice.totalFee)} with Stripe`}
+        title={`Pay ${fmtMoney(invoice.totalFee)} by card`}
         message="You'll be taken to Stripe's secure checkout to complete your payment. Your card details are entered on Stripe and never stored by us."
         confirmLabel="Continue to Stripe"
         cancelLabel="Cancel"
