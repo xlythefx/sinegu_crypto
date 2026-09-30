@@ -63,6 +63,9 @@ export interface PositionRow {
   accountBalance: number
   symbol: string
   price: number
+  /** Closed trades only: entry price (averaged over the rows that carry one on
+   *  a merged line); null when none recorded it. Open positions: null. */
+  entryPrice: number | null
   pnl: number
   /** Closed trades only: exchange fee already out of `pnl` (summed on a
    *  merged line; null when no row carries one). Open positions: null. */
@@ -153,6 +156,7 @@ export function buildPositionRows(
         accountBalance: p.account_balance,
         symbol: p.symbol,
         price: p.price,
+        entryPrice: null,
         pnl: p.unrealized_pnl,
         fee: null,
         feeSource: null,
@@ -187,6 +191,7 @@ export function buildPositionRows(
         symbol: p.symbol,
         price: 0,
         priceSum: p.price,
+        entryPrice: null,
         pnl: p.unrealized_pnl,
         fee: null,
         feeSource: null,
@@ -231,6 +236,7 @@ export function buildTradeRows(
         accountBalance: t.account_balance,
         symbol: t.symbol,
         price: t.price,
+        entryPrice: t.entry_price ?? null,
         pnl: t.realized_pnl,
         fee: t.exchange_fee,
         feeSource: t.fee_source,
@@ -245,15 +251,25 @@ export function buildTradeRows(
 
   const map = new Map<
     string,
-    PositionRow & { priceSum: number; strategies: Set<string> }
+    PositionRow & {
+      priceSum: number
+      entrySum: number
+      entryCount: number
+      strategies: Set<string>
+    }
   >()
   for (const t of rows) {
     const key = `${t.account_id}|${t.symbol}`
+    const entry = t.entry_price ?? null
     const g = map.get(key)
     if (g) {
       g.ids.push(t.id)
       g.count += 1
       g.pnl += t.realized_pnl
+      if (entry !== null) {
+        g.entrySum += entry
+        g.entryCount += 1
+      }
       g.fee = sumFees(g.fee, t.exchange_fee)
       g.feeSource = mergeFeeSource(g.feeSource, t.fee_source)
       g.priceSum += t.price
@@ -272,6 +288,9 @@ export function buildTradeRows(
         symbol: t.symbol,
         price: 0,
         priceSum: t.price,
+        entryPrice: null,
+        entrySum: entry ?? 0,
+        entryCount: entry === null ? 0 : 1,
         pnl: t.realized_pnl,
         fee: t.exchange_fee,
         feeSource: t.fee_source,
@@ -285,9 +304,10 @@ export function buildTradeRows(
     }
   }
   return Array.from(map.values())
-    .map(({ priceSum, strategies, ...g }) => ({
+    .map(({ priceSum, entrySum, entryCount, strategies, ...g }) => ({
       ...g,
       price: priceSum / g.count,
+      entryPrice: entryCount > 0 ? entrySum / entryCount : null,
       strategy:
         strategies.size === 0
           ? null

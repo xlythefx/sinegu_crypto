@@ -160,7 +160,10 @@ export interface AdminPastTrade {
   account_name: string | null
   account_balance: number
   symbol: string
+  /** Exit price. */
   price: number
+  /** Null when the close row never recorded its entry. */
+  entry_price?: number | null
   /** NET of `exchange_fee` — matches the trade in the exchange's own app. */
   realized_pnl: number
   /** Commission + funding already deducted; null on a gross row. */

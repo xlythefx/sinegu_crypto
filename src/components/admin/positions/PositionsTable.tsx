@@ -98,6 +98,22 @@ function FeeCell({ fee, source }: { fee: number | null; source: RowFeeSource }) 
   )
 }
 
+/** Entry and exit of a closed trade in one cell, entry first. */
+function EntryExitCell({ entry, exit }: { entry: number | null; exit: number }) {
+  return (
+    <div className="inline-flex flex-col items-end gap-px font-mono whitespace-nowrap">
+      <span className="text-[12.5px]">
+        <span className="text-faint text-[10px] uppercase tracking-[0.05em] mr-1.5">In</span>
+        {entry === null ? <span className="text-faint">—</span> : fmtMoney(entry)}
+      </span>
+      <span className="text-[12.5px]">
+        <span className="text-faint text-[10px] uppercase tracking-[0.05em] mr-1.5">Out</span>
+        {fmtMoney(exit)}
+      </span>
+    </div>
+  )
+}
+
 /** Merged-count pill; only emphasized when it actually merges >1 row. */
 function CountPill({ count }: { count: number }) {
   return (
@@ -121,8 +137,8 @@ interface Props {
   onDelete: (row: PositionRow) => void
 }
 
-/** One table for both tabs and both views — the view only decides whether the
- *  last-but-one column shows a merge count or the row's own database id. */
+/** One table for both tabs and both views — the grouped view adds a merge
+ *  count column; a single row's id stays in the action buttons' titles. */
 export default function PositionsTable({
   tab,
   view,
@@ -131,7 +147,8 @@ export default function PositionsTable({
   onDelete,
 }: Props) {
   const closed = tab === 'closed'
-  const cols = closed ? 10 : 7
+  const grouped = view === 'grouped'
+  const cols = (closed ? 9 : 6) + (grouped ? 1 : 0)
   // Editing writes to ONE database row, so a merged line has no single target.
   const canEdit = view === 'rows'
 
@@ -144,10 +161,10 @@ export default function PositionsTable({
             <th className={TH}>Ticker</th>
             <th className={TH}>Broker</th>
             {closed && <th className={TH}>Strategy</th>}
-            <th className={TH_R}>Price</th>
+            <th className={TH_R}>{closed ? 'Entry / Exit' : 'Price'}</th>
             <th className={TH_R}>{closed ? 'P&L' : 'Unrealized P&L'}</th>
             {closed && <th className={`${TH_R} max-[900px]:hidden`}>Fee</th>}
-            <th className={TH_C}>{view === 'rows' ? 'ID' : 'Count'}</th>
+            {grouped && <th className={TH_C}>Count</th>}
             {closed && <th className={TH_R}>Closed At</th>}
             <th className={TH_R}>Actions</th>
           </tr>
@@ -183,7 +200,13 @@ export default function PositionsTable({
                 {closed && (
                   <td className={`${TD} text-muted`}>{r.strategy ?? '—'}</td>
                 )}
-                <td className={`${TD_R} font-mono`}>{fmtMoney(r.price)}</td>
+                <td className={`${TD_R} font-mono`}>
+                  {closed ? (
+                    <EntryExitCell entry={r.entryPrice} exit={r.price} />
+                  ) : (
+                    fmtMoney(r.price)
+                  )}
+                </td>
                 <td className={TD_R}>
                   <PnlCell pnl={r.pnl} balance={r.accountBalance} />
                 </td>
@@ -192,15 +215,11 @@ export default function PositionsTable({
                     <FeeCell fee={r.fee} source={r.feeSource} />
                   </td>
                 )}
-                <td className={TD_C}>
-                  {view === 'rows' ? (
-                    <span className="font-mono text-[12px] text-faint">
-                      #{r.rowId}
-                    </span>
-                  ) : (
+                {grouped && (
+                  <td className={TD_C}>
                     <CountPill count={r.count} />
-                  )}
-                </td>
+                  </td>
+                )}
                 {closed && (
                   <td className={`${TD_R} text-muted font-mono`}>
                     {r.closedAt ? fmtDateTime(r.closedAt) : '—'}
