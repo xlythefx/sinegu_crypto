@@ -420,22 +420,36 @@ export default function PaymentMethodModal({
               <Receipt size={13} className="text-accent" /> What you're paying for
             </p>
             <div className="rounded-[14px] border border-border bg-surface2 py-1 px-4 max-[420px]:px-3.5">
-              <div className="flex items-center justify-between gap-4 py-3 border-b border-hair">
-                <div className="flex flex-col gap-[3px] min-w-0">
-                  <span className="text-[13px] font-semibold text-text">
-                    Realized profit share
-                  </span>
-                  <span className="text-[11px] text-faint font-mono">
-                    {invoice.realizedPercent}% of{' '}
-                    {fmtSignedMoney(invoice.realizedPnl)} closed P&amp;L
+              {invoice.feeSource === 'manual' ? (
+                <div className="flex items-center justify-between gap-4 py-3 border-b border-hair">
+                  <div className="flex flex-col gap-[3px] min-w-0">
+                    <span className="text-[13px] font-semibold text-text">Performance fee</span>
+                    <span className="text-[11px] text-faint font-mono">
+                      Set manually for {invoice.monthLabel}
+                    </span>
+                  </div>
+                  <span className="text-[14px] font-bold text-text font-mono flex-shrink-0">
+                    {fmtMoney(invoice.totalFee)}
                   </span>
                 </div>
-                <span className="text-[14px] font-bold text-text font-mono flex-shrink-0">
-                  {fmtMoney(invoice.feeRealized)}
-                </span>
-              </div>
+              ) : (
+                <div className="flex items-center justify-between gap-4 py-3 border-b border-hair">
+                  <div className="flex flex-col gap-[3px] min-w-0">
+                    <span className="text-[13px] font-semibold text-text">
+                      Realized profit share
+                    </span>
+                    <span className="text-[11px] text-faint font-mono">
+                      {invoice.realizedPercent}% of{' '}
+                      {fmtSignedMoney(invoice.realizedPnl)} closed P&amp;L
+                    </span>
+                  </div>
+                  <span className="text-[14px] font-bold text-text font-mono flex-shrink-0">
+                    {fmtMoney(invoice.feeRealized)}
+                  </span>
+                </div>
+              )}
 
-              {invoice.unrealizedPnl !== 0 && (
+              {invoice.feeSource !== 'manual' && invoice.unrealizedPnl !== 0 && (
                 <div className="flex items-center justify-between gap-4 py-3 border-b border-hair">
                   <div className="flex flex-col gap-[3px] min-w-0">
                     <span className="text-[13px] font-semibold text-text">

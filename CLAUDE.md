@@ -236,7 +236,16 @@ mother-style: per-user `realized_percentage × realized + unrealized_percentage 
 (defaults 20% / 6% on `user_credentials`). Endpoints: user `GET /invoices`,`/invoices/{id}`;
 admin `GET/POST/PUT/DELETE /admin/invoices*`. **Admin Invoice History** (`/admin/invoices`)
 lists/filters/settles/deletes; **Admin Sandbox → Invoice Testing** generates an invoice from
-a user's closed P&L and marks it paid (manual charging).
+a user's closed P&L and marks it paid (manual charging). Its **Manual fee** tab
+(2026-09-30, `POST /admin/invoices/manual` → `InvoiceService::generateManual`)
+bills ONE Binance account a typed fee: same row, same HWM math as the P&L
+invoice for that month, but `total_fee` = the amount, the realized/unrealized
+split zero and `invoices.fee_source = 'manual'` (every screen then prints one
+"set manually" line — never a split that does not add up to the total). It
+replaces that month's unpaid invoice and refuses a paid one (a $0 row that
+generate stored as 'paid' collected nothing and IS replaceable); due today + 7
+days, never from the billing month, or the overdue sweep would disable the
+account the same night. Regenerating from P&L resets `fee_source` to 'pnl'.
 **The master account is never invoiced** (owner, 2026-09-25):
 `InvoiceService::notInvoiceableReason` refuses it inside `generateForAccount`, so
 the admin screen (422 `NOT_INVOICEABLE`) and the future monthly run agree;

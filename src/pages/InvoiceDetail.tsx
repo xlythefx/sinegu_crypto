@@ -417,20 +417,34 @@ export default function InvoiceDetail() {
               <Receipt size={13} className="text-accent" /> FEE BREAKDOWN
             </p>
             <div className="flex flex-col">
-              <div className="flex items-center justify-between gap-4 py-3.5 border-b border-hair first:pt-0">
-                <div className="flex flex-col gap-[3px]">
-                  <span className="text-[13.5px] font-semibold text-text">
-                    Realized profit share
-                  </span>
-                  <span className="text-[11.5px] text-faint font-mono">
-                    {invoice.realizedPercent}% of {fmtSignedMoney(invoice.realizedPnl)}
+              {invoice.feeSource === 'manual' ? (
+                <div className="flex items-center justify-between gap-4 py-3.5 border-b border-hair first:pt-0">
+                  <div className="flex flex-col gap-[3px]">
+                    <span className="text-[13.5px] font-semibold text-text">Performance fee</span>
+                    <span className="text-[11.5px] text-faint font-mono">
+                      Set manually for {invoice.monthLabel}
+                    </span>
+                  </div>
+                  <span className="text-[15px] font-bold text-text font-mono">
+                    {fmtMoney(invoice.totalFee)}
                   </span>
                 </div>
-                <span className="text-[15px] font-bold text-text font-mono">
-                  {fmtMoney(invoice.feeRealized)}
-                </span>
-              </div>
-              {invoice.unrealizedPnl !== 0 && (
+              ) : (
+                <div className="flex items-center justify-between gap-4 py-3.5 border-b border-hair first:pt-0">
+                  <div className="flex flex-col gap-[3px]">
+                    <span className="text-[13.5px] font-semibold text-text">
+                      Realized profit share
+                    </span>
+                    <span className="text-[11.5px] text-faint font-mono">
+                      {invoice.realizedPercent}% of {fmtSignedMoney(invoice.realizedPnl)}
+                    </span>
+                  </div>
+                  <span className="text-[15px] font-bold text-text font-mono">
+                    {fmtMoney(invoice.feeRealized)}
+                  </span>
+                </div>
+              )}
+              {invoice.feeSource !== 'manual' && invoice.unrealizedPnl !== 0 && (
                 <div className="flex items-center justify-between gap-4 py-3.5 border-b border-hair first:pt-0">
                   <div className="flex flex-col gap-[3px]">
                     <span className="text-[13.5px] font-semibold text-text">

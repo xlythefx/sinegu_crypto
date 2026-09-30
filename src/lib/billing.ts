@@ -8,6 +8,9 @@ import type { ExchangeKind } from '../types/exchanges'
 
 export type InvoiceStatus = 'pending' | 'paid'
 
+/** 'pnl' = the fee math; 'manual' = an admin typed the fee (no realized/unrealized split). */
+export type InvoiceFeeSource = 'pnl' | 'manual'
+
 /** Fallback fee shares when a period has no profit to derive the rate from. */
 export const REALIZED_FEE_PERCENT = 20
 export const UNREALIZED_FEE_PERCENT = 6
@@ -26,6 +29,7 @@ export interface Invoice {
   status: InvoiceStatus
   isOverdue: boolean
   totalFee: number
+  feeSource: InvoiceFeeSource
   currency: 'USD'
   /** Percentage gain over the reference (HWM / deposit) for the period. */
   performanceGain: number
@@ -60,6 +64,8 @@ export interface ApiInvoice {
   status: InvoiceStatus
   is_overdue: boolean
   total_fee: number
+  /** Absent from an API older than 2026-09-30 — read as 'pnl'. */
+  fee_source?: InvoiceFeeSource
   currency: string
   performance_gain: number
   current_balance: number
@@ -89,6 +95,7 @@ export function mapApiInvoice(row: ApiInvoice): Invoice {
     status: row.status === 'paid' ? 'paid' : 'pending',
     isOverdue: row.is_overdue,
     totalFee: row.total_fee,
+    feeSource: row.fee_source === 'manual' ? 'manual' : 'pnl',
     currency: 'USD',
     performanceGain: row.performance_gain,
     currentBalance: row.current_balance,

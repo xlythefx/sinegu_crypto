@@ -499,6 +499,22 @@ export async function generateInvoices(
   return res.invoices.map(mapApiInvoice)
 }
 
+export interface ManualInvoiceInput {
+  /** A binance_accounts id — manual invoices are Binance-only, like generate. */
+  account_id: number
+  month_year: string
+  amount: number
+}
+
+/** One invoice at a typed fee; replaces that month's unpaid invoice, refuses a paid one. */
+export async function createManualInvoice(input: ManualInvoiceInput): Promise<Invoice> {
+  const res = await apiFetch<{ success: boolean; invoices: ApiInvoice[] }>(
+    '/admin/invoices/manual',
+    { method: 'POST', body: input, auth: true },
+  )
+  return mapApiInvoice(res.invoices[0])
+}
+
 export async function updateInvoice(
   id: string,
   body: { total_fee?: number; status?: string },

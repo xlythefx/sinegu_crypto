@@ -94,6 +94,15 @@ export default function InvoiceDocumentModal({
   // actually earned a fee. A zero-fee period still prints a line — an invoice
   // with no items reads like a rendering failure, not like "nothing was owed".
   const items: LineItem[] = []
+  if (invoice.feeSource === 'manual') {
+    // A typed fee has no profit-share split; the one line IS the total.
+    items.push({
+      description: `Performance fee (${invoice.monthLabel})`,
+      detail: `Set manually · ${exchange} · ${invoice.accountName}`,
+      qty: 1,
+      amount: invoice.totalFee,
+    })
+  }
   if (invoice.feeRealized > 0) {
     items.push({
       description: `Performance fee — realized profit (${invoice.monthLabel})`,
