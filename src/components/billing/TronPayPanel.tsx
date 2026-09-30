@@ -170,8 +170,11 @@ export default function TronPayPanel({ intent, developer, onSettled }: TronPayPa
           TRON one reaches this address. */}
       <p className="flex items-start gap-2 text-[11.5px] font-semibold text-red rounded-[10px] border border-[color-mix(in_srgb,var(--red)_40%,transparent)] bg-[color-mix(in_srgb,var(--red)_10%,transparent)] py-2.5 px-3 leading-[1.45] mt-3">
         <TriangleAlert size={14} className="flex-shrink-0 mt-px" />
-        Send on the <strong>TRON (TRC-20)</strong> network only. {intent.asset} sent
-        over any other chain cannot be recovered.
+        {/* One span, or the flex row splits the sentence into columns. */}
+        <span className="min-w-0">
+          Send on the <strong>TRON (TRC-20)</strong> network only. {intent.asset} sent
+          over any other chain cannot be recovered.
+        </span>
       </p>
 
       <p className="text-[11.5px] text-muted leading-[1.5] mt-3 pt-3 border-t border-accent-line">

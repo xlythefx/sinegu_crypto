@@ -38,7 +38,7 @@ import type {
 } from '../../types/payments'
 import DevDetails from '../ui/DevDetails'
 import ExchangeBadge from './ExchangeBadge'
-import TronPayPanel from './TronPayPanel'
+import TronAddressModal from './TronAddressModal'
 import PaymentSuccess from './PaymentSuccess'
 
 /**
@@ -111,8 +111,13 @@ export default function PaymentMethodModal({
    */
   const [pickedProvider, setPickedProvider] = useState<'coinsbuy' | 'tron'>('coinsbuy')
   const provider = COINSBUY_ENABLED ? pickedProvider : 'tron'
-  /** Set once a TRON amount is reserved — replaces the whole method section. */
+  /** Set once a TRON amount is reserved; kept for the life of the sheet. */
   const [tronIntent, setTronIntent] = useState<TronIntent | null>(null)
+  /**
+   * Whether the address dialog is showing. Closing it only hides it — the
+   * reserved amount stays, and "Show payment address" reopens the same one.
+   */
+  const [addressOpen, setAddressOpen] = useState(false)
   /**
    * Set the moment the invoice is actually settled. Replaces the ENTIRE sheet
    * with a confirmation: once the money has landed, restating the fee breakdown
@@ -136,8 +141,11 @@ export default function PaymentMethodModal({
 
   useEffect(() => {
     if (!open) return
+    // Escape closes the topmost dialog only: the address one first.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key !== 'Escape') return
+      if (addressOpen) setAddressOpen(false)
+      else onClose()
     }
     window.addEventListener('keydown', onKey)
     // Lock the page behind the sheet so only the sheet scrolls.
@@ -147,7 +155,7 @@ export default function PaymentMethodModal({
       window.removeEventListener('keydown', onKey)
       document.body.style.overflow = prev
     }
-  }, [open, onClose])
+  }, [open, onClose, addressOpen])
 
   // Fresh state per open, and the provider list straight from the API — the
   // server decides which coins it accepts and whether it is in sandbox mode.
@@ -159,6 +167,7 @@ export default function PaymentMethodModal({
     setDeposit(null)
     setPickedProvider('coinsbuy')
     setTronIntent(null)
+    setAddressOpen(false)
     setSettled(null)
     setCopied(false)
     setErrorDebug(null)
@@ -237,6 +246,7 @@ export default function PaymentMethodModal({
     setErrorDebug(null)
     try {
       setTronIntent(await createTronIntent({ invoiceId: invoice.id, amount: invoice.totalFee }))
+      setAddressOpen(true)
     } catch (err) {
       setError(getApiErrorMessage(err, 'Could not start the crypto payment.'))
       setErrorDebug(getApiErrorDebug(err))
@@ -343,6 +353,7 @@ export default function PaymentMethodModal({
   }
 
   return createPortal(
+    <>
     <div
       className="fixed inset-0 z-[1000] flex justify-center overflow-y-auto p-4 max-[420px]:p-3 sm:p-6 bg-[var(--bgScrim)] backdrop-blur-[4px] animate-[fadeup_0.2s_ease_both]"
       onClick={busy ? undefined : onClose}
@@ -578,14 +589,7 @@ export default function PaymentMethodModal({
               <Wallet size={13} className="text-accent" /> Pay with
             </p>
 
-            {tronIntent ? (
-              /* Direct wallet: the address and the exact figure, in place. */
-              <TronPayPanel
-                intent={tronIntent}
-                developer={developer}
-                onSettled={setSettled}
-              />
-            ) : deposit ? (
+            {deposit ? (
               /* Enterprise-wallet fallback: no hosted page, just an address. */
               <div className="rounded-[14px] border border-accent bg-accent-soft p-4 max-[420px]:p-3.5">
                 <p className="text-[13.5px] font-bold text-text mb-1">
@@ -703,7 +707,17 @@ export default function PaymentMethodModal({
                         )}
                       </p>
                       <p className="text-[11.5px] text-muted">
-                        Send straight to our wallet — no provider, no redirect.
+                        {tronIntent ? (
+                          <>
+                            Reserved:{' '}
+                            <span className="font-mono font-bold text-text">
+                              {tronIntent.amount} {tronIntent.asset}
+                            </span>{' '}
+                            — send it manually to the payment address.
+                          </>
+                        ) : (
+                          'Send manually straight to our wallet — no provider, no redirect.'
+                        )}
                       </p>
                     </div>
                     {COINSBUY_ENABLED && provider === 'tron' && (
@@ -722,9 +736,10 @@ export default function PaymentMethodModal({
               </p>
             )}
 
-            {/* Card — hidden once a crypto amount is reserved, since the sheet
-                is then committed to that transfer. */}
-            {cardEnabled && !tronIntent && !deposit && (
+            {/* Card — still offered after a TRON amount is reserved: an unused
+                reservation simply expires, and whichever rail pays first
+                settles the invoice (settle() is idempotent). */}
+            {cardEnabled && !deposit && (
               <button
                 type="button"
                 className={`w-full flex items-center gap-3 text-left rounded-[14px] border border-border bg-surface2 p-4 max-[420px]:p-3.5 cursor-pointer transition-[border-color] duration-150 hover:border-accent disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:border-border ${
@@ -801,11 +816,19 @@ export default function PaymentMethodModal({
             >
               {deposit || tronIntent ? 'Done' : 'Cancel'}
             </button>
-            {!deposit && !tronIntent && cryptoRail && (
+            {!deposit && cryptoRail && (
               <button
                 type="button"
                 className="inline-flex items-center justify-center gap-2 text-[13.5px] font-bold bg-accent text-on-accent border-0 py-3 px-[22px] rounded-pill cursor-pointer shadow-[0_10px_24px_var(--glow)] transition-[filter,transform] duration-150 hover:brightness-[1.06] active:translate-y-px disabled:opacity-60 disabled:cursor-not-allowed disabled:shadow-none max-[430px]:w-full"
-                onClick={provider === 'tron' ? startTronPayment : startPayment}
+                // Once an amount is reserved this only REOPENS it — a second
+                // reservation would quote the trader a new countdown for nothing.
+                onClick={
+                  provider === 'tron'
+                    ? tronIntent
+                      ? () => setAddressOpen(true)
+                      : startTronPayment
+                    : startPayment
+                }
                 disabled={busy || payDisabled}
                 autoFocus
               >
@@ -837,7 +860,22 @@ export default function PaymentMethodModal({
           </div>
         </footer>
       </div>
-    </div>,
+    </div>
+
+    {/* Mounted for as long as an amount is reserved, shown or not, so it
+        keeps watching for the payment while the trader is on the sheet. A
+        SIBLING of the sheet's backdrop, never a child: React bubbles clicks
+        through portals, so a click on this backdrop would close the sheet too. */}
+    {tronIntent && (
+      <TronAddressModal
+        open={addressOpen}
+        intent={tronIntent}
+        developer={developer}
+        onClose={() => setAddressOpen(false)}
+        onSettled={setSettled}
+      />
+    )}
+    </>,
     document.body,
   )
 }

@@ -265,8 +265,12 @@ Default is `prod` — there is only one target today.
    SANDBOX keys on this same box — `PaymentController::applyRoleOverrides` forces
    them, and `VerifyCoinsbuySignature` accepts the sandbox-signed callback for a
    developer's invoice only.
-   **Stripe is NOT live**: no `STRIPE_*` keys anywhere, and the UI hides cards
-   behind `CARD_PAYMENTS_ENABLED = false`.
+   **Stripe (cards, wired 2026-09-30):** `sync-api-env` mirrors both secret keys
+   and the LIVE webhook secret. The card button appears only when the resolved
+   mode has a webhook secret too, so it stays hidden on prod until the owner
+   registers `https://pixel-alpha.com/api/payments/stripe/webhook` in the Stripe
+   dashboard (to-do `stripe-register-webhooks`). The TEST webhook secret is set
+   on the box by hand and never mirrored (locally it is the Stripe CLI's).
 7. **Switch SSH to key auth and disable password login** — the root password is currently
    the only thing guarding the box, and it has been shared in plaintext. Rotate it, add
    `"key_file"` to the creds file in place of `"password"`, then set
