@@ -6,6 +6,7 @@ import {
   Calendar,
   CheckCircle2,
   Clock,
+  CreditCard,
   FileText,
   FlaskConical,
   Landmark,
@@ -26,10 +27,20 @@ import InvoiceDocumentModal from '../components/billing/InvoiceDocumentModal'
 import PaymentMethodModal from '../components/billing/PaymentMethodModal'
 import { EXCHANGE_META } from '../components/exchanges/meta'
 import { getInvoice } from '../services/billing'
-import { getPaymentMethods } from '../services/payments'
-import { ApiError } from '../services/api'
+import { createStripeCheckout, getPaymentMethods } from '../services/payments'
+import { ApiError, getApiErrorMessage } from '../services/api'
+import type { PaymentMethods } from '../types/payments'
+import ConfirmModal from '../components/ui/ConfirmModal'
 import { hasFee, type Invoice } from '../lib/billing'
 import { fmtMoney, fmtSignedMoney, fmtSignedPct, formatDate } from '../lib/format'
+
+/**
+ * Stripe's own violet (#635BFF) — a brand colour, like the exchange colours in
+ * `exchanges/meta.ts`, so it is fixed rather than a theme token: the card
+ * button should read as "Stripe" in both themes. Same size as the crypto one.
+ */
+const CARD_BTN =
+  'w-full inline-flex items-center justify-center gap-[9px] rounded-[14px] py-[15px] px-7 text-[14.5px] font-bold cursor-pointer text-white bg-[#635BFF] shadow-[0_12px_28px_-12px_rgba(99,91,255,0.7)] transition-[filter,transform] duration-150 hover:brightness-[1.08] active:translate-y-px disabled:opacity-70 disabled:cursor-wait'
 
 function Tile({
   icon,
@@ -72,21 +83,46 @@ export default function InvoiceDetail() {
   // server's own answer (null until it arrives — the button then claims neither).
   const sessionUser = useSessionUser()
   const developer = isDeveloper(sessionUser?.type)
-  const [devNetwork, setDevNetwork] = useState<string | null>(null)
+  // Read for everyone: it also decides whether the card button exists (the
+  // server offers cards only where a webhook can settle them).
+  const [methods, setMethods] = useState<PaymentMethods | null>(null)
   useEffect(() => {
-    if (!developer) return
     let cancelled = false
     getPaymentMethods()
       .then((m) => {
-        if (!cancelled) setDevNetwork(m.tron.network || null)
+        if (!cancelled) setMethods(m)
       })
       .catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [developer])
+  }, [])
+  const devNetwork = developer ? methods?.tron.network || null : null
   const devTest = developer && devNetwork !== null && devNetwork !== 'mainnet'
   const devReal = developer && devNetwork === 'mainnet'
+
+  // ── card (Stripe hosted checkout) ──────────────────────────────────────
+  const cardEnabled = methods?.stripe.enabled === true
+  /** Developers only: which card modes they may pick (test card / real charge). */
+  const devCardModes = methods?.stripe.modes
+  const [cardBusy, setCardBusy] = useState<'test' | 'live' | 'default' | null>(null)
+  const [cardError, setCardError] = useState<string | null>(null)
+  const [confirmLiveCard, setConfirmLiveCard] = useState(false)
+  const startCard = useCallback(
+    async (mode?: 'test' | 'live') => {
+      if (!id) return
+      setCardBusy(mode ?? 'default')
+      setCardError(null)
+      try {
+        const session = await createStripeCheckout({ invoiceId: id, mode })
+        window.location.href = session.checkoutUrl
+      } catch (err) {
+        setCardError(getApiErrorMessage(err, 'Could not start the card payment.'))
+        setCardBusy(null)
+      }
+    },
+    [id],
+  )
   const [searchParams, setSearchParams] = useSearchParams()
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [loading, setLoading] = useState(true)
@@ -342,18 +378,61 @@ export default function InvoiceDetail() {
 
             <div className="flex-shrink-0">
               {!paid && fee ? (
-                <div className="flex flex-col items-center gap-2">
+                <div className="flex flex-col items-stretch gap-2 min-w-[230px] max-[640px]:min-w-0">
                   <button
                     type="button"
-                    className="inline-flex items-center gap-[9px] rounded-[14px] py-[15px] px-7 text-[14.5px] font-bold cursor-pointer text-on-accent bg-accent shadow-[0_12px_28px_-12px_var(--glow)] transition-[filter,transform] duration-150 hover:brightness-[1.07] active:translate-y-px"
+                    className="w-full inline-flex items-center justify-center gap-[9px] rounded-[14px] py-[15px] px-7 text-[14.5px] font-bold cursor-pointer text-on-accent bg-accent shadow-[0_12px_28px_-12px_var(--glow)] transition-[filter,transform] duration-150 hover:brightness-[1.07] active:translate-y-px"
                     onClick={() => setPayOpen(true)}
                   >
                     {devTest ? <FlaskConical size={18} /> : <Wallet size={18} />}
                     {devTest ? 'Test pay (no real money)' : 'Pay with crypto'}
                   </button>
+
+                  {/* Card: straight to Stripe's hosted checkout. Traders get one
+                      button in the box's own mode; developers one per mode they
+                      may use, the real charge behind a confirmation. */}
+                  {cardEnabled && !devCardModes && (
+                    <button
+                      type="button"
+                      className={CARD_BTN}
+                      onClick={() => void startCard()}
+                      disabled={cardBusy !== null}
+                    >
+                      {cardBusy ? <Loader2 size={18} className="animate-[dstate-spin_0.8s_linear_infinite]" /> : <CreditCard size={18} />}
+                      {cardBusy ? 'Opening Stripe…' : 'Pay with card'}
+                    </button>
+                  )}
+                  {cardEnabled && devCardModes?.test && (
+                    <button
+                      type="button"
+                      className={CARD_BTN}
+                      onClick={() => void startCard('test')}
+                      disabled={cardBusy !== null}
+                    >
+                      {cardBusy === 'test' ? <Loader2 size={18} className="animate-[dstate-spin_0.8s_linear_infinite]" /> : <FlaskConical size={18} />}
+                      {cardBusy === 'test' ? 'Opening Stripe…' : 'Test card (sandbox)'}
+                    </button>
+                  )}
+                  {cardEnabled && devCardModes?.live && (
+                    <button
+                      type="button"
+                      className={CARD_BTN}
+                      onClick={() => setConfirmLiveCard(true)}
+                      disabled={cardBusy !== null}
+                    >
+                      {cardBusy === 'live' ? <Loader2 size={18} className="animate-[dstate-spin_0.8s_linear_infinite]" /> : <CreditCard size={18} />}
+                      {cardBusy === 'live' ? 'Opening Stripe…' : 'Pay with card (real)'}
+                    </button>
+                  )}
+                  {cardError && (
+                    <span className="self-center max-w-[260px] text-center text-[11.5px] font-semibold text-red leading-[1.4]">
+                      {cardError}
+                    </span>
+                  )}
+
                   {developer && (
                     <span
-                      className={`font-mono text-[10.5px] uppercase tracking-[0.08em] ${
+                      className={`self-center text-center font-mono text-[10.5px] uppercase tracking-[0.08em] ${
                         devReal ? 'text-red' : 'text-accent'
                       }`}
                     >
@@ -586,6 +665,21 @@ export default function InvoiceDetail() {
           setDocOpen(false)
           setPayOpen(true)
         }}
+      />
+
+      {/* A developer's REAL card charge is real money — confirm it first. */}
+      <ConfirmModal
+        open={confirmLiveCard}
+        title="Charge a real card?"
+        message={`This opens a LIVE Stripe checkout for ${fmtMoney(invoice.totalFee)}. Your real card is charged and this invoice is settled with that money. For a rehearsal, use Test card instead.`}
+        confirmLabel="Yes, charge real card"
+        cancelLabel="Cancel"
+        danger
+        onConfirm={() => {
+          setConfirmLiveCard(false)
+          void startCard('live')
+        }}
+        onCancel={() => setConfirmLiveCard(false)}
       />
 
       <PaymentMethodModal
