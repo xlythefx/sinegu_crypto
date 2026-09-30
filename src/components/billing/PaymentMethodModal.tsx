@@ -908,7 +908,7 @@ export default function PaymentMethodModal({
     <ConfirmModal
       open={confirmLive}
       title={`Pay ${fmtMoney(invoice.totalFee)} with Stripe`}
-      message={`You'll continue to Stripe's secure checkout to pay this invoice by card. Developer note: this is a live payment, so the card is really charged — use "Use a Stripe test card" to rehearse.`}
+      message="You'll be taken to Stripe's secure checkout to complete your payment. Your card details are entered on Stripe and never stored by us."
       confirmLabel="Continue to Stripe"
       cancelLabel="Cancel"
       onConfirm={() => {

@@ -40,7 +40,7 @@ import { fmtMoney, fmtSignedMoney, fmtSignedPct, formatDate } from '../lib/forma
  * button should read as "Stripe" in both themes. Same size as the crypto one.
  */
 const CARD_BTN =
-  'w-full inline-flex items-center justify-center gap-[9px] rounded-[14px] py-[15px] px-7 text-[14.5px] font-bold cursor-pointer text-white bg-[#635BFF] shadow-[0_12px_28px_-12px_rgba(99,91,255,0.7)] transition-[filter,transform] duration-150 hover:brightness-[1.08] active:translate-y-px disabled:opacity-70 disabled:cursor-wait'
+  'flex-1 whitespace-nowrap inline-flex items-center justify-center gap-[9px] rounded-[14px] py-[15px] px-7 text-[14.5px] font-bold cursor-pointer text-white bg-[#635BFF] shadow-[0_12px_28px_-12px_rgba(99,91,255,0.7)] transition-[filter,transform] duration-150 hover:brightness-[1.08] active:translate-y-px disabled:opacity-70 disabled:cursor-wait'
 
 /** The developer-only test-card button: outlined, so it never reads as the real one. */
 const CARD_TEST_BTN =
@@ -383,9 +383,11 @@ export default function InvoiceDetail() {
             <div className="flex-shrink-0">
               {!paid && fee ? (
                 <div className="flex flex-col items-stretch gap-2 min-w-[230px] max-[640px]:min-w-0">
+                  {/* The two ways to pay, side by side (stacked on phones). */}
+                  <div className="flex gap-2.5 max-[560px]:flex-col">
                   <button
                     type="button"
-                    className="w-full inline-flex items-center justify-center gap-[9px] rounded-[14px] py-[15px] px-7 text-[14.5px] font-bold cursor-pointer text-on-accent bg-accent shadow-[0_12px_28px_-12px_var(--glow)] transition-[filter,transform] duration-150 hover:brightness-[1.07] active:translate-y-px"
+                    className="flex-1 whitespace-nowrap inline-flex items-center justify-center gap-[9px] rounded-[14px] py-[15px] px-7 text-[14.5px] font-bold cursor-pointer text-on-accent bg-accent shadow-[0_12px_28px_-12px_var(--glow)] transition-[filter,transform] duration-150 hover:brightness-[1.07] active:translate-y-px"
                     onClick={() => setPayOpen(true)}
                   >
                     {devTest ? <FlaskConical size={18} /> : <Wallet size={18} />}
@@ -419,6 +421,7 @@ export default function InvoiceDetail() {
                       {cardBusy === 'live' ? 'Opening Stripe…' : 'Pay with Stripe'}
                     </button>
                   )}
+                  </div>
                   {/* Developer-only rehearsal. Always SHOWN to a developer so it
                       is findable; disabled (with the reason) until the test-mode
                       webhook exists, because without it a test payment would
@@ -689,7 +692,7 @@ export default function InvoiceDetail() {
       <ConfirmModal
         open={confirmLiveCard}
         title={`Pay ${fmtMoney(invoice.totalFee)} with Stripe`}
-        message={`You'll continue to Stripe's secure checkout to pay this invoice by card. Developer note: this is a live payment, so the card is really charged — use "Use a Stripe test card" to rehearse.`}
+        message="You'll be taken to Stripe's secure checkout to complete your payment. Your card details are entered on Stripe and never stored by us."
         confirmLabel="Continue to Stripe"
         cancelLabel="Cancel"
         onConfirm={() => {
