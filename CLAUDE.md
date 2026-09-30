@@ -209,8 +209,8 @@ page by page ("we slowly do it"). Rules for every ported page:
   chips, collapsible invoice cards with performance breakdown, "How billing works" sidebar,
   and an in-depth detail page at `/dashboard/invoices/:id`; **wired live** to
   `sinegutrade-api` via `services/billing.ts` + `useApiData`. The trader pay button opens
-  `PaymentMethodModal` → a real Coinsbuy deposit; cards stay hidden behind
-  `CARD_PAYMENTS_ENABLED = false` until the Stripe flow is written). Remaining user pages:
+  `PaymentMethodModal` → USDT-TRC20 or, where the server allows it, a card via Stripe
+  Checkout — see "Card payments" below). Remaining user pages:
   Trading Assets, Referrals; further admin pages (Strategies, ...).
 
 **The printable invoice document** — "View invoice" on `/dashboard/invoices/:id` opens
@@ -347,8 +347,37 @@ with `python .claude/deploy_sinegualcrypto.py sync-api-env` (mirrors `COINSBUY_*
 `sinegutrade-api/.env`, writes the prod-only `PAYMENTS_*` URLs, re-runs `config:cache` —
 without which a new key stays invisible to every request). The callback URL is sent per
 deposit, so nothing needs configuring in the Coinsbuy dashboard except the **outbound IP
-allow-list** (2.24.139.176, else 403 / code 2016). **Stripe is not live** — no keys, and no
-frontend call for `/payments/stripe/checkout-session` yet.
+allow-list** (2.24.139.176, else 403 / code 2016).
+
+**Card payments — Stripe hosted Checkout (wired 2026-09-30).** Ported from the
+mother (`sinegu-api/stripe/create-checkout-session.php` + `webhook.php`), reusing
+the SAME Stripe account's keys. Flow: "Pay $X by card" in `PaymentMethodModal`
+→ `POST /payments/stripe/checkout-session` (amount from the invoice row, a Stripe
+Customer per uni_id with `setup_future_usage=off_session` so a later auto-charge
+can reuse the card) → redirect to checkout.stripe.com → back to
+`/dashboard/invoices/:id?payment=success&session_id=…`, which only POLLS; the
+invoice is settled by the signed `checkout.session.completed` webhook
+(`StripeWebhookController` → `InvoiceService::settle`), never by the return.
+Rules:
+- **The button is server-gated on `stripe.enabled`** = a secret key AND a webhook
+  secret for the resolved mode. `CARD_PAYMENTS_ENABLED` is only a kill switch. A
+  box with no webhook secret therefore shows no card button — a card charged
+  with no webhook would leave the invoice pending and `engine:mark-overdue`
+  would pause the customer.
+- **A webhook secret belongs to an ENDPOINT, not the account.** The mother's
+  live `whsec_` is for its own URL and was deliberately NOT copied; the live
+  endpoint for `https://pixel-alpha.com/api/payments/stripe/webhook` is owner
+  to-do `stripe-register-webhooks`. Locally `STRIPE_WEBHOOK_SECRET_TEST` is the
+  Stripe CLI secret (`stripe listen --forward-to 127.0.0.1:8000/api/payments/stripe/webhook`).
+  `sync-api-env` mirrors both secret keys and the LIVE webhook secret; the TEST
+  webhook secret is per box and never mirrored.
+- **The mother's endpoint also receives our events** (one account) and answers
+  them 400 (no `broker` metadata). Harmless to both products, noisy in Stripe's
+  delivery log; the fix, if wanted, is a separate Stripe account.
+- Live keys still need https callbacks (`PaymentEnvironment`), and a `developer`
+  pays with test cards everywhere (4242 4242 4242 4242), like the other rails.
+- Saved cards / off-session auto-charge are NOT built yet — the Customer and the
+  reusable PaymentMethod are captured now so that phase needs no re-entry.
 
 **A `developer` account is the test rig, on every box including prod.**
 `PaymentController::applyRoleOverrides` pins that role to the providers' SANDBOX keys

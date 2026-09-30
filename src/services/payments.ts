@@ -109,6 +109,31 @@ export async function createCoinsbuyDeposit(params: {
   }
 }
 
+/**
+ * POST /payments/stripe/checkout-session — opens a hosted Stripe Checkout for
+ * an invoice and returns the URL to send the trader to. As with the crypto
+ * rails, the charged amount comes from the invoice row server-side and `amount`
+ * is only the stale-tab guard; the invoice settles on Stripe's signed webhook,
+ * never on the trader's return.
+ */
+export async function createStripeCheckout(params: {
+  invoiceId: string | number
+  amount?: number
+}): Promise<{ checkoutUrl: string; sessionId: string; mode: string }> {
+  const res = await apiFetch<{
+    success: boolean
+    provider: 'stripe'
+    mode: string
+    session_id: string
+    checkout_url: string
+  }>('/payments/stripe/checkout-session', {
+    method: 'POST',
+    auth: true,
+    body: { invoice_id: Number(params.invoiceId), amount: params.amount },
+  })
+  return { checkoutUrl: res.checkout_url, sessionId: res.session_id, mode: res.mode }
+}
+
 interface ApiTronIntent {
   success: boolean
   provider: 'tron'

@@ -94,8 +94,15 @@ export default function InvoiceDetail() {
   const [payOpen, setPayOpen] = useState(false)
   /** The printable invoice document (white paper, outside the dark theme). */
   const [docOpen, setDocOpen] = useState(false)
-  /** Set when Coinsbuy bounced the trader back here after checkout. */
+  /** Set when a hosted checkout (Stripe or Coinsbuy) bounced the trader back here. */
   const [returned, setReturned] = useState<'success' | 'cancelled' | null>(null)
+  /**
+   * Which checkout it was, read off the return URL: Stripe appends
+   * `session_id`, Coinsbuy `transaction_id`. A cancel carries neither, so it
+   * defaults to card — the only hosted checkout offered while Coinsbuy is
+   * hidden (TRON never leaves the page, so it never returns here).
+   */
+  const [returnedVia, setReturnedVia] = useState<'card' | 'crypto'>('card')
   const [polls, setPolls] = useState(0)
 
   const load = useCallback(() => {
@@ -119,12 +126,14 @@ export default function InvoiceDetail() {
 
   useEffect(() => load(), [load])
 
-  // Coinsbuy returns to `?payment=success&transaction_id=…` (or `=cancelled`).
+  // Stripe returns to `?payment=success&session_id=…`, Coinsbuy to
+  // `…&transaction_id=…` (both to `?payment=cancelled` on a cancel).
   // Read it once, then strip the params so a refresh doesn't replay the banner.
   useEffect(() => {
     const status = searchParams.get('payment')
     if (status !== 'success' && status !== 'cancelled') return
     setReturned(status)
+    setReturnedVia(searchParams.has('transaction_id') ? 'crypto' : 'card')
     const next = new URLSearchParams(searchParams)
     next.delete('payment')
     next.delete('transaction_id')
@@ -261,16 +270,22 @@ export default function InvoiceDetail() {
                 ? 'Payment cancelled'
                 : paid
                   ? 'Payment confirmed'
-                  : 'Payment received — confirming on-chain'}
+                  : returnedVia === 'card'
+                    ? 'Payment received — confirming'
+                    : 'Payment received — confirming on-chain'}
             </p>
             <p className="text-[12px] text-muted leading-[1.5] mt-0.5">
               {returned === 'cancelled'
-                ? 'You left the Coinsbuy checkout, so nothing was charged. This invoice is still outstanding.'
+                ? `You left the ${returnedVia === 'card' ? 'card' : 'Coinsbuy'} checkout, so nothing was charged. This invoice is still outstanding.`
                 : paid
                   ? 'This billing period is settled and your high-water mark has been updated.'
                   : settling
-                    ? 'Your transfer is waiting for blockchain confirmation. This page updates automatically — it usually takes a few minutes.'
-                    : 'Still not settled. Confirmation can lag behind the network; refresh in a few minutes or contact support if it persists.'}
+                    ? returnedVia === 'card'
+                      ? 'Stripe is confirming your card payment. This page updates automatically — it usually takes a few seconds.'
+                      : 'Your transfer is waiting for blockchain confirmation. This page updates automatically — it usually takes a few minutes.'
+                    : returnedVia === 'card'
+                      ? 'Still not settled. Refresh in a few minutes, or contact support if it persists — please don’t pay a second time.'
+                      : 'Still not settled. Confirmation can lag behind the network; refresh in a few minutes or contact support if it persists.'}
             </p>
           </div>
           <button

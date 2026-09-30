@@ -1484,6 +1484,19 @@ MIRRORED_API_ENV_KEYS = (
     "MAIL_FROM_ADDRESS",
     "MAIL_FROM_NAME",
     "MAIL_ADMIN_ADDRESS",
+    # Stripe (card payments, 2026-09-30) — the product's Stripe account, shared
+    # with the mother product. Both secret keys identify the ACCOUNT, and the
+    # live webhook secret identifies the ONE live endpoint registered for
+    # pixel-alpha.com — so all three are the same on every machine (local never
+    # runs live, so holding prod's value there is harmless).
+    #
+    # Deliberately NOT mirrored:
+    #   STRIPE_WEBHOOK_SECRET_TEST — per BOX. Locally it is the Stripe CLI's
+    #     `stripe listen` secret; on prod it is the test-mode dashboard
+    #     endpoint's. Mirroring would break developer test payments on prod.
+    "STRIPE_SECRET_KEY",
+    "STRIPE_SECRET_KEY_TEST",
+    "STRIPE_WEBHOOK_SECRET",
 )
 
 # Written with PROD values, never mirrored — these describe the BOX. Locally
@@ -1554,7 +1567,7 @@ def _sync_payment_env(ssh) -> None:
     if missing:
         log("  api/.env: not set locally, skipped -> " + ", ".join(missing))
     if not changed and not missing:
-        log("  api/.env: mirrored keys (Coinsbuy, TRON, Discord) already match local")
+        log("  api/.env: mirrored keys (Coinsbuy, TRON, Discord, mail, Stripe) already match local")
 
     for key, value in PROD_PAYMENT_ENV.items():
         if _remote_env_value(ssh, f"{REMOTE_API}/.env", key) == value:

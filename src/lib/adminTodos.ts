@@ -18,6 +18,25 @@ import type { AdminTodo } from '../types/adminTodos'
  *    the note and the date it was settled stay readable.
  */
 export const ADMIN_TODOS: AdminTodo[] = [
+  // ── Card payments via Stripe (2026-09-30) ───────────────────────────────
+  {
+    id: 'stripe-register-webhooks',
+    feature: 'Card payments',
+    kind: 'action',
+    title: 'Register the Pixel Alpha webhook in Stripe (live and test) and paste its signing secrets',
+    added: '2026-09-30',
+    why: 'Card payments use the same Stripe account as the old product, and the API already holds its keys. But Stripe only tells us a card was paid through a webhook that has to be registered in the Stripe dashboard, and each registration has its own signing secret. The old product\'s secret belongs to ITS address and cannot be reused. Until this is done the "Pay by card" button stays hidden for customers on pixel-alpha.com, on purpose: a card charged with no webhook would leave the invoice unpaid, and the overdue job would then pause that customer\'s trading.',
+    steps: [
+      'Stripe Dashboard (the same account as the old product) → Developers → Webhooks → Add endpoint, in LIVE mode.',
+      'Endpoint URL: https://pixel-alpha.com/api/payments/stripe/webhook. Events: checkout.session.completed only.',
+      'Open the new endpoint → Signing secret → Reveal. Paste it into STRIPE_WEBHOOK_SECRET in the local sinegutrade-api/.env, then run `python .claude/deploy_sinegualcrypto.py sync-api-env`.',
+      'Switch the dashboard to TEST mode and add the same endpoint URL there too, with the same event. That one is for developer accounts, which always pay with test cards, even on prod. Paste its signing secret into STRIPE_WEBHOOK_SECRET_TEST on the PROD box only (api/.env, then `php artisan config:cache`). Leave the local value alone: the local one is the Stripe CLI secret for `stripe listen`.',
+      'Rehearse as a developer account on prod: open an invoice, choose Pay by card, pay with card 4242 4242 4242 4242, and check the invoice flips to Paid within seconds.',
+      'Heads-up: the OLD product\'s webhook on the same Stripe account will also receive Pixel Alpha payments and answer them with an error, because they lack its "broker" field. That does no harm to either product, but Stripe will list those deliveries as failed on the old endpoint and may email about them. If that becomes noise, give Pixel Alpha its own Stripe account and swap the keys.',
+    ],
+    envKeys: ['STRIPE_WEBHOOK_SECRET', 'STRIPE_WEBHOOK_SECRET_TEST'],
+    links: [{ label: 'Stripe → Webhooks', href: 'https://dashboard.stripe.com/webhooks' }],
+  },
   // ── Transfer history from the exchange ledger (2026-09-25) ──────────────
   {
     id: 'ledger-backfill-existing-accounts',

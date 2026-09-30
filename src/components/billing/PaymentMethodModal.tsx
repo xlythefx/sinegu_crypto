@@ -23,6 +23,7 @@ import { daysUntilDue, type Invoice } from '../../lib/billing'
 import {
   FALLBACK_CRYPTOCURRENCIES,
   createCoinsbuyDeposit,
+  createStripeCheckout,
   createTronIntent,
   getPaymentMethods,
 } from '../../services/payments'
@@ -41,11 +42,14 @@ import TronPayPanel from './TronPayPanel'
 import PaymentSuccess from './PaymentSuccess'
 
 /**
- * Card / Stripe payments are hidden until the Stripe flow is switched on — flip
- * this to `true` (and pass `onPayWithCard`) to bring the card option back. The
- * backend endpoint (`/payments/stripe/checkout-session`) already exists.
+ * Card payments (Stripe hosted Checkout, 2026-09-30) are offered whenever
+ * `/payments/methods` reports `stripe.enabled` — i.e. the server holds BOTH a
+ * secret key and a webhook secret for the mode it resolved. The webhook secret
+ * is the part that matters: it is the only thing that settles a card payment,
+ * so a box without one never shows a button that would charge a card against
+ * an invoice nothing will ever mark paid. This flag is only a kill switch.
  */
-const CARD_PAYMENTS_ENABLED = false
+const CARD_PAYMENTS_ENABLED = true
 
 /**
  * Coinsbuy is hidden from traders (2026-09-23, owner's call): invoices are paid
@@ -68,8 +72,6 @@ interface PaymentMethodModalProps {
   onClose: () => void
   /** Fired once a deposit exists, before the redirect to Coinsbuy. */
   onDepositCreated?: (deposit: CoinsbuyDeposit) => void
-  /** Only used while {@link CARD_PAYMENTS_ENABLED} is on. */
-  onPayWithCard?: () => void
 }
 
 const LABEL = 'text-[10.5px] uppercase tracking-[0.1em] text-faint'
@@ -93,11 +95,12 @@ export default function PaymentMethodModal({
   invoice,
   onClose,
   onDepositCreated,
-  onPayWithCard,
 }: PaymentMethodModalProps) {
   const [methods, setMethods] = useState<PaymentMethods | null>(null)
   const [crypto, setCrypto] = useState<string>('USDT')
   const [phase, setPhase] = useState<'idle' | 'creating' | 'redirecting'>('idle')
+  /** The card rail's own progress — it leaves the page, the crypto rails do not. */
+  const [cardPhase, setCardPhase] = useState<'idle' | 'creating' | 'redirecting'>('idle')
   const [error, setError] = useState<string | null>(null)
   /** Set only on the Enterprise-wallet path — a bare address to send to. */
   const [deposit, setDeposit] = useState<CoinsbuyDeposit | null>(null)
@@ -151,6 +154,7 @@ export default function PaymentMethodModal({
   useEffect(() => {
     if (!open) return
     setPhase('idle')
+    setCardPhase('idle')
     setError(null)
     setDeposit(null)
     setPickedProvider('coinsbuy')
@@ -241,6 +245,30 @@ export default function PaymentMethodModal({
     }
   }, [invoice])
 
+  /**
+   * Open Stripe's hosted Checkout. The card is entered on Stripe's page, never
+   * here, and returning to the invoice does not settle it — the signed webhook
+   * does; the invoice page only polls to notice.
+   */
+  const startCardPayment = useCallback(async () => {
+    if (!invoice) return
+    setCardPhase('creating')
+    setError(null)
+    setErrorDebug(null)
+    try {
+      const session = await createStripeCheckout({
+        invoiceId: invoice.id,
+        amount: invoice.totalFee,
+      })
+      setCardPhase('redirecting')
+      window.location.href = session.checkoutUrl
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not start the card payment.'))
+      setErrorDebug(getApiErrorDebug(err))
+      setCardPhase('idle')
+    }
+  }, [invoice])
+
   const copyAddress = useCallback(async () => {
     if (!deposit?.destination) return
     try {
@@ -272,7 +300,10 @@ export default function PaymentMethodModal({
   const sandbox = methods?.coinsbuy.mode === 'sandbox'
   // Developer account: test credentials on every machine, including production.
   const testAccount = methods?.testAccount === true
-  const busy = phase !== 'idle'
+  const busy = phase !== 'idle' || cardPhase !== 'idle'
+  /** Server-decided: a secret key AND a webhook secret exist for this mode. */
+  const cardEnabled = CARD_PAYMENTS_ENABLED && methods?.stripe.enabled === true
+  const cardTestMode = cardEnabled && methods?.stripe.mode !== 'live'
 
   /**
    * Whether to offer the direct-wallet rail at all. The server is the authority
@@ -292,8 +323,10 @@ export default function PaymentMethodModal({
   const testMode = COINSBUY_ENABLED ? testAccount || sandbox : tronIsTestnet
   /** A developer about to send real funds — the one case the banner must not call a test. */
   const developerOnMainnet = testAccount && !testMode
+  /** Whether any crypto rail can be offered — drives the footer's crypto button. */
+  const cryptoRail = tronVisible || (COINSBUY_ENABLED && cryptoEnabled)
   /** No rail left to offer: say so instead of rendering an empty "Pay with". */
-  const noRail = !tronVisible && (!COINSBUY_ENABLED || !cryptoEnabled)
+  const noRail = !cryptoRail && !cardEnabled
 
   // Once the invoice is settled the sheet has one job left: confirm what was
   // paid and offer somewhere to go. Everything above it — the fee breakdown,
@@ -328,8 +361,8 @@ export default function PaymentMethodModal({
           </span>
           <div className="min-w-0">
             <h3 className="font-display text-[18px] font-extrabold tracking-[-0.01em] leading-tight flex items-center gap-2 flex-wrap">
-              Pay with crypto
-              {testMode && (
+              Pay invoice
+              {testMode && cryptoRail && (
                 <span className="font-body text-[9.5px] font-bold uppercase tracking-[0.06em] py-[3px] px-2 rounded-pill bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-accent">
                   Test mode
                 </span>
@@ -685,31 +718,49 @@ export default function PaymentMethodModal({
             {noRail && (
               <p className="flex items-start gap-2 text-[11.5px] font-semibold text-red mt-2.5">
                 <AlertTriangle size={13} className="flex-shrink-0 mt-px" />
-                Crypto payments are not configured on this server yet.
+                Payments are not configured on this server yet.
               </p>
             )}
 
-            {CARD_PAYMENTS_ENABLED ? (
+            {/* Card — hidden once a crypto amount is reserved, since the sheet
+                is then committed to that transfer. */}
+            {cardEnabled && !tronIntent && !deposit && (
               <button
                 type="button"
-                className="w-full mt-2.5 flex items-center gap-3 text-left rounded-[14px] border border-border bg-surface2 p-4 cursor-pointer transition-[border-color] duration-150 hover:border-accent"
-                onClick={onPayWithCard}
+                className={`w-full flex items-center gap-3 text-left rounded-[14px] border border-border bg-surface2 p-4 max-[420px]:p-3.5 cursor-pointer transition-[border-color] duration-150 hover:border-accent disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:border-border ${
+                  cryptoRail ? 'mt-2.5' : ''
+                }`}
+                onClick={startCardPayment}
+                disabled={busy}
               >
-                <span className="w-9 h-9 flex-shrink-0 grid place-items-center rounded-[10px] border border-border bg-surface text-muted">
-                  <CreditCard size={16} />
+                <span className="w-9 h-9 flex-shrink-0 grid place-items-center rounded-[10px] border border-accent-line bg-[var(--bubble)] text-accent">
+                  {cardPhase !== 'idle' ? (
+                    <Loader2 size={16} className="animate-[dstate-spin_0.8s_linear_infinite]" />
+                  ) : (
+                    <CreditCard size={16} />
+                  )}
                 </span>
-                <span className="min-w-0">
-                  <span className="block text-[13.5px] font-bold text-text">Card</span>
-                  <span className="block text-[11.5px] text-muted">
-                    Processed securely via Stripe.
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2 flex-wrap text-[13.5px] font-bold text-text">
+                    {cardPhase === 'creating'
+                      ? 'Opening secure checkout…'
+                      : cardPhase === 'redirecting'
+                        ? 'Redirecting to Stripe…'
+                        : `Pay ${fmtMoney(invoice.totalFee)} by card`}
+                    {cardTestMode && (
+                      <span className="inline-flex items-center gap-1 rounded-pill border border-accent-line bg-[var(--bubble)] py-0.5 px-2 text-[10px] font-bold uppercase tracking-[0.08em] text-accent">
+                        <FlaskConical size={10} /> Test mode
+                      </span>
+                    )}
+                  </span>
+                  <span className="block text-[11.5px] text-muted mt-0.5">
+                    {cardTestMode
+                      ? 'Stripe test checkout — use card 4242 4242 4242 4242, no money moves.'
+                      : 'Visa, Mastercard and more — entered on Stripe’s secure page, never here.'}
                   </span>
                 </span>
+                <ExternalLink size={15} className="flex-shrink-0 text-faint" />
               </button>
-            ) : (
-              <p className="flex items-center gap-2 text-[11.5px] text-faint mt-2.5">
-                <CreditCard size={13} className="flex-shrink-0" />
-                Card payments are coming soon — crypto is the only method for now.
-              </p>
             )}
 
             {error && (
@@ -722,7 +773,7 @@ export default function PaymentMethodModal({
             {/* Developer accounts get the whole failure, not the polite version:
                 which stage broke, what the provider said, what to check. */}
             {developer && errorDebug && (
-              <DevDetails title="Crypto payment failed" debug={errorDebug} />
+              <DevDetails title="Payment failed" debug={errorDebug} />
             )}
             {developer && methodsDebug && (
               <DevDetails
@@ -750,7 +801,7 @@ export default function PaymentMethodModal({
             >
               {deposit || tronIntent ? 'Done' : 'Cancel'}
             </button>
-            {!deposit && !tronIntent && (
+            {!deposit && !tronIntent && cryptoRail && (
               <button
                 type="button"
                 className="inline-flex items-center justify-center gap-2 text-[13.5px] font-bold bg-accent text-on-accent border-0 py-3 px-[22px] rounded-pill cursor-pointer shadow-[0_10px_24px_var(--glow)] transition-[filter,transform] duration-150 hover:brightness-[1.06] active:translate-y-px disabled:opacity-60 disabled:cursor-not-allowed disabled:shadow-none max-[430px]:w-full"
