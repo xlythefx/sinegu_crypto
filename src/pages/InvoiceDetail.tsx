@@ -42,6 +42,10 @@ import { fmtMoney, fmtSignedMoney, fmtSignedPct, formatDate } from '../lib/forma
 const CARD_BTN =
   'w-full inline-flex items-center justify-center gap-[9px] rounded-[14px] py-[15px] px-7 text-[14.5px] font-bold cursor-pointer text-white bg-[#635BFF] shadow-[0_12px_28px_-12px_rgba(99,91,255,0.7)] transition-[filter,transform] duration-150 hover:brightness-[1.08] active:translate-y-px disabled:opacity-70 disabled:cursor-wait'
 
+/** The developer-only test-card button: outlined, so it never reads as the real one. */
+const CARD_TEST_BTN =
+  'w-full inline-flex items-center justify-center gap-2 rounded-[14px] py-[11px] px-6 text-[13px] font-bold cursor-pointer text-[#8b85ff] bg-transparent border border-dashed border-[#635BFF] transition-[background-color] duration-150 hover:bg-[rgba(99,91,255,0.1)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent'
+
 function Tile({
   icon,
   label,
@@ -399,21 +403,10 @@ export default function InvoiceDetail() {
                       disabled={cardBusy !== null}
                     >
                       {cardBusy ? <Loader2 size={18} className="animate-[dstate-spin_0.8s_linear_infinite]" /> : <CreditCard size={18} />}
-                      {cardBusy ? 'Opening Stripe…' : 'Pay with card'}
+                      {cardBusy ? 'Opening Stripe…' : 'Pay with Stripe'}
                     </button>
                   )}
-                  {cardEnabled && devCardModes?.test && (
-                    <button
-                      type="button"
-                      className={CARD_BTN}
-                      onClick={() => void startCard('test')}
-                      disabled={cardBusy !== null}
-                    >
-                      {cardBusy === 'test' ? <Loader2 size={18} className="animate-[dstate-spin_0.8s_linear_infinite]" /> : <FlaskConical size={18} />}
-                      {cardBusy === 'test' ? 'Opening Stripe…' : 'Test card (sandbox)'}
-                    </button>
-                  )}
-                  {cardEnabled && devCardModes?.live && (
+                  {devCardModes?.live && (
                     <button
                       type="button"
                       className={CARD_BTN}
@@ -421,8 +414,33 @@ export default function InvoiceDetail() {
                       disabled={cardBusy !== null}
                     >
                       {cardBusy === 'live' ? <Loader2 size={18} className="animate-[dstate-spin_0.8s_linear_infinite]" /> : <CreditCard size={18} />}
-                      {cardBusy === 'live' ? 'Opening Stripe…' : 'Pay with card (real)'}
+                      {/* Same label a customer sees — the confirmation, not the
+                          button, is where a developer is told it is real money. */}
+                      {cardBusy === 'live' ? 'Opening Stripe…' : 'Pay with Stripe'}
                     </button>
+                  )}
+                  {/* Developer-only rehearsal. Always SHOWN to a developer so it
+                      is findable; disabled (with the reason) until the test-mode
+                      webhook exists, because without it a test payment would
+                      never settle. */}
+                  {devCardModes && (
+                    <>
+                      <button
+                        type="button"
+                        className={CARD_TEST_BTN}
+                        onClick={() => void startCard('test')}
+                        disabled={cardBusy !== null || !devCardModes.test}
+                      >
+                        {cardBusy === 'test' ? <Loader2 size={16} className="animate-[dstate-spin_0.8s_linear_infinite]" /> : <FlaskConical size={16} />}
+                        {cardBusy === 'test' ? 'Opening Stripe…' : 'Use a Stripe test card'}
+                      </button>
+                      {!devCardModes.test && (
+                        <span className="self-center max-w-[260px] text-center text-[10.5px] text-faint leading-[1.4]">
+                          Dev only · needs the Stripe TEST webhook secret on the server
+                          (to-do "stripe-register-webhooks").
+                        </span>
+                      )}
+                    </>
                   )}
                   {cardError && (
                     <span className="self-center max-w-[260px] text-center text-[11.5px] font-semibold text-red leading-[1.4]">
@@ -670,11 +688,10 @@ export default function InvoiceDetail() {
       {/* A developer's REAL card charge is real money — confirm it first. */}
       <ConfirmModal
         open={confirmLiveCard}
-        title="Charge a real card?"
-        message={`This opens a LIVE Stripe checkout for ${fmtMoney(invoice.totalFee)}. Your real card is charged and this invoice is settled with that money. For a rehearsal, use Test card instead.`}
-        confirmLabel="Yes, charge real card"
+        title={`Pay ${fmtMoney(invoice.totalFee)} with Stripe`}
+        message={`You'll continue to Stripe's secure checkout to pay this invoice by card. Developer note: this is a live payment, so the card is really charged — use "Use a Stripe test card" to rehearse.`}
+        confirmLabel="Continue to Stripe"
         cancelLabel="Cancel"
-        danger
         onConfirm={() => {
           setConfirmLiveCard(false)
           void startCard('live')

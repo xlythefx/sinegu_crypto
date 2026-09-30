@@ -329,7 +329,7 @@ export default function PaymentMethodModal({
   const cardEnabled = CARD_PAYMENTS_ENABLED && methods?.stripe.enabled === true
   const cardTestMode = cardEnabled && methods?.stripe.mode !== 'live'
   /** Developer accounts: pick test card (sandbox) or a real charge (live). */
-  const devCardModes = cardEnabled ? methods?.stripe.modes : undefined
+  const devCardModes = CARD_PAYMENTS_ENABLED ? methods?.stripe.modes : undefined
 
   /**
    * Whether to offer the direct-wallet rail at all. The server is the authority
@@ -760,7 +760,7 @@ export default function PaymentMethodModal({
               <CardPayButton
                 className={cryptoRail ? 'mt-2.5' : ''}
                 tone={cardTestMode ? 'test' : 'normal'}
-                title={`Pay ${fmtMoney(invoice.totalFee)} by card`}
+                title={`Pay ${fmtMoney(invoice.totalFee)} with Stripe`}
                 subtitle={
                   cardTestMode
                     ? 'Stripe test checkout — use card 4242 4242 4242 4242, no money moves.'
@@ -773,39 +773,34 @@ export default function PaymentMethodModal({
               />
             )}
 
-            {cardEnabled && !deposit && devCardModes && (
-              /* Developers choose: a sandbox rehearsal or a REAL charge. */
+            {!deposit && devCardModes && (
+              /* Developers: the customer's own button (live, confirmed first)
+                 plus a test-card rehearsal that only they ever see. */
               <div className={`flex flex-col gap-2 ${cryptoRail ? 'mt-2.5' : ''}`}>
-                <p className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-accent flex items-center gap-1.5">
-                  <FlaskConical size={12} /> Developer · card payment
-                </p>
-                {devCardModes.test && (
+                {devCardModes.live && (
                   <CardPayButton
-                    tone="test"
-                    title={`Test card — ${fmtMoney(invoice.totalFee)}`}
-                    subtitle="Stripe sandbox: card 4242 4242 4242 4242, any future date, any CVC. No money moves; the invoice still settles."
-                    loading={cardPhase !== 'idle' && cardMode === 'test'}
-                    loadingLabel="Opening sandbox checkout…"
-                    disabled={busy}
-                    onClick={() => void startCardPayment('test')}
-                  />
-                )}
-                {devCardModes.live ? (
-                  <CardPayButton
-                    tone="live"
-                    title={`Real card — ${fmtMoney(invoice.totalFee)}`}
-                    subtitle="Live Stripe checkout. Your real card is charged exactly like a customer's would be."
+                    tone="normal"
+                    title={`Pay ${fmtMoney(invoice.totalFee)} with Stripe`}
+                    subtitle="Visa, Mastercard and more — entered on Stripe’s secure page, never here."
                     loading={cardPhase !== 'idle' && cardMode === 'live'}
-                    loadingLabel="Opening live checkout…"
+                    loadingLabel="Opening secure checkout…"
                     disabled={busy}
                     onClick={() => setConfirmLive(true)}
                   />
-                ) : (
-                  <p className="text-[11px] text-faint leading-[1.45]">
-                    Real card payments are not available on this server — it needs
-                    the live Stripe webhook secret and must be the production box.
-                  </p>
                 )}
+                <CardPayButton
+                  tone="test"
+                  title="Use a Stripe test card"
+                  subtitle={
+                    devCardModes.test
+                      ? 'Developer only · card 4242 4242 4242 4242, any future date, any CVC. No money moves; the invoice still settles.'
+                      : 'Developer only · unavailable until the Stripe TEST webhook secret is on the server (to-do "stripe-register-webhooks").'
+                  }
+                  loading={cardPhase !== 'idle' && cardMode === 'test'}
+                  loadingLabel="Opening sandbox checkout…"
+                  disabled={busy || !devCardModes.test}
+                  onClick={() => void startCardPayment('test')}
+                />
               </div>
             )}
 
@@ -912,11 +907,10 @@ export default function PaymentMethodModal({
     {/* A developer's REAL charge is real money — confirm it, per convention. */}
     <ConfirmModal
       open={confirmLive}
-      title="Charge a real card?"
-      message={`This opens a LIVE Stripe checkout for ${fmtMoney(invoice.totalFee)}. Your real card is charged and this invoice is settled with that money. For a rehearsal, use the Test card button instead.`}
-      confirmLabel="Yes, charge real card"
+      title={`Pay ${fmtMoney(invoice.totalFee)} with Stripe`}
+      message={`You'll continue to Stripe's secure checkout to pay this invoice by card. Developer note: this is a live payment, so the card is really charged — use "Use a Stripe test card" to rehearse.`}
+      confirmLabel="Continue to Stripe"
       cancelLabel="Cancel"
-      danger
       onConfirm={() => {
         setConfirmLive(false)
         void startCardPayment('live')
