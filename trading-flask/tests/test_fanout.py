@@ -345,6 +345,41 @@ def test_a_scaled_account_still_hits_its_own_cap(fake_accounts, fake_assets):
     assert (skipped["increment"], skipped["max_increments"]) == (10, 10)
 
 
+def _run_with_open(fake_accounts, fake_assets, position_amt):
+    open_positions = {"success": True, "positions": [
+        {"api_key": "live-key-1", "position_side": "LONG", "position_amt": position_amt, "entry_price": 60000},
+    ]}
+    with (
+        patch.object(webhook, "fetch_accounts", return_value=fake_accounts[:1]),
+        patch.object(webhook, "get_asset", side_effect=lambda t, *a, **k: fake_assets.get(t.upper())),
+        patch.object(exchanges, "BinanceAPI", MagicMock()),
+        patch.object(webhook, "handle_entry", side_effect=_entry_ok),
+        patch.object(webhook.engine_client, "get_json", return_value=open_positions),
+        patch.object(webhook.engine_client, "post_json", return_value={"success": True}),
+    ):
+        return webhook._process_trade_job("BUY", "BTCUSDT", 100.0, None, None)
+
+
+def test_balance_drift_does_not_steal_the_last_entry(fake_accounts, fake_assets):
+    """2026-09-30: 9 entries held, but a balance that moved since they were
+    opened reads the stack as 9.04. That is still 9 entries — the last one of
+    10 must be placed, not refused as 'maxed sizing'."""
+    summary = _run_with_open(fake_accounts, fake_assets, 0.0452)   # entry 0.005 -> 9.04
+
+    assert summary["filled"] == 1
+    detail = summary["details"][0]
+    assert detail["sizing"]["stacks_now"] == 9.04
+    assert detail["increment"] == 10
+
+
+def test_a_full_stack_that_drifted_is_still_full(fake_accounts, fake_assets):
+    """Rounding must not open an 11th entry: 10 held reading as 9.9 is full."""
+    summary = _run_with_open(fake_accounts, fake_assets, 0.0495)   # 9.9 -> 10 entries
+
+    assert summary["skipped"] == 1
+    assert summary["details"][0]["reason"] == "maxed sizing"
+
+
 # --- Increment published to Telegram -------------------------------------------
 
 def test_a_fill_carries_the_stack_depth_it_reached(fake_accounts, fake_assets):

@@ -595,9 +595,13 @@ def _run_account(
             # first entry and could never add.
             #
             # The divisor is the size THIS signal would open, so a balance that
-            # moved since the earlier entries shifts the count slightly. That is
-            # the intended reading: the cap is about exposure relative to what
-            # the account trades today.
+            # moved since the earlier entries shifts the ratio slightly — which
+            # is why the cap compares WHOLE entries (the ratio rounded), never
+            # the raw ratio. On 2026-09-30 two accounts holding exactly 2 of 3
+            # read 2.0076 (entry 184.8 then 183.4 LTC) and 2.1 (a balance a few
+            # dollars under 2,100 dropped the entry from 29.4 to 28), were
+            # refused the 3rd — and cheapest — entry as "maxed", and closed
+            # the trade at a loss the fully-stacked accounts did not take.
             position_side = "LONG" if action == "BUY" else "SHORT"
             max_increments = sizing["max_increments"]
             # `current` is resolved whenever it is already paid for: the batched
@@ -616,7 +620,7 @@ def _run_account(
             if current is not None:
                 stacks_now = round(current / quantity, 4) if quantity else 0.0
                 sizing["stacks_now"] = stacks_now
-                if max_increments > 0 and stacks_now + 1 > max_increments + 1e-9:
+                if max_increments > 0 and int(round(stacks_now)) + 1 > max_increments:
                     _bump("accounts_skipped")
                     return base | {
                         "status": "skipped",
