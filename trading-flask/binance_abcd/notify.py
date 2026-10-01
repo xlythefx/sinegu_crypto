@@ -47,10 +47,12 @@ Config lives in ``hooks.py`` under ``BINANCE_ABCD_TELEGRAM_*`` (and
 from __future__ import annotations
 
 import html
+import json
 import logging
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from typing import Any, Optional
 
 from binance_abcd import discord_notify, exchanges, hooks, key_status, published_closes
@@ -888,6 +890,68 @@ def notify_max_increments(action: str, ticker: str, entries: list[tuple]) -> Non
         lines.append(f"  … +{len(entries) - 20} more")
     lines.append(f"({len(entries)} account(s) affected)")
     _send_admin("\n".join(lines))
+
+
+def _send_private(text: str) -> None:
+    """Admin chat ONLY — no fallback to the public channel. For messages that
+    carry customer names and money (the monthly invoice run), where the
+    `_admin_chat()` fallback would publish them to the world."""
+    if not hooks.TELEGRAM_ADMIN_CHAT_ID:
+        log.warning("admin chat not configured — private message not sent")
+        return
+    _send(text, hooks.TELEGRAM_ADMIN_CHAT_ID)
+
+
+def _month_label(month: str) -> str:
+    try:
+        return datetime.strptime(month, "%Y-%m").strftime("%B %Y")
+    except ValueError:
+        return month
+
+
+_INVOICE_LIST_LIMIT = 25
+
+
+def notify_monthly_invoices(month: str, exchange: str, result: dict) -> None:
+    """The monthly run's outcome: who was billed what, and who needs a human."""
+    totals = result.get("totals") or {}
+    lines = [
+        f"🧾 <b>Monthly invoices — {_esc(_month_label(month))}</b> · {_esc(exchanges.label(exchange))}",
+        f"Billed <b>{totals.get('billed', 0)}</b> · ${float(totals.get('amount') or 0):,.2f} total"
+        f" · $0 fee {totals.get('zero_fee', 0)}"
+        f" · skipped {totals.get('skipped', 0)} · failed {totals.get('failed', 0)}",
+    ]
+    billed = [c for c in result.get("created") or [] if float(c.get("total_fee") or 0) > 0]
+    if billed:
+        lines.append("")
+        for c in billed[:_INVOICE_LIST_LIMIT]:
+            lines.append(f"• {_esc(c.get('owner_name'))} — ${float(c['total_fee']):,.2f} (due {_esc(c.get('due_date'))})")
+        if len(billed) > _INVOICE_LIST_LIMIT:
+            lines.append(f"… and {len(billed) - _INVOICE_LIST_LIMIT} more (Admin → Invoices)")
+    needs_human = [s for s in result.get("skipped") or [] if s.get("reason") != "already invoiced"]
+    for title, rows, key in (("⚠️ Check by hand", needs_human, "reason"), ("❌ Failed", result.get("failed") or [], "error")):
+        if rows:
+            lines.append("")
+            lines.append(f"<b>{title}</b>")
+            for r in rows[:_INVOICE_LIST_LIMIT]:
+                lines.append(f"• {_esc(r.get('owner_name'))} — {_esc(r.get(key))}")
+    _send_private("\n".join(lines))
+
+
+def notify_monthly_invoices_refused(month: str, exchange: str, body: dict) -> None:
+    detail = body.get("message") or body.get("error_code") or json.dumps(body)[:300]
+    _send_private(
+        f"❌ <b>Monthly invoices NOT created — {_esc(_month_label(month))}</b> · {_esc(exchanges.label(exchange))}\n"
+        f"{_esc(detail)}\nCreate them in Admin → Sandbox → Invoice Testing."
+    )
+
+
+def notify_monthly_invoices_missed(month: str, late_hours: float) -> None:
+    _send_private(
+        f"⚠️ <b>Monthly invoices for {_esc(_month_label(month))} were NOT created</b>\n"
+        f"The engine was down at the scheduled time ({late_hours:.0f}h ago, past the catch-up window).\n"
+        "Create them in Admin → Sandbox → Invoice Testing."
+    )
 
 
 def notify_error(context: str, detail: str) -> None:

@@ -283,6 +283,23 @@ REPORT_MONTHLY_AT = _env_str("REPORT_MONTHLY_AT", "last 11:30")
 REPORT_CATCHUP_HOURS = _env_float("REPORT_CATCHUP_HOURS", 12.0)
 REPORT_TICK_SECONDS = _env_float("REPORT_TICK_SECONDS", 30.0)
 
+# --- Monthly invoicing (binance_abcd/monthly_invoices.py) ---------------------
+# On day MONTHLY_INVOICE_DAY at MONTHLY_INVOICE_AT (local to
+# MONTHLY_INVOICE_TIMEZONE — default the 1st, 23:00 GMT+8) the engine refreshes
+# every balance and asks the API to invoice the month that just ended. The fee
+# math stays in Laravel's InvoiceService; this only decides WHEN. Runs only
+# where the pollers run (RUN_POLLERS), so a dev box without them never bills.
+MONTHLY_INVOICE_ENABLED = _env_bool("MONTHLY_INVOICE_ENABLED", True)
+MONTHLY_INVOICE_TIMEZONE = _env_str("MONTHLY_INVOICE_TIMEZONE", "Asia/Manila")
+MONTHLY_INVOICE_DAY = _env_int("MONTHLY_INVOICE_DAY", 1)
+MONTHLY_INVOICE_AT = _env_str("MONTHLY_INVOICE_AT", "23:00")
+# A run the engine was down for still happens when it comes back, within this
+# window — invoices are due on the 8th, so a late run is far better than none.
+MONTHLY_INVOICE_CATCHUP_HOURS = _env_float("MONTHLY_INVOICE_CATCHUP_HOURS", 72.0)
+MONTHLY_INVOICE_TICK_SECONDS = _env_float("MONTHLY_INVOICE_TICK_SECONDS", 60.0)
+# Generating every customer's invoice is one request; give it room.
+MONTHLY_INVOICE_API_TIMEOUT = _env_float("MONTHLY_INVOICE_API_TIMEOUT", 120.0)
+
 # --- Taker commission (for the PUBLISHED close percentage only) ---------------
 # The engine reads Binance/MEXC `realizedPnl`, which is GROSS — before
 # commission. The DB stores it NET (the API's App\Services\Pnl\TradingFee nets

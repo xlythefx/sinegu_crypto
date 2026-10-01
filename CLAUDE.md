@@ -238,7 +238,8 @@ admin `GET/POST/PUT/DELETE /admin/invoices*`. **Admin Invoice History** (`/admin
 lists/filters/settles/deletes; **Admin Sandbox → Invoice Testing** generates an invoice from
 a user's closed P&L and marks it paid (manual charging). Its **Manual fee** tab
 (2026-09-30, `POST /admin/invoices/manual` → `InvoiceService::generateManual`)
-bills ONE Binance account a typed fee: same row, same HWM math as the P&L
+bills ONE Binance account a typed fee (see also **monthly auto-invoicing**
+below): same row, same HWM math as the P&L
 invoice for that month, but `total_fee` = the amount, the realized/unrealized
 split zero and `invoices.fee_source = 'manual'` (every screen then prints one
 "set manually" line — never a split that does not add up to the total). It
@@ -254,8 +255,30 @@ Sandbox → Invoice Testing may bill the master** — it sends `sandbox: true` t
 `/admin/invoices/generate|manual`, an explicit per-request opt-in that nothing
 else sends. Its safety half: **`engine:mark-overdue` never disables a master's
 account** (the invoice still goes overdue), so a rehearsal left unpaid cannot
-stop the house trading. Still deferred, both reusing
-`InvoiceService::settle`: monthly auto-generation and off-session auto-charge.
+stop the house trading. Still deferred: off-session auto-charge.
+
+**Monthly auto-invoicing (2026-10-01) — the 1st, 23:00 Asia/Manila (GMT+8).**
+A scheduler in the ENGINE (`binance_abcd/monthly_invoices.py`, owner's
+request) decides only WHEN: it refreshes every balance (the HWM test reads the
+LIVE balance + unrealized), then `POST /api/engine/binance/invoices/monthly
+{month_year}` (`EngineInvoiceController`) invoices the month that just ended
+through `InvoiceService::generateForAccount` with each user's own rates. Rules:
+- **Customers only** (`type = 'user'`), real money (demo 0, not sandbox, not
+  `SBXINV-`), connected before the month ended; master/staff never.
+- **An account already invoiced for that month is SKIPPED, never
+  regenerated** — a re-run must not overwrite a manual fee. Only an ENDED
+  month (UTC) is accepted.
+- A disconnected account that traded in the month is NOT billed but named in
+  the summary ("bill by hand"). Bybit/MEXC are refused until they have a
+  `PnlSource`; `INVOICED_EXCHANGES` grows with them.
+- State `out/invoice_state.json`; first run after a firing time seeds without
+  billing; catch-up 72 h, else a "missed" alert; unreachable API retried every
+  10 min, a 4xx is final. The summary (names + $) goes to the admin chat ONLY
+  (`notify._send_private` — never the public fallback). Runs only with
+  `RUN_POLLERS`. Config `BINANCE_ABCD_MONTHLY_INVOICE_*` (not mirrored —
+  defaults are the schedule); `/health` shows `monthly_invoices.next`.
+- Due date stays the 8th of the following month (`computeForAccount`), and
+  `engine:mark-overdue` pauses unpaid accounts after it.
 
 **Direct USDT-TRC20 payments — THE rail customers pay on (2026-09-23).**
 Customers send USDT straight to a TRON wallet we control; a scheduled poller

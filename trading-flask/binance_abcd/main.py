@@ -25,6 +25,7 @@ from binance_abcd.binance_api import (
 )
 from binance_abcd.exchange_api import mode_key, want_hedge
 from binance_abcd.exchanges import client_for, enabled as enabled_exchanges, exchange_of, label, tradeable
+from binance_abcd.monthly_invoices import monthly_invoices_status, start_monthly_invoices
 from binance_abcd.reports import reports_status, start_reporter
 from binance_abcd.retry_queue import queue_depth, start_retry_queue
 from binance_abcd.routes.admin import admin_bp
@@ -63,6 +64,7 @@ def create_app() -> Flask:
             "rate_limited_until": rate_limited_until() or None,
             "pollers": list(_pollers_running),
             "reports": reports_status(),
+            "monthly_invoices": monthly_invoices_status(),
         })
 
     return app
@@ -199,6 +201,9 @@ def main() -> None:
     start_reporter(_shutdown)
     if hooks.RUN_POLLERS:
         start_pollers()
+        # Billing rides with the pollers: a dev box that does not poll the
+        # exchanges must never invoice anyone.
+        start_monthly_invoices(_shutdown)
     else:
         log.info("pollers disabled (BINANCE_ABCD_RUN_POLLERS=false)")
 
