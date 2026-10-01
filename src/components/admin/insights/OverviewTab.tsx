@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { AlertTriangle, ArrowRight, Globe, UserPlus } from 'lucide-react'
 import Tabs, { type TabItem } from '../../ui/Tabs'
@@ -23,7 +24,7 @@ const VIEWS: TabItem<OverviewView>[] = [
  * tab bar badges Needs attention with the same count — one request, so an
  * approval made in the pane clears the strip and the badge together.
  */
-export default function OverviewTab() {
+export default function OverviewTab({ toolbarSlot }: { toolbarSlot?: HTMLElement | null }) {
   const [params, setParams] = useSearchParams()
   const overview = useApiData(getOverviewInsights)
   const raw = params.get('view')
@@ -42,10 +43,12 @@ export default function OverviewTab() {
     )
 
   const tabs = VIEWS.map((v) => (v.key === 'attention' ? { ...v, badge: pendingCount } : v))
+  const viewTabs = <Tabs tabs={tabs} active={view} onChange={select} label="Overview views" />
 
   return (
     <div className="flex flex-col gap-stack">
-      <Tabs tabs={tabs} active={view} onChange={select} label="Overview views" />
+      {/* At the right end of the dashboard's tab row when it offers a slot. */}
+      {toolbarSlot ? createPortal(viewTabs, toolbarSlot) : viewTabs}
       {/* keyed re-mount replays the reveal on every switch */}
       <div key={view} className="flex flex-col gap-stack animate-[fadeup_0.35s_ease-out]">
         {view === 'platform' ? (

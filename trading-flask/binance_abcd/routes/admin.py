@@ -10,6 +10,7 @@ from __future__ import annotations
 import hmac as hmac_mod
 import html
 import re
+from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import date, datetime, timedelta
 
 from flask import Blueprint, jsonify, request
@@ -118,6 +119,100 @@ def account_ledger():
         return jsonify({"error": "LEDGER_UNAVAILABLE",
                         "message": "The exchange's history could not be read completely. Try again in a minute."}), 502
     return jsonify({"success": True, "exchange": exchange_of(account), "ledger": payload})
+
+
+# Manual closes run on their own small pool, never the webhook's dispatch pool:
+# an admin closing twenty positions must not delay the next TradingView signal.
+_CLOSE_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="manual-close")
+CLOSE_MAX_POSITIONS = 50
+# How long the request waits for the closes to finish. Shorter than the API's
+# own timeout so a slow close answers "still running" instead of a 504; the
+# job keeps going either way.
+CLOSE_WAIT_SECONDS = 40.0
+
+
+@admin_bp.route("/close-positions", methods=["POST"])
+def close_positions():
+    """Close specific open positions now — Admin Dashboard → Open positions.
+
+    Body: ``{"positions": [{"exchange", "uni_id", "symbol", "side"}]}`` where
+    side is LONG or SHORT. Each item closes that user's WHOLE side of that
+    symbol on that venue (hedge mode: one position per symbol and side; one
+    account per user per venue).
+
+    It runs the same exit path a TradingView EXIT runs — re-read first, retry
+    on a transient failure, bookkeeping, a trade_logs row — grouped into one
+    job per (exchange, symbol, side) and narrowed to exactly the users named.
+    Two differences, both deliberate:
+    - **Nothing is announced publicly.** An admin closing a customer's position
+      is not a strategy exit; the channel would print a close nobody entered.
+      Failures still reach the admin chat.
+    - **It waits for the result** (up to CLOSE_WAIT_SECONDS) so the page can
+      show per-account outcomes rather than "accepted".
+    """
+    if not _authorized():
+        return jsonify({"error": "Unauthorized"}), 403
+    from binance_abcd.exchanges import enabled as enabled_exchanges
+    from binance_abcd.routes import webhook
+
+    raw = (request.get_json(silent=True) or {}).get("positions")
+    if not isinstance(raw, list) or not raw:
+        return jsonify({"error": "positions must be a non-empty list"}), 400
+    if len(raw) > CLOSE_MAX_POSITIONS:
+        return jsonify({"error": f"at most {CLOSE_MAX_POSITIONS} positions per request"}), 400
+
+    live = set(enabled_exchanges())
+    groups: dict[tuple[str, str, str], set[str]] = {}
+    for item in raw:
+        if not isinstance(item, dict):
+            return jsonify({"error": "every position must be an object"}), 400
+        exchange = str(item.get("exchange") or "").strip().lower()
+        uni_id = str(item.get("uni_id") or "").strip()
+        symbol = str(item.get("symbol") or "").strip().upper()
+        side = str(item.get("side") or "").strip().upper()
+        if not uni_id or not symbol or side not in ("LONG", "SHORT"):
+            return jsonify({"error": "each position needs uni_id, symbol and side LONG|SHORT"}), 400
+        # Refused, never defaulted: the job falls back to EVERY live venue
+        # when its target venue is not live, and with that venue's filter gone
+        # it would close every account there.
+        if exchange not in live:
+            return jsonify({"error": "EXCHANGE_NOT_ENABLED",
+                            "message": f"The engine is not trading '{exchange}'."}), 400
+        groups.setdefault((exchange, symbol, side), set()).add(uni_id)
+
+    futures = {
+        _CLOSE_EXECUTOR.submit(
+            webhook._process_trade_job,
+            f"EXIT_{side}", symbol, None, None, None,
+            targets={exchange: uni_ids}, announce=False,
+        ): (exchange, symbol, side, uni_ids)
+        for (exchange, symbol, side), uni_ids in groups.items()
+    }
+    wait(futures, timeout=CLOSE_WAIT_SECONDS)
+
+    jobs = []
+    for future, (exchange, symbol, side, uni_ids) in futures.items():
+        job = {"exchange": exchange, "symbol": symbol, "side": side,
+               "action": f"EXIT_{side}", "uni_ids": sorted(uni_ids)}
+        if not future.done():
+            job |= {"status": "running"}
+        elif future.exception() is not None:
+            job |= {"status": "crashed", "error": str(future.exception())}
+        else:
+            summary = future.result()
+            job |= {"status": "done", "filled": summary.get("filled", 0),
+                    "failed": summary.get("failed", 0), "skipped": summary.get("skipped", 0),
+                    "category": summary.get("category"), "details": summary.get("details", [])}
+        jobs.append(job)
+
+    return jsonify({
+        "success": all(j["status"] == "done" for j in jobs),
+        "jobs": jobs,
+        "filled": sum(j.get("filled", 0) for j in jobs),
+        "failed": sum(j.get("failed", 0) for j in jobs) + sum(1 for j in jobs if j["status"] == "crashed"),
+        "skipped": sum(j.get("skipped", 0) for j in jobs),
+        "running": sum(1 for j in jobs if j["status"] == "running"),
+    })
 
 
 _TG_TAGS = re.compile(r"</?(?:b|i|u|s|code|pre)>")

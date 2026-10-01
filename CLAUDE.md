@@ -484,6 +484,24 @@ DB reads only — never an exchange call). Rules:
   pooled balance the day started with; its trades carry the owner's `name`.
   The money-under-management card is shared with the Money tab
   (`insights/UnderManagementCard.tsx`).
+- **Open positions tab** (`?tab=positions`, 2026-10-01,
+  `insights/OpenPositionsTab.tsx` + `components/admin/open-positions/`,
+  `AdminOpenPositionsController`): every venue's open rows, a forced fetch
+  (`POST /admin/open-positions/refresh` → engine `refresh-positions`; **30 s
+  cooldown PLATFORM-WIDE**, `Cache::add`, 429 `REFRESH_COOLDOWN`), and a manual
+  close of ticked rows (`POST /admin/open-positions/close`, body
+  `{positions: [{exchange, id}]}` — owner/symbol/side are resolved SERVER-side,
+  never taken from the client) → engine `POST /admin/close-positions`, which
+  runs the normal exit path per (exchange, symbol, side) narrowed to those
+  uni_ids, **with `announce=False`** (no public post; admin-chat failures
+  only) and waits ≤40 s for per-account results. The engine REFUSES a venue
+  that is not live — `_process_trade_job` falls back to every live venue with
+  no user filter otherwise. A retry now inherits `announce` only if the run
+  owed one. Rows on accounts the engine does not trade (disabled, sandbox,
+  disconnected, owner suspended) show why and cannot be ticked. The page
+  shows the request and response JSON for testing.
+  Overview's Platform / Needs attention sub-tabs sit at the RIGHT end of the
+  dashboard's tab row (portaled into `toolbarSlot`).
 - **Pending sign-ups are approved FROM the Overview** (2026-09-28, owner's
   request — they were buried as one line). `OverviewTab` owns the overview
   fetch so Platform shows a "N new users need to be approved" strip (click →

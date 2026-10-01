@@ -879,8 +879,10 @@ def _process_trade_job(
             enqueue_retry(
                 action, symbol, price, leverage, strategy, retrying,
                 # Nothing filled -> this run published nothing, so the retry
-                # inherits the message.
-                announce=(filled == 0),
+                # inherits the message — but only a message this run owed. A
+                # silent run (the admin's manual close) must not grow a public
+                # post just because its first attempt timed out.
+                announce=announce and filled == 0,
             )
 
     # What the channel prints beside an entry, best source first: a real
