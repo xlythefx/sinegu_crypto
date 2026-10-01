@@ -1,4 +1,4 @@
-"""Automatic monthly invoicing — the 1st of every month, 23:00 GMT+8.
+"""Automatic monthly invoicing — the 1st of every month, 16:00 Thailand time (GMT+7).
 
 The engine owns only the WHEN. At the configured moment it:
 
