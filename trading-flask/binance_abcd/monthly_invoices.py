@@ -22,9 +22,10 @@ State lives in ``out/invoice_state.json``: the invoice step under the bare
 exchange key (``{"binance": "2026-09"}``, the original shape), the others
 under ``"binance:gentle"`` etc. Rules, per step:
 
-* A missing state file is a FIRST RUN: a step whose time has already passed is
-  recorded without running, so a deploy mid-month does not suddenly bill or
-  pause anyone. A step still ahead runs normally.
+* At STARTUP, a missing state file is a first deploy: a step whose time has
+  already passed is recorded without running (a deploy mid-month must not
+  suddenly bill or pause anyone) and the file is written either way. Never
+  decided on a tick — see seed_state() for the 2026-10-01 incident.
 * A step the engine was down for still runs within its catch-up window
   (invoice/pause 72 h; reminders 12 h — a stale reminder arriving after the
   pause is wrong, not late). Past it the step is marked and the admin chat is
@@ -194,13 +195,37 @@ def _report(step: Step, outcome: str, exchange: str, month: str, body: dict) -> 
 
 # --- Runner ------------------------------------------------------------------------------
 
+def seed_state(tzinfo, now: Optional[datetime] = None) -> None:
+    """At STARTUP only: with no state file, record every step whose time has
+    already passed as done (a deploy mid-month must not suddenly bill or pause
+    anyone) and WRITE the file — even when nothing has passed yet.
+
+    This must never be decided on a tick. On 2026-10-01 it was: the engine
+    started at 15:50, wrote no file because nothing was due, and the first tick
+    after 16:00 saw "no file + time passed" and recorded September as done
+    without billing it.
+    """
+    if STATE_FILE.exists():
+        return
+    now = now or datetime.now(tzinfo)
+    hour, minute = parse_clock(hooks.MONTHLY_INVOICE_AT)
+    state: dict = {}
+    for step in STEPS:
+        fire = fire_time(now, hooks.MONTHLY_INVOICE_DAY + step.offset, hour, minute)
+        if now >= fire:
+            for ex in INVOICED_EXCHANGES:
+                state[step.state_key(ex)] = billing_month(fire)
+            log.info("[invoices] first start — %s for %s recorded without running (was due %s)",
+                     step.name, billing_month(fire), fire.isoformat())
+    _save_state(state)
+
+
 def run_once(tzinfo, now: Optional[datetime] = None, *, monotonic: Optional[float] = None) -> None:
     """One tick: run every step that is due and not yet done."""
     now = now or datetime.now(tzinfo)
     clock = time.monotonic() if monotonic is None else monotonic
     hour, minute = parse_clock(hooks.MONTHLY_INVOICE_AT)
 
-    first_run = not STATE_FILE.exists()
     state = _load_state()
     changed = False
 
@@ -211,15 +236,6 @@ def run_once(tzinfo, now: Optional[datetime] = None, *, monotonic: Optional[floa
         month = billing_month(fire)
         pending = [ex for ex in INVOICED_EXCHANGES if state.get(step.state_key(ex)) != month]
         if not pending:
-            continue
-
-        if first_run:
-            # Deployed after this step's time: record it, do nothing.
-            for ex in pending:
-                state[step.state_key(ex)] = month
-            changed = True
-            log.info("[invoices] first run — %s for %s recorded without running (was due %s)",
-                     step.name, month, fire.isoformat())
             continue
 
         late_hours = (now - fire).total_seconds() / 3600
@@ -296,6 +312,7 @@ def start_monthly_invoices(shutdown: threading.Event) -> Optional[threading.Thre
         notify.notify_error("monthly billing disabled", str(exc))
         return None
 
+    seed_state(tzinfo)
     _status.update(enabled=True, tz=tzinfo)
     thread = threading.Thread(target=_loop, args=(tzinfo, shutdown), name="monthly-invoices", daemon=True)
     thread.start()

@@ -111,18 +111,29 @@ def test_never_twice_in_one_month():
     req.assert_not_called()
 
 
-def test_a_deploy_before_the_time_on_the_1st_still_bills_today():
-    req, *_ = _tick(at(1, 12))
-    req.assert_not_called()
-    assert not mi.STATE_FILE.exists()
+def test_a_start_before_the_time_on_the_1st_still_bills_today():
+    """REGRESSION 2026-10-01: started 15:50 with no state file, the first tick
+    after 16:00 recorded September as done without billing it. Seeding happens
+    at startup now and always writes the file, so the tick bills."""
+    mi.seed_state(BKK, at(1, 15, 50))
+    assert mi.STATE_FILE.exists()
+    req, *_ = _tick(at(1, 16, 0).replace(second=29))
+    assert _called_steps(req) == [("invoice", "binance", "2026-09")]
 
 
-def test_first_run_after_the_time_records_without_running():
-    req, invoiced, step, *_ = _tick(at(15, 10))
+def test_a_start_after_the_time_records_without_running():
+    mi.seed_state(BKK, at(15, 10))
+    assert _state() == SEPT_DONE
+    req, invoiced, step, *_ = _tick(at(15, 10, 1))
     req.assert_not_called()
     invoiced.assert_not_called()
     step.assert_not_called()
-    assert _state() == SEPT_DONE
+
+
+def test_seeding_never_touches_an_existing_state_file():
+    _seed({"binance": "2026-08"})
+    mi.seed_state(BKK, at(15, 10))
+    assert _state() == {"binance": "2026-08"}
 
 
 def test_an_unreachable_api_is_retried_later_not_marked():
