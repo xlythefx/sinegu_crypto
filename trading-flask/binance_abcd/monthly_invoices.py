@@ -184,6 +184,10 @@ def _report(step: Step, outcome: str, exchange: str, month: str, body: dict) -> 
         notify.notify_billing_refused(step.name, month, exchange, body)
     elif step.name == "invoice":
         notify.notify_monthly_invoices(month, exchange, body)
+        # The public "invoices are out" post (owner, 2026-10-01) — only when
+        # someone was actually billed; a month with no fees announces nothing.
+        if int((body.get("totals") or {}).get("billed") or 0) > 0:
+            notify.notify_billing_announcement(month)
     else:
         notify.notify_billing_step(step.name, month, exchange, body)
 

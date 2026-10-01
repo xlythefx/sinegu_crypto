@@ -939,6 +939,45 @@ def notify_monthly_invoices(month: str, exchange: str, result: dict) -> None:
     _send_private("\n".join(lines))
 
 
+def render_billing_announcement(month: str) -> str:
+    """The PUBLIC "invoices are out" post — wording approved by the owner on
+    2026-10-01. Public, so it explains the schedule and carries no names,
+    amounts or customer counts (the /api/public/* rule)."""
+    period = _esc(_month_label(month))
+    short = _esc(_month_label(month).split(" ")[0])
+    return "\n".join([
+        f"🧾 <b>{short} invoices are out!</b>",
+        "",
+        f"Hi everyone 👋 Your Pixel Alpha invoice for <b>{period}</b> is now ready in your dashboard. "
+        "If the bots made you new profit last month, you'll also find it in your email.",
+        "",
+        "<b>How billing works</b>",
+        "💡 You only pay <b>20% of new profit</b>, the profit above your previous high. "
+        "A losing month is never invoiced, and losses are recovered before any fee is due again.",
+        "",
+        "📅 <b>The schedule, every month:</b>",
+        "• <b>1st</b> · Invoice issued and emailed to you",
+        "• <b>2nd</b> · Friendly reminder if it's still open",
+        "• <b>3rd</b> · Final reminder",
+        "• <b>4th</b> · Due date. Accounts still unpaid <b>pause new trades</b> until the invoice is settled",
+        "",
+        "✅ Paying takes a minute: open <b>Dashboard → Billing &amp; Invoices</b> and pay in <b>USDT (TRC-20)</b>. "
+        "As soon as your payment arrives, your invoice is marked paid. "
+        "If trading was paused, it switches back on <b>automatically</b>.",
+        "",
+        "Questions about your invoice? We're happy to help:",
+        "📧 support@pixel-alpha.com",
+        "",
+        "Thank you for trading with Pixel Alpha 🚀",
+    ])
+
+
+def notify_billing_announcement(month: str) -> None:
+    """Posted to the public channel (Telegram + Discord mirror) after each
+    monthly invoice run that billed anyone."""
+    _send_public(render_billing_announcement(month), color=discord_notify.BLUE)
+
+
 _STEP_WORDS = {
     # step: (emoji, what it is, what to do by hand when it did not happen)
     "invoice": ("🧾", "Monthly invoices", "Create them in Admin → Sandbox → Invoice Testing."),

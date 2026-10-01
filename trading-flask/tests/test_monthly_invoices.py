@@ -201,3 +201,22 @@ def test_the_pause_summary_lists_who_was_paused(monkeypatch):
         notify.notify_billing_step("enforce", "2026-09", "binance", body)
     text = send.call_args.args[0]
     assert "paused" in text.lower() and "Late Larry — $80.00" in text and "accounts paused 1" in text
+
+
+def test_a_billed_month_is_announced_publicly_without_names_or_amounts(monkeypatch):
+    _seed(AUG_DONE)
+    with patch.object(mi.notify, "notify_billing_announcement") as announce:
+        _tick(at(1, 16))
+    announce.assert_called_once_with("2026-09")
+
+    text = notify.render_billing_announcement("2026-09")
+    assert "September invoices are out" in text and "September 2026" in text
+    assert "1st" in text and "4th" in text and "$" not in text
+
+
+def test_a_month_with_no_fees_is_not_announced():
+    _seed(AUG_DONE)
+    nothing = ("ok", {"success": True, "totals": {"billed": 0}, "created": [], "skipped": [], "failed": []})
+    with patch.object(mi.notify, "notify_billing_announcement") as announce:
+        _tick(at(1, 16), answer=nothing)
+    announce.assert_not_called()
