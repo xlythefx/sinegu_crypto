@@ -4,6 +4,7 @@ import { login, register } from '../services/auth'
 import { getDiscordConfig } from '../services/discord'
 import { ApiError } from '../services/api'
 import { isLoggedIn } from '../lib/session'
+import { postAuthPath, VERIFY_EMAIL_PATH } from '../lib/emailVerification'
 import { normaliseReferralCode, recallReferralCode, rememberReferralCode } from '../lib/referral'
 import { useApiData } from '../hooks/useApiData'
 import AuthFrame, { AuthBrand } from '../components/auth/AuthFrame'
@@ -124,10 +125,13 @@ function AuthForm() {
     try {
       if (isRegister) {
         await register(name, email, password, confirmPassword, refCode ?? undefined)
+        // Registration mails a six-digit code; the account is unusable until
+        // it is redeemed. (A verified answer there bounces on to /dashboard.)
+        navigate(VERIFY_EMAIL_PATH)
       } else {
-        await login(email, password)
+        const { user } = await login(email, password)
+        navigate(postAuthPath(user))
       }
-      navigate('/dashboard')
     } catch (err) {
       if (err instanceof ApiError) {
         // Prefer the first field-level validation error when present

@@ -552,6 +552,27 @@ DB reads only — never an exchange call). Rules:
   for a collaborator). `resolvePending` forgets the cached `overview` and
   `customers` answers, so an approved user never lingers for the cache minute.
 
+## Email verification on sign-up (2026-10-01)
+
+Register creates the row with `email_verified = false`, signs the user in, and
+mails a 6-digit code; `/auth/verify` (`pages/VerifyEmail.tsx`,
+`components/auth/CodeInput.tsx` — six boxes, also used by Forgot password)
+takes it. API: `App\Services\Auth\EmailVerification` (15-min TTL, 5 attempts,
+60 s resend cooldown derived from the expiry — no extra column),
+`POST /auth/email/{verify,resend}`. Rules:
+- **`EnsureEmailVerified` (`email.verified`) guards every signed-in route**
+  except `/auth/me`, `/auth/logout`, `/auth/email/*` → 403 `EMAIL_UNVERIFIED`;
+  the client redirects are cosmetic, and only an explicit `false` redirects
+  (a session stored before the field existed is not "unverified").
+- **The team's "someone registered" notice and the approval queue wait for
+  verification** — sent from `EmailVerification::verify`, not `register()`.
+  Unverified pending users still appear under User Management's Pending filter
+  with an "Email unverified" tag.
+- Discord sign-ups whose Discord email is verified skip the code.
+- Every pre-existing row was backfilled verified.
+- **It depends on prod actually sending mail** (`MAIL_MAILER=smtp`): with `log`,
+  no sign-up could ever finish.
+
 ## Collaborator role — read-only staff (2026-09-28)
 
 `user_credentials.type = 'collaborator'` opens the admin portal READ-ONLY:

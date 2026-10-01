@@ -18,6 +18,7 @@ import {
 import { DiscordMark } from '../components/ui/BrandIcons'
 import { forgetReferralCode, recallReferralCode } from '../lib/referral'
 import { isLoggedIn } from '../lib/session'
+import { postAuthPath } from '../lib/emailVerification'
 import { ApiError } from '../services/api'
 import { completeDiscordSignup } from '../services/discord'
 import { DISCORD_SIGNUP_KEY } from './DiscordCallback'
@@ -94,14 +95,15 @@ export default function DiscordTerms() {
     }
     setLoading(true)
     try {
-      await completeDiscordSignup(signupToken, name.trim() || null, refCode)
+      const { user } = await completeDiscordSignup(signupToken, name.trim() || null, refCode)
       try {
         sessionStorage.removeItem(DISCORD_SIGNUP_KEY)
       } catch {
         // nothing to clear
       }
       forgetReferralCode()
-      navigate('/dashboard', { replace: true })
+      // Discord vouched for the address → straight in; otherwise a code was mailed.
+      navigate(postAuthPath(user), { replace: true })
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.errorCode === 'SIGNUP_EXPIRED') {

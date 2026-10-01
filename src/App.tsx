@@ -6,6 +6,7 @@ import Landing from './pages/Landing'
 import LandingV2 from './pages/LandingV2'
 import Auth from './pages/Auth'
 import ForgotPassword from './pages/ForgotPassword'
+import VerifyEmail from './pages/VerifyEmail'
 import DiscordStart from './pages/DiscordStart'
 import DiscordCallback from './pages/DiscordCallback'
 import DiscordTerms from './pages/DiscordTerms'
@@ -59,6 +60,7 @@ function App() {
             <Route path="/v2" element={<LandingV2 />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/auth/forgot" element={<ForgotPassword />} />
+            <Route path="/auth/verify" element={<VerifyEmail />} />
             <Route path="/auth/discord/start" element={<DiscordStart />} />
             <Route path="/auth/discord/callback" element={<DiscordCallback />} />
             <Route path="/auth/discord/terms" element={<DiscordTerms />} />

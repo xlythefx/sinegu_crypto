@@ -34,6 +34,13 @@ export interface AuthUser {
   has_password?: boolean
   /** The linked Discord account, or null. `id` is a snowflake — keep it a string. */
   discord?: DiscordLink | null
+  /**
+   * False until the six-digit code mailed at sign-up is redeemed
+   * (`/auth/verify`). Absent in sessions stored before the field existed —
+   * only an explicit `false` means unverified; undefined is "unknown" and is
+   * never treated as unverified (see `lib/emailVerification.ts`).
+   */
+  email_verified?: boolean
 }
 
 export interface DiscordLink {

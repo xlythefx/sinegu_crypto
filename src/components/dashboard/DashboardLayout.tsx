@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import AOS from 'aos'
 import 'aos/dist/aos.css'
 import DashboardShell from './DashboardShell'
@@ -9,6 +9,8 @@ import OnboardingGate from './OnboardingGate'
 import ConfirmModal from '../ui/ConfirmModal'
 import { ExchangeFilterProvider } from '../../context/ExchangeFilterContext'
 import { logout } from '../../services/auth'
+import { useSessionUser } from '../../hooks/useSessionUser'
+import { needsEmailVerification, VERIFY_EMAIL_PATH } from '../../lib/emailVerification'
 
 interface DashboardLayoutProps {
   title: string
@@ -37,6 +39,12 @@ export default function DashboardLayout({
   useEffect(() => {
     document.title = `${title} — Pixel Alpha`
   }, [title])
+
+  // Unverified sign-ups belong on the code screen. OnboardingGate's useMe()
+  // refreshes /auth/me into the session, so a verdict changed server-side
+  // lands here too. Cosmetic — the API's EMAIL_UNVERIFIED 403 is the gate.
+  const user = useSessionUser()
+  if (needsEmailVerification(user)) return <Navigate to={VERIFY_EMAIL_PATH} replace />
 
   return (
     <ExchangeFilterProvider>

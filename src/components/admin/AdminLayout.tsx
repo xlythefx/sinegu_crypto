@@ -9,6 +9,8 @@ import ConfirmModal from '../ui/ConfirmModal'
 import UserAvatar from '../ui/UserAvatar'
 import { useTheme } from '../../theme'
 import { useSessionUser } from '../../hooks/useSessionUser'
+import { useMe } from '../../hooks/useMe'
+import { needsEmailVerification, VERIFY_EMAIL_PATH } from '../../lib/emailVerification'
 import {
   canSeeAdminPortal,
   collaboratorMayOpen,
@@ -82,6 +84,9 @@ export default function AdminLayout({
 }: AdminLayoutProps) {
   const navigate = useNavigate()
   const [confirmLogout, setConfirmLogout] = useState(false)
+  // Refresh /auth/me into the session (role, verification) on every admin
+  // mount; the session user below is the render source.
+  useMe()
   const user = useSessionUser()
   const { pathname } = useLocation()
 
@@ -89,6 +94,9 @@ export default function AdminLayout({
     AOS.init({ duration: 700, once: true, offset: 80, easing: 'ease-out-cubic' })
   }, [])
 
+  if (needsEmailVerification(user)) {
+    return <Navigate to={VERIFY_EMAIL_PATH} replace />
+  }
   if (user && !canSeeAdminPortal(user.type)) {
     return <Navigate to="/dashboard" replace />
   }

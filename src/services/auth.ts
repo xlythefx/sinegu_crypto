@@ -1,7 +1,7 @@
 import { apiFetch } from './api'
-import { clearSession, saveSession } from '../lib/session'
+import { clearSession, saveSession, saveUser } from '../lib/session'
 import { TERMS } from '../lib/terms'
-import type { AuthResponse } from '../types/auth'
+import type { AuthResponse, AuthUser } from '../types/auth'
 
 export async function login(
   email: string,
@@ -72,4 +72,53 @@ export async function resetPassword(
     method: 'POST',
     body: { email, code, password, password_confirmation: passwordConfirmation },
   })
+}
+
+/**
+ * Redeems the six-digit sign-up code for the signed-in user and stores the
+ * returned (now verified) user in the session. Rejects with ApiError
+ * `INVALID_CODE` (422) whose payload carries `attempts_left` / `expired` —
+ * read it with {@link readVerifyFailure}.
+ */
+export async function verifyEmail(code: string): Promise<AuthUser> {
+  const res = await apiFetch<{ user: AuthUser }>('/auth/email/verify', {
+    method: 'POST',
+    body: { code },
+    auth: true,
+  })
+  saveUser(res.user)
+  return res.user
+}
+
+export interface ResendVerificationResponse {
+  message?: string
+  /** Seconds until another code may be requested. */
+  retry_after?: number
+}
+
+/**
+ * Mails a fresh code (and resets the attempt counter). Rejects with ApiError
+ * `RESEND_TOO_SOON` (409) whose payload carries `retry_after`.
+ */
+export function resendVerification(): Promise<ResendVerificationResponse> {
+  return apiFetch<ResendVerificationResponse>('/auth/email/resend', {
+    method: 'POST',
+    auth: true,
+  })
+}
+
+/** The detail a refused verification carries, when the API sent it. */
+export interface VerifyFailure {
+  attemptsLeft?: number
+  expired: boolean
+  retryAfter?: number
+}
+
+export function readVerifyFailure(payload: unknown): VerifyFailure {
+  const p = (payload ?? {}) as Record<string, unknown>
+  return {
+    attemptsLeft: typeof p.attempts_left === 'number' ? p.attempts_left : undefined,
+    expired: p.expired === true,
+    retryAfter: typeof p.retry_after === 'number' ? p.retry_after : undefined,
+  }
 }

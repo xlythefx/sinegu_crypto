@@ -6,6 +6,8 @@ import { ApiError } from '../services/api'
 import { isLoggedIn } from '../lib/session'
 import AuthFrame, { AuthBrand } from '../components/auth/AuthFrame'
 import { BUTTON, ERROR, ICON_CHIP, INPUT } from '../components/auth/authClasses'
+import CodeInput from '../components/auth/CodeInput'
+import { isCompleteCode } from '../lib/emailVerification'
 
 type Step = 'email' | 'code' | 'done'
 
@@ -29,6 +31,7 @@ function ForgotPasswordForm() {
   const [step, setStep] = useState<Step>('email')
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
+  const [codeError, setCodeError] = useState(false)
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -64,15 +67,24 @@ function ForgotPasswordForm() {
   const redeem = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
+    if (!isCompleteCode(code)) {
+      setError('Enter the six-digit code from the email.')
+      return
+    }
     if (password !== confirm) {
       setError('Passwords do not match.')
       return
     }
     setLoading(true)
     try {
-      await resetPassword(email.trim(), code.trim(), password, confirm)
+      await resetPassword(email.trim(), code, password, confirm)
       setStep('done')
     } catch (err) {
+      if (err instanceof ApiError && err.errorCode === 'INVALID_CODE') {
+        // Shake and clear the boxes; the passwords stay typed.
+        setCode('')
+        setCodeError(true)
+      }
       fail(err)
     } finally {
       setLoading(false)
@@ -121,18 +133,15 @@ function ForgotPasswordForm() {
             account, a code is on its way. It expires in 15 minutes.
           </p>
           <form className="flex flex-col gap-3.5" onSubmit={redeem}>
-            <input
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              pattern="\d{6}"
-              maxLength={6}
-              placeholder="6-digit code"
-              className={`${INPUT} font-mono tracking-[0.3em]`}
+            <CodeInput
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              onChange={(v) => {
+                setCode(v)
+                setCodeError(false)
+              }}
+              error={codeError}
+              disabled={loading}
               autoFocus
-              required
             />
             <input
               type="password"

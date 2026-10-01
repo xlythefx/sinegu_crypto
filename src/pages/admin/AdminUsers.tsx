@@ -59,6 +59,12 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
  */
 type Group = 'users' | 'staff'
 const isStaff = (u: AdminUser) => u.type !== 'user'
+/**
+ * Pending AND proved the address. An unverified sign-up stays listed under the
+ * Pending filter (staff can still find it) but is not yet waiting on anyone.
+ */
+const awaitsApproval = (u: AdminUser) =>
+  u.status === 'pending' && u.email_verified !== false
 
 /** Staff roles only — the Users tab holds a single role, so it has no picker. */
 const ROLE_FILTERS: { key: RoleFilter; label: string }[] = [
@@ -139,7 +145,7 @@ export default function AdminUsers() {
   // Every sign-up waiting for approval, whichever tab is open — the queue
   // above the table must never be hidden by a tab.
   const pendingUsers = useMemo(
-    () => users.filter((u) => u.status === 'pending'),
+    () => users.filter(awaitsApproval),
     [users],
   )
 
@@ -154,13 +160,13 @@ export default function AdminUsers() {
         key: 'users',
         label: `Users · ${users.filter((u) => !isStaff(u)).length}`,
         Icon: Users,
-        badge: users.filter((u) => !isStaff(u) && u.status === 'pending').length,
+        badge: users.filter((u) => !isStaff(u) && awaitsApproval(u)).length,
       },
       {
         key: 'staff',
         label: `Staff · ${users.filter(isStaff).length}`,
         Icon: ShieldCheck,
-        badge: users.filter((u) => isStaff(u) && u.status === 'pending').length,
+        badge: users.filter((u) => isStaff(u) && awaitsApproval(u)).length,
       },
     ],
     [users],
@@ -700,7 +706,14 @@ function UserRows({
           )}
         </td>
         <td className={TD}>
-          <StatusBadge status={user.status} />
+          <div className="flex flex-wrap items-center gap-1.5">
+            <StatusBadge status={user.status} />
+            {user.email_verified === false && (
+              <span className="rounded-full border border-border bg-surface2 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-muted whitespace-nowrap">
+                Email unverified
+              </span>
+            )}
+          </div>
         </td>
         <td className={`${TD} font-mono text-[12px] text-muted whitespace-nowrap`}>
           {user.created_at ? fmtMediumDate(user.created_at) : '—'}

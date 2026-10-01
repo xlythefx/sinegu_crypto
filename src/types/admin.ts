@@ -77,6 +77,8 @@ export interface AdminUser {
   email: string
   status: UserStatus
   type: UserRole
+  /** false = signed up but never typed the emailed code; not in the approval queue. */
+  email_verified?: boolean
   realized_percentage?: number
   unrealized_percentage?: number
   created_at: string | null

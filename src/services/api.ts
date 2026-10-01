@@ -1,4 +1,5 @@
-import { getToken } from '../lib/session'
+import { getToken, updateStoredUser } from '../lib/session'
+import { EMAIL_UNVERIFIED, VERIFY_EMAIL_PATH } from '../lib/emailVerification'
 
 /** Local Laravel dev server (`php artisan serve`). */
 const DEV_API_URL = 'http://127.0.0.1:8000/api'
@@ -142,6 +143,22 @@ export function getApiErrorDebug(err: unknown): ApiErrorDebug {
   }
 }
 
+/**
+ * Safety net for a stale session: the stored user says nothing (or says
+ * verified) but the API refuses with `EMAIL_UNVERIFIED`. Record the server's
+ * verdict so the route guards agree with it, then hard-navigate to the code
+ * screen — services live outside the router, and a full load also drops every
+ * in-flight request of the page that was refused. The error is still thrown
+ * so the caller's own handling unwinds normally.
+ */
+function redirectToVerify(): void {
+  if (typeof window === 'undefined') return
+  updateStoredUser({ email_verified: false })
+  if (window.location.pathname !== VERIFY_EMAIL_PATH) {
+    window.location.assign(VERIFY_EMAIL_PATH)
+  }
+}
+
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
@@ -173,10 +190,23 @@ export async function apiFetch<T>(
   const data = await res.json().catch(() => ({}))
 
   if (!res.ok) {
+    // The API names its errors `error_code`; the email-verification endpoints
+    // may answer with `code`. Accept either, and only a string.
+    const errorCode: string | undefined =
+      typeof data.error_code === 'string'
+        ? data.error_code
+        : typeof data.code === 'string'
+          ? data.code
+          : undefined
+
+    if (res.status === 403 && errorCode === EMAIL_UNVERIFIED) {
+      redirectToVerify()
+    }
+
     throw new ApiError(
       res.status,
       data.message ?? `Request failed (${res.status})`,
-      data.error_code,
+      errorCode,
       data.errors,
       data,
     )
