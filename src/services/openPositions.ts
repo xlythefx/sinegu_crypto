@@ -8,11 +8,11 @@ import type {
 
 /** Every open position on every venue, each with a "can the engine close it" verdict. */
 export async function getAdminOpenPositions(): Promise<AdminOpenPositionsData> {
-  const { positions, refresh } = await apiFetch<{ success: boolean } & AdminOpenPositionsData>(
+  const { success: _ok, ...data } = await apiFetch<{ success: boolean } & AdminOpenPositionsData>(
     '/admin/open-positions',
     { auth: true },
   )
-  return { positions, refresh }
+  return data
 }
 
 /**

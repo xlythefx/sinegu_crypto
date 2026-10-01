@@ -33,8 +33,20 @@ export interface OpenPositionsRefreshState {
   retry_after: number
 }
 
+/** An account the engine trades (master excluded) — present even when flat. */
+export interface TradedAccount {
+  exchange: ExchangeKind
+  uni_id: string
+  owner_name: string
+  account_name: string | null
+  demo: boolean
+}
+
 export interface AdminOpenPositionsData {
   positions: AdminOpenPosition[]
+  /** Venues the master has an account on — the only ones a user can be compared on. */
+  master_exchanges: ExchangeKind[]
+  accounts: TradedAccount[]
   refresh: OpenPositionsRefreshState
 }
 

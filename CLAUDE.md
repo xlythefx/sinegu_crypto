@@ -499,7 +499,14 @@ DB reads only — never an exchange call). Rules:
   no user filter otherwise. A retry now inherits `announce` only if the run
   owed one. Rows on accounts the engine does not trade (disabled, sandbox,
   disconnected, owner suspended) show why and cannot be ticked. The page
-  shows the request and response JSON for testing.
+  shows the request and response JSON for testing (folded; opens after a close).
+  **It leads with the MASTER's positions** (owner's request — keep it
+  uncluttered); a "Users" view lists every traded account (`accounts`, flat
+  ones included — holding nothing while the master is in a trade is the case
+  that matters) compared with the master ON THE SAME VENUE by coin + side
+  only (`lib/openPositions.ts` `splitByMaster`; sizes scale with balance, so
+  size is never a difference). A venue missing from `master_exchanges` reads
+  "No master here", not "different".
   Overview's Platform / Needs attention sub-tabs sit at the RIGHT end of the
   dashboard's tab row (portaled into `toolbarSlot`).
 - **Pending sign-ups are approved FROM the Overview** (2026-09-28, owner's

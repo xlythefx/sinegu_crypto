@@ -9,6 +9,8 @@ interface PositionsListProps {
   selected: Set<string>
   onToggle: (key: string) => void
   onToggleAll: () => void
+  /** False where every row has the same owner (master view, one user expanded). */
+  showOwner?: boolean
 }
 
 const TH = 'px-3 py-2.5 text-left font-mono text-[10.5px] font-bold uppercase tracking-[0.08em] text-faint'
@@ -30,11 +32,11 @@ function SidePill({ side }: { side: 'LONG' | 'SHORT' }) {
   )
 }
 
-function Who({ p }: { p: AdminOpenPosition }) {
+function Who({ p, showOwner }: { p: AdminOpenPosition; showOwner: boolean }) {
   const meta = EXCHANGE_META[p.exchange]
   return (
     <div className="min-w-0">
-      <div className="flex items-center gap-1.5">
+      <div className={`items-center gap-1.5 ${showOwner ? 'flex' : 'hidden'}`}>
         <span className="truncate text-[13px] font-semibold text-text">{p.owner_name}</span>
         {p.owner_type === 'master' && (
           <span className="flex-none rounded-pill bg-accent-soft px-1.5 font-mono text-[10px] font-bold text-accent">MASTER</span>
@@ -68,7 +70,7 @@ function Blocked({ reason }: { reason: string | null }) {
  * engine cannot close keeps its checkbox disabled and says why on the row
  * itself, so nobody ticks it and wonders why nothing happened.
  */
-export default function PositionsList({ positions, selected, onToggle, onToggleAll }: PositionsListProps) {
+export default function PositionsList({ positions, selected, onToggle, onToggleAll, showOwner = true }: PositionsListProps) {
   const closable = positions.filter((p) => p.closable)
   const allOn = closable.length > 0 && closable.every((p) => selected.has(positionKey(p)))
 
@@ -88,7 +90,7 @@ export default function PositionsList({ positions, selected, onToggle, onToggleA
                   aria-label="Select every closable position"
                 />
               </th>
-              <th className={TH}>User · account</th>
+              <th className={TH}>{showOwner ? 'User · account' : 'Account'}</th>
               <th className={TH}>Coin</th>
               <th className={TH}>Side</th>
               <th className={`${TH} text-right`}>Size</th>
@@ -121,7 +123,7 @@ export default function PositionsList({ positions, selected, onToggle, onToggleA
                     />
                   </td>
                   <td className={TD}>
-                    <Who p={p} />
+                    <Who p={p} showOwner={showOwner} />
                     {!p.closable && <Blocked reason={p.blocked_reason} />}
                   </td>
                   <td className={`${TD} font-mono font-bold`}>{p.symbol}</td>
@@ -165,7 +167,7 @@ export default function PositionsList({ positions, selected, onToggle, onToggleA
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">
-                  <Who p={p} />
+                  <Who p={p} showOwner={showOwner} />
                   <span className={`flex-none font-mono text-[13px] font-bold ${pnlClass(p.unrealized_pnl)}`}>
                     {p.unrealized_pnl === null ? '—' : fmtSignedMoney(p.unrealized_pnl)}
                   </span>
