@@ -257,12 +257,23 @@ else sends. Its safety half: **`engine:mark-overdue` never disables a master's
 account** (the invoice still goes overdue), so a rehearsal left unpaid cannot
 stop the house trading. Still deferred: off-session auto-charge.
 
-**Monthly auto-invoicing (2026-10-01) — the 1st, 23:00 Asia/Manila (GMT+8).**
-A scheduler in the ENGINE (`binance_abcd/monthly_invoices.py`, owner's
-request) decides only WHEN: it refreshes every balance (the HWM test reads the
-LIVE balance + unrealized), then `POST /api/engine/binance/invoices/monthly
-{month_year}` (`EngineInvoiceController`) invoices the month that just ended
-through `InvoiceService::generateForAccount` with each user's own rates. Rules:
+**Monthly auto-billing (2026-10-01) — 16:00 Thailand time (Asia/Bangkok),
+owner's schedule; to move to 09:00 the week of 2026-10-08.** A scheduler in the
+ENGINE (`binance_abcd/monthly_invoices.py`) decides only WHEN, four steps at
+the same hour:
+**1st** refresh every balance (the HWM test reads the LIVE balance +
+unrealized), then `POST /api/engine/binance/invoices/monthly {month_year}`
+(`EngineInvoiceController`) invoices the month that just ended through
+`InvoiceService::generateForAccount` with each user's own rates and emails
+"invoice ready"; **2nd / 3rd** `POST …/invoices/remind {stage: gentle|firm}`
+emails everyone still unpaid; **4th = the DUE DATE** (`computeForAccount`:
+start of next month + 3 days) `POST …/invoices/enforce` marks them overdue,
+disables the account and emails "trading paused" (`Billing\OverdueEnforcer`,
+shared with the nightly `engine:mark-overdue`, which only pauses invoices due
+BEFORE today so it can never pre-empt the 4th's hour). Emails:
+`Billing\InvoiceNotifier`, best-effort; the four templates are now `live` in
+`EmailCatalogue`. Reminders catch up 12 h only (a reminder after the pause is
+wrong); invoice/pause 72 h. Rules:
 - **Customers only** (`type = 'user'`), real money (demo 0, not sandbox, not
   `SBXINV-`), connected before the month ended; master/staff never.
 - **An account already invoiced for that month is SKIPPED, never
@@ -277,8 +288,8 @@ through `InvoiceService::generateForAccount` with each user's own rates. Rules:
   (`notify._send_private` — never the public fallback). Runs only with
   `RUN_POLLERS`. Config `BINANCE_ABCD_MONTHLY_INVOICE_*` (not mirrored —
   defaults are the schedule); `/health` shows `monthly_invoices.next`.
-- Due date stays the 8th of the following month (`computeForAccount`), and
-  `engine:mark-overdue` pauses unpaid accounts after it.
+- Due date is the 4th of the following month (`computeForAccount`), and
+  the 4th's enforce step pauses unpaid accounts at the billing hour.
 
 **Direct USDT-TRC20 payments — THE rail customers pay on (2026-09-23).**
 Customers send USDT straight to a TRON wallet we control; a scheduled poller

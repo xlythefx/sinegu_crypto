@@ -1,32 +1,38 @@
-"""Automatic monthly invoicing — the 1st of every month, 16:00 Thailand time (GMT+7).
+"""Automatic monthly billing — invoice, two reminders, pause. 16:00 Thailand time.
 
-The engine owns only the WHEN. At the configured moment it:
+The engine owns only the WHEN; every rule about money lives in the API. One
+clock, four steps (owner, 2026-10-01), all at MONTHLY_INVOICE_AT in
+MONTHLY_INVOICE_TIMEZONE:
 
-1. refreshes every tradeable account's balance from the exchange — the
-   invoice's high-water-mark test reads the LIVE balance + unrealized P&L, so
-   it should be minutes old, not a poll old;
-2. POSTs ``/api/engine/{exchange}/invoices/monthly`` with the month that just
-   ended. Laravel's InvoiceService computes every fee (the same call Admin →
-   Invoice Testing makes) and SKIPS any account already invoiced for that
-   month, so a retry or a catch-up can never overwrite a manual fee;
-3. reports the outcome to the PRIVATE admin chat — customer names and dollar
-   amounts, so it is sent only when an admin chat id is configured, never via
-   the public-channel fallback.
+  day 1  invoice  — refresh every balance, then POST /invoices/monthly for the
+                    month that just ended. The API bills each customer through
+                    InvoiceService, SKIPS anyone already invoiced (a re-run can
+                    never overwrite a manual fee) and emails "invoice ready".
+  day 2  gentle   — POST /invoices/remind {stage: gentle}: emails everyone
+                    still unpaid.
+  day 3  firm     — the same with stage firm: names the pause day.
+  day 4  enforce  — POST /invoices/enforce: invoices due today go overdue, those
+                    accounts stop trading, the customer is emailed "paused".
+                    Paying switches trading back on (InvoiceService::settle).
 
-State lives in ``out/invoice_state.json`` (``{exchange: "YYYY-MM"}``), the
-same shape of rule the recap scheduler follows:
+Each outcome goes to the PRIVATE admin chat only (names and dollars — never
+the public-channel fallback).
 
-* A missing state file is a FIRST RUN: a month whose firing time has already
-  passed is recorded without billing, so deploying on the 15th does not
-  suddenly invoice everyone for last month. A firing time still ahead (deploy
-  before 23:00 on the 1st) runs normally.
-* A run the engine was down for is still made within
-  MONTHLY_INVOICE_CATCHUP_HOURS; past that it is marked and the admin chat is
-  told to invoice by hand.
+State lives in ``out/invoice_state.json``: the invoice step under the bare
+exchange key (``{"binance": "2026-09"}``, the original shape), the others
+under ``"binance:gentle"`` etc. Rules, per step:
+
+* A missing state file is a FIRST RUN: a step whose time has already passed is
+  recorded without running, so a deploy mid-month does not suddenly bill or
+  pause anyone. A step still ahead runs normally.
+* A step the engine was down for still runs within its catch-up window
+  (invoice/pause 72 h; reminders 12 h — a stale reminder arriving after the
+  pause is wrong, not late). Past it the step is marked and the admin chat is
+  told.
 * "Could not reach the API" is retried every RETRY_SECONDS; a definite answer
   (2xx, or a 4xx refusal) is final for that month.
 
-Nothing here raises into the engine: a broken invoice schedule must never stop
+Nothing here raises into the engine: a broken billing schedule must never stop
 trading.
 """
 
@@ -36,6 +42,7 @@ import json
 import logging
 import threading
 import time
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
 
@@ -50,11 +57,38 @@ STATE_FILE = hooks.OUT_DIR / "invoice_state.json"
 # is a line here once the API can price it.
 INVOICED_EXCHANGES: tuple[str, ...] = ("binance",)
 
-# Between attempts at an unreachable API, so a dead API costs one balance
-# refresh per ten minutes rather than one a minute.
+# Between attempts at an unreachable API, so a dead API costs one call (and,
+# for the invoice step, one balance refresh) per ten minutes, not one a minute.
 RETRY_SECONDS = 600.0
 
-_next_attempt = 0.0
+REMINDER_CATCHUP_HOURS = 12.0
+
+
+@dataclass(frozen=True)
+class Step:
+    name: str
+    #: Days after MONTHLY_INVOICE_DAY.
+    offset: int
+    path: str
+    #: Extra JSON besides month_year.
+    extra: tuple[tuple[str, str], ...] = ()
+
+    def catchup_hours(self) -> float:
+        return REMINDER_CATCHUP_HOURS if self.name in ("gentle", "firm") else hooks.MONTHLY_INVOICE_CATCHUP_HOURS
+
+    def state_key(self, exchange: str) -> str:
+        # The invoice step keeps the original key so an existing state file reads the same.
+        return exchange if self.name == "invoice" else f"{exchange}:{self.name}"
+
+
+STEPS: tuple[Step, ...] = (
+    Step("invoice", 0, "invoices/monthly"),
+    Step("gentle", 1, "invoices/remind", (("stage", "gentle"),)),
+    Step("firm", 2, "invoices/remind", (("stage", "firm"),)),
+    Step("enforce", 3, "invoices/enforce"),
+)
+
+_next_attempt: dict[str, float] = {}
 _status: dict[str, Any] = {"enabled": False}
 
 
@@ -69,7 +103,7 @@ def parse_clock(raw: str) -> tuple[int, int]:
 
 
 def fire_time(now: datetime, day: int, hour: int, minute: int) -> datetime:
-    """This month's firing moment, in `now`'s timezone."""
+    """This month's firing moment for `day`, in `now`'s timezone."""
     return now.replace(day=day, hour=hour, minute=minute, second=0, microsecond=0)
 
 
@@ -120,18 +154,18 @@ def _refresh_balances() -> None:
         log.warning("[invoices] balance refresh before invoicing failed: %s", exc)
 
 
-def request_invoices(exchange: str, month: str) -> tuple[str, Optional[dict]]:
+def call_api(step: Step, exchange: str, month: str) -> tuple[str, Optional[dict]]:
     """('ok', body) on 2xx, ('refused', body) on a 4xx answer, ('retry', None)
     when the API could not be reached or failed on its side."""
     try:
         response = get_session().post(
-            hooks.engine_url("invoices/monthly", exchange),
-            json={"month_year": month},
+            hooks.engine_url(step.path, exchange),
+            json={"month_year": month, **dict(step.extra)},
             headers=hooks.engine_headers(),
             timeout=hooks.MONTHLY_INVOICE_API_TIMEOUT,
         )
     except Exception as exc:  # noqa: BLE001
-        log.warning("[invoices] %s %s: API unreachable: %s", exchange, month, exc)
+        log.warning("[invoices] %s %s %s: API unreachable: %s", step.name, exchange, month, exc)
         return "retry", None
     try:
         body = response.json()
@@ -141,65 +175,74 @@ def request_invoices(exchange: str, month: str) -> tuple[str, Optional[dict]]:
         return "ok", body
     if 400 <= response.status_code < 500:
         return "refused", body if isinstance(body, dict) else {"raw": str(body)}
-    log.warning("[invoices] %s %s: API HTTP %s", exchange, month, response.status_code)
+    log.warning("[invoices] %s %s %s: API HTTP %s", step.name, exchange, month, response.status_code)
     return "retry", None
+
+
+def _report(step: Step, outcome: str, exchange: str, month: str, body: dict) -> None:
+    if outcome == "refused":
+        notify.notify_billing_refused(step.name, month, exchange, body)
+    elif step.name == "invoice":
+        notify.notify_monthly_invoices(month, exchange, body)
+    else:
+        notify.notify_billing_step(step.name, month, exchange, body)
 
 
 # --- Runner ------------------------------------------------------------------------------
 
 def run_once(tzinfo, now: Optional[datetime] = None, *, monotonic: Optional[float] = None) -> None:
-    """One tick: invoice last month on every venue that has not been, if due."""
-    global _next_attempt
+    """One tick: run every step that is due and not yet done."""
     now = now or datetime.now(tzinfo)
     clock = time.monotonic() if monotonic is None else monotonic
     hour, minute = parse_clock(hooks.MONTHLY_INVOICE_AT)
-    fire = fire_time(now, hooks.MONTHLY_INVOICE_DAY, hour, minute)
-    if now < fire:
-        return
-    month = billing_month(fire)
 
     first_run = not STATE_FILE.exists()
     state = _load_state()
-    pending = [ex for ex in INVOICED_EXCHANGES if state.get(ex) != month]
-    if not pending:
-        return
-
-    if first_run:
-        # Deployed after this month's firing time: record it, bill nothing.
-        for ex in pending:
-            state[ex] = month
-        _save_state(state)
-        log.info("[invoices] first run — %s recorded as done without billing (fired %s)", month, fire.isoformat())
-        return
-
-    late_hours = (now - fire).total_seconds() / 3600
-    if late_hours > hooks.MONTHLY_INVOICE_CATCHUP_HOURS:
-        for ex in pending:
-            state[ex] = month
-        _save_state(state)
-        log.error("[invoices] %s missed — %.1fh late (limit %.1fh)", month, late_hours, hooks.MONTHLY_INVOICE_CATCHUP_HOURS)
-        notify.notify_monthly_invoices_missed(month, late_hours)
-        return
-
-    if clock < _next_attempt:
-        return
-    _next_attempt = clock + RETRY_SECONDS
-
-    _refresh_balances()
     changed = False
-    for ex in pending:
-        outcome, body = request_invoices(ex, month)
-        if outcome == "retry":
-            continue  # unmarked: the next attempt in RETRY_SECONDS tries again
-        state[ex] = month
-        changed = True
-        if outcome == "ok":
-            totals = (body or {}).get("totals") or {}
-            log.info("[invoices] %s %s: %s", ex, month, totals)
-            notify.notify_monthly_invoices(month, ex, body or {})
-        else:
-            log.error("[invoices] %s %s refused: %s", ex, month, body)
-            notify.notify_monthly_invoices_refused(month, ex, body or {})
+
+    for step in STEPS:
+        fire = fire_time(now, hooks.MONTHLY_INVOICE_DAY + step.offset, hour, minute)
+        if now < fire:
+            continue
+        month = billing_month(fire)
+        pending = [ex for ex in INVOICED_EXCHANGES if state.get(step.state_key(ex)) != month]
+        if not pending:
+            continue
+
+        if first_run:
+            # Deployed after this step's time: record it, do nothing.
+            for ex in pending:
+                state[step.state_key(ex)] = month
+            changed = True
+            log.info("[invoices] first run — %s for %s recorded without running (was due %s)",
+                     step.name, month, fire.isoformat())
+            continue
+
+        late_hours = (now - fire).total_seconds() / 3600
+        if late_hours > step.catchup_hours():
+            for ex in pending:
+                state[step.state_key(ex)] = month
+            changed = True
+            log.error("[invoices] %s for %s missed — %.1fh late (limit %.1fh)",
+                      step.name, month, late_hours, step.catchup_hours())
+            notify.notify_billing_missed(step.name, month, late_hours)
+            continue
+
+        if clock < _next_attempt.get(step.name, 0.0):
+            continue
+        _next_attempt[step.name] = clock + RETRY_SECONDS
+
+        if step.name == "invoice":
+            _refresh_balances()
+        for ex in pending:
+            outcome, body = call_api(step, ex, month)
+            if outcome == "retry":
+                continue  # unmarked: tried again after RETRY_SECONDS
+            state[step.state_key(ex)] = month
+            changed = True
+            log.info("[invoices] %s %s %s: %s %s", step.name, ex, month, outcome, (body or {}).get("totals"))
+            _report(step, outcome, ex, month, body or {})
+
     if changed:
         _save_state(state)
 
@@ -215,43 +258,43 @@ def _loop(tzinfo, shutdown: threading.Event) -> None:
 
 
 def monthly_invoices_status() -> dict:
-    """What /health shows: whether it is on and when it next fires."""
+    """What /health shows: whether it is on and when each step next fires."""
     tzinfo = _status.get("tz")
     if not _status.get("enabled") or tzinfo is None:
         return {"enabled": False}
     hour, minute = parse_clock(hooks.MONTHLY_INVOICE_AT)
     now = datetime.now(tzinfo)
-    fire = next_fire(now, hooks.MONTHLY_INVOICE_DAY, hour, minute)
+    nxt = {s.name: next_fire(now, hooks.MONTHLY_INVOICE_DAY + s.offset, hour, minute).isoformat() for s in STEPS}
     return {
         "enabled": True,
         "timezone": hooks.MONTHLY_INVOICE_TIMEZONE,
-        "next": fire.isoformat(),
-        "bills_month": billing_month(fire),
-        "last_billed": _load_state(),
+        "next": nxt["invoice"],
+        "steps": nxt,
+        "done": _load_state(),
     }
 
 
 def start_monthly_invoices(shutdown: threading.Event) -> Optional[threading.Thread]:
     """Start the scheduler; None (never raises) when off or misconfigured."""
     if not hooks.MONTHLY_INVOICE_ENABLED:
-        log.info("[invoices] monthly invoicing disabled (BINANCE_ABCD_MONTHLY_INVOICE_ENABLED=false)")
+        log.info("[invoices] monthly billing disabled (BINANCE_ABCD_MONTHLY_INVOICE_ENABLED=false)")
         return None
     try:
         from zoneinfo import ZoneInfo
 
         tzinfo = ZoneInfo(hooks.MONTHLY_INVOICE_TIMEZONE)
         parse_clock(hooks.MONTHLY_INVOICE_AT)
-        if not 1 <= hooks.MONTHLY_INVOICE_DAY <= 28:
-            raise ValueError(f"MONTHLY_INVOICE_DAY must be 1-28, got {hooks.MONTHLY_INVOICE_DAY}")
+        # The pause runs 3 days after the invoice and must stay inside the month.
+        if not 1 <= hooks.MONTHLY_INVOICE_DAY <= 25:
+            raise ValueError(f"MONTHLY_INVOICE_DAY must be 1-25, got {hooks.MONTHLY_INVOICE_DAY}")
     except Exception as exc:  # noqa: BLE001
-        log.error("[invoices] monthly invoicing OFF — bad config: %s", exc)
-        notify.notify_error("monthly invoicing disabled", str(exc))
+        log.error("[invoices] monthly billing OFF — bad config: %s", exc)
+        notify.notify_error("monthly billing disabled", str(exc))
         return None
 
     _status.update(enabled=True, tz=tzinfo)
     thread = threading.Thread(target=_loop, args=(tzinfo, shutdown), name="monthly-invoices", daemon=True)
     thread.start()
-    log.info("[invoices] scheduled: day %s at %s %s — next %s",
-             hooks.MONTHLY_INVOICE_DAY, hooks.MONTHLY_INVOICE_AT, hooks.MONTHLY_INVOICE_TIMEZONE,
-             monthly_invoices_status().get("next"))
+    log.info("[invoices] scheduled at %s %s: %s", hooks.MONTHLY_INVOICE_AT, hooks.MONTHLY_INVOICE_TIMEZONE,
+             ", ".join(f"{k} {v}" for k, v in monthly_invoices_status().get("steps", {}).items()))
     return thread

@@ -919,7 +919,8 @@ def notify_monthly_invoices(month: str, exchange: str, result: dict) -> None:
         f"🧾 <b>Monthly invoices — {_esc(_month_label(month))}</b> · {_esc(exchanges.label(exchange))}",
         f"Billed <b>{totals.get('billed', 0)}</b> · ${float(totals.get('amount') or 0):,.2f} total"
         f" · $0 fee {totals.get('zero_fee', 0)}"
-        f" · skipped {totals.get('skipped', 0)} · failed {totals.get('failed', 0)}",
+        f" · skipped {totals.get('skipped', 0)} · failed {totals.get('failed', 0)}"
+        f" · emailed {totals.get('emailed', 0)}",
     ]
     billed = [c for c in result.get("created") or [] if float(c.get("total_fee") or 0) > 0]
     if billed:
@@ -938,19 +939,54 @@ def notify_monthly_invoices(month: str, exchange: str, result: dict) -> None:
     _send_private("\n".join(lines))
 
 
-def notify_monthly_invoices_refused(month: str, exchange: str, body: dict) -> None:
+_STEP_WORDS = {
+    # step: (emoji, what it is, what to do by hand when it did not happen)
+    "invoice": ("🧾", "Monthly invoices", "Create them in Admin → Sandbox → Invoice Testing."),
+    "gentle": ("📨", "Payment reminder (2nd)", "Remind the unpaid customers by hand."),
+    "firm": ("📨", "Final reminder (3rd)", "Remind the unpaid customers by hand."),
+    "enforce": ("⛔", "Unpaid accounts paused (4th)", "The nightly overdue job pauses them at 00:10 UTC as a safety net."),
+}
+
+
+def notify_billing_step(step: str, month: str, exchange: str, result: dict) -> None:
+    """A reminder or pause step's outcome: who is still unpaid, and for how much."""
+    emoji, title, _ = _STEP_WORDS.get(step, ("🧾", step, ""))
+    totals = result.get("totals") or {}
+    rows = result.get("unpaid") or result.get("paused") or []
+    count = totals.get("unpaid", totals.get("overdue", len(rows)))
+    head = (
+        f"{emoji} <b>{_esc(title)} — {_esc(_month_label(month))}</b> · {_esc(exchanges.label(exchange))}"
+    )
+    if not count:
+        _send_private(f"{head}\nEveryone has paid — nothing to send.")
+        return
+    lines = [head, f"<b>{count}</b> unpaid · ${float(totals.get('amount') or 0):,.2f} · emailed {totals.get('emailed', 0)}"]
+    if step == "enforce":
+        lines[1] += f" · accounts paused {totals.get('disabled', 0)}"
+    lines.append("")
+    for r in rows[:_INVOICE_LIST_LIMIT]:
+        lines.append(f"• {_esc(r.get('owner_name'))} — ${float(r.get('total_fee') or 0):,.2f}"
+                     + ("" if r.get("emailed", True) else " (email failed)"))
+    if len(rows) > _INVOICE_LIST_LIMIT:
+        lines.append(f"… and {len(rows) - _INVOICE_LIST_LIMIT} more (Admin → Invoices)")
+    _send_private("\n".join(lines))
+
+
+def notify_billing_refused(step: str, month: str, exchange: str, body: dict) -> None:
+    _, title, by_hand = _STEP_WORDS.get(step, ("", step, ""))
     detail = body.get("message") or body.get("error_code") or json.dumps(body)[:300]
     _send_private(
-        f"❌ <b>Monthly invoices NOT created — {_esc(_month_label(month))}</b> · {_esc(exchanges.label(exchange))}\n"
-        f"{_esc(detail)}\nCreate them in Admin → Sandbox → Invoice Testing."
+        f"❌ <b>{_esc(title)} did NOT run — {_esc(_month_label(month))}</b> · {_esc(exchanges.label(exchange))}\n"
+        f"{_esc(detail)}\n{_esc(by_hand)}"
     )
 
 
-def notify_monthly_invoices_missed(month: str, late_hours: float) -> None:
+def notify_billing_missed(step: str, month: str, late_hours: float) -> None:
+    _, title, by_hand = _STEP_WORDS.get(step, ("", step, ""))
     _send_private(
-        f"⚠️ <b>Monthly invoices for {_esc(_month_label(month))} were NOT created</b>\n"
+        f"⚠️ <b>{_esc(title)} for {_esc(_month_label(month))} did NOT run</b>\n"
         f"The engine was down at the scheduled time ({late_hours:.0f}h ago, past the catch-up window).\n"
-        "Create them in Admin → Sandbox → Invoice Testing."
+        f"{_esc(by_hand)}"
     )
 
 
