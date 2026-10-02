@@ -64,7 +64,7 @@ export default function Landing() {
       <div className="relative z-[1]">
         <Ticker stats={record?.stats ?? null} series={record?.series ?? []} />
         <Nav />
-        <Hero stats={record?.stats ?? null} series={record?.series ?? []} />
+        <Hero />
         <Performance record={record} loading={loading} error={error} />
         <Features />
         {/* "We don't talk. We deliver results." (components/landing/Receipts.tsx)

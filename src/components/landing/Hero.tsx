@@ -2,18 +2,15 @@ import { useNavigate } from 'react-router-dom'
 import { useSessionUser } from '../../hooks/useSessionUser'
 import { SECTION_IDS, scrollToSection } from '../../lib/scroll'
 import { REGISTER_PATH } from '../../lib/routes'
-import HeroCard from './HeroCard'
-import type { TrackRecordPoint, TrackRecordStats } from '../../types/publicStats'
+import OrderBook from './OrderBook'
 
 const CONTAINER = 'max-w-[1280px] mx-auto px-10 max-[560px]:px-5'
 
-interface HeroProps {
-  /** The page's one track-record fetch, for the card's second face. */
-  stats: TrackRecordStats | null
-  series: TrackRecordPoint[]
-}
-
-export default function Hero({ stats, series }: HeroProps) {
+// The card used to alternate between the order book and a "Verified track
+// record" face (components/landing/PerformancePanel.tsx). That face is hidden
+// at the owner's request (2026-10-03); the track record still has its own
+// section further down. The component stays put — render it again to bring it back.
+export default function Hero() {
   const navigate = useNavigate()
   const user = useSessionUser()
   return (
@@ -53,7 +50,9 @@ export default function Hero({ stats, series }: HeroProps) {
           <span>◆ Funds stay on your exchange</span>
         </div>
       </div>
-      <HeroCard stats={stats} series={series} />
+      <div className="relative animate-[fadeup_0.8s_cubic-bezier(0.2,0.7,0.2,1)_0.15s_both]">
+        <OrderBook />
+      </div>
     </section>
   )
 }
