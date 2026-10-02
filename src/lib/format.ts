@@ -32,6 +32,19 @@ export function fmtQty(n: number, minDp = 3, maxDp = 6): string {
   })
 }
 
+/**
+ * A crypto amount as the API sends it ("3.000000") → "3.00". Trailing zeros
+ * go, but never below 2 decimals, and a significant digit is NEVER dropped
+ * ("3.123400" → "3.1234"): under amount matching the figure shown is the
+ * figure the customer must send, so it may be shortened, never rounded.
+ */
+export function fmtCryptoAmount(amount: string): string {
+  const m = /^(-?\d+)(?:\.(\d*))?$/.exec(amount.trim())
+  if (!m) return amount
+  const frac = (m[2] ?? '').replace(/0+$/, '').padEnd(2, '0')
+  return `${m[1]}.${frac}`
+}
+
 /** "$12,822.73" (absolute value). */
 export function fmtMoney(n: number, dp = 2): string {
   return `$${fmtNum(Math.abs(n), dp)}`

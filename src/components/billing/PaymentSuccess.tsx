@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle2, ExternalLink, FileText, FlaskConical, LayoutDashboard } from 'lucide-react'
-import { fmtMoney } from '../../lib/format'
+import { fmtCryptoAmount, fmtMoney } from '../../lib/format'
 import type { Invoice } from '../../lib/billing'
 import type { TronSettlement } from '../../types/payments'
 
@@ -62,7 +62,7 @@ export default function PaymentSuccess({ invoice, settlement, onDone }: PaymentS
             {fmtMoney(settlement.usdAmount)}
           </p>
           <p className="font-mono text-[12px] text-faint">
-            {settlement.amount} {settlement.asset}
+            {fmtCryptoAmount(settlement.amount)} {settlement.asset}
           </p>
 
           {settlement.simulated && (

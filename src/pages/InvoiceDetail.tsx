@@ -484,6 +484,63 @@ export default function InvoiceDetail() {
             </div>
           </section>
 
+          {/* billing period — first after the amount, like any invoice */}
+          <section
+            className="rounded-card border border-border bg-surface p-card"
+            data-aos="fade-up"
+          >
+            <p className="inline-flex items-center gap-1.5 text-[10.5px] tracking-[0.14em] text-faint mb-3.5">
+              BILLING PERIOD
+            </p>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4 max-[520px]:grid-cols-1">
+              <div className="flex items-center justify-between gap-3 pb-3.5 border-b border-hair">
+                <span className="inline-flex items-center gap-1.5 text-[12px] text-muted">
+                  <Calendar size={13} className="text-faint flex-shrink-0" /> Invoice Date
+                </span>
+                <span className="text-[13px] font-bold text-text font-mono">
+                  {formatDate(invoice.invoiceDate)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3 pb-3.5 border-b border-hair">
+                <span className="inline-flex items-center gap-1.5 text-[12px] text-muted">
+                  <Clock size={13} className="text-faint flex-shrink-0" /> Due Date
+                </span>
+                <span className="text-[13px] font-bold text-text font-mono">
+                  {formatDate(invoice.dueDate)}
+                </span>
+              </div>
+              {paid && (
+                <div className="flex items-center justify-between gap-3 pb-3.5 border-b border-hair">
+                  <span className="inline-flex items-center gap-1.5 text-[12px] text-muted">
+                    <CheckCircle2 size={13} className="text-faint flex-shrink-0" /> Paid Date
+                  </span>
+                  <span className="text-[13px] font-bold text-green font-mono">
+                    {formatDate(invoice.paidDate)}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-3 pb-3.5 border-b border-hair">
+                <span className="inline-flex items-center gap-1.5 text-[12px] text-muted">
+                  <Landmark size={13} className="text-faint flex-shrink-0" />{' '}
+                  {invoice.referenceLabel}
+                </span>
+                <span className="text-[13px] font-bold text-text font-mono">
+                  {fmtMoney(invoice.referenceValue)}
+                </span>
+              </div>
+              {invoice.isFirstInvoice && (invoice.depositAmount ?? 0) > 0 && (
+                <div className="flex items-center justify-between gap-3 pb-3.5 border-b border-hair">
+                  <span className="inline-flex items-center gap-1.5 text-[12px] text-muted">
+                    <Landmark size={13} className="text-faint flex-shrink-0" /> Initial Deposit
+                  </span>
+                  <span className="text-[13px] font-bold text-text font-mono">
+                    {fmtMoney(invoice.depositAmount!)}
+                  </span>
+                </div>
+              )}
+            </div>
+          </section>
+
           {/* performance summary tiles */}
           <div className="grid grid-cols-4 gap-3.5 max-[720px]:grid-cols-2">
             <Tile
@@ -617,62 +674,6 @@ export default function InvoiceDetail() {
             )}
           </section>
 
-          {/* timeline / reference */}
-          <section
-            className="rounded-card border border-border bg-surface p-card"
-            data-aos="fade-up"
-          >
-            <p className="inline-flex items-center gap-1.5 text-[10.5px] tracking-[0.14em] text-faint mb-3.5">
-              BILLING PERIOD
-            </p>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-4 max-[520px]:grid-cols-1">
-              <div className="flex items-center justify-between gap-3 pb-3.5 border-b border-hair">
-                <span className="inline-flex items-center gap-1.5 text-[12px] text-muted">
-                  <Calendar size={13} className="text-faint flex-shrink-0" /> Invoice Date
-                </span>
-                <span className="text-[13px] font-bold text-text font-mono">
-                  {formatDate(invoice.invoiceDate)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3 pb-3.5 border-b border-hair">
-                <span className="inline-flex items-center gap-1.5 text-[12px] text-muted">
-                  <Clock size={13} className="text-faint flex-shrink-0" /> Due Date
-                </span>
-                <span className="text-[13px] font-bold text-text font-mono">
-                  {formatDate(invoice.dueDate)}
-                </span>
-              </div>
-              {paid && (
-                <div className="flex items-center justify-between gap-3 pb-3.5 border-b border-hair">
-                  <span className="inline-flex items-center gap-1.5 text-[12px] text-muted">
-                    <CheckCircle2 size={13} className="text-faint flex-shrink-0" /> Paid Date
-                  </span>
-                  <span className="text-[13px] font-bold text-green font-mono">
-                    {formatDate(invoice.paidDate)}
-                  </span>
-                </div>
-              )}
-              <div className="flex items-center justify-between gap-3 pb-3.5 border-b border-hair">
-                <span className="inline-flex items-center gap-1.5 text-[12px] text-muted">
-                  <Landmark size={13} className="text-faint flex-shrink-0" />{' '}
-                  {invoice.referenceLabel}
-                </span>
-                <span className="text-[13px] font-bold text-text font-mono">
-                  {fmtMoney(invoice.referenceValue)}
-                </span>
-              </div>
-              {invoice.isFirstInvoice && (invoice.depositAmount ?? 0) > 0 && (
-                <div className="flex items-center justify-between gap-3 pb-3.5 border-b border-hair">
-                  <span className="inline-flex items-center gap-1.5 text-[12px] text-muted">
-                    <Landmark size={13} className="text-faint flex-shrink-0" /> Initial Deposit
-                  </span>
-                  <span className="text-[13px] font-bold text-text font-mono">
-                    {fmtMoney(invoice.depositAmount!)}
-                  </span>
-                </div>
-              )}
-            </div>
-          </section>
         </div>
 
         <BillingHelpSidebar />

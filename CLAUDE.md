@@ -244,9 +244,17 @@ invoice for that month, but `total_fee` = the amount, the realized/unrealized
 split zero and `invoices.fee_source = 'manual'` (every screen then prints one
 "set manually" line — never a split that does not add up to the total). It
 replaces that month's unpaid invoice and refuses a paid one (a $0 row that
-generate stored as 'paid' collected nothing and IS replaceable); due today + 7
-days, never from the billing month, or the overdue sweep would disable the
-account the same night. Regenerating from P&L resets `fee_source` to 'pnl'.
+generate stored as 'paid' collected nothing and IS replaceable); **due the 4th
+of the month after the billing month, like every invoice (owner, 2026-10-02,
+`InvoiceService::manualDueDate`)** — or today + 3 days once that 4th has
+passed, never a past date, or the overdue sweep would disable the account the
+same night. Regenerating from P&L resets `fee_source` to 'pnl'.
+**Billing schedule as the team states it:** 2nd reminder, 3rd reminder, 4th
+the account is cut off (paused) and emailed that it was — NO reminder on the
+4th. The `PaymentReminder` stages gentle / firm / paused already say exactly
+that. Invoice page: the Billing Period card sits directly under the amount
+due; crypto amounts print via `fmtCryptoAmount` ("3.000000" → "3.00", never
+dropping a significant digit); "Show QR code" opens its own `TronQrModal`.
 **The master account is never invoiced** (owner, 2026-09-25):
 `InvoiceService::notInvoiceableReason` refuses it inside `generateForAccount`, so
 the admin screen (422 `NOT_INVOICEABLE`) and the future monthly run agree;

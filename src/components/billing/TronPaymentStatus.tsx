@@ -171,12 +171,14 @@ export default function TronPaymentStatus({
               </>
             ) : (
               <>
-                Send exactly{' '}
-                <span className="font-mono font-bold text-text">
-                  {amount} {asset}
-                </span>{' '}
-                from your wallet or exchange. Once you've sent it, it normally appears here
-                within 1–3 minutes — exchanges can take longer to release a withdrawal.
+                <span className="block text-[12.5px] font-bold text-text mb-0.5">
+                  Please send the exact amount:{' '}
+                  <span className="font-mono text-accent">
+                    {amount} {asset}
+                  </span>
+                </span>
+                Once you've sent it, it normally appears here within 1–3 minutes —
+                exchanges can take longer to release a withdrawal.
               </>
             )}
           </p>

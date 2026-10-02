@@ -19,7 +19,7 @@ const SECTIONS = [
   {
     icon: Clock,
     title: 'Due date & payment',
-    body: 'You have 7 days (due by the 8th). Pay in crypto — USDT on the TRC20 network — or by card through Stripe. Payment updates your HWM automatically.',
+    body: 'Your invoice is due on the 4th — we remind you on the 2nd and 3rd, and trading pauses on the 4th if it is still unpaid. Pay in crypto — USDT on the TRC20 network — or by card through Stripe. Payment updates your HWM automatically.',
   },
 ]
 

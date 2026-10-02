@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Check, Copy, FlaskConical, Loader2, QrCode, TriangleAlert } from 'lucide-react'
-import { QRCodeSVG } from 'qrcode.react'
 import { getTronIntentStatus, simulateTronPayment } from '../../services/payments'
 import { getApiErrorMessage } from '../../services/api'
 import { useInterval } from '../../hooks/useInterval'
 import type { TronIntent, TronIntentStatus, TronSettlement } from '../../types/payments'
 import DevDetails from '../ui/DevDetails'
+import { fmtCryptoAmount } from '../../lib/format'
+import TronQrModal from './TronQrModal'
 import TronPaymentStatus, { type TronStage } from './TronPaymentStatus'
 
 interface TronPayPanelProps {
@@ -58,6 +59,8 @@ export default function TronPayPanel({
   const [remaining, setRemaining] = useState(intent.secondsRemaining)
   const [copied, setCopied] = useState<'address' | 'amount' | null>(null)
   const [showQr, setShowQr] = useState(false)
+  /** "3.000000" → "3.00"; never drops a significant digit (see fmtCryptoAmount). */
+  const shownAmount = fmtCryptoAmount(intent.amount)
   const [simulating, setSimulating] = useState(false)
   const [simError, setSimError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
@@ -149,7 +152,7 @@ export default function TronPayPanel({
     <div className="flex flex-col gap-4">
       <TronPaymentStatus
         stage={stage}
-        amount={intent.amount}
+        amount={shownAmount}
         asset={intent.asset}
         remaining={remaining}
         elapsed={(now - shownAt.current) / 1000}
@@ -176,10 +179,10 @@ export default function TronPayPanel({
           <p className={FIELD_LABEL}>Exact amount</p>
           <div className={`${FIELD_BOX} mb-3`}>
             <code className="flex-1 min-w-0 font-mono text-[15px] font-bold text-text break-all">
-              {intent.amount}
+              {shownAmount}
             </code>
             <span className="flex-shrink-0 font-mono text-[11.5px] text-muted">{intent.asset}</span>
-            <button type="button" className={COPY_BTN} onClick={() => copy(intent.amount, 'amount')}>
+            <button type="button" className={COPY_BTN} onClick={() => copy(shownAmount, 'amount')}>
               {copied === 'amount' ? <Check size={13} /> : <Copy size={13} />}
               {copied === 'amount' ? 'Copied' : 'Copy'}
             </button>
@@ -196,42 +199,15 @@ export default function TronPayPanel({
             </button>
           </div>
 
-          {/* The QR carries the bare ADDRESS only. TRON wallet URI support for an
-              amount is inconsistent, and a QR that silently drops the amount would
-              send the wrong figure under amount matching — so the amount is
-              always typed from the field above, and the caption says so. */}
+          {/* The QR opens in its own window above this one (TronQrModal). */}
           <button
             type="button"
             className="mt-2.5 w-full inline-flex items-center justify-center gap-2 rounded-[10px] border border-accent-line bg-surface2 py-2.5 px-3 text-[12.5px] font-bold text-text cursor-pointer transition-[border-color] duration-150 hover:border-accent"
-            onClick={() => setShowQr((v) => !v)}
-            aria-expanded={showQr}
+            onClick={() => setShowQr(true)}
           >
             <QrCode size={14} />
-            {showQr ? 'Hide QR code' : 'Show QR code'}
+            Show QR code
           </button>
-          {showQr && (
-            <div className="mt-3 flex flex-col items-center gap-2.5 animate-[fadeup_0.25s_ease-out]">
-              {/* Fixed white quiet zone, never theme tokens: scanners need
-                  dark-on-light contrast in either theme. */}
-              <div className="rounded-[14px] bg-white p-3.5">
-                <QRCodeSVG
-                  value={intent.address}
-                  size={184}
-                  level="M"
-                  bgColor="#ffffff"
-                  fgColor="#0b0d12"
-                  title={`${intent.chainLabel} address ${intent.address}`}
-                />
-              </div>
-              <p className="max-w-[300px] text-center text-[11.5px] text-muted leading-[1.5]">
-                Scan to fill in the address. The QR holds the address only — enter{' '}
-                <strong className="font-mono text-text">
-                  {intent.amount} {intent.asset}
-                </strong>{' '}
-                yourself.
-              </p>
-            </div>
-          )}
 
           {/* Unrecoverable if ignored: USDT exists on several chains and only the
               TRON one reaches this address. */}
@@ -307,6 +283,15 @@ export default function TronPayPanel({
           className=""
         />
       )}
+
+      <TronQrModal
+        open={showQr && !expired}
+        address={intent.address}
+        amount={shownAmount}
+        asset={intent.asset}
+        chainLabel={intent.chainLabel}
+        onClose={() => setShowQr(false)}
+      />
     </div>
   )
 }

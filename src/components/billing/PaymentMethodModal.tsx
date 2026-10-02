@@ -17,7 +17,7 @@ import {
   X,
 } from 'lucide-react'
 import CopyState from '../ui/CopyState'
-import { fmtMoney, fmtSignedMoney, fmtSignedPct, formatDate } from '../../lib/format'
+import { fmtCryptoAmount, fmtMoney, fmtSignedMoney, fmtSignedPct, formatDate } from '../../lib/format'
 import { daysUntilDue, type Invoice } from '../../lib/billing'
 import {
   FALLBACK_CRYPTOCURRENCIES,
@@ -728,7 +728,7 @@ export default function PaymentMethodModal({
                           <>
                             Reserved:{' '}
                             <span className="font-mono font-bold text-text">
-                              {tronIntent.amount} {tronIntent.asset}
+                              {fmtCryptoAmount(tronIntent.amount)} {tronIntent.asset}
                             </span>{' '}
                             — send it manually to the payment address.
                           </>

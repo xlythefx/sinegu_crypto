@@ -301,7 +301,8 @@ export default function SandboxInvoiceCard({ users }: { users: AdminUser[] }) {
 
       {mode === 'manual' && (
         <p className="text-[11.5px] text-faint mt-2.5 leading-[1.5]">
-          Replaces this month's unpaid invoice for the account. Due 7 days from today.
+          Replaces this month's unpaid invoice for the account. Due on the 4th of the
+          next month (or in 3 days, if that 4th has already passed).
           Paid in crypto, it settles only when the transfer arrives.
         </p>
       )}
@@ -371,7 +372,7 @@ export default function SandboxInvoiceCard({ users }: { users: AdminUser[] }) {
           account
             ? `Bill ${account.name} (#${account.id}) ${fmtMoney(fee)} for ${monthLabel}. ` +
               `It replaces that month's unpaid invoice for this account, if there is one, ` +
-              `and is due in 7 days.`
+              `and is due on the 4th of the next month (or in 3 days, if that has passed).`
             : ''
         }
         confirmLabel="Create invoice"
