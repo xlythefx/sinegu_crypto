@@ -406,7 +406,7 @@ export default function InvoiceDetail() {
                       disabled={cardBusy !== null}
                     >
                       {cardBusy ? <Loader2 size={18} className="animate-[dstate-spin_0.8s_linear_infinite]" /> : <CreditCard size={18} />}
-                      {cardBusy ? 'Opening Stripe…' : 'Pay with card'}
+                      {cardBusy ? 'Opening Stripe…' : 'Pay with Stripe'}
                     </button>
                   )}
                   {devCardModes?.live && (
@@ -419,7 +419,7 @@ export default function InvoiceDetail() {
                       {cardBusy === 'live' ? <Loader2 size={18} className="animate-[dstate-spin_0.8s_linear_infinite]" /> : <CreditCard size={18} />}
                       {/* Same label a customer sees — the confirmation, not the
                           button, is where a developer is told it is real money. */}
-                      {cardBusy === 'live' ? 'Opening Stripe…' : 'Pay with card'}
+                      {cardBusy === 'live' ? 'Opening Stripe…' : 'Pay with Stripe'}
                     </button>
                   )}
                   </div>

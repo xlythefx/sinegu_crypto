@@ -313,6 +313,10 @@ only method a trader is offered.**
   (`TRON_DEVELOPER_NETWORK=nile`) — that is the rule that stops a test ever
   exposing the real receiving address, so a MAINNET rehearsal means flipping
   that key temporarily rather than testing as a developer and assuming.
+- **On prod since 2026-10-02:** `TRON_PUBLIC=true` and
+  `PAYMENTS_DEFAULT_PROVIDER=tron` are set on the box (they were missing, so
+  only developers saw the rail). `TRON_DEVELOPER_NETWORK` is still `mainnet`
+  there from a rehearsal — set it back to `nile` when that is over.
 
 - **Matching is by AMOUNT, not by sender or address.** One shared receiving
   address; a `payment_intents` row reserves the exact figure for an invoice and
@@ -372,8 +376,9 @@ only method a trader is offered.**
   end-to-end rehearsal, then set `TRON_MAINNET_ADDRESS`. **Before `TRON_PUBLIC=true`,
   measure a real withdrawal from each exchange customers use** and record how many
   decimals survived and how much fee was deducted — only then decide whether a
-  fingerprint is viable. No QR (TRON wallet URI support is inconsistent, and a QR
-  that silently drops the amount is worse than none under amount matching).
+  fingerprint is viable. The QR (added 2026-10-02) carries the bare address ONLY,
+  never an amount URI (TRON wallet URI support is inconsistent, and a QR that
+  silently drops the amount is worse than none under amount matching).
   Off-ramping USDT stays manual, and AML screening on inbound funds becomes ours
   the day this is the default rather than Coinsbuy's.
 
@@ -390,7 +395,16 @@ allow-list** (2.24.139.176, else 403 / code 2016).
 
 **Card payments — Stripe hosted Checkout (wired 2026-09-30).** Ported from the
 mother (`sinegu-api/stripe/create-checkout-session.php` + `webhook.php`), reusing
-the SAME Stripe account's keys. Flow: "Pay $X by card" in `PaymentMethodModal`
+the SAME Stripe account's keys.
+**The two rails are SEPARATE BUTTONS on the invoice page (owner, 2026-10-02):**
+`/dashboard/invoices/:id` shows **"Pay with crypto"** (gold) → opens
+`PaymentMethodModal`, which is **crypto ONLY** (`SHEET_OFFERS_CARD = false`
+there), and **"Pay with Stripe"** (violet, `CARD_BTN` in `InvoiceDetail.tsx`) →
+straight to Stripe Checkout. Never put the card back inside the crypto sheet.
+`CARD_PAYMENTS_ENABLED` in `lib/paymentRails.ts` is the one kill switch for
+every card button. The address window (`TronPayPanel`) has a "Show QR code"
+toggle that encodes the bare ADDRESS only — the amount is always typed.
+Flow: "Pay with Stripe"
 → `POST /payments/stripe/checkout-session` (amount from the invoice row, a Stripe
 Customer per uni_id with `setup_future_usage=off_session` so a later auto-charge
 can reuse the card) → redirect to checkout.stripe.com → back to

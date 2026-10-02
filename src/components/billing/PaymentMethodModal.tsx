@@ -40,6 +40,13 @@ import ExchangeBadge from './ExchangeBadge'
 import TronAddressModal from './TronAddressModal'
 import CardPayButton from './CardPayButton'
 import { CARD_PAYMENTS_ENABLED } from '../../lib/paymentRails'
+
+/**
+ * This sheet is opened by "Pay with crypto", so it offers crypto ONLY (owner,
+ * 2026-10-02). The card lives on its own violet "Pay with Stripe" button on the
+ * invoice page; the card rows below are kept so this flag can bring them back.
+ */
+const SHEET_OFFERS_CARD = false
 import ConfirmModal from '../ui/ConfirmModal'
 import PaymentSuccess from './PaymentSuccess'
 
@@ -317,11 +324,13 @@ export default function PaymentMethodModal({
   // Developer account: test credentials on every machine, including production.
   const testAccount = methods?.testAccount === true
   const busy = phase !== 'idle' || cardPhase !== 'idle'
-  /** Server-decided: a secret key AND a webhook secret exist for this mode. */
-  const cardEnabled = CARD_PAYMENTS_ENABLED && methods?.stripe.enabled === true
+  /** Server-decided: a secret key AND a webhook secret exist for this mode.
+   *  Never true in this sheet — it is crypto only; the card has its own
+   *  "Pay with Stripe" button on the invoice page ({@link SHEET_OFFERS_CARD}). */
+  const cardEnabled = SHEET_OFFERS_CARD && CARD_PAYMENTS_ENABLED && methods?.stripe.enabled === true
   const cardTestMode = cardEnabled && methods?.stripe.mode !== 'live'
   /** Developer accounts: pick test card (sandbox) or a real charge (live). */
-  const devCardModes = CARD_PAYMENTS_ENABLED ? methods?.stripe.modes : undefined
+  const devCardModes = SHEET_OFFERS_CARD && CARD_PAYMENTS_ENABLED ? methods?.stripe.modes : undefined
 
   /**
    * Whether to offer the direct-wallet rail at all. The server is the authority

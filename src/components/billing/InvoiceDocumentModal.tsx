@@ -502,7 +502,7 @@ export default function InvoiceDocumentModal({
                 {' '}— you never pay twice on the same gains.{' '}
                 {paid
                   ? 'This billing period is settled. Thank you.'
-                  : `Settle in USDT (TRC-20) from your ${COMPANY.name} billing page.`}
+                  : `Settle in USDT (TRC-20) or by card from your ${COMPANY.name} billing page.`}
               </p>
             </div>
           </div>
