@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Clock,
   DollarSign,
+  Eye,
   Search,
   Trash2,
 } from 'lucide-react'
@@ -13,6 +14,8 @@ import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import ExchangeBadge from '../../components/billing/ExchangeBadge'
+import InvoiceDocumentModal from '../../components/billing/InvoiceDocumentModal'
+import AdminInvoiceDetailModal from '../../components/admin/invoices/AdminInvoiceDetailModal'
 import { EXCHANGE_META, EXCHANGE_ORDER } from '../../components/exchanges/meta'
 import { useApiData } from '../../hooks/useApiData'
 import {
@@ -51,6 +54,12 @@ const STATUS_PILL: Record<AdminInvoiceRow['status'], string> = {
   pending: 'bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-accent',
 }
 
+/** Sort key: overdue, then outstanding, then paid. */
+function urgency(i: AdminInvoiceRow): number {
+  if (i.status === 'paid') return 2
+  return i.isOverdue && i.totalFee > 0 ? 0 : 1
+}
+
 interface PendingAction {
   invoice: AdminInvoiceRow
   action: 'markPaid' | 'delete'
@@ -66,6 +75,8 @@ export default function AdminInvoiceHistory() {
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [viewing, setViewing] = useState<AdminInvoiceRow | null>(null)
+  const [docInvoice, setDocInvoice] = useState<AdminInvoiceRow | null>(null)
 
   const invoices = useMemo(() => data?.invoices ?? [], [data])
 
@@ -81,7 +92,10 @@ export default function AdminInvoiceHistory() {
           .includes(q)
       )
     }
-    return list
+    // Outstanding first (overdue at the very top) — the rows that need an
+    // action. A stable sort, so the API's newest-first order holds within
+    // each group.
+    return [...list].sort((a, b) => urgency(a) - urgency(b))
   }, [invoices, statusFilter, exchangeFilter, search])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
@@ -108,6 +122,7 @@ export default function AdminInvoiceHistory() {
         await deleteInvoice(pendingAction.invoice.id)
       }
       setPendingAction(null)
+      setViewing(null)
       reload()
     } catch (err) {
       setActionError(getApiErrorMessage(err, 'Unable to update invoice.'))
@@ -244,7 +259,11 @@ export default function AdminInvoiceHistory() {
                 </tr>
               )}
               {paginated.map((inv) => (
-                <tr key={inv.id}>
+                <tr
+                  key={inv.id}
+                  className="cursor-pointer transition-colors duration-150 hover:bg-surface2"
+                  onClick={() => setViewing(inv)}
+                >
                   <td className={`${TD} font-mono`}>{inv.formattedId}</td>
                   <td className={TD}>
                     <span className="block font-semibold">{inv.userName ?? '—'}</span>
@@ -266,7 +285,14 @@ export default function AdminInvoiceHistory() {
                     </span>
                   </td>
                   <td className={`${TD} text-right`}>
-                    <div className="inline-flex gap-2 justify-end">
+                    <div className="inline-flex gap-2 justify-end" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-[5px] rounded-[9px] py-[7px] px-3 text-[12px] font-semibold cursor-pointer border border-border bg-surface2 text-text transition-[border-color] duration-150 hover:border-accent"
+                        onClick={() => setViewing(inv)}
+                      >
+                        <Eye size={13} /> View
+                      </button>
                       {inv.status !== 'paid' && inv.totalFee > 0 && (
                         <button
                           type="button"
@@ -324,6 +350,25 @@ export default function AdminInvoiceHistory() {
           </div>
         )}
       </section>
+
+      <AdminInvoiceDetailModal
+        invoice={viewing}
+        onClose={() => setViewing(null)}
+        onViewDocument={(inv) => setDocInvoice(inv)}
+        onMarkPaid={
+          viewing && viewing.status !== 'paid' && viewing.totalFee > 0
+            ? (inv) => setPendingAction({ invoice: inv, action: 'markPaid' })
+            : undefined
+        }
+        busy={actionLoading}
+      />
+
+      <InvoiceDocumentModal
+        open={docInvoice !== null}
+        invoice={docInvoice}
+        customer={docInvoice ? { name: docInvoice.userName, email: docInvoice.userEmail } : null}
+        onClose={() => setDocInvoice(null)}
+      />
 
       <ConfirmModal
         open={pendingAction !== null}
