@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Check, Copy, FlaskConical, Loader2, TriangleAlert } from 'lucide-react'
+import { AlertTriangle, Check, Copy, FlaskConical, Loader2, QrCode, TriangleAlert } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import { getTronIntentStatus, simulateTronPayment } from '../../services/payments'
 import { getApiErrorMessage } from '../../services/api'
 import { useInterval } from '../../hooks/useInterval'
@@ -56,6 +57,7 @@ export default function TronPayPanel({
   const [status, setStatus] = useState<TronIntentStatus | null>(null)
   const [remaining, setRemaining] = useState(intent.secondsRemaining)
   const [copied, setCopied] = useState<'address' | 'amount' | null>(null)
+  const [showQr, setShowQr] = useState(false)
   const [simulating, setSimulating] = useState(false)
   const [simError, setSimError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
@@ -193,6 +195,43 @@ export default function TronPayPanel({
               {copied === 'address' ? 'Copied' : 'Copy'}
             </button>
           </div>
+
+          {/* The QR carries the bare ADDRESS only. TRON wallet URI support for an
+              amount is inconsistent, and a QR that silently drops the amount would
+              send the wrong figure under amount matching — so the amount is
+              always typed from the field above, and the caption says so. */}
+          <button
+            type="button"
+            className="mt-2.5 w-full inline-flex items-center justify-center gap-2 rounded-[10px] border border-accent-line bg-surface2 py-2.5 px-3 text-[12.5px] font-bold text-text cursor-pointer transition-[border-color] duration-150 hover:border-accent"
+            onClick={() => setShowQr((v) => !v)}
+            aria-expanded={showQr}
+          >
+            <QrCode size={14} />
+            {showQr ? 'Hide QR code' : 'Show QR code'}
+          </button>
+          {showQr && (
+            <div className="mt-3 flex flex-col items-center gap-2.5 animate-[fadeup_0.25s_ease-out]">
+              {/* Fixed white quiet zone, never theme tokens: scanners need
+                  dark-on-light contrast in either theme. */}
+              <div className="rounded-[14px] bg-white p-3.5">
+                <QRCodeSVG
+                  value={intent.address}
+                  size={184}
+                  level="M"
+                  bgColor="#ffffff"
+                  fgColor="#0b0d12"
+                  title={`${intent.chainLabel} address ${intent.address}`}
+                />
+              </div>
+              <p className="max-w-[300px] text-center text-[11.5px] text-muted leading-[1.5]">
+                Scan to fill in the address. The QR holds the address only — enter{' '}
+                <strong className="font-mono text-text">
+                  {intent.amount} {intent.asset}
+                </strong>{' '}
+                yourself.
+              </p>
+            </div>
+          )}
 
           {/* Unrecoverable if ignored: USDT exists on several chains and only the
               TRON one reaches this address. */}

@@ -39,18 +39,10 @@ import DevDetails from '../ui/DevDetails'
 import ExchangeBadge from './ExchangeBadge'
 import TronAddressModal from './TronAddressModal'
 import CardPayButton from './CardPayButton'
+import { CARD_PAYMENTS_ENABLED } from '../../lib/paymentRails'
 import ConfirmModal from '../ui/ConfirmModal'
 import PaymentSuccess from './PaymentSuccess'
 
-/**
- * Card payments (Stripe hosted Checkout, 2026-09-30) are offered whenever
- * `/payments/methods` reports `stripe.enabled` — i.e. the server holds BOTH a
- * secret key and a webhook secret for the mode it resolved. The webhook secret
- * is the part that matters: it is the only thing that settles a card payment,
- * so a box without one never shows a button that would charge a card against
- * an invoice nothing will ever mark paid. This flag is only a kill switch.
- */
-const CARD_PAYMENTS_ENABLED = true
 
 /**
  * Coinsbuy is hidden from traders (2026-09-23, owner's call): invoices are paid

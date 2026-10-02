@@ -21,6 +21,7 @@ import DataState from '../components/dashboard/DataState'
 import { useInterval } from '../hooks/useInterval'
 import { useSessionUser } from '../hooks/useSessionUser'
 import { isDeveloper } from '../lib/roles'
+import { CARD_PAYMENTS_ENABLED } from '../lib/paymentRails'
 import BillingHelpSidebar from '../components/billing/BillingHelpSidebar'
 import ExchangeBadge from '../components/billing/ExchangeBadge'
 import InvoiceDocumentModal from '../components/billing/InvoiceDocumentModal'
@@ -106,9 +107,9 @@ export default function InvoiceDetail() {
   const devReal = developer && devNetwork === 'mainnet'
 
   // ── card (Stripe hosted checkout) ──────────────────────────────────────
-  const cardEnabled = methods?.stripe.enabled === true
+  const cardEnabled = CARD_PAYMENTS_ENABLED && methods?.stripe.enabled === true
   /** Developers only: which card modes they may pick (test card / real charge). */
-  const devCardModes = methods?.stripe.modes
+  const devCardModes = CARD_PAYMENTS_ENABLED ? methods?.stripe.modes : undefined
   const [cardBusy, setCardBusy] = useState<'test' | 'live' | 'default' | null>(null)
   const [cardError, setCardError] = useState<string | null>(null)
   const [confirmLiveCard, setConfirmLiveCard] = useState(false)
