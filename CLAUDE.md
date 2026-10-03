@@ -556,6 +556,15 @@ DB reads only — never an exchange call). Rules:
   owed one. Rows on accounts the engine does not trade (disabled, sandbox,
   disconnected, owner suspended) show why and cannot be ticked. The page
   shows the request and response JSON for testing (folded; opens after a close).
+  **Closing is one step** (2026-10-03, `open-positions/ClosePanel.tsx`): pick
+  **Everyone / Master only / One user** (searchable by name, account,
+  exchange) → **Close all** → ConfirmModal. Every user row and the master view
+  also carry their own "Exit all (N)". The client splits anything over 50 into
+  sequential batches (the API + engine cap) and one failed batch never stops
+  the rest. A position on a venue the engine is NOT trading (read from its
+  `/health`, `EngineCache::tradedExchanges`, cached 60 s; engine silent =
+  unknown = blocks nothing) is not closable — the engine refuses a whole
+  request naming such a venue, so one Bybit row would sink "close everyone".
   **It leads with the MASTER's positions** (owner's request — keep it
   uncluttered); a "Users" view lists every traded account (`accounts`, flat
   ones included — holding nothing while the master is in a trade is the case

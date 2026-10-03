@@ -7,6 +7,7 @@ import PositionsList from '../open-positions/PositionsList'
 import UserSyncList from '../open-positions/UserSyncList'
 import JsonPanel from '../open-positions/JsonPanel'
 import ExitAllButton from '../open-positions/ExitAllButton'
+import ClosePanel from '../open-positions/ClosePanel'
 import CloseResult, { type CloseOutcome } from '../open-positions/CloseResult'
 import { useApiData } from '../../../hooks/useApiData'
 import { ApiError, getApiErrorMessage } from '../../../services/api'
@@ -35,6 +36,35 @@ interface CloseTarget {
 const toRequest = (list: AdminOpenPosition[]): ClosePositionsRequest => ({
   positions: list.map((p) => ({ exchange: p.exchange, id: p.id })),
 })
+
+/** The API's (and the engine's) per-request cap. */
+const CLOSE_BATCH = 50
+
+function chunk<T>(list: T[], size: number): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size))
+  return out
+}
+
+/** Several batch answers read as one close: jobs pooled, counts summed. */
+function mergeAnswers(answers: { res: ClosePositionsResponse | null; error: string | null }[]): ClosePositionsResponse {
+  if (answers.length === 1) {
+    const [a] = answers
+    return a.res && !a.error ? a.res : { ...(a.res ?? {}), success: false, message: a.error ?? a.res?.message ?? 'Close failed.' }
+  }
+  const sum = (k: 'filled' | 'failed' | 'skipped' | 'running') =>
+    answers.reduce((s, a) => s + (a.res?.engine_response?.[k] ?? 0), 0)
+  const errors = answers.flatMap((a, i) => (a.error ? [`batch ${i + 1}: ${a.error}`] : []))
+  const parts = [`${sum('filled')} closed`]
+  if (sum('failed')) parts.push(`${sum('failed')} failed`)
+  if (sum('skipped')) parts.push(`${sum('skipped')} already flat`)
+  if (sum('running')) parts.push(`${sum('running')} still running — check the Signal Log`)
+  return {
+    success: answers.every((a) => !a.error && a.res?.success),
+    message: `${parts.join(' · ')} (${answers.length} batches).${errors.length ? ` Failed ${errors.join('; ')}.` : ''}`,
+    engine_response: { jobs: answers.flatMap((a) => a.res?.engine_response?.jobs ?? []) },
+  }
+}
 
 const BTN =
   'inline-flex items-center justify-center gap-1.5 rounded-pill px-4 py-2 text-[13px] font-semibold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50'
@@ -74,6 +104,7 @@ export default function OpenPositionsTab() {
   const [target, setTarget] = useState<CloseTarget | null>(null)
   const [lastRequest, setLastRequest] = useState<ClosePositionsRequest | null>(null)
   const [closing, setClosing] = useState(false)
+  const [progress, setProgress] = useState<string | null>(null)
   const [outcome, setOutcome] = useState<CloseOutcome | null>(null)
   const [response, setResponse] = useState<unknown>(null)
   const [jsonOpen, setJsonOpen] = useState(false)
@@ -160,36 +191,49 @@ export default function OpenPositionsTab() {
 
   const close = async () => {
     if (!target) return
-    const req = toRequest(target.positions)
     const closedKeys = new Set(target.positions.map(positionKey))
+    const batches = chunk(target.positions, CLOSE_BATCH)
     setTarget(null)
     setClosing(true)
     setOutcome(null)
-    setLastRequest(req)
-    try {
-      const res = await closeOpenPositions(req)
-      setResponse(res)
-      setOutcome({ ok: res.success, message: res.message, response: res })
-      // Only what was sent leaves the selection; other ticks survive an "Exit all".
-      setSelected((prev) => new Set([...prev].filter((k) => !closedKeys.has(k))))
-    } catch (err) {
-      const payload = err instanceof ApiError ? (err.payload as ClosePositionsResponse) : null
-      setResponse(payload ?? { error: getApiErrorMessage(err, 'Close failed.') })
-      setOutcome({ ok: false, message: getApiErrorMessage(err, 'Could not close the positions.'), response: payload })
-    } finally {
-      setClosing(false)
-      setJsonOpen(true)
-      reload()
+    setLastRequest(toRequest(target.positions))
+    // One request per 50 (the API's cap), one after another: a failed batch
+    // is reported and the rest still run — "close everyone" must not stop at
+    // the first account that refuses.
+    const answers: { res: ClosePositionsResponse | null; error: string | null }[] = []
+    for (const [i, batch] of batches.entries()) {
+      setProgress(batches.length > 1 ? `Batch ${i + 1} of ${batches.length}…` : null)
+      try {
+        answers.push({ res: await closeOpenPositions(toRequest(batch)), error: null })
+      } catch (err) {
+        answers.push({
+          res: err instanceof ApiError ? (err.payload as ClosePositionsResponse) : null,
+          error: getApiErrorMessage(err, 'Could not close the positions.'),
+        })
+      }
     }
+    const merged = mergeAnswers(answers)
+    setResponse(answers.length === 1 ? (answers[0].res ?? { error: answers[0].error }) : answers.map((a) => a.res ?? { error: a.error }))
+    setOutcome({ ok: merged.success, message: merged.message, response: merged })
+    // Only what was sent leaves the selection; other ticks survive.
+    setSelected((prev) => new Set([...prev].filter((k) => !closedKeys.has(k))))
+    setProgress(null)
+    setClosing(false)
+    setJsonOpen(true)
+    reload()
   }
 
   const pending = target?.positions ?? []
   const pendingLive = pending.filter((p) => !p.demo).length
-  const what = target?.owner
-    ? `every open position of ${target.owner} (${pending.length}: ${pending.map((p) => `${p.symbol} ${p.side}`).join(', ')})`
-    : pending.length === 1
-      ? `${pending[0].symbol} ${pending[0].side} of ${pending[0].owner_name}`
-      : `${pending.length} positions`
+  const pendingAccounts = new Set(pending.map((p) => `${p.exchange}:${p.uni_id}`)).size
+  const coins = pending.map((p) => `${p.symbol} ${p.side}`)
+  const what = target?.owner === 'everyone'
+    ? `EVERY open position on the platform — ${pending.length} across ${pendingAccounts} accounts, master included`
+    : target?.owner
+      ? `every open position of ${target.owner} (${pending.length}: ${coins.length > 8 ? `${coins.slice(0, 8).join(', ')} and ${coins.length - 8} more` : coins.join(', ')})`
+      : pending.length === 1
+        ? `${pending[0].symbol} ${pending[0].side} of ${pending[0].owner_name}`
+        : `${pending.length} positions`
   const confirmMessage =
     `This closes ${what} at market price — the whole side of that coin on each account. ` +
     (pendingLive > 0
@@ -226,6 +270,20 @@ export default function OpenPositionsTab() {
             </button>
           </div>
         </div>
+
+        {/* One step: whose positions, then Close all. */}
+        {data && (
+          <ClosePanel
+            positions={positions}
+            busy={closing}
+            onClose={(list, label) => setTarget({ positions: list, owner: label })}
+          />
+        )}
+        {closing && (
+          <div className="flex items-center gap-2 text-[12.5px] text-muted" role="status">
+            <Loader2 size={14} className="animate-spin" /> Closing at market{progress ? ` — ${progress}` : '…'}
+          </div>
+        )}
 
         {/* View switch — outside the re-keyed region so a chip keeps focus. */}
         <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Whose positions">
@@ -300,7 +358,7 @@ export default function OpenPositionsTab() {
         </div>
 
         {/* Action bar: sticks to the bottom of the screen while something is ticked. */}
-        {(chosen.length > 0 || closing) && (
+        {chosen.length > 0 && (
           <div className="sticky bottom-3 z-10 flex flex-wrap items-center gap-3 rounded-row border border-red/40 bg-surface px-4 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.35)]">
             <span className="min-w-0 flex-1 text-[13px] text-text">
               <b>{chosen.length}</b> selected
