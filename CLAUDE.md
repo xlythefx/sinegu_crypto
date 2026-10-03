@@ -1061,6 +1061,13 @@ closed trade across all accounts, in two views the admin switches between:
 multi-term over account name/id, row id, ticker, exchange and strategy
 (`lib/adminPositionRows.ts`, pure), beside per-user / ticker / exchange facets.
 Rules:
+- **Per row is the DEFAULT, and Past Positions are never merged** (owner,
+  2026-10-03) — the Combined switch exists on Active Positions only.
+- **Each open position has a Close button** (per-row view only): ConfirmModal →
+  `POST /admin/open-positions/close` with `{exchange: 'binance', id}` — the same
+  engine exit path as Admin Dashboard → Open positions, no public post. A
+  refused row shows the API's `blocked[].reason`. Binance-only like the rest of
+  this page.
 - **Editing writes ONE row, so it exists only in the per-row view** — the button
   is disabled on a merged line, which has no single target. Delete still works
   on both (a merged line deletes its whole `ids` list).

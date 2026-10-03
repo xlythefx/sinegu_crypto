@@ -1,4 +1,4 @@
-import { Pencil, Trash2 } from 'lucide-react'
+import { Pencil, Trash2, XOctagon } from 'lucide-react'
 import { displaySymbol } from '../../../lib/chart'
 import { fmtDateTime, fmtMoney, fmtQty, fmtSignedMoney } from '../../../lib/format'
 import type { PositionRow, PositionView, RowFeeSource } from '../../../lib/adminPositionRows'
@@ -18,6 +18,9 @@ const ROW = 'border-t border-hair transition-colors hover:bg-surface2'
 export const ICON_BTN =
   'inline-grid place-items-center w-8 h-8 border border-border rounded-[9px] bg-surface text-muted cursor-pointer transition-colors disabled:opacity-45 disabled:cursor-not-allowed enabled:hover:bg-surface2 enabled:hover:text-text'
 const ICON_BTN_DANGER = `${ICON_BTN} enabled:hover:!border-[color-mix(in_srgb,var(--red)_40%,transparent)] enabled:hover:!bg-[color-mix(in_srgb,var(--red)_12%,transparent)] enabled:hover:!text-red`
+
+const CLOSE_BTN =
+  'inline-flex items-center gap-1 h-8 px-2.5 border border-[color-mix(in_srgb,var(--red)_40%,transparent)] rounded-[9px] bg-[color-mix(in_srgb,var(--red)_10%,transparent)] text-red text-[12px] font-bold cursor-pointer transition-colors disabled:opacity-45 disabled:cursor-not-allowed enabled:hover:bg-[color-mix(in_srgb,var(--red)_20%,transparent)]'
 
 const LONG_SIDES = ['long', 'buy']
 
@@ -135,6 +138,8 @@ interface Props {
   rows: PositionRow[]
   onEdit: (row: PositionRow) => void
   onDelete: (row: PositionRow) => void
+  /** Active tab: close this one position at market on the exchange. */
+  onClose?: (row: PositionRow) => void
 }
 
 /** One table for both tabs and both views — the grouped view adds a merge
@@ -145,6 +150,7 @@ export default function PositionsTable({
   rows,
   onEdit,
   onDelete,
+  onClose,
 }: Props) {
   const closed = tab === 'closed'
   const grouped = view === 'grouped'
@@ -227,6 +233,22 @@ export default function PositionsTable({
                 )}
                 <td className={TD_R}>
                   <div className="inline-flex items-center gap-1.5">
+                    {!closed && onClose && (
+                      <button
+                        type="button"
+                        className={CLOSE_BTN}
+                        disabled={!canEdit}
+                        title={
+                          canEdit
+                            ? `Close ${displaySymbol(r.symbol)} at market on the exchange`
+                            : 'Switch to "Per row" to close a single position'
+                        }
+                        onClick={() => onClose(r)}
+                      >
+                        <XOctagon size={13} />
+                        Close
+                      </button>
+                    )}
                     <button
                       type="button"
                       className={ICON_BTN}

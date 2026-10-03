@@ -13,7 +13,8 @@ interface Props {
   onChange: (patch: Partial<PositionFilters>) => void
   onClear: () => void
   view: PositionView
-  onView: (v: PositionView) => void
+  /** Omitted where rows are never merged (Past Positions) — hides the switch. */
+  onView?: (v: PositionView) => void
   accounts: AccountOption[]
   tickers: string[]
   brokers: string[]
@@ -210,40 +211,42 @@ export default function PositionsToolbar({
       </label>
 
       {/* combined ↔ per-row */}
-      <div
-        className="flex items-center gap-1 p-1 border border-hair rounded-nav bg-surface2"
-        role="group"
-        aria-label="Row grouping"
-      >
-        <button
-          type="button"
-          className={`${TOGGLE} ${
-            view === 'grouped'
-              ? 'bg-accent text-on-accent'
-              : 'bg-transparent text-muted hover:text-text'
-          }`}
-          onClick={() => onView('grouped')}
-          aria-pressed={view === 'grouped'}
-          title="Merge same account + ticker into one row"
+      {onView && (
+        <div
+          className="flex items-center gap-1 p-1 border border-hair rounded-nav bg-surface2"
+          role="group"
+          aria-label="Row grouping"
         >
-          <Layers size={13} />
-          Combined
-        </button>
-        <button
-          type="button"
-          className={`${TOGGLE} ${
-            view === 'rows'
-              ? 'bg-accent text-on-accent'
-              : 'bg-transparent text-muted hover:text-text'
-          }`}
-          onClick={() => onView('rows')}
-          aria-pressed={view === 'rows'}
-          title="One row per database entry"
-        >
-          <List size={13} />
-          Per row
-        </button>
-      </div>
+          <button
+            type="button"
+            className={`${TOGGLE} ${
+              view === 'rows'
+                ? 'bg-accent text-on-accent'
+                : 'bg-transparent text-muted hover:text-text'
+            }`}
+            onClick={() => onView('rows')}
+            aria-pressed={view === 'rows'}
+            title="One row per database entry"
+          >
+            <List size={13} />
+            Per row
+          </button>
+          <button
+            type="button"
+            className={`${TOGGLE} ${
+              view === 'grouped'
+                ? 'bg-accent text-on-accent'
+                : 'bg-transparent text-muted hover:text-text'
+            }`}
+            onClick={() => onView('grouped')}
+            aria-pressed={view === 'grouped'}
+            title="Merge same account + ticker into one row"
+          >
+            <Layers size={13} />
+            Combined
+          </button>
+        </div>
+      )}
 
       <div className="flex items-center gap-2 ml-auto max-[560px]:ml-0">
         <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-muted font-mono">

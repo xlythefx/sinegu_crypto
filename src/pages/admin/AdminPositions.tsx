@@ -35,6 +35,7 @@ import {
   updateAdminPosition,
 } from '../../services/admin'
 import { ApiError, getApiErrorMessage } from '../../services/api'
+import { closeOpenPositions } from '../../services/openPositions'
 import { displaySymbol } from '../../lib/chart'
 import { computeAdminPositionMetrics } from '../../lib/adminPositionsStats'
 import {
@@ -63,7 +64,11 @@ export default function AdminPositions() {
 
   const [tab, setTab] = useState<Tab>('active')
   const [showAnalytics, setShowAnalytics] = useState(false)
-  const [view, setView] = useState<PositionView>('grouped')
+  // Per row by default (owner, 2026-10-03): every trade on its own line.
+  const [view, setView] = useState<PositionView>('rows')
+  const [closeTarget, setCloseTarget] = useState<PositionRow | null>(null)
+  const [closingRow, setClosingRow] = useState(false)
+  const [closeNote, setCloseNote] = useState<string | null>(null)
   const [filters, setFilters] = useState<PositionFilters>(EMPTY_FILTERS)
   const [page, setPage] = useState(1)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
@@ -99,19 +104,22 @@ export default function AdminPositions() {
     [positions, trades],
   )
 
+  // Past positions are never merged: each closed trade is its own line.
+  const effectiveView: PositionView = tab === 'closed' ? 'rows' : view
+
   // --- the rows on screen: filtered, then merged or left per-row ---
   const rows = useMemo(() => {
     if (tab === 'active') {
       return buildPositionRows(
         positions.filter((p) => matchesFilters(p, filters)),
-        view,
+        effectiveView,
       )
     }
     return buildTradeRows(
       trades.filter((t) => matchesFilters(t, filters)),
-      view,
+      effectiveView,
     )
-  }, [tab, positions, trades, filters, view])
+  }, [tab, positions, trades, filters, effectiveView])
 
   // DB rows behind the lines on screen — equals rows.length in the per-row view
   const matchedCount = rows.reduce((s, r) => s + r.count, 0)
@@ -187,6 +195,35 @@ export default function AdminPositions() {
       )
     } finally {
       setRefreshing(false)
+      reload()
+    }
+  }
+
+  /**
+   * One position, closed at market through the engine's exit path (the same
+   * endpoint as Admin Dashboard → Open positions). The API resolves owner,
+   * symbol and side from the row id and refuses an account the engine does
+   * not trade, with the reason.
+   */
+  const runClose = async () => {
+    const r = closeTarget
+    if (!r || r.rowId === null) return
+    setClosingRow(true)
+    setActionError(null)
+    setCloseNote(null)
+    try {
+      const res = await closeOpenPositions({ positions: [{ exchange: 'binance', id: r.rowId }] })
+      if (res.success) setCloseNote(`${displaySymbol(r.symbol)} on ${r.accountName ?? 'the account'}: ${res.message}`)
+      else setActionError(res.message)
+    } catch (err) {
+      // NOT_CLOSABLE carries the reason per row (disabled, disconnected, …).
+      const reason = err instanceof ApiError
+        ? (err.payload as { blocked?: { reason?: string }[] } | undefined)?.blocked?.[0]?.reason
+        : undefined
+      setActionError(reason ?? getApiErrorMessage(err, 'Could not close the position.'))
+    } finally {
+      setClosingRow(false)
+      setCloseTarget(null)
       reload()
     }
   }
@@ -306,6 +343,14 @@ export default function AdminPositions() {
           {actionError}
         </p>
       )}
+      {closeNote && (
+        <p
+          className="mb-3.5 py-[9px] px-3 border border-[color-mix(in_srgb,var(--green)_30%,transparent)] rounded-field bg-[color-mix(in_srgb,var(--green)_8%,transparent)] text-[12.5px] text-green"
+          role="status"
+        >
+          {closeNote}
+        </p>
+      )}
 
       <section
         className="border border-border rounded-card bg-surface overflow-hidden"
@@ -400,8 +445,8 @@ export default function AdminPositions() {
           filters={filters}
           onChange={patchFilters}
           onClear={() => setFilters(EMPTY_FILTERS)}
-          view={view}
-          onView={setView}
+          view={effectiveView}
+          onView={tab === 'active' ? setView : undefined}
           accounts={accounts}
           tickers={tickers}
           brokers={brokers}
@@ -414,15 +459,19 @@ export default function AdminPositions() {
             text search is deliberately left out: it changes per keystroke, and
             replaying the reveal on every letter is a flicker, not a reveal. */}
         <div
-          key={`${tab}-${view}-${filters.account}-${filters.ticker}-${filters.broker}-${safePage}`}
+          key={`${tab}-${effectiveView}-${filters.account}-${filters.ticker}-${filters.broker}-${safePage}`}
           className="animate-[fadeup_0.35s_ease-out]"
         >
           <PositionsTable
             tab={tab}
-            view={view}
+            view={effectiveView}
             rows={paged}
             onEdit={askEdit}
             onDelete={askDelete}
+            onClose={(r) => {
+              setCloseNote(null)
+              setCloseTarget(r)
+            }}
           />
         </div>
 
@@ -470,6 +519,23 @@ export default function AdminPositions() {
         cancelLabel="No"
         onConfirm={runEdit}
         onCancel={() => setPendingEdit(null)}
+      />
+
+      <ConfirmModal
+        open={closeTarget !== null}
+        title={`Close ${closeTarget ? displaySymbol(closeTarget.symbol) : ''} ${closeTarget?.side?.toUpperCase() ?? ''}?`}
+        message={
+          closeTarget
+            ? `This closes ${displaySymbol(closeTarget.symbol)} ${closeTarget.side?.toUpperCase() ?? ''} on ${
+                closeTarget.accountName ?? 'this account'
+              } at market price on the exchange — the whole side of that coin on that account. Nothing is posted to the public channel.`
+            : ''
+        }
+        confirmLabel={closingRow ? 'Closing…' : 'Yes, close'}
+        cancelLabel="No"
+        danger
+        onConfirm={runClose}
+        onCancel={() => setCloseTarget(null)}
       />
 
       <ConfirmModal
