@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { CheckCircle2, ChevronRight, CircleSlash, AlertTriangle } from 'lucide-react'
 import { EXCHANGE_META } from '../../exchanges/meta'
 import PositionsList from './PositionsList'
+import ExitAllButton from './ExitAllButton'
 import { EmptyNote } from '../insights/parts'
 import { fmtSignedMoney } from '../../../lib/format'
 import type { SideRef, SyncState, UserSync } from '../../../lib/openPositions'
@@ -12,6 +13,10 @@ interface UserSyncListProps {
   selected: Set<string>
   onToggle: (key: string) => void
   onToggleAll: (positions: AdminOpenPosition[]) => void
+  /** Close every closable position of this account (after confirmation). */
+  onExitAll: (user: UserSync) => void
+  /** A close is running — Exit all waits for it. */
+  busy?: boolean
 }
 
 const BADGE: Record<SyncState, { label: string; cls: string; Icon: typeof CheckCircle2 }> = {
@@ -37,7 +42,7 @@ function summary(u: UserSync): string {
  * that user's positions with the same select-to-close checkboxes as the
  * master view; the comparison itself never needs more than the one line.
  */
-export default function UserSyncList({ users, selected, onToggle, onToggleAll }: UserSyncListProps) {
+export default function UserSyncList({ users, selected, onToggle, onToggleAll, onExitAll, busy }: UserSyncListProps) {
   const [open, setOpen] = useState<string | null>(null)
 
   if (users.length === 0) return <EmptyNote>No user accounts are trading right now.</EmptyNote>
@@ -48,37 +53,46 @@ export default function UserSyncList({ users, selected, onToggle, onToggleAll }:
         const b = BADGE[u.state]
         const isOpen = open === u.key
         const meta = EXCHANGE_META[u.exchange]
+        const closable = u.positions.filter((p) => p.closable).length
         return (
           <div key={u.key} className={i ? 'border-t border-border' : ''}>
-            <button
-              type="button"
-              onClick={() => setOpen(isOpen ? null : u.key)}
-              aria-expanded={isOpen}
-              className="flex w-full cursor-pointer items-center gap-3 bg-transparent px-4 py-3 text-left transition-colors hover:bg-surface2"
-            >
-              <ChevronRight size={15} className={`flex-none text-muted transition-transform ${isOpen ? 'rotate-90' : ''}`} />
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: meta?.color }} />
-                  <span className="truncate text-[13.5px] font-semibold text-text">{u.owner_name}</span>
-                  {u.demo && (
-                    <span className="flex-none rounded-pill bg-surface2 px-1.5 font-mono text-[10px] font-bold text-muted">DEMO</span>
-                  )}
+            {/* Exit all sits BESIDE the row's toggle button, never inside it. */}
+            <div className="flex items-center transition-colors hover:bg-surface2">
+              <button
+                type="button"
+                onClick={() => setOpen(isOpen ? null : u.key)}
+                aria-expanded={isOpen}
+                className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 bg-transparent px-4 py-3 text-left"
+              >
+                <ChevronRight size={15} className={`flex-none text-muted transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: meta?.color }} />
+                    <span className="truncate text-[13.5px] font-semibold text-text">{u.owner_name}</span>
+                    {u.demo && (
+                      <span className="flex-none rounded-pill bg-surface2 px-1.5 font-mono text-[10px] font-bold text-muted">DEMO</span>
+                    )}
+                  </span>
+                  <span className={`block truncate text-[12px] ${u.state === 'differs' ? 'text-red' : 'text-muted'}`}>
+                    {summary(u)}
+                  </span>
                 </span>
-                <span className={`block truncate text-[12px] ${u.state === 'differs' ? 'text-red' : 'text-muted'}`}>
-                  {summary(u)}
+                {u.positions.length > 0 && (
+                  <span className={`flex-none font-mono text-[12.5px] font-bold max-[480px]:hidden ${u.unrealized > 0 ? 'text-green' : u.unrealized < 0 ? 'text-red' : 'text-muted'}`}>
+                    {fmtSignedMoney(u.unrealized)}
+                  </span>
+                )}
+                <span className={`inline-flex flex-none items-center gap-1 rounded-pill px-2 py-0.5 text-[11px] font-bold ${b.cls}`}>
+                  <b.Icon size={12} />
+                  <span className="max-[480px]:hidden">{b.label}</span>
                 </span>
-              </span>
-              {u.positions.length > 0 && (
-                <span className={`flex-none font-mono text-[12.5px] font-bold max-[480px]:hidden ${u.unrealized > 0 ? 'text-green' : u.unrealized < 0 ? 'text-red' : 'text-muted'}`}>
-                  {fmtSignedMoney(u.unrealized)}
-                </span>
+              </button>
+              {closable > 0 && (
+                <div className="flex-none pr-4">
+                  <ExitAllButton count={closable} disabled={busy} onClick={() => onExitAll(u)} />
+                </div>
               )}
-              <span className={`inline-flex flex-none items-center gap-1 rounded-pill px-2 py-0.5 text-[11px] font-bold ${b.cls}`}>
-                <b.Icon size={12} />
-                <span className="max-[480px]:hidden">{b.label}</span>
-              </span>
-            </button>
+            </div>
             {isOpen && (
               <div className="animate-[fadeup_0.25s_ease-out] border-t border-border bg-surface px-4 py-3.5">
                 {u.positions.length ? (

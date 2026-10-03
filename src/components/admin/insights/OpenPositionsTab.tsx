@@ -6,6 +6,7 @@ import { EmptyNote } from './parts'
 import PositionsList from '../open-positions/PositionsList'
 import UserSyncList from '../open-positions/UserSyncList'
 import JsonPanel from '../open-positions/JsonPanel'
+import ExitAllButton from '../open-positions/ExitAllButton'
 import CloseResult, { type CloseOutcome } from '../open-positions/CloseResult'
 import { useApiData } from '../../../hooks/useApiData'
 import { ApiError, getApiErrorMessage } from '../../../services/api'
@@ -24,6 +25,16 @@ import type {
 } from '../../../types/openPositions'
 
 type View = 'master' | 'users'
+
+interface CloseTarget {
+  positions: AdminOpenPosition[]
+  /** Whose book, for "Exit all" — null for a hand-ticked selection. */
+  owner: string | null
+}
+
+const toRequest = (list: AdminOpenPosition[]): ClosePositionsRequest => ({
+  positions: list.map((p) => ({ exchange: p.exchange, id: p.id })),
+})
 
 const BTN =
   'inline-flex items-center justify-center gap-1.5 rounded-pill px-4 py-2 text-[13px] font-semibold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50'
@@ -58,7 +69,10 @@ export default function OpenPositionsTab() {
   const [fetching, setFetching] = useState(false)
   const [fetchNote, setFetchNote] = useState<{ ok: boolean; text: string } | null>(null)
   const [lastFetchAt, setLastFetchAt] = useState<string | null>(null)
-  const [confirmOpen, setConfirmOpen] = useState(false)
+  // What the confirm dialog will close: the ticked rows, or one account's
+  // whole book from its "Exit all" button. Null = dialog closed.
+  const [target, setTarget] = useState<CloseTarget | null>(null)
+  const [lastRequest, setLastRequest] = useState<ClosePositionsRequest | null>(null)
   const [closing, setClosing] = useState(false)
   const [outcome, setOutcome] = useState<CloseOutcome | null>(null)
   const [response, setResponse] = useState<unknown>(null)
@@ -92,10 +106,14 @@ export default function OpenPositionsTab() {
   }, [positions])
 
   const chosen = positions.filter((p) => selected.has(positionKey(p)))
-  const request: ClosePositionsRequest = {
-    positions: chosen.map((p) => ({ exchange: p.exchange, id: p.id })),
-  }
+  const request = toRequest(chosen)
   const liveCount = chosen.filter((p) => !p.demo).length
+
+  /** One account's whole book, straight to the confirm dialog. */
+  const exitAll = (list: AdminOpenPosition[], owner: string) => {
+    const closable = list.filter((p) => p.closable)
+    if (closable.length) setTarget({ positions: closable, owner })
+  }
 
   const toggle = (key: string) =>
     setSelected((prev) => {
@@ -141,14 +159,19 @@ export default function OpenPositionsTab() {
   }
 
   const close = async () => {
-    setConfirmOpen(false)
+    if (!target) return
+    const req = toRequest(target.positions)
+    const closedKeys = new Set(target.positions.map(positionKey))
+    setTarget(null)
     setClosing(true)
     setOutcome(null)
+    setLastRequest(req)
     try {
-      const res = await closeOpenPositions(request)
+      const res = await closeOpenPositions(req)
       setResponse(res)
       setOutcome({ ok: res.success, message: res.message, response: res })
-      setSelected(new Set())
+      // Only what was sent leaves the selection; other ticks survive an "Exit all".
+      setSelected((prev) => new Set([...prev].filter((k) => !closedKeys.has(k))))
     } catch (err) {
       const payload = err instanceof ApiError ? (err.payload as ClosePositionsResponse) : null
       setResponse(payload ?? { error: getApiErrorMessage(err, 'Close failed.') })
@@ -160,15 +183,22 @@ export default function OpenPositionsTab() {
     }
   }
 
-  const what = chosen.length === 1
-    ? `${chosen[0].symbol} ${chosen[0].side} of ${chosen[0].owner_name}`
-    : `${chosen.length} positions`
+  const pending = target?.positions ?? []
+  const pendingLive = pending.filter((p) => !p.demo).length
+  const what = target?.owner
+    ? `every open position of ${target.owner} (${pending.length}: ${pending.map((p) => `${p.symbol} ${p.side}`).join(', ')})`
+    : pending.length === 1
+      ? `${pending[0].symbol} ${pending[0].side} of ${pending[0].owner_name}`
+      : `${pending.length} positions`
   const confirmMessage =
     `This closes ${what} at market price — the whole side of that coin on each account. ` +
-    (liveCount > 0
-      ? `${liveCount} ${liveCount === 1 ? 'is a LIVE account: real money' : 'are LIVE accounts: real money'}. `
-      : 'All selected accounts are demo accounts. ') +
+    (pendingLive > 0
+      ? `${pendingLive} ${pendingLive === 1 ? 'is on a LIVE account: real money' : 'are on LIVE accounts: real money'}. `
+      : 'All of them are on demo accounts. ') +
     'Nothing is posted to the public channel.'
+  const confirmTitle = target?.owner
+    ? `Exit all positions of ${target.owner}?`
+    : `Close ${pending.length === 1 ? 'this position' : `${pending.length} positions`}?`
 
   return (
     <div className="flex flex-col gap-stack">
@@ -221,11 +251,18 @@ export default function OpenPositionsTab() {
             )}
           </button>
           {data && view === 'master' && master.length > 0 && (
-            <span className="ml-auto text-[12.5px] text-muted max-[640px]:ml-0">
-              {master.length} open ·{' '}
-              <b className={`font-mono ${masterPnl > 0 ? 'text-green' : masterPnl < 0 ? 'text-red' : 'text-text'}`}>
-                {fmtSignedMoney(masterPnl)}
-              </b>
+            <span className="ml-auto flex flex-wrap items-center gap-3 text-[12.5px] text-muted max-[640px]:ml-0">
+              <span>
+                {master.length} open ·{' '}
+                <b className={`font-mono ${masterPnl > 0 ? 'text-green' : masterPnl < 0 ? 'text-red' : 'text-text'}`}>
+                  {fmtSignedMoney(masterPnl)}
+                </b>
+              </span>
+              <ExitAllButton
+                count={master.filter((p) => p.closable).length}
+                disabled={closing}
+                onClick={() => exitAll(master, master[0].owner_name)}
+              />
             </span>
           )}
           {data && view === 'users' && (
@@ -251,7 +288,14 @@ export default function OpenPositionsTab() {
               <EmptyNote>The master has no open positions.</EmptyNote>
             )
           ) : (
-            <UserSyncList users={users} selected={selected} onToggle={toggle} onToggleAll={toggleAll} />
+            <UserSyncList
+              users={users}
+              selected={selected}
+              onToggle={toggle}
+              onToggleAll={toggleAll}
+              onExitAll={(u) => exitAll(u.positions, u.owner_name)}
+              busy={closing}
+            />
           )}
         </div>
 
@@ -272,7 +316,7 @@ export default function OpenPositionsTab() {
             </button>
             <button
               type="button"
-              onClick={() => setConfirmOpen(true)}
+              onClick={() => setTarget({ positions: chosen, owner: null })}
               disabled={closing || chosen.length === 0}
               className={`${BTN} bg-red text-white hover:brightness-110`}
             >
@@ -300,8 +344,8 @@ export default function OpenPositionsTab() {
               <JsonPanel
                 title="Request"
                 hint="POST /api/admin/open-positions/close"
-                value={chosen.length ? request : null}
-                empty="Tick a position to see the request."
+                value={chosen.length ? request : lastRequest}
+                empty="Tick a position or press Exit all to see the request."
               />
               <JsonPanel
                 title="Response"
@@ -315,14 +359,14 @@ export default function OpenPositionsTab() {
       </section>
 
       <ConfirmModal
-        open={confirmOpen}
-        title={`Close ${chosen.length === 1 ? 'this position' : `${chosen.length} positions`}?`}
+        open={target !== null}
+        title={confirmTitle}
         message={confirmMessage}
-        confirmLabel="Yes, close"
+        confirmLabel={target?.owner ? 'Yes, exit all' : 'Yes, close'}
         cancelLabel="Cancel"
         danger
         onConfirm={close}
-        onCancel={() => setConfirmOpen(false)}
+        onCancel={() => setTarget(null)}
       />
     </div>
   )
