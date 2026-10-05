@@ -346,6 +346,42 @@ body {
     letter-spacing: 0;
   }
 }
+/* A diagonal band of light swept once across a figure tile when its value
+   changes (Performance card's Date Range tiles). */
+@keyframes sheen {
+  from {
+    transform: translateX(-130%) skewX(-18deg);
+  }
+  to {
+    transform: translateX(260%) skewX(-18deg);
+  }
+}
+/* Loading shimmer — a soft highlight travelling across a placeholder while
+   the figures behind it are being refreshed. */
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+/* Horizontal bar growing from its left edge (per-day contribution bars). */
+@keyframes growx {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .motion-sheen,
+  .motion-shimmer {
+    animation: none !important;
+    display: none;
+  }
+}
 /* DataState spinner + PortalSwitch spinner */
 @keyframes dstate-spin {
   to {

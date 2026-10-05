@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type PointerEvent } from 'react'
-import { ArrowLeftRight, LineChart, MoreVertical, X } from 'lucide-react'
+import { ArrowLeftRight, ChevronRight, LineChart, MoreVertical, X } from 'lucide-react'
 import {
   fmtMediumDate,
   fmtMoney,
@@ -11,11 +11,16 @@ import {
 import PnlBreakdown from '../ui/PnlBreakdown'
 import RangePresetMenu from './RangePresetMenu'
 import TransferSegmentsModal from './TransferSegmentsModal'
+import PeriodReturnModal from './PeriodReturnModal'
+import Sheen, { Shimmer } from '../ui/Sheen'
+import { useTween } from '../../hooks/useTween'
 import {
   quickPresets,
   transferSegments,
   type RangePreset,
 } from '../../lib/rangePresets'
+import { periodReturn } from '../../lib/periodReturn'
+import type { DailyReturn } from '../../types/analytics'
 
 type Tab = 'cumulative' | 'daily' | 'capital' | 'range'
 type Period = 'Daily' | 'Weekly' | 'Monthly' | 'All Time'
@@ -131,6 +136,14 @@ interface PerformanceChartCardProps {
   dailyUnrecordedFees?: Record<string, number>
   /** Capital held before any recorded transfer; absent on an older API. */
   initialDeposit?: number
+  /** The SAVED per-day % (the calendar's figure) the Period Return adds up;
+   *  absent on an older API, which then falls back to the same formula. */
+  dailyReturns?: Record<string, DailyReturn>
+  /** A ticker/strategy chip is active — saved days hold every trade, so the
+   *  filtered trades are measured instead. */
+  filtered?: boolean
+  /** The payload is being refetched (a filter change) — tiles shimmer. */
+  refreshing?: boolean
   baseline: number
   /** Set when some of the days carry no fee on record. */
   feesSince: string | null
@@ -147,6 +160,9 @@ export default function PerformanceChartCard({
   dailyBalance,
   dailyUnrecordedFees,
   initialDeposit,
+  dailyReturns,
+  filtered = false,
+  refreshing = false,
   baseline,
   feesSince,
 }: PerformanceChartCardProps) {
@@ -353,48 +369,35 @@ export default function PerformanceChartCard({
   }, [dailyFlows])
 
   /**
-   * The window's figures. The percentage is TIME-WEIGHTED: each day's P&L over
-   * the capital that day started with, the daily factors chained.
+   * The window's figures. The percentage is the saved daily percentages
+   * ADDED (owner's team, 2026-10-05): each day's P&L over the balance that
+   * day started with — the P&L calendar's own cell — summed, so a +1% day and
+   * a +4% day read +5%. `lib/periodReturn.ts` also compounds the same days
+   * for the breakdown modal.
    *
-   * It used to be `window P&L / all-time baseline`, which meant a deposit made
-   * in September changed the percentage August had already reported — a
-   * finished month must not move. Chaining fixes that at the root: a transfer
-   * only ever changes the capital of the days after it, and chaining ratios
-   * never sees the flows between them. Same method the landing page track
-   * record and the Telegram recaps use (on Manila days, where these are UTC).
-   *
-   * The consequence to keep in mind: this no longer equals
-   * `realized / baseline`, so the two figures on this card are a dollar total
-   * and a compounded return, not one divided by the other.
+   * Either way a transfer only changes the capital of the days after it, so a
+   * September deposit can never move August's figure. The consequence to keep
+   * in mind: this does not equal `realized / baseline`, so the two figures on
+   * this card are a dollar total and a return, not one divided by the other.
    */
   const range = useMemo(() => {
     let inRange = 0
     let inRangeNet = 0
     let upToEnd = 0
-    let growth = 1
-    let growthNet = 1
-    let measured = 0
-    let unmeasured = 0
     for (const [date, pnl, pnlNet] of entries) {
       if (date <= toDate) upToEnd += pnl
       if (date < fromDate || date > toDate) continue
       inRange += pnl
       inRangeNet += pnlNet
-
-      const capital = dailyCapital[date]
-      if (capital === undefined || capital <= 0) {
-        // A day whose capital was never recorded (or had gone non-positive)
-        // is left OUT of the chain rather than divided by a guess — and
-        // counted, so the card can say the return covers part of the window.
-        unmeasured++
-        continue
-      }
-      // Floored at 0: a day losing more than the whole account must not
-      // compound into a negative factor and flip every later day's sign.
-      growth *= Math.max(0, 1 + pnl / capital)
-      growthNet *= Math.max(0, 1 + pnlNet / capital)
-      measured++
     }
+    const period = periodReturn(
+      entries,
+      fromDate,
+      toDate,
+      dailyReturns,
+      dailyCapital,
+      filtered,
+    )
     // Transfers that landed inside the window, and every one after it.
     let flowsInRange = 0
     let flowsAfter = 0
@@ -436,10 +439,7 @@ export default function PerformanceChartCard({
       startBalance,
       flowsInRange,
       unrecordedFees,
-      pct: measured > 0 ? (growth - 1) * 100 : null,
-      pctNet: measured > 0 ? (growthNet - 1) * 100 : null,
-      measured,
-      unmeasured,
+      period,
     }
   }, [
     entries,
@@ -447,11 +447,21 @@ export default function PerformanceChartCard({
     toDate,
     baseline,
     dailyCapital,
+    dailyReturns,
+    filtered,
     dailyFlows,
     dailyBalance,
     dailyUnrecordedFees,
     initialDeposit,
   ])
+
+  // Display-only glides: a new range makes each figure travel to its value.
+  const endBalanceShown = useTween(range.endBalance)
+  const realizedShown = useTween(range.realizedNet)
+  const returnShown = useTween(range.period.added ?? 0)
+  const [returnOpen, setReturnOpen] = useState(false)
+  // Re-keys the tiles' light sweep, so it replays on every range change.
+  const sheenKey = `${fromDate}|${toDate}|${filtered ? 1 : 0}`
 
   const firstTradeDay = entries[0]?.[0] ?? null
   const presets = useMemo(() => {
@@ -637,7 +647,9 @@ export default function PerformanceChartCard({
       </div>
 
       <div className="mb-stack flex flex-wrap items-center justify-between gap-2.5">
-      <div className="self-start inline-flex gap-[3px] bg-surface2 border border-hair rounded-seg p-1">
+      {/* Four tabs do not fit a phone in one row (Date Range was clipped off
+          the edge) — there they sit as a 2×2 grid. */}
+      <div className="self-start inline-flex gap-[3px] bg-surface2 border border-hair rounded-seg p-1 max-[640px]:grid max-[640px]:w-full max-[640px]:grid-cols-2">
         {(
           [
             ['cumulative', 'Cumulative P&L'],
@@ -649,13 +661,20 @@ export default function PerformanceChartCard({
           <button
             key={key}
             type="button"
-            className={`font-body py-[7px] px-[13px] text-[12.5px] rounded-btn border ${tab === key ? 'bg-surface border-border text-text font-bold' : 'border-transparent bg-transparent text-muted font-semibold'}`}
+            className={`font-body py-[7px] px-[13px] text-[12.5px] rounded-btn border whitespace-nowrap transition-colors ${tab === key ? 'bg-surface border-border text-text font-bold' : 'border-transparent bg-transparent text-muted font-semibold'}`}
             onClick={() => {
               setTab(key)
               setHoverIdx(null)
             }}
           >
-            {label}
+            {key === 'capital' ? (
+              <>
+                <span className="max-[640px]:hidden">{label}</span>
+                <span className="hidden max-[640px]:inline">Transfers</span>
+              </>
+            ) : (
+              label
+            )}
           </button>
         ))}
       </div>
@@ -712,7 +731,7 @@ export default function PerformanceChartCard({
       />
 
       {tab === 'cumulative' && (
-        <div>
+        <div className="animate-[fadeup_0.35s_ease-out]">
           <div
             ref={plotRef}
             className="relative touch-pan-y"
@@ -770,7 +789,7 @@ export default function PerformanceChartCard({
       )}
 
       {tab === 'daily' && (
-        <div>
+        <div className="animate-[fadeup_0.35s_ease-out]">
           <div
             ref={plotRef}
             className="relative touch-pan-y"
@@ -829,7 +848,7 @@ export default function PerformanceChartCard({
       )}
 
       {tab === 'capital' && (
-        <div>
+        <div className="animate-[fadeup_0.35s_ease-out]">
           {capital.bars.length === 0 ? (
             <p className="text-[13px] text-muted py-10 text-center">
               No deposits or withdrawals on record for the accounts in scope.
@@ -899,7 +918,7 @@ export default function PerformanceChartCard({
       )}
 
       {tab === 'range' && (
-        <div className="flex flex-col gap-3.5">
+        <div className="flex flex-col gap-3.5 animate-[fadeup_0.35s_ease-out]">
           <div className="grid grid-cols-2 gap-3 max-[640px]:grid-cols-1">
             <label className="flex flex-col gap-1.5">
               <span className="text-[10.5px] font-extrabold tracking-[0.5px] text-faint uppercase">
@@ -925,12 +944,14 @@ export default function PerformanceChartCard({
             </label>
           </div>
 
-          <div className="border border-accent-line bg-[linear-gradient(160deg,var(--accentSoft),var(--surface))] rounded-rail py-[18px] px-5">
+          <div className="relative overflow-hidden border border-accent-line bg-[linear-gradient(160deg,var(--accentSoft),var(--surface))] rounded-rail py-[18px] px-5 animate-[fadeup_0.4s_ease-out_both]">
+            <Sheen key={sheenKey} />
+            {refreshing && <Shimmer />}
             <span className="text-[10.5px] font-extrabold tracking-[0.5px] text-faint uppercase">
               Balance on {fmtMediumDate(toDate)}
             </span>
-            <div className="font-mono text-[30px] font-extrabold tracking-[-0.6px] mt-1.5">
-              {fmtMoney(range.endBalance)}
+            <div className="font-mono text-[30px] font-extrabold tracking-[-0.6px] mt-1.5 tabular-nums">
+              {fmtMoney(endBalanceShown)}
             </div>
             {/* The balance reconciled: where the range started and the money
                 moved in or out inside it. What trading did is the Total
@@ -970,12 +991,20 @@ export default function PerformanceChartCard({
           </div>
 
           <div className="grid grid-cols-2 gap-3 max-[640px]:grid-cols-1">
-            <div className="border border-[rgba(47,214,122,0.3)] bg-[rgba(47,214,122,0.06)] rounded-rail py-4 px-[18px]">
+            <div
+              className={`relative overflow-hidden rounded-rail py-4 px-[18px] border animate-[fadeup_0.4s_ease-out_0.08s_both] ${
+                range.realizedNet < 0
+                  ? 'border-[rgba(240,80,80,0.3)] bg-[rgba(240,80,80,0.06)]'
+                  : 'border-[rgba(47,214,122,0.3)] bg-[rgba(47,214,122,0.06)]'
+              }`}
+            >
+              <Sheen key={sheenKey} delay={120} />
+              {refreshing && <Shimmer />}
               <span className="text-[10.5px] font-extrabold tracking-[0.5px] text-faint uppercase">
                 Total Realized Gains
               </span>
               <div
-                className={`font-mono text-[24px] font-extrabold tracking-[-0.6px] mt-1.5 ${range.realizedNet < 0 ? 'text-red' : 'text-green'}`}
+                className={`font-mono text-[24px] font-extrabold tracking-[-0.6px] mt-1.5 tabular-nums ${range.realizedNet < 0 ? 'text-red' : 'text-green'}`}
               >
                 {/* AFTER fees (2026-09-28): the figure has to tie out to the
                     P&L calendar, whose cells are after fees — before fees it
@@ -990,34 +1019,62 @@ export default function PerformanceChartCard({
                   heading={`${fmtMediumDate(fromDate)} — ${fmtMediumDate(toDate)}`}
                   hoverOnly
                 >
-                  {fmtSignedMoney(range.realizedNet)}
+                  {fmtSignedMoney(realizedShown)}
                 </PnlBreakdown>
               </div>
             </div>
-            <div className="border border-hair bg-surface2 rounded-rail py-4 px-[18px]">
-              <span className="text-[10.5px] font-extrabold tracking-[0.5px] text-faint uppercase">
-                Period Return
+            {/* The whole tile is the button into the breakdown: added vs
+                compounded, and the day list both come from. */}
+            <button
+              type="button"
+              onClick={() => setReturnOpen(true)}
+              aria-haspopup="dialog"
+              className="group relative overflow-hidden rounded-rail border border-hair bg-surface2 py-4 px-[18px] text-left font-body cursor-pointer transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-accent-line hover:shadow-[0_14px_34px_-16px_var(--glow)] focus-visible:outline-none focus-visible:border-accent-line focus-visible:shadow-[0_0_0_3px_var(--glow)] animate-[fadeup_0.4s_ease-out_0.16s_both]"
+            >
+              <Sheen key={sheenKey} delay={240} />
+              {refreshing && <Shimmer />}
+              <span className="flex items-center justify-between gap-2">
+                <span className="text-[10.5px] font-extrabold tracking-[0.5px] text-faint uppercase">
+                  Period Return
+                </span>
+                <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-muted transition-colors group-hover:text-accent">
+                  Breakdown
+                  <ChevronRight
+                    size={13}
+                    className="transition-transform duration-200 group-hover:translate-x-0.5"
+                  />
+                </span>
               </span>
-              <div
-                className={`font-mono text-[24px] font-extrabold tracking-[-0.6px] mt-1.5 mb-1 ${(range.pctNet ?? 0) < 0 ? 'text-red' : 'text-accent'}`}
+              <span
+                className={`block font-mono text-[24px] font-extrabold tracking-[-0.6px] mt-1.5 mb-1 tabular-nums ${(range.period.added ?? 0) < 0 ? 'text-red' : 'text-accent'}`}
                 title={
-                  range.pct === null
+                  range.period.addedGross === null
                     ? undefined
-                    : `Before exchange fees: ${fmtSignedPct(range.pct, 2)}`
+                    : `Before exchange fees: ${fmtSignedPct(range.period.addedGross, 2)}`
                 }
               >
                 {/* After fees, like the gains tile beside it — one basis per
                     pair, or the two read as disagreeing. */}
-                {range.pctNet === null ? '—' : fmtSignedPct(range.pctNet, 2)}
-              </div>
-              {/* Only when part of the window could not be measured. */}
-              {range.unmeasured > 0 && (
-                <div className="text-[11px] text-muted font-semibold">
-                  {`${range.measured} of ${range.measured + range.unmeasured} trading days measured`}
-                </div>
-              )}
-            </div>
+                {range.period.added === null ? '—' : fmtSignedPct(returnShown, 2)}
+              </span>
+              <span className="block text-[11px] text-muted font-semibold">
+                {range.period.unmeasured > 0
+                  ? `${range.period.measured} of ${range.period.measured + range.period.unmeasured} trading days measured`
+                  : range.period.measured > 0
+                    ? `Sum of ${range.period.measured} daily return${range.period.measured === 1 ? '' : 's'}${filtered ? ' · filtered' : ''}`
+                    : 'No closed trades in this range'}
+              </span>
+            </button>
           </div>
+
+          <PeriodReturnModal
+            open={returnOpen}
+            onClose={() => setReturnOpen(false)}
+            from={fromDate}
+            to={toDate}
+            result={range.period}
+            filtered={filtered}
+          />
         </div>
       )}
     </section>

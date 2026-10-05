@@ -235,6 +235,9 @@ export default function AnalyticsView({
                   dailyBalance={data.daily_balance}
                   dailyUnrecordedFees={data.daily_unrecorded_fees}
                   initialDeposit={data.initial_deposit}
+                  dailyReturns={data.daily_returns}
+                  filtered={data.filters.filtered}
+                  refreshing={refreshing}
                   baseline={data.baseline}
                   feesSince={data.fees.trades_without_fee > 0 ? data.fees.since : null}
                 />,

@@ -1772,6 +1772,21 @@ Strategy math is client-side (`lib/strategyStats.ts`: `tradePnl` /
 `tradePnlNet` / `tradeFee`), fed `exchange_fee` by `/admin/strategies` and
 `pastPositionsToStrategyTrades`. The public track record is untouched.
 
+**Period Return now ADDS the saved daily % (2026-10-05, Christian's request:
+"yesterday 4%, the day before 1% → between the two I see 5%").** Each day's
+% is the P&L calendar cell (`UserStatsService::dailyReturns` — the ONE
+function behind both, 2 dp), saved in `daily_returns` (uni_id, scope =
+'all'|exchange, day). `GET /analytics` syncs its scope from the data it
+already loaded and presents the stored rows as `daily_returns`;
+`pnl:daily-returns` (every 15 min) covers users who never open the page. A
+row is rewritten when its day's trades change and dropped when they are gone
+— never frozen. The card sums them (`lib/periodReturn.ts`); with a ticker /
+strategy chip active it measures the filtered trades with the same formula
+instead (a saved day holds every trade). Clicking the tile opens
+`PeriodReturnModal`: Added vs Compounded from the same daily % plus the day
+list. The landing page / recaps still COMPOUND — the modal says so. The
+compounded history below is kept for the record.
+
 **Performance Analytics' date-range percentage is TIME-WEIGHTED (2026-09-23).**
 The Performance card's second tile was "Relative to Baseline" = window P&L ÷
 the ALL-TIME baseline, so a deposit made in September changed the percentage

@@ -8,6 +8,20 @@
 
 import type { FeeSummary } from './dashboard'
 
+/** One saved trading day (`daily_returns`) — the P&L calendar cell's figures. */
+export interface DailyReturn {
+  /** Capital the day started with; 0/null = none on record. */
+  start_balance: number | null
+  /** P&L after fees. */
+  pnl: number
+  /** P&L before fees. */
+  pnl_gross: number
+  /** pnl ÷ start_balance × 100, 2 dp — null when there is no capital. */
+  pct: number | null
+  pct_gross: number | null
+  trades: number
+}
+
 export interface DayExtreme {
   date: string
   /** Before fees. */
@@ -166,6 +180,14 @@ export interface Analytics {
    * netted when both land on one day. Only days that moved money.
    */
   daily_flows: Record<string, number>
+  /**
+   * The SAVED per-day percentages (`daily_returns` table) — each trading
+   * day's after-fees P&L over the balance it started with, exactly the P&L
+   * calendar cell. All-time and chip-free for the exchange in scope. The Date
+   * Range card's Period Return ADDS these up. Optional while an older API is
+   * still deployed.
+   */
+  daily_returns?: Record<string, DailyReturn>
   /** Capital held before any recorded transfer — the walk's seed. NOT in `baseline`. */
   initial_deposit?: number
   day_of_week: Record<Weekday, DayOfWeekStat>

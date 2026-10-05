@@ -90,5 +90,6 @@ async function fetchAnalytics(
   if (Array.isArray(a.daily_flows)) a.daily_flows = {}
   if (Array.isArray(a.daily_balance)) a.daily_balance = {}
   if (Array.isArray(a.daily_unrecorded_fees)) a.daily_unrecorded_fees = {}
+  if (Array.isArray(a.daily_returns)) a.daily_returns = {}
   return a
 }
