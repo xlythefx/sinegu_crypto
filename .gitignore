@@ -36,6 +36,9 @@ graphify-out
 # Production database dumps — every secret_key and password hash is in here
 .claude/_db_backups/
 
+# Security audit reports — they list unfixed findings; never commit
+.claude/audits/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
