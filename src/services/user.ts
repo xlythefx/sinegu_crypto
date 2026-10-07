@@ -23,15 +23,45 @@ export function getMe(): Promise<MeResponse> {
   return apiFetch<MeResponse>('/auth/me', { auth: true })
 }
 
-/** Update the user's name/email (PUT /user/profile). */
+/**
+ * Update the user's name/email (PUT /user/profile).
+ *
+ * A changed email needs `currentPassword` and does NOT take effect on save:
+ * the API mails a code to the new address and returns it as
+ * `user.pending_email`, with `user.email` unchanged until the code is
+ * redeemed (`verifyEmail`). 422 `error_code`s: `PASSWORD_REQUIRED`,
+ * `INVALID_PASSWORD`, `NO_PASSWORD` (a Discord-only account must set one first).
+ */
 export function updateProfile(
   name: string,
   email: string,
+  currentPassword?: string,
 ): Promise<UpdateProfileResponse> {
   return apiFetch<UpdateProfileResponse>('/user/profile', {
     method: 'PUT',
     auth: true,
-    body: { name, email },
+    body: {
+      name,
+      email,
+      ...(currentPassword ? { current_password: currentPassword } : {}),
+    },
+  })
+}
+
+export interface CancelPendingEmailResponse {
+  success: boolean
+  user: AuthUser
+}
+
+/**
+ * Abandon an email change that is waiting for its code
+ * (DELETE /user/email/pending). The stored address was never touched, so
+ * this needs no confirmation step.
+ */
+export function cancelPendingEmail(): Promise<CancelPendingEmailResponse> {
+  return apiFetch<CancelPendingEmailResponse>('/user/email/pending', {
+    method: 'DELETE',
+    auth: true,
   })
 }
 

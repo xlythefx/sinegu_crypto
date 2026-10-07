@@ -41,6 +41,13 @@ export interface AuthUser {
    * never treated as unverified (see `lib/emailVerification.ts`).
    */
   email_verified?: boolean
+  /**
+   * A NEW address waiting for its six-digit code (`PUT /user/profile` with a
+   * different email). `email` stays the old, working address until the code
+   * is redeemed; null = no change in flight. Absent in sessions stored before
+   * the field existed — read it as null.
+   */
+  pending_email?: string | null
 }
 
 export interface DiscordLink {
