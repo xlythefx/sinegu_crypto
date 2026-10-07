@@ -13,6 +13,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 os.environ.setdefault("BINANCE_ABCD_WEBHOOK_SECRET", "test-webhook-secret")
+# Empty on purpose: the suite runs with /admin/* on the FALLBACK (webhook)
+# secret, as every pre-existing admin test assumes, and a developer's real
+# .env setting BINANCE_ABCD_ADMIN_SECRET must not flip that. test_admin_auth.py
+# monkeypatches hooks.ADMIN_SECRET to exercise the separated token.
+os.environ.setdefault("BINANCE_ABCD_ADMIN_SECRET", "")
 os.environ.setdefault("BINANCE_ABCD_ENGINE_SECRET", "test-engine-secret")
 os.environ.setdefault("BINANCE_ABCD_ENGINE_API_BASE", "http://engine.test/api")
 os.environ.setdefault("BINANCE_ABCD_RUN_POLLERS", "false")

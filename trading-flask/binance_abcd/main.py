@@ -39,12 +39,10 @@ _pollers_running: list[str] = []
 
 def create_app() -> Flask:
     app = Flask(__name__)
-    try:
-        from flask_cors import CORS
-
-        CORS(app)
-    except ImportError:
-        pass
+    # No CORS, on purpose: nothing in a browser ever calls the engine.
+    # TradingView posts server-to-server, nginx proxies only the webhook
+    # paths, and the API reaches /admin/* over loopback. A wildcard CORS
+    # header would only invite a page somewhere to try.
     app.register_blueprint(webhook_bp)
     app.register_blueprint(admin_bp)
 
@@ -191,10 +189,17 @@ def main() -> None:
     set_rate_limit_alert_hook(_on_rate_limit)
 
     log.info(
-        "starting %s on port %s (exchanges %s; webhooks %s)",
-        hooks.SERVICE_NAME, hooks.FLASK_PORT, ",".join(enabled_exchanges()),
+        "starting %s on %s:%s (exchanges %s; webhooks %s)",
+        hooks.SERVICE_NAME, hooks.BIND_HOST, hooks.FLASK_PORT, ",".join(enabled_exchanges()),
         ", ".join(f"{ex}={hooks.WEBHOOK_PATHS[ex]}" for ex in enabled_exchanges()),
     )
+    if hooks.ADMIN_SECRET_IS_FALLBACK:
+        # Once, at startup: the box works, but the token that fires a signal
+        # is also the token that closes every position.
+        log.warning(
+            "BINANCE_ABCD_ADMIN_SECRET not set — /admin/* accepts the TradingView "
+            "webhook secret; set it to separate the two"
+        )
     account_counts, asset_counts = startup_checks()
     notify.notify_startup(account_counts, asset_counts)
     start_retry_queue(_shutdown)
@@ -220,7 +225,7 @@ def main() -> None:
 
     from waitress import serve
 
-    serve(create_app(), host="0.0.0.0", port=hooks.FLASK_PORT, threads=hooks.WAITRESS_THREADS)
+    serve(create_app(), host=hooks.BIND_HOST, port=hooks.FLASK_PORT, threads=hooks.WAITRESS_THREADS)
 
 
 if __name__ == "__main__":

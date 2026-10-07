@@ -108,3 +108,39 @@ def test_perpetual_chart_tickers_lose_their_suffix_and_prefix(client):
         assert submit.call_args.args[2] == "BTCUSDT", raw
     assert webhook._normalize_ticker("MEXC:ethusdt.p") == "ETHUSDT"
     assert webhook._normalize_ticker(None) == ""
+
+
+def test_an_unusable_price_dispatches_with_no_price(client):
+    """float() accepts "nan", "inf" and "-5"; the price is informational
+    (sizing reads the live mark), so junk is dropped, never a reason to refuse."""
+    for raw in ("nan", "inf", "-inf", "-5", "0", "abc", True):
+        response, submit = _post(client, {"secret": SECRET, "action": "BUY", "symbol": "BTCUSDT", "price": raw})
+        assert response.status_code == 200, raw
+        submit.assert_called_once()
+        assert submit.call_args.args[3] is None, raw
+        assert "price" not in response.get_json(), raw
+
+
+def test_a_real_price_still_travels(client):
+    _, submit = _post(client, {"secret": SECRET, "action": "BUY", "symbol": "BTCUSDT", "close": 61000})
+    assert submit.call_args.args[3] == 61000.0
+
+
+def test_symbol_shapes_the_venues_know_are_accepted(client):
+    for raw, expected in (("LTCUSDT", "LTCUSDT"), ("BINANCE:LTCUSDT.P", "LTCUSDT"),
+                          ("LTC_USDT", "LTC_USDT"), ("mexc:ltc_usdt.p", "LTC_USDT"),
+                          ("1000PEPEUSDT", "1000PEPEUSDT")):
+        response, submit = _post(client, {"secret": SECRET, "action": "BUY", "symbol": raw})
+        assert response.status_code == 200, raw
+        assert submit.call_args.args[2] == expected, raw
+
+
+def test_a_symbol_that_could_inject_into_a_signed_query_is_refused(client):
+    """The symbol is interpolated into hand-built signed query strings with no
+    URL-encoding, so anything beyond [A-Z0-9_]{2,20} is a 400, not a trade."""
+    for raw in ("LTC&foo=1", "a", "X" * 25, "LTC USDT", "ltc/usdt", "LTC%26USDT", "BTC-USDT"):
+        response, submit = _post(client, {"secret": SECRET, "action": "BUY", "symbol": raw})
+        assert response.status_code == 400, raw
+        assert response.get_json()["error"] == "invalid symbol", raw
+        submit.assert_not_called()
+    assert webhook.is_valid_ticker("LTC_USDT") and not webhook.is_valid_ticker("LTC&foo=1")

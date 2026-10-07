@@ -1,4 +1,10 @@
-"""Operator endpoints under /admin, guarded by X-Admin-Secret (= webhook secret).
+"""Operator endpoints under /admin, guarded by the X-Admin-Secret HEADER.
+
+The secret is hooks.ADMIN_SECRET — the engine's own admin token, not the
+TradingView webhook secret (that one sits at TradingView, in every developer's
+.env and in the API's .env; a box with no BINANCE_ABCD_ADMIN_SECRET still
+falls back to it, and says so at startup). Header only: a ``?secret=`` in the
+query string lands in nginx's access log and in every proxy log between.
 
 refresh-balances is synchronous by design: the future monthly invoice
 generator calls it and blocks until every balance is fresh before computing
@@ -15,16 +21,18 @@ from datetime import date, datetime, timedelta
 
 from flask import Blueprint, jsonify, request
 
+from binance_abcd import hooks
 from binance_abcd.accounts_api import accounts_cache_age, invalidate_accounts_cache
 from binance_abcd.assets_api import assets_cache_age, invalidate_assets_cache
-from binance_abcd.hooks import WEBHOOK_SECRET
 
 admin_bp = Blueprint("abcd_admin", __name__, url_prefix="/admin")
 
 
 def _authorized() -> bool:
-    supplied = request.headers.get("X-Admin-Secret") or request.args.get("secret") or ""
-    return bool(WEBHOOK_SECRET) and hmac_mod.compare_digest(str(supplied), WEBHOOK_SECRET)
+    # Read through the module so a test can monkeypatch hooks.ADMIN_SECRET.
+    secret = hooks.ADMIN_SECRET
+    supplied = request.headers.get("X-Admin-Secret") or ""
+    return bool(secret) and hmac_mod.compare_digest(str(supplied), secret)
 
 
 @admin_bp.route("/refresh-accounts", methods=["POST"])
@@ -172,6 +180,10 @@ def close_positions():
         side = str(item.get("side") or "").strip().upper()
         if not uni_id or not symbol or side not in ("LONG", "SHORT"):
             return jsonify({"error": "each position needs uni_id, symbol and side LONG|SHORT"}), 400
+        # Same shape rule as the webhook: the symbol ends up inside a
+        # hand-built signed query string.
+        if not webhook.is_valid_ticker(symbol):
+            return jsonify({"error": "invalid symbol"}), 400
         # Refused, never defaulted: the job falls back to EVERY live venue
         # when its target venue is not live, and with that venue's filter gone
         # it would close every account there.
@@ -239,7 +251,7 @@ def reports_preview():
         return jsonify({"error": "Unauthorized"}), 403
     from zoneinfo import ZoneInfo
 
-    from binance_abcd import hooks, notify, reports  # deferred: reports pulls in the http client
+    from binance_abcd import notify, reports  # deferred: reports pulls in the http client
 
     body = request.get_json(silent=True) or {}
     kind = str(body.get("kind") or "").strip().lower()

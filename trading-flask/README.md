@@ -396,21 +396,28 @@ a report on prod by editing prod's `.env`, not by blanking it here.)
 
 ```bash
 # backend first (dev): cd C:\wamp64\www\sinegutrade-api && php artisan serve
-python -m binance_abcd.main          # waitress on :5010, pollers per RUN_POLLERS
+python -m binance_abcd.main          # waitress on 127.0.0.1:5010 (BIND_HOST), pollers per RUN_POLLERS
 python engine_launcher.py            # or: Tkinter start/stop GUI with live log +
                                      # copy-paste webhook URLs/secret for TradingView
 ```
 
 - `GET /health` — cache ages, job/account metrics, retry depth, rate-limit state
-- `POST /admin/refresh-accounts|refresh-assets|refresh-balances`, `GET /admin/stats`
-  (header `X-Admin-Secret` = the webhook secret; refresh-balances is synchronous
-  so a future invoice generator can block on fresh balances)
+- `POST /admin/refresh-accounts|refresh-assets|refresh-balances|refresh-positions|ledger|close-positions|reports/preview`,
+  `GET /admin/stats` — header `X-Admin-Secret` = `BINANCE_ABCD_ADMIN_SECRET`,
+  the engine's OWN box-local token (the deploy script generates it on the
+  server; `ENGINE_ADMIN_SECRET` on the API side). Never the TradingView
+  webhook secret — a box without the key falls back to it and logs a warning
+  at startup. Header only: a `?secret=` query string is refused, because it
+  would land in the access logs. The engine binds `127.0.0.1` (`BIND_HOST`),
+  nginx proxies only the webhook paths, and `/admin/*` + `/health` stay
+  loopback-only. refresh-balances is synchronous so the monthly invoice run
+  can block on fresh balances.
 - Dev tip: `BINANCE_ABCD_RUN_POLLERS=false` runs the webhook alone.
 
 ## Test trades
 
 ```bash
-python -m pytest tests/ -q     # 305 tests, no network
+python -m pytest tests/ -q     # 525 tests, no network
 python webhook_tester.py       # Tkinter GUI — local or prod target
 ```
 
@@ -504,7 +511,8 @@ Both decisions are recorded per account in the signal's `trade_logs` row
 `.claude/skills/deploy/SKILL.md`). It gates on this test suite, uploads to
 `/var/www/sinegualerts/engine`, builds the venv, generates the server-side `.env`
 once (webhook secret shared with the local `.env`, `ENGINE_SECRET` shared with
-`api/.env`), installs the `sinegualerts-engine` systemd unit, and rewrites the
+`api/.env`, a box-local `BINANCE_ABCD_ADMIN_SECRET` for `/admin/*` written into
+`api/.env` as `ENGINE_ADMIN_SECRET`), installs the `sinegualerts-engine` systemd unit, and rewrites the
 nginx vhost: `location = /binance_abcd_webhook` and `location = /mexc_abcd_webhook` proxied to `127.0.0.1:5010`,
 `/api/engine/` restricted to localhost (it serves plaintext account secrets).
 TradingView posts to `https://pixel-alpha.com/binance_abcd_webhook` (the old

@@ -66,6 +66,23 @@ FLASK_PORT = _env_int("FLASK_PORT", 5010)
 
 # TradingView -> webhook shared secret. Required; compared with hmac.compare_digest.
 WEBHOOK_SECRET = _env_str("WEBHOOK_SECRET")
+# /admin/* (cache flushes, manual closes, ledger reads, recap previews) has its
+# OWN secret, held only by this box and the API beside it. Until 2026-10-07 it
+# was the webhook secret above — which also sits at TradingView, in every
+# developer's .env and in the API's .env, so anyone holding the token that
+# fires a signal could also close every customer's positions. BOX-LOCAL like
+# ENGINE_SECRET: the deploy script generates it on the server and never mirrors
+# a local value. Empty falls back to the webhook secret so a box deployed
+# before the key existed keeps its admin surface working; main() logs one
+# warning while that is the case.
+_ADMIN_SECRET_OWN = _env_str("ADMIN_SECRET", "")
+ADMIN_SECRET = _ADMIN_SECRET_OWN or WEBHOOK_SECRET
+ADMIN_SECRET_IS_FALLBACK = not _ADMIN_SECRET_OWN
+# The interface waitress binds. nginx proxies the webhook paths over loopback
+# and the API pings /admin/* on 127.0.0.1, so nothing needs the engine on a
+# public interface — 0.0.0.0 left :5010, /admin/* included, one firewall rule
+# away from the internet.
+BIND_HOST = _env_str("BIND_HOST", "127.0.0.1")
 
 # --- sinegutrade-api (engine machine-to-machine API) --------------------------
 ENGINE_API_BASE = _env_str("ENGINE_API_BASE", "http://127.0.0.1:8000/api").rstrip("/")

@@ -31,7 +31,12 @@ def _loader(exchange: str):
             return None
         accounts = data.get("accounts")
         if not isinstance(accounts, list):
-            log.warning("[%s] accounts payload malformed: %.200s", exchange, data)
+            # The shape, never the payload: this is the one body on the whole
+            # surface that carries every api_key and secret_key in clear.
+            log.warning(
+                "[%s] accounts payload malformed: 'accounts' is %s (%s)",
+                exchange, type(accounts).__name__, engine_client.error_fields(data) or "no error field",
+            )
             return None
         return [
             dict(a, exchange=exchange)

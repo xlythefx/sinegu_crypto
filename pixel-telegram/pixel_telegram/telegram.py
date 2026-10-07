@@ -28,6 +28,16 @@ def enabled() -> bool:
     return bool(config.ENABLED and config.BOT_TOKEN and config.CHAT_ID)
 
 
+def _redact(message: str) -> str:
+    """Scrub the bot token out of anything logged. A requests ConnectionError
+    quotes the URL it failed on, and the token is IN the Telegram URL
+    (/bot<TOKEN>/sendMessage) — so the one line a failed alert leaves in the
+    journal would otherwise hand the bot to whoever reads it. Same rule as the
+    engine's notify._redact."""
+    token = str(config.BOT_TOKEN or "")
+    return message.replace(token, "***") if token else message
+
+
 def send(text: str, *, dry: bool = False, chat_id: Optional[str] = None) -> bool:
     """Post one message. Returns True when Telegram accepted it.
 
@@ -51,11 +61,11 @@ def send(text: str, *, dry: bool = False, chat_id: Optional[str] = None) -> bool
     try:
         response = requests.post(url, json=payload, timeout=config.HTTP_TIMEOUT)
         if not response.ok:
-            log.warning("telegram send failed: %s %.200s", response.status_code, response.text)
+            log.warning("telegram send failed: %s %.200s", response.status_code, _redact(response.text))
             return False
         return True
     except Exception as exc:  # noqa: BLE001 - an alert must never crash the job
-        log.warning("telegram send exception: %s", exc)
+        log.warning("telegram send exception: %s", _redact(str(exc)))
         return False
 
 

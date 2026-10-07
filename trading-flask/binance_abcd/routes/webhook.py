@@ -16,6 +16,7 @@ import hmac as hmac_mod
 import json
 import logging
 import math
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -60,6 +61,12 @@ ENTRY_ACTIONS = ("BUY", "SELL")
 # per venue the engine trades, or `{{ticker}}` from that venue's own chart
 # arrives as `BYBIT:BTCUSDT` and matches no asset row — every signal rejected.
 _TICKER_PREFIXES = ("BINANCE:", "MEXC:", "BYBIT:")
+# What a ticker may look like once normalised: the venues' own symbols
+# (`BTCUSDT`, MEXC's `LTC_USDT`) and nothing else. The symbol is interpolated
+# into hand-built signed query strings (binance_api._request_get and its
+# siblings) with no URL-encoding, so `LTC&foo=1` would inject a parameter
+# into a signed request. Anything else is refused with 400 before dispatch.
+_TICKER_RE = re.compile(r"^[A-Z0-9_]{2,20}$")
 
 _DISPATCH_EXECUTOR = ThreadPoolExecutor(max_workers=DISPATCH_WORKERS, thread_name_prefix="dispatch")
 _ACCOUNT_EXECUTOR = ThreadPoolExecutor(max_workers=FANOUT_WORKERS, thread_name_prefix="account")
@@ -155,6 +162,22 @@ def _deposit_gate(account: dict) -> tuple[bool, Optional[float]]:
     if deposit is None:
         return False, None
     return deposit + 1e-9 >= MIN_DEPOSIT, deposit
+
+
+def _parse_price(raw: Any) -> Optional[float]:
+    """The signal's price, or None when it is not a finite positive number.
+
+    ``float()`` happily accepts "nan", "inf" and "-5", and the figure is
+    informational only (sizing reads the live mark), so an unusable value is
+    treated as ABSENT — never a reason to refuse the signal.
+    """
+    if isinstance(raw, bool):
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) and value > 0 else None
 
 
 def _parse_leverage(raw: Any) -> Optional[int]:
@@ -1145,6 +1168,12 @@ def _normalize_ticker(raw: Any) -> str:
         ticker = ticker[: -len(_PERP_SUFFIX)]
     return ticker
 
+
+def is_valid_ticker(ticker: str) -> bool:
+    """A normalised ticker the engine may hand to a venue's signed request."""
+    return bool(_TICKER_RE.fullmatch(ticker or ""))
+
+
 def _handle_webhook(exchange: str):
     """The trade path for ONE venue. The path a TradingView alert posts to is
     what decides which exchange's accounts the signal trades — so each venue
@@ -1181,6 +1210,9 @@ def _handle_webhook(exchange: str):
     if not ticker:
         _bump("rejected")
         return jsonify({"error": "missing symbol/ticker"}), 400
+    if not is_valid_ticker(ticker):
+        _bump("rejected")
+        return jsonify({"error": "invalid symbol"}), 400
 
     # A payload may still name the venue (the admin console does); it just has
     # to agree with the path it was posted to. A mismatch is a misconfigured
@@ -1193,13 +1225,7 @@ def _handle_webhook(exchange: str):
         _bump("rejected")
         return jsonify({"error": f"this webhook trades {exchange} only (payload named {', '.join(named)})"}), 400
 
-    price: Optional[float] = None
-    raw_price = data.get("price", data.get("close"))
-    if raw_price not in (None, ""):
-        try:
-            price = float(raw_price)
-        except (TypeError, ValueError):
-            price = None
+    price = _parse_price(data.get("price", data.get("close")))
 
     leverage = _parse_leverage(data.get("leverage"))
     strategy = (str(data.get("strategy")).strip() or None) if data.get("strategy") else None

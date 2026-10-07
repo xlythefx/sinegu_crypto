@@ -4,7 +4,10 @@ monkeypatched state. `deploy-telegram` gates on this suite passing.
 
 from __future__ import annotations
 
+import logging
+
 import pytest
+import requests
 
 from pixel_telegram import config, metrics as metrics_mod, services, state as state_mod
 from pixel_telegram import telegram
@@ -185,3 +188,43 @@ def test_fingerprint_changes_on_restart_and_on_stop():
     assert services.fingerprint(_unit()) == "active:1000"
     assert services.fingerprint(_unit(monotonic=2000)) != services.fingerprint(_unit())
     assert services.fingerprint(_unit(active="failed")) != services.fingerprint(_unit())
+
+
+# --- The token never reaches the journal ----------------------------------------
+
+def _armed(monkeypatch):
+    monkeypatch.setattr(config, "ENABLED", True)
+    monkeypatch.setattr(config, "BOT_TOKEN", "123456:SHOULD-NOT-APPEAR")
+    monkeypatch.setattr(config, "CHAT_ID", "-1001")
+
+
+def test_a_failed_send_never_logs_the_bot_token(monkeypatch, caplog):
+    """A requests error quotes the URL it failed on, and the token is IN it
+    (/bot<TOKEN>/sendMessage) — the one line a failed alert leaves must not
+    hand the bot to whoever reads the journal."""
+    _armed(monkeypatch)
+
+    def refused(url, **kwargs):
+        raise requests.ConnectionError(f"Max retries exceeded with url: {url}")
+
+    monkeypatch.setattr(telegram.requests, "post", refused)
+    with caplog.at_level(logging.WARNING, logger="pixel_telegram.telegram"):
+        assert telegram.send("hello") is False
+
+    assert "SHOULD-NOT-APPEAR" not in caplog.text
+    assert "/bot***/sendMessage" in caplog.text
+
+
+def test_a_refused_send_is_scrubbed_too(monkeypatch, caplog):
+    _armed(monkeypatch)
+
+    class _Refused:
+        ok = False
+        status_code = 401
+        text = "Unauthorized: bot123456:SHOULD-NOT-APPEAR"
+
+    monkeypatch.setattr(telegram.requests, "post", lambda *a, **k: _Refused())
+    with caplog.at_level(logging.WARNING, logger="pixel_telegram.telegram"):
+        assert telegram.send("hello") is False
+
+    assert "SHOULD-NOT-APPEAR" not in caplog.text and "401" in caplog.text

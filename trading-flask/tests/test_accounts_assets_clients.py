@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from unittest.mock import patch
@@ -123,3 +124,17 @@ def test_increment_cap_edges():
     # A max size below one base size means ONE entry, never "unlimited".
     assert assets_api._increment_cap(5, 14) == 1.0
     assert assets_api._increment_cap(14, 14) == 1.0
+
+
+def test_a_malformed_accounts_payload_is_logged_without_its_contents(caplog):
+    """That payload is every api_key and secret_key in clear — the log gets
+    the shape and the API's error text, never a slice of the body."""
+    payload = {"success": True, "message": "shape changed",
+               "accounts": {"api_key": "k1", "secret_key": "SHOULD-NOT-APPEAR"}}
+    with caplog.at_level(logging.WARNING, logger="binance_abcd.accounts_api"), \
+            patch.object(accounts_api.engine_client, "get_json", return_value=payload):
+        accounts_api.invalidate_accounts_cache()
+        accounts_api.fetch_accounts(force=True)
+
+    assert "SHOULD-NOT-APPEAR" not in caplog.text
+    assert "'accounts' is dict" in caplog.text and "message=shape changed" in caplog.text
