@@ -648,6 +648,132 @@ nothing else, and no write control anywhere.
   only, no name, no dollar figure** — the `/api/public/*` rule. Fixed
   colours, never theme tokens (it is an image, like the invoice document).
 
+## Security hardening (2026-10-07 audit)
+
+A read-only audit of the three codebases (Christian's "most sensitive parts"
+task; the report lives in the gitignored `.claude/audits/`, never commit it)
+produced one fix per finding, one commit each in the repo it touched. The
+rules that came out of it:
+
+- **Paused for non-payment stays paused.** `POST /exchange/{x}` refuses
+  `INVOICE_OVERDUE` while the user has any unpaid invoice past due
+  (`Invoice::unpaidPastDue` + `Invoice::blockingFor`: pending past its date,
+  or `overdue`/`failed`, fee > 0; the master and `SBXINV-` rows exempt exactly
+  as `OverdueEnforcer` exempts them) — on ANY venue, because owing on Binance
+  is no reason to start on MEXC. The connect wizard keeps that error on the
+  review step with a "View invoice" link. `InvoiceService::settle` re-enables
+  the account only when no other invoice on it is still owed, and through the
+  invoice's OWN venue model: ids repeat across `{x}_accounts`, so a MEXC
+  invoice must never flip Binance account #N. `OverdueEnforcer`, the nightly
+  suspended-owner sweep and `exchange:disconnect-blocked-keys` walk
+  `ExchangeSchema::supported()` the same way.
+- **Suspension ends sessions now.** Suspend / reject delete the user's
+  tokens; `account.active` (`EnsureAccountActive` → 403 `ACCOUNT_SUSPENDED`)
+  guards every signed-in route except `/auth/logout`; Sanctum tokens expire
+  after 30 days (`SANCTUM_TOKEN_EXPIRATION_MINUTES`, pruned nightly). The SPA
+  (`services/api.ts` `endSession`) clears the session and reloads
+  `/auth?reason=expired|suspended` on a 401 or that 403 for any request that
+  carried a token — sign-out excepted — and `/auth` says why, once.
+- **Changing your email needs your password and a code.** The new address
+  goes to `user_credentials.pending_email` and receives the 6-digit code; the
+  old address stays live until the code is entered (Settings → Account info,
+  `PendingEmailStrip`), so a typo cannot lock the owner out and a stolen token
+  cannot cut them off. `PASSWORD_REQUIRED` / `INVALID_PASSWORD` /
+  `NO_PASSWORD` (Discord-only: set one first) / 409 `RESEND_TOO_SOON`; success
+  swaps the address, revokes every OTHER session and sends no team notice;
+  `EMAIL_TAKEN` at verify drops the change; `DELETE /user/email/pending`
+  cancels it. No notice goes to the OLD address yet — a new template, owner's
+  wording.
+- **Auth throttles are per ACCOUNT as well as per IP**
+  (`AppServiceProvider::configureRateLimiting`: login 10/min per IP + 5/min
+  per email, forgot 3 + 2, reset 10 + 10, register 5). `forgot` has a 60 s
+  per-account cooldown counted from the last mail (`reset_code_sent_at`), and
+  a reissue inside a live window inherits both the attempts spent AND the
+  window's expiry — five guesses per 15 minutes per account whatever the IP,
+  and the owner is always back in once the window runs out (extending the
+  window on every reissue would let an attacker keep a victim locked out).
+  Login answers one `INVALID_CREDENTIALS` for an unknown email and a wrong
+  password alike (a dummy `Hash::check` keeps the timing equal);
+  `DISCORD_ONLY` stays, because that account has no password to check.
+- **The Database console masks `secret_key` by column name on every table**
+  and partial-masks `api_key` on every venue in `ExchangeSchema`; fully masked
+  columns are excluded from the row search (a prefix search could confirm a
+  secret one character at a time), and a round-tripped mask is refused on write.
+- **The engine binds loopback and `/admin/*` has its own secret.**
+  `BINANCE_ABCD_BIND_HOST` (default 127.0.0.1 — nginx, the API pings and the
+  reporter all use loopback), no CORS (nothing in a browser calls it).
+  `X-Admin-Secret` = `BINANCE_ABCD_ADMIN_SECRET`, header only (`?secret=` is
+  refused), falling back to the webhook secret with one startup warning; the
+  API reads the same value as `ENGINE_ADMIN_SECRET` (`EngineCache::adminSecret()`,
+  same fallback, so either half rolls out first). Both are BOX-local like
+  `ENGINE_SECRET`: written by the deploy script, never mirrored. The webhook
+  refuses a symbol outside `^[A-Z0-9_]{2,20}$` (it is interpolated unencoded
+  into signed query strings) and treats a non-finite or non-positive price as
+  absent. Engine logs never carry a raw engine-API body (the accounts payload
+  holds every key): status, size and the error fields only; pixel-telegram
+  scrubs its bot token like `notify.py`.
+- **TRON manual attribution** refuses `NETWORK_MISMATCH` against the invoice
+  owner's network (`tronNetworkFor`) and needs `accept_amount: true` outside
+  the matcher's band (`TronIntentService::bandFor`, the ONE tolerance
+  definition) — a confirm step on Admin → Crypto Transfers, since manual
+  attribution exists for short, late and over payments — and writes its own
+  audit row (`TronWatcher::attributionEventId`, `secondary_status =
+  amount_mismatch`) instead of colliding with the unmatched one. The TronGrid
+  query carries `contract_address`, so a fake-token flood cannot eat the page
+  budget; a run that exhausts it without passing the overlap window is logged
+  and stamped (`budget_exhausted_at` per network on the admin listing). An
+  open intent whose figure no longer equals `feeCents()` is superseded
+  (`open_units` released) and re-minted, so an edited invoice cannot settle at
+  the old amount.
+- **On the box, the engine and pixel-telegram run as `pixelalpha`, never root
+  and never www-data** (`DEPLOY` `SERVICE_USER`). Their trees are root-owned
+  and read-only, `.env` is `root:pixelalpha 640`, and the ONLY writable
+  directories are `engine/out` and `telegram/state` — `ENGINE_WRITABLE_DIRS` /
+  `TELEGRAM_WRITABLE_DIRS`, one tuple that feeds both the chown and the units'
+  `ReadWritePaths=` under `ProtectSystem=strict`, so a start failure naming a
+  path is fixed by adding it there, never by widening the sandbox. www-data
+  keeps exactly two rights: `sudo systemctl restart` of the engine unit and
+  reading its journal (the admin Bot Engine page). `_backups/` is root-only
+  (the engine tarball carries its `.env`). The script writes env values over
+  SFTP (`_upsert_env_line`), never on a command line, and scrubs every
+  credential it touches from its own output (`_scrub`); `provision` and
+  `verify-tls` fail unless ufw is active, because ufw alone closes 5010 and
+  3306. nginx carries nosniff / `X-Frame-Options DENY` / Referrer-Policy /
+  Permissions-Policy and a **report-only** CSP (`NGINX_CSP_HEADER`; flip it
+  after a browser pass with the console open — see the deploy skill); still
+  no HSTS, by decision. Applied by the next `deploy-engine`,
+  `deploy-telegram` and `verify-tls`.
+- **Smaller API gates, each its own commit:** `POST /engine/{x}/invoices/monthly`
+  accepts only the month that just ended (`MONTH_NOT_PREVIOUS`) unless
+  `force: true` — an older month's invoice is born overdue and pauses the
+  account that night. Purge has a third server-side gate, `UNINVOICED_TRADES`:
+  real-money closed trades in a month later than the account's latest invoice
+  (or any, with no invoice) block the hard delete, because a hand-billed
+  invoice is computed from them — demo / sandbox / `SBXINV-` rows exempt; the
+  consequence is that a real-money account that ever traded is never purged,
+  it stays disconnected. Sandbox email previews go only to the caller's own
+  address or a `MAIL_PREVIEW_DOMAINS` domain (`RECIPIENT_NOT_ALLOWED`). The
+  three position-sync endpoints file rows under the account's OWNER
+  (`ownersByApiKey`, trashed rows included) and skip-and-report a key with no
+  account row, still answering 200 so the engine does not replay for ever;
+  `transactions` and `fees` still take the payload's `uni_id` (follow-up).
+  `config/cors.php` names the origins (`CORS_ALLOWED_ORIGINS`, keep more than
+  one entry — php-cors echoes a lone origin unconditionally) instead of the
+  framework's `*`.
+- `phpunit.xml` pins `TRON_PUBLIC=false` and `PAYMENTS_DEFAULT_PROVIDER=coinsbuy`
+  so a developer's `.env` cannot leak into the suite.
+- **Dependencies:** `npm audit` is clean (react-router, nanoid, source-map-js,
+  postcss bumped); the API runs guzzle 8 / framework 13.35 after a sweep of
+  every test file; `trading-flask/requirements.txt` is PINNED to the versions
+  the suite runs on — a bump is a deliberate change that runs the suite first.
+- **Seen and deliberately left as they are (owner, 2026-10-07):** admins may
+  still assign `developer`/`master`, themselves included; Coinsbuy's callback
+  (deposit-id precedence, no replay window); the Sandbox invoice wipe; deleting
+  or un-paying a paid invoice; the `?secret=` form of the TradingView webhook
+  and plain HTTP on the bare IP; `target_uni_ids` on the public webhook; root
+  SSH with a password. They are named in the report so the next audit does
+  not raise them as new.
+
 ## Owner to-do list — Admin → To be Done (`/admin/todo`, 2026-09-21)
 
 **Whenever a feature leaves work only the OWNER can do — register at a third
@@ -1410,7 +1536,7 @@ for the overlay's `position: fixed` and trap it inside.
   `SYNC_POSITION_MODE_ON_STARTUP`. Config-only fix, no code, no test gate:
   `python .claude/deploy_sinegualcrypto.py sync-engine-env` (upserts + restarts).
 - **Commands:** `python -m binance_abcd.main` (waitress), `python -m pytest
-  tests/ -q` (457 tests, no network), `python webhook_tester.py` (Tkinter GUI
+  tests/ -q` (525 tests, no network), `python webhook_tester.py` (Tkinter GUI
   trade sender — local or prod target, red banner on prod).
 - **Naming trap:** root `src/` is the React app; the engine package is
   `binance_abcd/`, deliberately not named `src`. Python and TypeScript
