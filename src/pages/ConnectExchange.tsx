@@ -49,6 +49,12 @@ import type { ExchangeKind } from '../types/exchanges'
 
 type StepKey = 'exchange' | 'mode' | 'keys' | 'review'
 
+/** The blocking invoice's id off an INVOICE_OVERDUE refusal, when the API named one. */
+function invoiceIdOf(payload: unknown): string | null {
+  const id = (payload as { invoice_id?: unknown } | null)?.invoice_id
+  return typeof id === 'string' && id !== '' ? id : null
+}
+
 const STEP: Record<StepKey, WizardStep> = {
   exchange: { key: 'exchange', label: 'Exchange', hint: 'Where you trade' },
   mode: { key: 'mode', label: 'Mode', hint: 'Live or demo' },
@@ -98,6 +104,7 @@ export default function ConnectExchange() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [overdueInvoiceId, setOverdueInvoiceId] = useState<string | null>(null)
   const [connected, setConnected] = useState<ConnectExchangeResult | null>(null)
 
   const accounts = data?.accounts ?? []
@@ -198,6 +205,7 @@ export default function ConnectExchange() {
     setConfirmOpen(false)
     setSubmitting(true)
     setSubmitError(null)
+    setOverdueInvoiceId(null)
     try {
       const result = await connectExchangeAccount(kind, {
         name: form.name.trim(),
@@ -213,9 +221,14 @@ export default function ConnectExchange() {
       setSubmitError(
         getApiErrorMessage(err, `Failed to connect ${label} account.`),
       )
+      // Paused for non-payment: nothing on this page fixes it — the API
+      // refuses the connect whatever the key, paying is what resumes trading
+      // — so stay put and point at the invoice.
+      const overdue = err instanceof ApiError && err.errorCode === 'INVOICE_OVERDUE'
+      setOverdueInvoiceId(overdue ? invoiceIdOf(err.payload) : null)
       // A rejected key or a taken name is fixed on the credentials step, so
       // send them back to it rather than leaving the error on a read-only page.
-      if (err instanceof ApiError && err.status === 422) goTo('keys')
+      if (err instanceof ApiError && err.status === 422 && !overdue) goTo('keys')
     } finally {
       setSubmitting(false)
     }
@@ -356,6 +369,17 @@ export default function ConnectExchange() {
           {submitError && (
             <p className={`${ERROR_STRIP} mt-4`} role="alert">
               {submitError}
+              {overdueInvoiceId && (
+                <>
+                  {' '}
+                  <Link
+                    to={`/dashboard/invoices/${overdueInvoiceId}`}
+                    className="font-semibold underline underline-offset-2"
+                  >
+                    View invoice
+                  </Link>
+                </>
+              )}
             </p>
           )}
 
