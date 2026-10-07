@@ -31,7 +31,8 @@ Subcommands:
   deploy-dash   - local dist/ -> remote dashboard/   (run `npm run build` first)
   deploy-api    - local sinegutrade-api -> remote api/ (preserves .env/storage/vendor)
   deploy-engine - local trading-flask/ (binance_abcd) -> remote engine/ + venv +
-                  server-side .env + systemd unit + nginx webhook route (preserves .env/.venv)
+                  server-side .env + systemd unit (runs as `pixelalpha`, root-owned
+                  read-only tree) + nginx webhook route (preserves .env/.venv/out)
   sync-api-env  - config only: mirror the Coinsbuy / TRON / Discord keys from local
                   sinegutrade-api/.env into api/.env, set the prod PAYMENTS_* URLs,
                   config:cache
@@ -48,8 +49,10 @@ Credentials are NOT stored in this file. They load from .claude/deploy.creds.jso
 """
 from __future__ import annotations
 
+import errno
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime
@@ -100,8 +103,47 @@ TELEGRAM_EXCLUDE_FILES = {".env"}
 TELEGRAM_EXCLUDE_EXT = {".pyc", ".log"}
 
 
+# ------------------------------------------------------------ secret scrubbing
+#
+# Every credential this script handles — a webhook token read from a local
+# .env, the DB password from the creds file, a secret it just minted — is
+# registered here, and everything that reaches the terminal passes through
+# _scrub() first. The case this exists for is the FAILURE path, not the happy
+# one: run() raises with the command and its stdout/stderr in the message, and a
+# deploy transcript (or a traceback pasted into a chat) is exactly where a
+# secret must not end up written down. It is the second fence. The first is
+# that secrets no longer ride a command line at all — _upsert_env_line writes
+# them over SFTP — so `ps` on the box never sees them either.
+_SECRETS: set[str] = set()
+_SECRET_KEY_RE = re.compile(r"SECRET|TOKEN|PASSWORD|API_KEY|WEBHOOK_URL|PRIVATE", re.I)
+
+
+def _is_secret_key(key: str) -> bool:
+    """Which env KEYS hold a credential. Decided by name rather than registering
+    every value read: `_ENABLED=true` or `_REPORT_DAILY_AT=23:55` registered as
+    a secret would turn every `true` and `23:55` in the transcript into `***`,
+    and the PAYMENTS_* URLs are logged by value on purpose (the value is the
+    thing being verified). A Discord webhook URL is a credential — its last
+    path segment is the token — hence WEBHOOK_URL in the pattern."""
+    return bool(_SECRET_KEY_RE.search(key))
+
+
+def _register_secret(value: str | None) -> None:
+    # A one-character "secret" would scrub every digit from every line.
+    if value and len(value) >= 6:
+        _SECRETS.add(value)
+
+
+def _scrub(text: str) -> str:
+    """Replace every registered secret in `text` with ***. Longest first, so a
+    value that happens to contain a shorter registered one is masked whole."""
+    for secret in sorted(_SECRETS, key=len, reverse=True):
+        text = text.replace(secret, "***")
+    return text
+
+
 def log(msg: str) -> None:
-    print(msg, flush=True)
+    print(_scrub(msg), flush=True)
 
 
 def _load_creds() -> dict:
@@ -144,6 +186,8 @@ PASSWORD = _C.get("password")
 KEYFILE = _C.get("key_file")
 if not PASSWORD and not KEYFILE:
     raise SystemExit(f"[abort] no password/key_file for target {_TARGET!r} ({HOST}) in {CREDS_FILE}")
+_register_secret(PASSWORD)
+_register_secret(((_C.get("db") or _CREDS.get("db") or {}).get("password")))
 
 REMOTE_PARENT = _T["parent"]
 REMOTE_DASH = REMOTE_PARENT + "/dashboard"
@@ -160,6 +204,20 @@ DB_BACKUP_KEEP = 10
 REMOTE_TMP = "/tmp/sinegu_deploy"
 ENGINE_SERVICE = "sinegualerts-engine"
 TELEGRAM_SERVICE = "pixel-telegram"
+
+# The system account the engine and pixel-telegram run AS. Never www-data: that
+# is php-fpm, and a PHP bug must not be able to read exchange keys. Never root:
+# the engine holds every customer's trade-only API key and is reachable from
+# TradingView. The PHP side keeps exactly two rights over it — `sudo systemctl
+# restart` of the unit and reading its journal (the admin "Bot Engine" page).
+SERVICE_USER = "pixelalpha"
+# The ONLY directories those processes may write. This tuple is handed to
+# chown (the tree is root-owned, read-only otherwise) AND to the units'
+# ReadWritePaths= — one list, so the sandbox and the ownership cannot drift.
+# Engine: out/ (watermarks, report/invoice state, the webhook_trades.log
+# mirror, published_closes.jsonl). pixel-telegram: state/ (last-seen units).
+ENGINE_WRITABLE_DIRS = (f"{REMOTE_ENGINE}/out",)
+TELEGRAM_WRITABLE_DIRS = (f"{REMOTE_TELEGRAM}/state",)
 
 
 # ---------------------------------------------------------------- connection
@@ -224,7 +282,7 @@ def run(ssh, cmd: str, check: bool = True, attempts: int = 3, timeout: int = 300
             rc = stdout.channel.recv_exit_status()
         except _NET_ERRORS as e:
             last = e
-            log(f"  [run] channel dropped ({type(e).__name__}); retry {i}/{attempts}: {cmd[:60]}")
+            log(f"  [run] channel dropped ({type(e).__name__}); retry {i}/{attempts}: {_scrub(cmd)[:60]}")
             if i < attempts:
                 time.sleep(3 * i)
                 try:
@@ -233,15 +291,83 @@ def run(ssh, cmd: str, check: bool = True, attempts: int = 3, timeout: int = 300
                     log(f"  [run] reconnect failed: {type(ce).__name__}")
             continue
         if check and rc != 0:
-            raise RuntimeError(f"rc={rc} for: {cmd}\n--- stdout ---\n{out}\n--- stderr ---\n{err}")
+            # Scrubbed: this message is what ends up in a pasted traceback, and
+            # a failed `grep KEY= .env` would otherwise quote the value verbatim.
+            raise RuntimeError(_scrub(f"rc={rc} for: {cmd}\n--- stdout ---\n{out}\n--- stderr ---\n{err}"))
         return rc, out, err
-    raise RuntimeError(f"command failed after {attempts} attempts: {cmd}") from last
+    raise RuntimeError(_scrub(f"command failed after {attempts} attempts: {cmd}")) from last
 
 
 def sh(ssh, cmd: str, check: bool = True, timeout: int = 300):
     """Same as run(), but wrapped in `bash -lc` so pipes/globs/&& behave."""
     quoted = cmd.replace("'", "'\\''")
     return run(ssh, f"bash -lc '{quoted}'", check=check, timeout=timeout)
+
+
+def _with_sftp(ssh, action, attempts: int = 3):
+    """Run `action(sftp)` with the same reconnect-and-retry as run().
+
+    A dropped channel mid-read must surface as an ERROR, never as an empty
+    file: an api/.env that read back empty would make _ensure_engine_secrets
+    mint a fresh ENGINE_SECRET over the one the running engine is using. A
+    missing file (paramiko reports it as IOError(ENOENT)) is an answer, not a
+    transport failure, and is re-raised for the caller to interpret.
+    """
+    last = None
+    for i in range(1, attempts + 1):
+        try:
+            with _current(ssh).open_sftp() as sftp:
+                return action(sftp)
+        except _NET_ERRORS as e:
+            if isinstance(e, OSError) and e.errno == errno.ENOENT:
+                raise
+            last = e
+            log(f"  [sftp] dropped ({type(e).__name__}); retry {i}/{attempts}")
+            if i < attempts:
+                time.sleep(3 * i)
+                try:
+                    _reconnect()
+                except Exception as ce:
+                    log(f"  [sftp] reconnect failed: {type(ce).__name__}")
+    raise RuntimeError(f"sftp action failed after {attempts} attempts") from last
+
+
+def _read_remote_text(ssh, path: str) -> str | None:
+    """The file's text over SFTP; None when it does not exist.
+
+    SFTP rather than `cat`/`grep` so the contents never ride a shell round trip
+    — a value holding quotes, `$` or `#` is read exactly as dotenv will read it,
+    and nothing about it appears in a command line or a run() error message.
+    """
+    def action(sftp):
+        with sftp.open(path, "r") as f:
+            return f.read().decode("utf-8", errors="replace")
+    try:
+        return _with_sftp(ssh, action)
+    except OSError as e:
+        if e.errno == errno.ENOENT:
+            return None
+        raise
+
+
+def _write_remote_text(ssh, path: str, text: str, mode_if_new: int = 0o600) -> None:
+    """Write (or create) a remote file over SFTP, keeping its mode and owner.
+
+    Truncating in place keeps the inode, so an existing file's owner and mode
+    survive untouched; a NEW file gets `mode_if_new` (0600 by default — every
+    caller writes something secret) rather than the sftp-server's umask.
+    """
+    def action(sftp):
+        try:
+            existing = sftp.stat(path).st_mode & 0o7777
+        except OSError as e:
+            if e.errno != errno.ENOENT:
+                raise
+            existing = None
+        with sftp.open(path, "w") as f:
+            f.write(text)
+        sftp.chmod(path, existing if existing is not None else mode_if_new)
+    _with_sftp(ssh, action)
 
 
 # ------------------------------------------------------------------- helpers
@@ -320,8 +446,17 @@ def _upload(ssh, local_path: str, remote_path: str, attempts: int = 5) -> None:
 
 
 def _deploy_via_tgz(ssh, local_root: str, remote_dest: str, mode: str, name: str,
-                    rsync_extra: list[str] | None = None, pre_sync: list[str] | None = None):
-    """Pack -> upload -> extract into a clean staging dir -> rsync into dest."""
+                    rsync_extra: list[str] | None = None, pre_sync: list[str] | None = None,
+                    owner: str | None = "www-data"):
+    """Pack -> upload -> extract into a clean staging dir -> rsync into dest.
+
+    `owner` is who gets the tree afterwards. The dashboard and the API are
+    www-data's (nginx reads the dist, php-fpm writes storage/). The engine and
+    pixel-telegram pass None and are locked down by _lock_down_service_tree
+    instead: until 2026-10-07 this chown handed THEIR trees — code, .venv and
+    .env — to the PHP user, while the units ran them as root, so any PHP bug
+    could rewrite the engine's code and read every exchange secret.
+    """
     if not os.path.isdir(local_root):
         sys.exit(f"[abort] local source not found: {local_root}")
     files = _collect(local_root, mode=mode)
@@ -351,7 +486,8 @@ def _deploy_via_tgz(ssh, local_root: str, remote_dest: str, mode: str, name: str
     # (.env, storage/, vendor/) survives. Stale frontend chunks are handled
     # separately by the pre_sync `rm -rf assets`.
     sh(ssh, f"rsync -a {excl} {stage}/ {remote_dest}/")
-    sh(ssh, f"chown -R www-data:www-data {remote_dest}", check=False)
+    if owner:
+        sh(ssh, f"chown -R {owner}:{owner} {remote_dest}", check=False)
 
     sh(ssh, f"rm -rf {stage} {remote_tgz}", check=False)
     try:
@@ -427,16 +563,67 @@ CERT_LIVE = f"/etc/letsencrypt/live/{DOMAIN}"
 CERTBOT_EMAIL = "wodnxly3@gmail.com"
 
 NGINX_SNIPPET_PATH = "/etc/nginx/snippets/sinegualerts-app.conf"
+NGINX_HEADERS_PATH = "/etc/nginx/snippets/sinegualerts-headers.conf"
 NGINX_REALIP_PATH = "/etc/nginx/conf.d/cloudflare-realip.conf"
+
+# ---- security headers (2026-10-07) ----
+#
+# REPORT-ONLY until a browser pass on prod shows a clean console. An enforcing
+# CSP that is wrong by one source blanks the app for every visitor, and this
+# policy has not been measured against the built bundle yet — html-to-image's
+# Google Fonts embed (connect-src) and the Stripe redirect are the first things
+# to watch. To enforce it: change this name to "Content-Security-Policy" and
+# run deploy-nginx. The policy string itself is the same either way.
+NGINX_CSP_HEADER = "Content-Security-Policy-Report-Only"
+NGINX_CSP_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com data:; "
+    "img-src 'self' data: blob: https:; "
+    "connect-src 'self'; "
+    "frame-src 'self' https://checkout.stripe.com; "
+    "form-action 'self' https://checkout.stripe.com; "
+    "base-uri 'self'; "
+    "frame-ancestors 'none'"
+)
+
+# Included at SERVER level by the app snippet and AGAIN inside every location
+# that carries its own add_header. That repetition is nginx's rule, not
+# sloppiness: add_header is not additive across levels — a location that sets
+# one header (Cache-Control on /, /index.html and /assets/) replaces the whole
+# inherited set, and would otherwise ship the SPA's entry point with none of
+# these. `always` so 4xx/5xx responses carry them too.
+#
+# No HSTS, on purpose (SKILL.md): trivial to enable at the Cloudflare edge,
+# hard to undo, and the owner skipped it. Do not add it here either.
+NGINX_SECURITY_HEADERS = f"""# Managed by .claude/deploy_sinegualcrypto.py — edits here are overwritten.
+# Included once per server block AND inside every location that has its own
+# add_header (nginx drops the inherited set there). No HSTS, by decision.
+add_header X-Content-Type-Options nosniff always;
+add_header X-Frame-Options DENY always;
+add_header Referrer-Policy strict-origin-when-cross-origin always;
+add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+# Report-only until a browser pass confirms it — see NGINX_CSP_HEADER in the deploy script.
+add_header {NGINX_CSP_HEADER} "{NGINX_CSP_POLICY}" always;
+"""
 
 # The application itself, shared verbatim by every server block that serves it
 # (:80 default_server for the bare IP and for the engine's 127.0.0.1 calls, and
 # :443 for the domain). One copy — three near-identical copies is how a location
 # gets fixed in one place and stays broken in the other two.
+#
+# The security headers ride with the APP, not with the port: this snippet is
+# what both app-serving blocks include, and the bare IP still serves the app
+# directly over :80, so a header set that depended on which listener you
+# arrived at would be a gap. The engine's 127.0.0.1 API calls get them too,
+# harmlessly.
 NGINX_APP_SNIPPET = """root /var/www/sinegualerts/dashboard;
 index index.html;
 
 client_max_body_size 32M;
+
+include __HEADERS_PATH__;
 
 # ---- engine machine-to-machine API: localhost ONLY ----
 # /api/engine/* hands out account api/secret keys (X-Engine-Secret header);
@@ -486,13 +673,17 @@ __ENGINE_WEBHOOK_LOCATIONS__
 # serving an old index.html, which points at the previous build's hashed
 # bundle — the deploy looks like it never happened until you hard-refresh
 # or open incognito. `no-cache` still allows a cheap 304 via ETag.
+# Each of these three sets its own add_header, which makes nginx DROP the
+# server-level set — so the security headers are included again inside them.
 location / {
+    include __HEADERS_PATH__;
     add_header Cache-Control "no-cache, must-revalidate" always;
     try_files $uri $uri/ /index.html;
 }
 
 # try_files re-runs location matching, so the fallback lands here.
 location = /index.html {
+    include __HEADERS_PATH__;
     add_header Cache-Control "no-cache, must-revalidate" always;
     try_files $uri =404;
 }
@@ -501,6 +692,7 @@ location = /index.html {
 # One explicit header rather than `expires` + add_header, which emits two
 # separate Cache-Control lines that a CDN in front could read ambiguously.
 location /assets/ {
+    include __HEADERS_PATH__;
     add_header Cache-Control "public, max-age=31536000, immutable" always;
     try_files $uri =404;
 }
@@ -657,8 +849,16 @@ def do_provision(ssh) -> None:
             "DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs; fi", timeout=900)
 
     log("  creating layout...")
+    # Only the two www-data trees are the PHP user's. The parent stays root's:
+    # owning /var/www/sinegualerts is the right to rename engine/ away and put
+    # another one in its place, and _backups/ holds the engine's .env.
     sh(ssh, f"mkdir -p {REMOTE_DASH} {REMOTE_API} {REMOTE_BACKUPS} {REMOTE_TMP} && "
-            f"chown -R www-data:www-data {REMOTE_PARENT}")
+            f"chown root:root {REMOTE_PARENT} && chmod 755 {REMOTE_PARENT} && "
+            f"chown -R www-data:www-data {REMOTE_DASH} {REMOTE_API} && "
+            f"chown root:root {REMOTE_BACKUPS} && chmod 700 {REMOTE_BACKUPS}")
+
+    log(f"  service account {SERVICE_USER} (runs the engine + pixel-telegram)...")
+    _ensure_service_user(ssh)
 
     log("  installing certbot (TLS is issued separately by `setup-tls`)...")
     sh(ssh, "DEBIAN_FRONTEND=noninteractive apt-get install -y certbot", timeout=900)
@@ -671,6 +871,9 @@ def do_provision(ssh) -> None:
 
     log("  firewall (OpenSSH + HTTP/HTTPS)...")
     sh(ssh, "ufw allow OpenSSH && ufw allow 'Nginx Full' && ufw --force enable", check=False)
+    # check=False above because `ufw enable` is chatty and re-running it is not
+    # an error — so THIS is the line that proves the firewall actually came up.
+    _assert_ufw_active(ssh)
 
     log("  placeholder index so the vhost answers before the first deploy...")
     sh(ssh, f"[ -f {REMOTE_DASH}/index.html ] || "
@@ -684,6 +887,26 @@ def do_provision(ssh) -> None:
 def _has_cert(ssh) -> bool:
     rc, _, _ = sh(ssh, f"test -f {CERT_LIVE}/fullchain.pem", check=False)
     return rc == 0
+
+
+def _assert_ufw_active(ssh) -> None:
+    """Fail loudly unless ufw reports `Status: active`.
+
+    ufw is the ONLY thing between the internet and :5010 (the engine — its
+    /admin/* refreshes caches and closes positions) and :3306 (MySQL): nothing
+    else closes them. provision enables it with check=False because `ufw enable`
+    is chatty and re-running it is not an error, so until this assertion nothing
+    ever checked that it took — a box with ufw inactive looked identical to a
+    healthy one from every verify step.
+    """
+    rc, _, _ = sh(ssh, "ufw status 2>/dev/null | grep -q '^Status: active'", check=False)
+    if rc != 0:
+        raise RuntimeError(
+            "ufw is NOT active — :5010 (engine admin/health) and :3306 (MySQL) are open to "
+            "the internet, ufw alone closes them. On the box: `ufw --force enable`, then "
+            "`ufw status` must read `Status: active`."
+        )
+    log("  ufw: active (only OpenSSH + Nginx Full reach the box; 5010 and 3306 stay local)")
 
 
 def _write_cloudflare_realip(ssh) -> None:
@@ -735,10 +958,15 @@ def do_deploy_nginx(ssh) -> None:
 
     sh(ssh, "mkdir -p /etc/nginx/snippets /etc/nginx/conf.d")
     with _current(ssh).open_sftp() as sftp:
+        with sftp.open(NGINX_HEADERS_PATH, "w") as f:
+            f.write(NGINX_SECURITY_HEADERS)
         with sftp.open(NGINX_SNIPPET_PATH, "w") as f:
-            f.write(NGINX_APP_SNIPPET.replace("__ENGINE_WEBHOOK_LOCATIONS__", _engine_webhook_locations()))
+            f.write(NGINX_APP_SNIPPET
+                    .replace("__ENGINE_WEBHOOK_LOCATIONS__", _engine_webhook_locations())
+                    .replace("__HEADERS_PATH__", NGINX_HEADERS_PATH))
         with sftp.open("/etc/nginx/sites-available/sinegualerts", "w") as f:
             f.write(_nginx_vhost(tls))
+    log(f"  security headers: nosniff / DENY / referrer / permissions + {NGINX_CSP_HEADER}")
     sh(ssh, "rm -f /etc/nginx/sites-enabled/default && "
             "ln -sf /etc/nginx/sites-available/sinegualerts /etc/nginx/sites-enabled/sinegualerts")
     rc, out, err = sh(ssh, "nginx -t", check=False)
@@ -860,6 +1088,10 @@ def do_verify_tls(ssh) -> None:
     _, out, _ = sh(ssh, f"curl -s -o /dev/null -w '%{{http_code}}' https://{DOMAIN}/ || echo ERR",
                    check=False, timeout=90)
     log(f"  through Cloudflare https://{DOMAIN}/ -> {out.strip()}  (522 = edge cannot reach origin)")
+
+    # Every TLS check also proves the firewall is up: TLS says who can read the
+    # traffic, ufw says which ports exist at all, and only the second closes 5010.
+    _assert_ufw_active(ssh)
     log("")
 
 
@@ -875,14 +1107,27 @@ def do_provision_db(ssh) -> None:
             '  "prod": { ..., "db": { "database": "sinegu_crypto", "user": "sinegu", "password": "<pick-one>" } }'
         )
     log(f"=== PROVISION DB '{name}' user '{user}' ===")
+    _register_secret(pw)
+
+    # The password goes through a 0600 file, never `mysql -e "..."` — the same
+    # rule backup-db follows: `ps aux` is world-readable, and run() quotes the
+    # command in its error message. Escaped as a MySQL string literal.
+    def q(v: str) -> str:
+        return v.replace("\\", "\\\\").replace("'", "''")
+
     sql = (
-        f"CREATE DATABASE IF NOT EXISTS \\`{name}\\` "
-        f"CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; "
-        f"CREATE USER IF NOT EXISTS '{user}'@'localhost' IDENTIFIED BY '{pw}'; "
-        f"GRANT ALL PRIVILEGES ON \\`{name}\\`.* TO '{user}'@'localhost'; "
-        f"FLUSH PRIVILEGES;"
+        f"CREATE DATABASE IF NOT EXISTS `{name}` "
+        f"CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\n"
+        f"CREATE USER IF NOT EXISTS '{q(user)}'@'localhost' IDENTIFIED BY '{q(pw)}';\n"
+        f"GRANT ALL PRIVILEGES ON `{name}`.* TO '{q(user)}'@'localhost';\n"
+        f"FLUSH PRIVILEGES;\n"
     )
-    sh(ssh, f'mysql -e "{sql}"')
+    sql_file = "/root/.sinegu_provision.sql"
+    _write_remote_text(ssh, sql_file, sql, mode_if_new=0o600)
+    try:
+        sh(ssh, f"mysql < {sql_file}")
+    finally:
+        sh(ssh, f"rm -f {sql_file}", check=False)
     _, out, _ = sh(ssh, "mysql -e 'SHOW DATABASES;'", check=False)
     log("  databases: " + " ".join(out.split()))
     log("=== PROVISION DB DONE ===\n")
@@ -985,7 +1230,13 @@ def do_backup(ssh) -> str:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     dest = f"{REMOTE_BACKUPS}/{ts}"
     log(f"=== BACKUP -> {dest} ===")
-    sh(ssh, f"mkdir -p {dest}")
+    # Root-only, every time: engine.tar.gz carries engine/.env (every exchange
+    # secret and the engine's own) and api.env / engine.env sit beside it.
+    # provision used to chown the whole parent to www-data, which left a PHP
+    # bug one `tar xzf` away from the engine's keys — the hole B2 closes on the
+    # live tree would have stayed open here.
+    sh(ssh, f"mkdir -p {dest} && chown root:root {REMOTE_BACKUPS} {dest} && "
+            f"chmod 700 {REMOTE_BACKUPS} {dest}")
     for name, src in [("dashboard", REMOTE_DASH), ("api", REMOTE_API), ("engine", REMOTE_ENGINE)]:
         _, out, _ = sh(ssh, f"[ -d {src} ] && echo YES || echo NO", check=False)
         if out.strip() != "YES":
@@ -1031,6 +1282,8 @@ def _remote_env_db(ssh) -> dict:
         if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
             v = v[1:-1]
         out[k.strip()] = v
+        if _is_secret_key(k):
+            _register_secret(v)
     return out
 
 
@@ -1239,6 +1492,79 @@ def do_deploy_api(ssh):
     return ssh
 
 
+# --- the service account and the ownership it implies ---------------------------
+
+def _ensure_service_user(ssh) -> None:
+    """Create SERVICE_USER if it does not exist. Idempotent; safe from every command.
+
+    Until 2026-10-07 the engine and pixel-telegram had no User= and ran as root
+    out of trees _deploy_via_tgz had chown'ed to www-data — so any PHP bug could
+    edit the engine's code and read every exchange secret in its .env, and the
+    next restart would execute the edit as root. A system uid with no shell and
+    no password; --home-dir is the engine dir only so nothing goes looking for
+    a home to create (--no-create-home: the directory is the deploy's).
+    """
+    sh(ssh, f"id -u {SERVICE_USER} >/dev/null 2>&1 || "
+            f"useradd --system --home-dir {REMOTE_ENGINE} --no-create-home "
+            f"--shell /usr/sbin/nologin {SERVICE_USER}")
+
+
+def _secure_env_file(ssh, path: str) -> None:
+    """root:pixelalpha 640. The process reads it (python-dotenv loads it in-process
+    and systemd's EnvironmentFile= reads it as root), nobody else can, and the
+    deploy — root — still edits it. The old `chmod 600` under a www-data owner
+    meant the PHP user could read it and the service user could not."""
+    sh(ssh, f"[ -f {path} ] && chown root:{SERVICE_USER} {path} && chmod 640 {path} || true")
+
+
+def _lock_down_service_tree(ssh, root: str, writable: tuple[str, ...]) -> None:
+    """Ownership after an engine / pixel-telegram deploy.
+
+      code + .venv    root:root, read-only for everyone else — the process must
+                      not be able to rewrite what it runs, and neither may php-fpm
+      .env            root:pixelalpha 640 (_secure_env_file)
+      writable dirs   pixelalpha's, and ONLY those: the same tuple the unit lists
+                      as ReadWritePaths=, so the sandbox and the ownership agree
+
+    The chmod is not cosmetic: tar runs as root on the box and therefore keeps
+    the archive's modes, and the archive was packed on Windows, where os.stat
+    reports 0666 — without it every shipped .py lands world-WRITABLE. `X` keeps
+    the exec bit where one already exists (the venv's bin/ scripts) and sets it
+    on directories only. chmod -R skips symlinks, so .venv/bin/python's target
+    under /usr is untouched.
+    """
+    sh(ssh, f"chown -R root:root {root} && chmod -R u=rwX,go=rX {root}", timeout=600)
+    _secure_env_file(ssh, f"{root}/.env")
+    for d in writable:
+        sh(ssh, f"mkdir -p {d} && chown -R {SERVICE_USER}:{SERVICE_USER} {d} && "
+                f"chmod -R u=rwX,g=rX,o= {d}")
+    # The parent must not be the PHP user's either (provision used to chown it):
+    # owning /var/www/sinegualerts is the right to rename engine/ away and put
+    # another one in its place for systemd to start.
+    sh(ssh, f"chown root:root {REMOTE_PARENT} && chmod 755 {REMOTE_PARENT}", check=False)
+
+
+def _unit_hardening(writable: tuple[str, ...]) -> str:
+    """The [Service] lines shared by the engine unit and both telegram oneshots.
+
+    One template so the three cannot drift. ProtectSystem=strict mounts the whole
+    filesystem read-only for the process except what ReadWritePaths= names — and
+    that is exactly the tuple _lock_down_service_tree handed to pixelalpha, so
+    "where may it write" has one answer. No capabilities: the engine binds a
+    high port (5010), and the reporter only makes outbound calls and runs
+    `systemctl show`, which any user may do over D-Bus.
+    """
+    return (
+        f"User={SERVICE_USER}\n"
+        f"Group={SERVICE_USER}\n"
+        "NoNewPrivileges=true\n"
+        "ProtectSystem=strict\n"
+        "ProtectHome=true\n"
+        "PrivateTmp=true\n"
+        f"ReadWritePaths={' '.join(writable)}\n"
+    )
+
+
 ENGINE_SYSTEMD_UNIT = f"""[Unit]
 Description=Pixel Alpha BINANCE_ABCD trading engine (waitress :5010)
 After=network-online.target
@@ -1248,10 +1574,13 @@ Wants=network-online.target
 WorkingDirectory={REMOTE_ENGINE}
 EnvironmentFile=-{REMOTE_ENGINE}/.env
 Environment=PYTHONUNBUFFERED=1
+# The code tree is root-owned and read-only to the service, so CPython could
+# not write __pycache__ anyway; saying so stops it trying on every import.
+Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStart={REMOTE_ENGINE}/.venv/bin/python -m binance_abcd.main
 Restart=always
 RestartSec=5
-
+{_unit_hardening(ENGINE_WRITABLE_DIRS)}
 [Install]
 WantedBy=multi-user.target
 """
@@ -1271,8 +1600,9 @@ Wants=network-online.target
 Type=oneshot
 WorkingDirectory={REMOTE_TELEGRAM}
 Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStart={REMOTE_TELEGRAM}/.venv/bin/python -m pixel_telegram.main {mode}
-"""
+{_unit_hardening(TELEGRAM_WRITABLE_DIRS)}"""
 
 
 # Persistent=true so a 4-hour tick missed while the box was down fires on boot
@@ -1314,21 +1644,36 @@ MIRRORED_TELEGRAM_ENV_KEYS = (
 
 
 def _local_env_value(path: str, key: str) -> str:
+    """First `KEY=` line of a local .env, unquoted. A credential-shaped key's
+    value is registered for scrubbing the moment it is read."""
+    value = ""
     try:
         with open(path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line.startswith(f"{key}="):
-                    return line.split("=", 1)[1].strip().strip('"').strip("'")
+                    value = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
     except OSError:
         pass
-    return ""
+    if _is_secret_key(key):
+        _register_secret(value)
+    return value
 
 
 def _remote_env_value(ssh, path: str, key: str) -> str:
-    _, out, _ = sh(ssh, f"grep -E '^{key}=' {path} 2>/dev/null | tail -1", check=False)
-    line = out.strip()
-    return line.split("=", 1)[1].strip().strip('"').strip("'") if "=" in line else ""
+    """Last `KEY=` line of a server .env, unquoted (the `grep | tail -1` this
+    replaced took the last one too). Read over SFTP, so the value never passes
+    through a shell and never appears in a run() error message; a missing file
+    reads as "" exactly as the failed grep did."""
+    value = ""
+    for line in (_read_remote_text(ssh, path) or "").splitlines():
+        line = line.strip()
+        if line.startswith(f"{key}="):
+            value = line.split("=", 1)[1].strip().strip('"').strip("'")
+    if _is_secret_key(key):
+        _register_secret(value)
+    return value
 
 
 # Engine .env keys whose value is the SAME everywhere and is therefore copied
@@ -1368,6 +1713,12 @@ MIRRORED_ENGINE_ENV_KEYS = (
 # copying them from a dev machine would break prod:
 #   BINANCE_ABCD_ENGINE_API_BASE   local points at WAMP, prod at nginx :80
 #   BINANCE_ABCD_ENGINE_SECRET     must match prod api/.env, not the dev one
+#   BINANCE_ABCD_ADMIN_SECRET      same: the engine's /admin/* credential, paired
+#                                  with ENGINE_ADMIN_SECRET in prod api/.env by
+#                                  _ensure_engine_secrets — a dev value here would
+#                                  lock the prod API out of its own engine
+#   BINANCE_ABCD_BIND_HOST         where waitress listens; 127.0.0.1 by default
+#                                  and a property of the box's network layout
 #   BINANCE_ABCD_FLASK_PORT / _RUN_POLLERS / _SYNC_POSITION_MODE_ON_STARTUP
 #   BINANCE_ABCD_EXCHANGES         which venues prod TRADES. Turning MEXC on for
 #                                  real customers is a decision someone makes on
@@ -1381,13 +1732,12 @@ MIRRORED_ENGINE_ENV_KEYS = (
 def _sync_mirrored_engine_env(ssh) -> None:
     """Copy MIRRORED_ENGINE_ENV_KEYS from local trading-flask/.env into prod.
 
-    Upsert per key (delete the line, append the new one) rather than sed
-    substitution: a bot token is arbitrary text and would otherwise have to be
-    escaped against the delimiter. Only key NAMES are ever logged — a deploy
+    Upsert per key over SFTP (_upsert_env_line) rather than sed substitution: a
+    bot token is arbitrary text and would otherwise have to be escaped against
+    the delimiter — and, since 2026-10-07, so that the value never sits on a
+    command line for `ps` to read. Only key NAMES are ever logged — a deploy
     transcript must not become a place secrets are written down.
     """
-    import shlex
-
     local_env = os.path.join(LOCAL_ENGINE, ".env")
     changed, missing = [], []
 
@@ -1398,9 +1748,7 @@ def _sync_mirrored_engine_env(ssh) -> None:
             continue
         if _remote_env_value(ssh, f"{REMOTE_ENGINE}/.env", key) == value:
             continue
-        line = shlex.quote(f"{key}={value}")
-        sh(ssh, f"sed -i '/^{key}=/d' {REMOTE_ENGINE}/.env && "
-                f"printf '%s\\n' {line} >> {REMOTE_ENGINE}/.env")
+        _upsert_env_line(ssh, f"{REMOTE_ENGINE}/.env", key, value)
         changed.append(key)
 
     if changed:
@@ -1519,24 +1867,54 @@ PROD_PAYMENT_ENV = {
 }
 
 
-def _upsert_remote_env(ssh, path: str, key: str, value: str) -> None:
-    """Replace (or append) one KEY=value line, passing the value as one shell word.
+def _upsert_env_line(ssh, path: str, key: str, value: str) -> None:
+    """Set KEY=value in a server .env: SFTP read -> edit in memory -> SFTP write.
 
-    Delete-then-append rather than `sed s|old|new|`: a Coinsbuy webhook secret is
-    base64 and contains '/' and '=', which collides with any sed delimiter.
+    The value never touches a command line. `ps` on the box is world-readable,
+    and run() quotes the failed command in its error — so the old
+    `printf '%s\\n' KEY=value >>` and `sed -i 's|^KEY=.*|KEY=value|'` forms put
+    every webhook token and engine secret in both places. (The value is also
+    registered for scrubbing here, so a secret that arrives by any other route
+    — a freshly minted one — is masked from the transcript too.)
+
+    In place when the key exists (the comment beside it survives; a later
+    duplicate is dropped, where `grep | tail -1` used to let the last one win),
+    appended when it does not. Every other line is kept byte for byte, a
+    missing trailing newline is tolerated, the mode is preserved, and the file
+    is created 0600 when absent — the caller sets the final owner/mode.
+    Quoting for dotenv is the CALLER's job (see _upsert_remote_env): the API's
+    parser and python-dotenv do not agree on it.
+    """
+    if _is_secret_key(key):
+        _register_secret(value)
+    raw = _read_remote_text(ssh, path) or ""
+    new_line = f"{key}={value}"
+    out, done = [], False
+    for line in raw.splitlines():
+        if line.startswith(f"{key}="):
+            if not done:
+                out.append(new_line)
+                done = True
+            continue
+        out.append(line)
+    if not done:
+        out.append(new_line)
+    _write_remote_text(ssh, path, "\n".join(out) + "\n", mode_if_new=0o600)
+
+
+def _upsert_remote_env(ssh, path: str, key: str, value: str) -> None:
+    """Replace (or append) one KEY=value line in api/.env, quoted for Laravel's dotenv.
 
     The readers strip the value's quotes, so they are put back here whenever
     dotenv needs them: `MAIL_FROM_NAME=Pixel Alpha` unquoted makes Laravel
     reject the WHOLE file ("unexpected whitespace"), and on 2026-09-28 that took
-    the API down between config:clear and config:cache.
+    the API down between config:clear and config:cache. A Coinsbuy webhook
+    secret is base64 with '/' and '=' in it, which is one more reason the write
+    is an SFTP edit (_upsert_env_line) and not a sed substitution.
     """
-    import re
-    import shlex
-
     if re.search(r'[\s#"\'\\]', value):
         value = '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
-    line = shlex.quote(f"{key}={value}")
-    sh(ssh, f"sed -i '/^{key}=/d' {path} && printf '%s\\n' {line} >> {path}")
+    _upsert_env_line(ssh, path, key, value)
 
 
 def _sync_payment_env(ssh) -> None:
@@ -1582,10 +1960,14 @@ def _ensure_engine_secrets(ssh) -> None:
 
     The webhook secret is copied from the LOCAL trading-flask/.env so URLs the
     user already pasted into TradingView keep working. The engine<->API secret
-    prefers whatever prod api/.env already has, else generates a fresh one.
-    Existing server files are edited line-wise, never rewritten.
+    prefers whatever prod api/.env already has, else generates a fresh one —
+    and the engine's ADMIN secret is minted the same way (below). Existing
+    server files are edited line-wise over SFTP, never rewritten, and no value
+    ever rides a command line.
     """
     import secrets as pysecrets
+
+    _ensure_service_user(ssh)
 
     webhook_secret = _local_env_value(os.path.join(LOCAL_ENGINE, ".env"), "BINANCE_ABCD_WEBHOOK_SECRET")
     if not webhook_secret:
@@ -1594,21 +1976,35 @@ def _ensure_engine_secrets(ssh) -> None:
     api_secret = _remote_env_value(ssh, f"{REMOTE_API}/.env", "ENGINE_SECRET")
     engine_env_secret = _remote_env_value(ssh, f"{REMOTE_ENGINE}/.env", "BINANCE_ABCD_ENGINE_SECRET")
     engine_secret = api_secret or engine_env_secret or pysecrets.token_urlsafe(32)
+    _register_secret(engine_secret)
+
+    # The engine's /admin/* (cache refresh, forced balance/position reads,
+    # close-positions) used to be gated on the TradingView WEBHOOK secret — one
+    # credential for two audiences, so a leaked alert token could also close
+    # every customer's positions. It is now its own secret: the engine reads
+    # BINANCE_ABCD_ADMIN_SECRET, the API sends ENGINE_ADMIN_SECRET, and BOTH
+    # fall back to the webhook secret while unset — which is why minting one
+    # here is safe whichever side's code lands first. Same precedence as the
+    # engine secret: prod api/.env, else engine/.env, else fresh.
+    api_admin = _remote_env_value(ssh, f"{REMOTE_API}/.env", "ENGINE_ADMIN_SECRET")
+    engine_admin = _remote_env_value(ssh, f"{REMOTE_ENGINE}/.env", "BINANCE_ABCD_ADMIN_SECRET")
+    admin_secret = api_admin or engine_admin or pysecrets.token_urlsafe(32)
+    _register_secret(admin_secret)
 
     if not api_secret:
-        log("  api/.env: appending ENGINE_SECRET ...")
-        sh(ssh, f"printf '\\nENGINE_SECRET={engine_secret}\\n' >> {REMOTE_API}/.env", timeout=120)
+        log("  api/.env: setting ENGINE_SECRET ...")
+        _upsert_env_line(ssh, f"{REMOTE_API}/.env", "ENGINE_SECRET", engine_secret)
+    if not api_admin:
+        log("  api/.env: setting ENGINE_ADMIN_SECRET ...")
+        _upsert_env_line(ssh, f"{REMOTE_API}/.env", "ENGINE_ADMIN_SECRET", admin_secret)
 
     # The API also needs the engine's WEBHOOK secret: the manual-trade console
-    # signs proxied webhooks with it, and the admin cache flush uses it as
-    # X-Admin-Secret to refresh the engine's account/asset caches.
+    # signs proxied webhooks with it (and, until ENGINE_ADMIN_SECRET is read on
+    # both sides, the cache flush still falls back to it as X-Admin-Secret).
     api_hook = _remote_env_value(ssh, f"{REMOTE_API}/.env", "BINANCE_ENGINE_WEBHOOK_SECRET")
     if api_hook != webhook_secret:
         log("  api/.env: syncing BINANCE_ENGINE_WEBHOOK_SECRET with the engine ...")
-        sh(ssh, f"grep -q '^BINANCE_ENGINE_WEBHOOK_SECRET=' {REMOTE_API}/.env && "
-                f"sed -i 's|^BINANCE_ENGINE_WEBHOOK_SECRET=.*|BINANCE_ENGINE_WEBHOOK_SECRET={webhook_secret}|' "
-                f"{REMOTE_API}/.env || "
-                f"printf 'BINANCE_ENGINE_WEBHOOK_SECRET={webhook_secret}\\n' >> {REMOTE_API}/.env")
+        _upsert_env_line(ssh, f"{REMOTE_API}/.env", "BINANCE_ENGINE_WEBHOOK_SECRET", webhook_secret)
 
     log("  api/.env: config:cache ...")
     sh(ssh, f"cd {REMOTE_API} && php artisan config:cache && "
@@ -1622,25 +2018,29 @@ def _ensure_engine_secrets(ssh) -> None:
             "# Generated by deploy-engine; lives only on the server, never overwritten by deploys.\n"
             f"BINANCE_ABCD_WEBHOOK_SECRET={webhook_secret}\n"
             f"BINANCE_ABCD_ENGINE_SECRET={engine_secret}\n"
+            f"BINANCE_ABCD_ADMIN_SECRET={admin_secret}\n"
             "BINANCE_ABCD_ENGINE_API_BASE=http://127.0.0.1/api\n"
             "BINANCE_ABCD_FLASK_PORT=5010\n"
             "BINANCE_ABCD_RUN_POLLERS=true\n"
             "BINANCE_ABCD_SYNC_POSITION_MODE_ON_STARTUP=false\n"
         )
-        with _current(ssh).open_sftp() as sftp:
-            with sftp.open(f"{REMOTE_ENGINE}/.env", "w") as f:
-                f.write(env_body)
-        sh(ssh, f"chmod 600 {REMOTE_ENGINE}/.env", check=False)
-    elif engine_env_secret != engine_secret:
-        log("  engine/.env: aligning BINANCE_ABCD_ENGINE_SECRET with api/.env ...")
-        sh(ssh, f"grep -q '^BINANCE_ABCD_ENGINE_SECRET=' {REMOTE_ENGINE}/.env && "
-                f"sed -i 's|^BINANCE_ABCD_ENGINE_SECRET=.*|BINANCE_ABCD_ENGINE_SECRET={engine_secret}|' "
-                f"{REMOTE_ENGINE}/.env || "
-                f"printf 'BINANCE_ABCD_ENGINE_SECRET={engine_secret}\\n' >> {REMOTE_ENGINE}/.env")
+        _write_remote_text(ssh, f"{REMOTE_ENGINE}/.env", env_body, mode_if_new=0o600)
+    else:
+        if engine_env_secret != engine_secret:
+            log("  engine/.env: aligning BINANCE_ABCD_ENGINE_SECRET with api/.env ...")
+            _upsert_env_line(ssh, f"{REMOTE_ENGINE}/.env", "BINANCE_ABCD_ENGINE_SECRET", engine_secret)
+        if engine_admin != admin_secret:
+            log("  engine/.env: aligning BINANCE_ABCD_ADMIN_SECRET with api/.env ...")
+            _upsert_env_line(ssh, f"{REMOTE_ENGINE}/.env", "BINANCE_ABCD_ADMIN_SECRET", admin_secret)
 
     # Runs whether the file was just created or already existed: the point is
     # that prod ends up carrying the local values for these keys, every time.
     _sync_mirrored_engine_env(ssh)
+
+    # root:pixelalpha 640 — whichever path above touched the file. Done here and
+    # not only in the deploy so that `sync-engine-env` alone also leaves the
+    # file readable by the service user and by nobody else.
+    _secure_env_file(ssh, f"{REMOTE_ENGINE}/.env")
 
 
 def do_deploy_engine(ssh):
@@ -1656,10 +2056,13 @@ def do_deploy_engine(ssh):
         sys.exit("[abort] engine tests FAILED — not deploying:\n  " + "\n  ".join(tail))
     log("  tests green: " + (r.stdout.strip().splitlines()[-1] if r.stdout.strip() else "ok"))
 
-    log(f"=== DEPLOY engine -> {REMOTE_ENGINE} (.env/.venv preserved) ===")
+    log(f"=== DEPLOY engine -> {REMOTE_ENGINE} (.env/.venv/out preserved) ===")
+    _ensure_service_user(ssh)
+    # owner=None: the tree is NOT handed to www-data — _lock_down_service_tree
+    # below makes it root's, read-only, with out/ the service user's.
     ssh = _deploy_via_tgz(
         ssh, LOCAL_ENGINE, REMOTE_ENGINE, mode="engine", name="sinegu_engine.tar.gz",
-        rsync_extra=[".env", ".venv", "out"],
+        rsync_extra=[".env", ".venv", "out"], owner=None,
     )
 
     log("  python venv + deps ...")
@@ -1672,7 +2075,12 @@ def do_deploy_engine(ssh):
 
     _ensure_engine_secrets(ssh)
 
-    log("  systemd unit + nginx route ...")
+    # After pip (the venv is part of the read-only tree) and after the .env is
+    # in place: code + .venv root:root, .env root:pixelalpha 640, out/ pixelalpha.
+    log(f"  ownership: tree root-owned read-only, out/ -> {SERVICE_USER} ...")
+    _lock_down_service_tree(ssh, REMOTE_ENGINE, ENGINE_WRITABLE_DIRS)
+
+    log(f"  systemd unit (User={SERVICE_USER}, ProtectSystem=strict) + nginx route ...")
     with _current(ssh).open_sftp() as sftp:
         with sftp.open(f"/etc/systemd/system/{ENGINE_SERVICE}.service", "w") as f:
             f.write(ENGINE_SYSTEMD_UNIT)
@@ -1696,31 +2104,38 @@ def do_deploy_engine(ssh):
 def _sync_telegram_env(ssh) -> None:
     """Copy MIRRORED_TELEGRAM_ENV_KEYS from local pixel-telegram/.env into prod.
 
-    Same upsert-per-key shape as _sync_mirrored_engine_env, and the same rule:
+    Same upsert-per-key shape as _sync_mirrored_engine_env, and the same rules:
     only key NAMES are logged, never values — a deploy transcript must not
-    become a place the bot token is written down.
+    become a place the bot token is written down — and the value is written
+    over SFTP, never put on a command line.
     """
-    import shlex
-
     local_env = os.path.join(LOCAL_TELEGRAM, ".env")
     if not os.path.isfile(local_env):
         log(f"  ! {local_env} not found — create it from .env.example "
             f"(the group will stay silent until PIXEL_TG_CHAT_ID is set)")
         return
 
-    sh(ssh, f"touch {REMOTE_TELEGRAM}/.env")
+    _ensure_service_user(ssh)
+    remote_env = f"{REMOTE_TELEGRAM}/.env"
+    # Create-if-missing goes through the SFTP writer (0600) rather than `touch`,
+    # which inherited root's umask and left the bot token world-readable (644).
+    if _read_remote_text(ssh, remote_env) is None:
+        _write_remote_text(ssh, remote_env, "", mode_if_new=0o600)
     changed, missing = [], []
     for key in MIRRORED_TELEGRAM_ENV_KEYS:
         value = _local_env_value(local_env, key)
         if not value:
             missing.append(key)
             continue
-        if _remote_env_value(ssh, f"{REMOTE_TELEGRAM}/.env", key) == value:
+        if _remote_env_value(ssh, remote_env, key) == value:
             continue
-        line = shlex.quote(f"{key}={value}")
-        sh(ssh, f"sed -i '/^{key}=/d' {REMOTE_TELEGRAM}/.env && "
-                f"printf '%s\\n' {line} >> {REMOTE_TELEGRAM}/.env")
+        _upsert_env_line(ssh, remote_env, key, value)
         changed.append(key)
+    # root:pixelalpha 640 — the oneshots run as the service user and load the
+    # file in-process (python-dotenv), so it must be group-readable to them and
+    # to nobody else. Here as well as in the deploy, so sync-telegram-env alone
+    # leaves it right.
+    _secure_env_file(ssh, remote_env)
 
     if changed:
         log("  telegram/.env: mirrored from local -> " + ", ".join(changed))
@@ -1747,9 +2162,12 @@ def do_deploy_telegram(ssh):
     log("  tests green: " + (r.stdout.strip().splitlines()[-1] if r.stdout.strip() else "ok"))
 
     log(f"=== DEPLOY pixel-telegram -> {REMOTE_TELEGRAM} (.env/.venv/state preserved) ===")
+    _ensure_service_user(ssh)
+    # owner=None: same rule as the engine — root-owned read-only tree, state/
+    # the service user's (_lock_down_service_tree below), never www-data's.
     ssh = _deploy_via_tgz(
         ssh, LOCAL_TELEGRAM, REMOTE_TELEGRAM, mode="telegram", name="pixel_telegram.tar.gz",
-        rsync_extra=[".env", ".venv", "state"],
+        rsync_extra=[".env", ".venv", "state"], owner=None,
     )
 
     log("  python venv + deps ...")
@@ -1759,6 +2177,11 @@ def do_deploy_telegram(ssh):
     sh(ssh, f"mkdir -p {REMOTE_TELEGRAM}/state", check=False)
 
     _sync_telegram_env(ssh)
+
+    # Before the units are (re)installed and the seeding run below fires as
+    # pixelalpha: that run writes state/, which must already be its own.
+    log(f"  ownership: tree root-owned read-only, state/ -> {SERVICE_USER} ...")
+    _lock_down_service_tree(ssh, REMOTE_TELEGRAM, TELEGRAM_WRITABLE_DIRS)
 
     # The php-fpm unit carries the PHP version in its name, so report what is
     # actually installed rather than letting a stale default watch a unit that
@@ -1843,9 +2266,12 @@ def do_verify_engine(ssh) -> None:
         log(f"    {path} -> {code} {'OK (secret gate)' if code == '403' else '<-- expected 403'}")
 
     log("  engine -> Laravel auth (accounts endpoint with engine secret) ...")
+    # The header is fed to curl from a process substitution (`-H @/dev/fd/N`),
+    # not as an argument: `-H "X-Engine-Secret: $S"` put the engine secret in
+    # curl's argv, where `ps` on the box could read it for the call's duration.
     _, out, _ = sh(ssh, f"S=$(grep -E '^BINANCE_ABCD_ENGINE_SECRET=' {REMOTE_ENGINE}/.env | cut -d= -f2-); "
                         f"curl -s -m 8 -o /dev/null -w '%{{http_code}}' "
-                        f"-H \"X-Engine-Secret: $S\" -H 'Accept: application/json' "
+                        f"-H @<(printf 'X-Engine-Secret: %s\\n' \"$S\") -H 'Accept: application/json' "
                         f"http://127.0.0.1/api/engine/binance/accounts", check=False)
     code = out.strip()
     log(f"    -> {code} {'OK' if code == '200' else '<-- expected 200'}")

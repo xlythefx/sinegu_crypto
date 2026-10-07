@@ -59,21 +59,45 @@ key auth is set up (recommended — then disable password auth in sshd).
 ## Remote layout
 
 ```
-/var/www/sinegualerts/
-├── dashboard/            React dist — nginx root, SPA fallback
-├── api/                  Laravel sinegutrade-api — nginx /api -> api/public via php8.3-fpm
+/var/www/sinegualerts/          root:root — the PHP user owns only its two trees
+├── dashboard/            React dist — nginx root, SPA fallback            (www-data)
+├── api/                  Laravel sinegutrade-api — nginx /api -> api/public via php8.3-fpm (www-data)
 ├── engine/               trading-flask binance_abcd — systemd `sinegualerts-engine`,
-│                         waitress on 127.0.0.1:5010; nginx proxies ONLY
-│                         /binance_abcd_webhook + /mexc_abcd_webhook — one path per
-│                         venue (health/admin stay local-only)
-└── _backups/<ts>/        dashboard/api/engine tar.gz + api.env + engine.env (newest 10 kept)
+│                         runs as `pixelalpha`; code + .venv root-owned read-only,
+│                         .env root:pixelalpha 640, out/ the one writable dir.
+│                         waitress binds 127.0.0.1:5010 (`BINANCE_ABCD_BIND_HOST`,
+│                         default 127.0.0.1 — the design: nginx is the only public
+│                         face, ufw the second fence); nginx proxies ONLY
+│                         /binance_abcd_webhook + /mexc_abcd_webhook +
+│                         /bybit_abcd_webhook — one path per venue (health/admin
+│                         stay local-only)
+├── telegram/             pixel-telegram ops reporter — same ownership rule as engine/,
+│                         state/ its one writable dir; two oneshot timers as `pixelalpha`
+└── _backups/<ts>/        dashboard/api/engine tar.gz + api.env + engine.env (newest 10 kept;
+                          root-only 700 — the engine tarball carries engine/.env)
 ```
+
+**Who runs what.** PHP (`php-fpm`) runs as `www-data` and owns `dashboard/` and
+`api/` only. The engine and pixel-telegram run as the system account
+**`pixelalpha`** (`useradd --system`, nologin — created idempotently by
+`provision`, `deploy-engine`, `deploy-telegram` and the env syncs): their trees
+are `root:root` and read-only to everyone, their `.env` is `root:pixelalpha 640`
+(python-dotenv reads it in-process), and exactly the directories they write
+(`engine/out`, `telegram/state`) are theirs — the same list the units carry as
+`ReadWritePaths=` under `ProtectSystem=strict` / `ProtectHome` / `PrivateTmp` /
+`NoNewPrivileges`. The point: a PHP bug can no longer rewrite the engine's code
+or read its exchange secrets, and the engine itself cannot modify what it runs.
+`www-data` keeps exactly two rights over the engine — `sudo systemctl restart
+sinegualerts-engine` and reading its journal — which is all the admin "Bot
+Engine" page uses. The engine binds a high port (5010), so the unit needs no
+capabilities.
 
 nginx vhost: `/etc/nginx/sites-available/sinegualerts` (written by `deploy-nginx`,
 `default` removed). Serves the SPA at `/`, Laravel at `/api`, immutable caching on
-`/assets/`, gzip on. Two generated files back it:
+`/assets/`, gzip on. Three generated files back it:
 `/etc/nginx/snippets/sinegualerts-app.conf` (the app's locations, included by every
-server block that serves it) and `/etc/nginx/conf.d/cloudflare-realip.conf`
+server block that serves it), `/etc/nginx/snippets/sinegualerts-headers.conf` (the
+security headers — see below) and `/etc/nginx/conf.d/cloudflare-realip.conf`
 (refreshed from Cloudflare's published ranges on every `deploy-nginx`).
 
 ## Domain & TLS — pixel-alpha.com (live 2026-08-11)
@@ -111,22 +135,50 @@ edge — turn it off, re-run `setup-tls`, turn it back on.
 undo), and restricting ufw 80/443 to Cloudflare ranges — the origin IP still serves
 the app directly.
 
+**Security headers (2026-10-07, `/etc/nginx/snippets/sinegualerts-headers.conf`).**
+Every app response carries `X-Content-Type-Options: nosniff`, `X-Frame-Options:
+DENY`, `Referrer-Policy: strict-origin-when-cross-origin` and `Permissions-Policy:
+camera=(), microphone=(), geolocation=()` (all `always`, so error pages too). The
+snippet is included at server level AND again inside `/`, `/index.html` and
+`/assets/` — nginx's `add_header` is not additive, so a location that sets its own
+`Cache-Control` would otherwise drop the whole inherited set. Still no HSTS, by the
+decision above.
+The **Content-Security-Policy is REPORT-ONLY** (`NGINX_CSP_HEADER` in the deploy
+script) until a browser pass confirms it: an enforcing CSP that is wrong by one
+source blanks the app for every visitor, and this one has not been measured
+against the built bundle yet. To flip it: open prod in a browser with the devtools
+console open, walk the app (sign in, dashboard, analytics capture — html-to-image's
+Google Fonts embed is the likeliest `connect-src` report — an invoice page, the
+Stripe button); if no `[Report Only]` CSP violations appear, change
+`NGINX_CSP_HEADER` to `Content-Security-Policy` and run `deploy-nginx`. If any
+appear, widen the source in `NGINX_CSP_POLICY` first and redeploy still
+report-only.
+
+**`verify-tls` and `provision` now assert `ufw` is active** and fail loudly if
+not — ufw is the only thing closing :5010 (engine admin/health) and :3306 to the
+internet, and until this nothing ever checked that `ufw enable` took.
+
 ## Commands
 
 ```bash
 python .claude/deploy_sinegualcrypto.py inspect          # read-only: stack + layout + .env
-python .claude/deploy_sinegualcrypto.py provision        # ONE-TIME server setup (changes the box)
+python .claude/deploy_sinegualcrypto.py provision        # ONE-TIME server setup (changes the box;
+                                                         #   creates the `pixelalpha` service user,
+                                                         #   asserts ufw came up)
 python .claude/deploy_sinegualcrypto.py provision-db     # create MySQL db + user from creds
 python .claude/deploy_sinegualcrypto.py setup-env        # write api/.env + php artisan key:generate
 python .claude/deploy_sinegualcrypto.py deploy-nginx     # rewrite + test + reload the vhost
+                                                         #   (+ the security-headers snippet)
 python .claude/deploy_sinegualcrypto.py setup-tls        # issue/renew the LE cert, enable :443
 python .claude/deploy_sinegualcrypto.py verify-tls        # listeners, origin probes, www 301,
-                                                         #   engine loop, real-IP spoof check
+                                                         #   engine loop, real-IP spoof check,
+                                                         #   ufw active
 npm run build                                            # ALWAYS before deploying frontend
 python .claude/deploy_sinegualcrypto.py deploy-dash      # frontend only
 python .claude/deploy_sinegualcrypto.py deploy-api       # backend only
 python .claude/deploy_sinegualcrypto.py deploy-engine    # bot engine (tests-gated; venv +
-                                                         #   .env + systemd + nginx route)
+                                                         #   .env + systemd + nginx route;
+                                                         #   service user + root-owned tree)
 python .claude/deploy_sinegualcrypto.py sync-engine-env  # config only: re-mirror engine/.env
                                                          #   from local + restart (no code)
 python .claude/deploy_sinegualcrypto.py sync-api-env     # config only: Coinsbuy / TRON / Discord
@@ -165,15 +217,44 @@ local `trading-flask/.env` on every engine deploy** — the webhook secret (so T
 URLs keep working) and the whole `BINANCE_ABCD_TELEGRAM_*` block. Those keys describe the
 product, so prod drifting from local is always a bug: prod posted nothing to Telegram
 until 2026-08-10 purely because the generated file had no token or chat id.
-Host-specific keys (`ENGINE_API_BASE`, `ENGINE_SECRET`, `FLASK_PORT`, `RUN_POLLERS`,
-`SYNC_POSITION_MODE_ON_STARTUP`) are never mirrored — a dev value there breaks prod.
-Only key NAMES are logged, never values. `ENGINE_SECRET` is shared with `api/.env`
-(appended + `config:cache` if missing). First-boot defaults: `RUN_POLLERS=true`,
+Host-specific keys (`ENGINE_API_BASE`, `ENGINE_SECRET`, `ADMIN_SECRET`, `FLASK_PORT`,
+`RUN_POLLERS`, `SYNC_POSITION_MODE_ON_STARTUP`) are never mirrored — a dev value there
+breaks prod. Only key NAMES are logged, never values. `ENGINE_SECRET` is shared with
+`api/.env` (appended + `config:cache` if missing). **So is the engine's admin secret
+(2026-10-07):** the engine's `/admin/*` (cache refresh, forced balance/position
+reads, close-positions) is gated on `BINANCE_ABCD_ADMIN_SECRET` in `engine/.env`,
+which the API sends as `ENGINE_ADMIN_SECRET` — its own credential, no longer the
+TradingView webhook token, so a leaked alert secret cannot also close positions.
+`deploy-engine` / `sync-engine-env` mint it once (prod api/.env value, else
+engine/.env, else a fresh `token_urlsafe(32)`) and write both sides; both sides
+fall back to the webhook secret while the key is unset, so the rollout order does
+not matter.
+**Secrets never touch a command line or the transcript.** Every `KEY=value`
+write into a server `.env` is an SFTP read-modify-write (`_upsert_env_line` —
+mode and the other lines preserved, in place when the key exists), never a
+`printf >>` / `sed -i` that would show the value in `ps` on the box; the
+`provision-db` SQL and the `backup-db` password go through 0600 files the same
+way. Every secret the script reads or mints is registered with `_register_secret`
+and `_scrub()` masks it as `***` in everything `log()` prints and in the error
+`run()` raises — so a failed command's quoted stdout cannot leak an `.env` line.
+First-boot defaults: `RUN_POLLERS=true`,
 `SYNC_POSITION_MODE_ON_STARTUP=false` — flip the latter on the server when you want
 per-account position-mode sync at startup. Prod TradingView webhook URL:
 `https://pixel-alpha.com/binance_abcd_webhook` (secret in JSON body or `?secret=`).
 The old `http://2.24.139.176/binance_abcd_webhook` still works — the bare IP is not
 redirected, and the domain's :80 block exempts this path rather than 301-ing a POST.
+
+**Apply once on the live box (hardening of 2026-10-07 — not yet run on prod):**
+the service user, the root-owned trees, the hardened units, the admin secret
+and the security headers all land through the ordinary commands, nothing by
+hand: `deploy-engine` (creates `pixelalpha`, locks down `engine/`, writes the
+new unit, mints `ENGINE_ADMIN_SECRET` / `BINANCE_ABCD_ADMIN_SECRET`, rewrites
+the vhost with the headers snippet, restarts) → `deploy-telegram` (same for
+`telegram/` and its two oneshots) → `verify-tls` (now also asserts ufw). Expect
+the first `deploy-engine` to spend a little longer on the `chmod -R` of the
+venv. If the engine fails to start afterwards, `journalctl -u
+sinegualerts-engine` will name a path it could not write — that path belongs
+in `ENGINE_WRITABLE_DIRS`, not in a wider `ProtectSystem=`.
 
 **First-deploy order** (already done once — needed again only on a rebuilt box):
 `provision` → `provision-db` → `deploy-api` (stops, no .env) → `setup-env` → `deploy-api`.
@@ -204,8 +285,19 @@ Default is `prod` — there is only one target today.
 
 - **`provision`** (one-time) — apt install nginx, php8.3-fpm + Laravel extensions
   (mysql, mbstring, xml, curl, zip, bcmath, gd, intl), mysql-server, composer, node 22,
-  rsync/git/unzip/ufw. Creates the layout, writes + tests the nginx vhost, enables
-  nginx/php-fpm/mysql, opens ufw for OpenSSH + Nginx Full, drops a placeholder index.
+  rsync/git/unzip/ufw. Creates the layout (parent `root:root`, only `dashboard/` and
+  `api/` to `www-data`, `_backups/` root-only), creates the `pixelalpha` service
+  account, writes + tests the nginx vhost, enables nginx/php-fpm/mysql, opens ufw for
+  OpenSSH + Nginx Full **and asserts it reports `Status: active`**, drops a
+  placeholder index.
+- **`deploy-engine` / `deploy-telegram`** — tests-gated pack → upload → staging →
+  rsync (`.env`/`.venv`/`out` or `state` excluded), venv + pip as root, env sync
+  (engine: `ENGINE_SECRET` + `ENGINE_ADMIN_SECRET` paired with the API, mirrored
+  product keys), then the ownership lock-down (`_lock_down_service_tree`: tree
+  `root:root` + `chmod u=rwX,go=rX` — needed because tar as root keeps the
+  Windows-side 0666 modes — `.env` `root:pixelalpha 640`, writable dirs to
+  `pixelalpha`), then the hardened units (`User=pixelalpha`, `ProtectSystem=strict`,
+  `ReadWritePaths=` the same dirs) → `daemon-reload` → restart/enable → verify.
 - **`backup`** — tars live `dashboard/` and `api/` into `_backups/<timestamp>/`
   (excluding `vendor`, `node_modules`, `storage/logs`), copies `api/.env` alongside as
   `api.env`, prunes to the newest 10.
@@ -229,6 +321,18 @@ Default is `prod` — there is only one target today.
 - Always `npm run build` locally before `deploy-dash`; abort if the build fails.
 - Verify after deploying — never report success without the verify step passing.
 - **Never overwrite** the server's `.env`, `storage/`, `vendor/`, or `bootstrap/cache`.
+- **Never chown `engine/` or `telegram/` (or their `.env`) to `www-data`**, and never
+  add a `User=root`/no-`User=` unit for them. `_deploy_via_tgz(owner=None)` +
+  `_lock_down_service_tree` are the only ownership path for those trees; a new
+  directory the engine must write goes into `ENGINE_WRITABLE_DIRS` (which is also
+  the unit's `ReadWritePaths=`) — anywhere else is read-only under
+  `ProtectSystem=strict` and the write fails.
+- **A secret never goes on a command line or into the transcript.** Write it with
+  `_upsert_env_line` / `_write_remote_text` (SFTP) and register it with
+  `_register_secret`; log key NAMES only. `ps` on the box is world-readable and
+  `run()` quotes the failed command.
+- `verify-tls` fails if ufw is not active — that is a real finding, not noise:
+  fix the firewall before anything else.
 - Gentle SSH: 3 connect attempts with 60s waits (hammering trips fail2ban). Every remote
   command reconnects and retries up to 3× on transport errors.
 - If a deploy goes bad, restore from the newest `_backups/<timestamp>/`.
