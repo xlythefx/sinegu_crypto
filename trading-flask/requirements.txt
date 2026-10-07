@@ -1,11 +1,19 @@
-flask>=2.0
-requests>=2.28
-certifi>=2023
-python-dotenv>=1.0
-waitress>=3.0
+# Pinned (2026-10-07) to what the suite was last run against — Python 3.10
+# locally, 3.12 on the box; every pin has wheels for both. The ranges this
+# replaces meant prod installed whatever was newest at deploy time, so two
+# deploys a week apart could run different code and a build could not be
+# reproduced. Bump on purpose: change the pin, `python -m pytest tests/ -q`,
+# then deploy.
+flask==3.0.3
+werkzeug==3.1.3
+requests==2.32.4
+urllib3==2.5.0
+certifi==2026.1.4
+python-dotenv==1.1.1
+waitress==3.0.2
 # Draws the daily win card for the Discord wins channel (win_card.py). Optional
 # at runtime — without it the win is posted as a plain embed.
-Pillow>=10.0
+pillow==11.2.1
 # zoneinfo has no tz database to read on Windows, so ZoneInfo("Asia/Manila")
 # raises there without this. The scheduled reports run on a local timezone.
-tzdata>=2024.1; sys_platform == "win32"
+tzdata==2025.2; sys_platform == "win32"
