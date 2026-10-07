@@ -688,6 +688,14 @@ export interface ApiKeyUsage {
   positions: number
   transactions: number
   invoices: number
+  /**
+   * Real-money closed trades in a month later than the account's latest
+   * invoice (or any, when it has none) — what a hand-billed invoice is
+   * computed from, so the purge refuses (UNINVOICED_TRADES) while they exist.
+   */
+  uninvoiced_trades: number
+  /** The months those trades fall in, `YYYY-MM`. */
+  uninvoiced_months: string[]
 }
 
 /** DELETE /admin/api-keys/{id}/purge — what the hard delete removed. */
