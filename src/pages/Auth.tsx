@@ -21,6 +21,26 @@ import {
 
 type Mode = 'signin' | 'register'
 
+/**
+ * Why the previous session ended, when the API client sent us here with
+ * `?reason=` (services/api.ts endSession): the token expired, or the account
+ * was suspended. Anything else is not ours to explain.
+ */
+function sessionEndedNotice(
+  reason: string | null,
+): { text: string; tone: 'muted' | 'error' } | null {
+  if (reason === 'expired') {
+    return { text: 'Your session has expired. Please sign in again.', tone: 'muted' }
+  }
+  if (reason === 'suspended') {
+    return {
+      text: 'This account has been suspended. Contact support if you think this is a mistake.',
+      tone: 'error',
+    }
+  }
+  return null
+}
+
 const PANEL_BUBBLES = [
   { top: '60%', left: '18%', size: 70, blur: 2, duration: 8, delay: 0 },
   { top: '80%', left: '60%', size: 44, blur: 0, duration: 6.5, delay: 1.4 },
@@ -66,6 +86,8 @@ function AuthForm() {
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  // Read once on mount; shown until the form produces its own message.
+  const [sessionNotice] = useState(() => sessionEndedNotice(searchParams.get('reason')))
 
   // Whether the Discord button is shown. Any failure reads as "off", so an
   // older API or a network blip just leaves the classic form.
@@ -257,6 +279,11 @@ function AuthForm() {
               >
                 Forgot your password?
               </Link>
+            )}
+            {sessionNotice && !error && (
+              <p className={sessionNotice.tone === 'error' ? ERROR : PILL} role="status">
+                {sessionNotice.text}
+              </p>
             )}
             {error && (
               <p className={ERROR} role="alert">

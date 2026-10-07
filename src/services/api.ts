@@ -1,5 +1,8 @@
-import { getToken, updateStoredUser } from '../lib/session'
+import { clearSession, getToken, updateStoredUser } from '../lib/session'
 import { EMAIL_UNVERIFIED, VERIFY_EMAIL_PATH } from '../lib/emailVerification'
+
+/** The API's answer to a suspended account's token (EnsureAccountActive). */
+export const ACCOUNT_SUSPENDED = 'ACCOUNT_SUSPENDED'
 
 /** Local Laravel dev server (`php artisan serve`). */
 const DEV_API_URL = 'http://127.0.0.1:8000/api'
@@ -159,6 +162,22 @@ function redirectToVerify(): void {
   }
 }
 
+/**
+ * The session is over: the token we sent was refused (401 — it expired, or
+ * was revoked when the account was suspended) or the account is suspended
+ * (403 ACCOUNT_SUSPENDED). Until 2026-10-07 neither could happen mid-session —
+ * tokens never expired and only `login` looked at `status` — so no page
+ * handled it, and a dead session just left every request failing. Same full
+ * load as redirectToVerify, for the same reason; `?reason=` lets /auth say why.
+ */
+function endSession(reason: 'expired' | 'suspended'): void {
+  if (typeof window === 'undefined') return
+  clearSession()
+  if (window.location.pathname !== '/auth') {
+    window.location.assign(`/auth?reason=${reason}`)
+  }
+}
+
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
@@ -171,10 +190,8 @@ export async function apiFetch<T>(
 ): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
-  if (auth) {
-    const token = getToken()
-    if (token) headers.Authorization = `Bearer ${token}`
-  }
+  const token = auth ? getToken() : null
+  if (token) headers.Authorization = `Bearer ${token}`
 
   let res: Response
   try {
@@ -201,6 +218,15 @@ export async function apiFetch<T>(
 
     if (res.status === 403 && errorCode === EMAIL_UNVERIFIED) {
       redirectToVerify()
+    }
+
+    // Only when a token was actually sent: a 401 from login itself is a wrong
+    // password, not a dead session. Sign-out is excluded — an expired token
+    // is exactly when someone reaches for Log out, and the layout already
+    // clears the session and navigates to /auth without a "session expired".
+    if (token && path !== '/auth/logout') {
+      if (res.status === 401) endSession('expired')
+      if (res.status === 403 && errorCode === ACCOUNT_SUSPENDED) endSession('suspended')
     }
 
     throw new ApiError(
