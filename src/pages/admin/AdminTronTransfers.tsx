@@ -13,17 +13,24 @@ import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import TronAttributeModal from '../../components/admin/TronAttributeModal'
+import TronAmountMismatchModal from '../../components/admin/TronAmountMismatchModal'
 import { useApiData } from '../../hooks/useApiData'
 import {
   attributeTronTransfer,
   getAdminTronTransfers,
   ignoreTronTransfer,
+  readTronAmountMismatch,
+  readTronNetworkMismatch,
 } from '../../services/admin'
 import { ApiError, getApiErrorMessage } from '../../services/api'
-import { fmtMoney } from '../../lib/format'
+import { fmtDateTime, fmtMoney } from '../../lib/format'
 import { getUser } from '../../lib/session'
 import { isDeveloper } from '../../lib/roles'
-import type { AdminTronTransfer } from '../../types/admin'
+import type {
+  AdminTronAmountMismatch,
+  AdminTronNetwork,
+  AdminTronTransfer,
+} from '../../types/admin'
 
 /**
  * Filters are predicates on the raw row, mirroring the server's `counts`
@@ -77,6 +84,23 @@ function shortHash(hash: string): string {
   return hash.length > 14 ? `${hash.slice(0, 8)}…${hash.slice(-4)}` : hash
 }
 
+/** A configured network whose cursor is not advancing — see `budget_exhausted_at`. */
+type StuckNetwork = AdminTronNetwork & { budget_exhausted_at: string }
+
+function isStuck(n: AdminTronNetwork): n is StuckNetwork {
+  return n.configured && n.budget_exhausted_at !== null
+}
+
+/** The invoice an admin picked, and the figures the server answered with. */
+interface PendingMismatch {
+  invoiceId: number
+  detail: AdminTronAmountMismatch
+}
+
+const STRIP =
+  'rounded-card border py-3 px-4 text-[12.5px] font-semibold leading-[1.45] mb-stack'
+const STRIP_RED = `${STRIP} text-red border-[color-mix(in_srgb,var(--red)_40%,transparent)] bg-[color-mix(in_srgb,var(--red)_10%,transparent)]`
+
 /**
  * Admin → Crypto Transfers. Every USDT-TRC20 arrival, and the decision the
  * automatic matcher refuses to make: which invoice an unplaceable payment pays.
@@ -97,6 +121,9 @@ export default function AdminTronTransfers() {
   const [notice, setNotice] = useState<string | null>(null)
   const [attributeTarget, setAttributeTarget] = useState<AdminTronTransfer | null>(null)
   const [ignoreTarget, setIgnoreTarget] = useState<AdminTronTransfer | null>(null)
+  // The second confirmation: the server said the amount is off, and the
+  // admin has not yet said "attribute anyway".
+  const [mismatch, setMismatch] = useState<PendingMismatch | null>(null)
 
   const user = getUser()
   const transfers = useMemo(() => data?.transfers ?? [], [data])
@@ -132,20 +159,47 @@ export default function AdminTronTransfers() {
     )
   }
 
-  const runAttribute = async (invoiceId: number) => {
+  /**
+   * First pass sends the invoice id alone. An `AMOUNT_MISMATCH` answer is not
+   * a failure — it opens the second confirmation with the server's figures,
+   * and confirming re-posts the SAME body with `accept_amount: true`. A
+   * `NETWORK_MISMATCH` is final and lands in the error strip naming both
+   * networks; anything else reads as before.
+   */
+  const runAttribute = async (invoiceId: number, acceptAmount = false) => {
     if (!attributeTarget) return
     setBusy(true)
     setActionError(null)
     try {
-      const res = await attributeTronTransfer(attributeTarget.id, invoiceId)
+      const res = await attributeTronTransfer(attributeTarget.id, invoiceId, { acceptAmount })
       setNotice(res.message)
+      setMismatch(null)
       setAttributeTarget(null)
       reload()
     } catch (err) {
-      setActionError(getApiErrorMessage(err, 'Could not attribute the transfer.'))
+      const amount = acceptAmount ? null : readTronAmountMismatch(err)
+      if (amount) {
+        setMismatch({ invoiceId, detail: amount })
+        return
+      }
+      setMismatch(null)
+      const network = readTronNetworkMismatch(err)
+      setActionError(
+        network
+          ? `${network.message} (transfer on ${network.transfer_network}, invoice expects ${network.invoice_network})`
+          : getApiErrorMessage(err, 'Could not attribute the transfer.'),
+      )
     } finally {
       setBusy(false)
     }
+  }
+
+  // While the mismatch confirmation is up, Escape and the scrim belong to it
+  // alone — the attribute modal underneath must not close with it.
+  const closeAttribute = () => {
+    if (mismatch) return
+    setAttributeTarget(null)
+    setActionError(null)
   }
 
   const runIgnore = async () => {
@@ -165,6 +219,10 @@ export default function AdminTronTransfers() {
   }
 
   const stalled = data.networks.filter((n) => n.configured && n.scan_stale)
+  // A stuck cursor can hide behind a fresh `last_scan_at`: the watcher IS
+  // running, it just never gets past the overlap window. Separate strip,
+  // louder than stale — both can be true at once.
+  const stuck = data.networks.filter(isStuck)
 
   return (
     <AdminLayout title="Crypto Transfers" subtitle="Incoming USDT-TRC20 payments">
@@ -175,7 +233,7 @@ export default function AdminTronTransfers() {
           <div
             key={n.name}
             className={`rounded-card border p-card ${
-              n.configured && n.scan_stale
+              n.configured && (n.scan_stale || n.budget_exhausted_at)
                 ? 'border-[color-mix(in_srgb,var(--red)_45%,transparent)] bg-[color-mix(in_srgb,var(--red)_8%,transparent)]'
                 : 'border-border bg-surface'
             }`}
@@ -205,27 +263,53 @@ export default function AdminTronTransfers() {
               Last scan:{' '}
               {n.last_scan_at ? new Date(n.last_scan_at).toLocaleTimeString() : 'never'}
             </p>
+            {isStuck(n) && (
+              <p className="flex items-start gap-1.5 text-[11.5px] font-semibold text-red mt-2">
+                <TriangleAlert size={13} className="flex-shrink-0 mt-px" />
+                Scanner stuck since {fmtDateTime(n.budget_exhausted_at)}
+              </p>
+            )}
           </div>
         ))}
       </section>
 
-      {stalled.length > 0 && (
-        <p
+      {/* One strip per stuck network, one level louder than "stale": solid
+          red border, a titled lead-in, and the moment it stalled. */}
+      {stuck.map((n) => (
+        <div
+          key={n.name}
           role="alert"
-          className="flex items-start gap-2 text-[12.5px] font-semibold text-red rounded-card border border-[color-mix(in_srgb,var(--red)_40%,transparent)] bg-[color-mix(in_srgb,var(--red)_10%,transparent)] py-3 px-4 leading-[1.45] mb-stack"
+          className={`${STRIP} flex items-start gap-2.5 text-text border-red bg-[color-mix(in_srgb,var(--red)_16%,transparent)]`}
         >
+          <TriangleAlert size={16} className="flex-shrink-0 mt-0.5 text-red" />
+          <div className="min-w-0">
+            <p className="font-bold text-red">Scanner stuck on {n.name}</p>
+            <p className="mt-1 font-medium">
+              The {n.name} scanner is stuck: the last scan hit its page budget without
+              getting past the overlap window, so new payments are not being seen. Check
+              TronGrid and the watcher log.
+            </p>
+            <p className="mt-1.5 font-mono text-[11px] font-medium text-muted">
+              Since {fmtDateTime(n.budget_exhausted_at)}
+            </p>
+          </div>
+        </div>
+      ))}
+
+      {stalled.length > 0 && (
+        <p role="alert" className={`${STRIP_RED} flex items-start gap-2`}>
           <TriangleAlert size={15} className="flex-shrink-0 mt-px" />
-          The payment watcher has not run recently on {stalled.map((n) => n.name).join(', ')}.
-          Payments are arriving unnoticed — check that the scheduler
-          (<code className="font-mono">schedule:run</code>) is alive.
+          <span>
+            The payment watcher has not run recently on{' '}
+            {stalled.map((n) => n.name).join(', ')}. Payments are arriving unnoticed —
+            check that the scheduler (<code className="font-mono">schedule:run</code>) is
+            alive.
+          </span>
         </p>
       )}
 
       {actionError && (
-        <p
-          role="alert"
-          className="text-[12.5px] font-semibold text-red rounded-card border border-[color-mix(in_srgb,var(--red)_40%,transparent)] bg-[color-mix(in_srgb,var(--red)_10%,transparent)] py-3 px-4 mb-stack"
-        >
+        <p role="alert" className={STRIP_RED}>
           {actionError}
         </p>
       )}
@@ -418,11 +502,19 @@ export default function AdminTronTransfers() {
         transfer={attributeTarget}
         busy={busy}
         error={actionError}
-        onConfirm={runAttribute}
-        onCancel={() => {
-          setAttributeTarget(null)
-          setActionError(null)
-        }}
+        onConfirm={(invoiceId) => runAttribute(invoiceId)}
+        onCancel={closeAttribute}
+      />
+
+      {/* Layered over the attribute modal. Cancel sends nothing and hands the
+          admin back their pick; confirm is the same POST plus accept_amount. */}
+      <TronAmountMismatchModal
+        open={mismatch !== null}
+        invoiceId={mismatch?.invoiceId ?? null}
+        detail={mismatch?.detail ?? null}
+        busy={busy}
+        onConfirm={() => mismatch && runAttribute(mismatch.invoiceId, true)}
+        onCancel={() => setMismatch(null)}
       />
 
       <ConfirmModal

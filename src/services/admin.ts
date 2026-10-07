@@ -19,8 +19,11 @@ import type {
   AdminUserCreateInput,
   AdminUserDetail,
   AdminUserSummary,
+  AdminTronAmountMismatch,
+  AdminTronAttributeRequest,
   AdminTronCounts,
   AdminTronNetwork,
+  AdminTronNetworkMismatch,
   AdminTronTransfer,
   AdminTronTransfersData,
   AdminUserUpdateInput,
@@ -944,19 +947,81 @@ export async function getAdminTronTransfers(): Promise<AdminTronTransfersData> {
   }
 }
 
+/** Error codes a 422 from `attributeTronTransfer` may carry. */
+export const TRON_AMOUNT_MISMATCH = 'AMOUNT_MISMATCH'
+export const TRON_NETWORK_MISMATCH = 'NETWORK_MISMATCH'
+
 /**
  * Settle an invoice from a transfer the matcher could not place. The server
  * re-checks eligibility, so a 422 here means the world changed under the page.
+ *
+ * Three 422s: `ATTRIBUTION_REFUSED` and `NETWORK_MISMATCH` are final;
+ * `AMOUNT_MISMATCH` is a confirm step — read it with
+ * {@link readTronAmountMismatch} and call again with `acceptAmount: true`.
+ * The key is sent only when true, so the ordinary request is unchanged.
  */
 export async function attributeTronTransfer(
   id: number,
   invoiceId: number,
+  options: { acceptAmount?: boolean } = {},
 ): Promise<{ settled: boolean; message: string }> {
+  const body: AdminTronAttributeRequest = { invoice_id: invoiceId }
+  if (options.acceptAmount) body.accept_amount = true
+
   const res = await apiFetch<{ success: boolean; settled: boolean; message: string }>(
     `/admin/tron-transfers/${id}/attribute`,
-    { method: 'POST', auth: true, body: { invoice_id: invoiceId } },
+    { method: 'POST', auth: true, body },
   )
   return { settled: res.settled, message: res.message }
+}
+
+/**
+ * The `AMOUNT_MISMATCH` detail off a failed attribute, or null for any other
+ * failure. The figures are validated as numbers: a page that shows "$NaN"
+ * beside an "Attribute anyway" button is worse than a plain error.
+ */
+export function readTronAmountMismatch(err: unknown): AdminTronAmountMismatch | null {
+  if (!(err instanceof ApiError) || err.status !== 422 || err.errorCode !== TRON_AMOUNT_MISMATCH) {
+    return null
+  }
+  const p = err.payload as Partial<AdminTronAmountMismatch> | undefined
+  if (
+    typeof p?.expected_usd !== 'number' ||
+    typeof p.received_usdt !== 'number' ||
+    typeof p.difference !== 'number'
+  ) {
+    return null
+  }
+  return {
+    error_code: TRON_AMOUNT_MISMATCH,
+    message: err.message,
+    expected_usd: p.expected_usd,
+    received_usdt: p.received_usdt,
+    difference: p.difference,
+    direction:
+      p.direction === 'short' || p.direction === 'over'
+        ? p.direction
+        : p.difference < 0
+          ? 'short'
+          : 'over',
+  }
+}
+
+/** The `NETWORK_MISMATCH` detail off a failed attribute, or null otherwise. */
+export function readTronNetworkMismatch(err: unknown): AdminTronNetworkMismatch | null {
+  if (!(err instanceof ApiError) || err.status !== 422 || err.errorCode !== TRON_NETWORK_MISMATCH) {
+    return null
+  }
+  const p = err.payload as Partial<AdminTronNetworkMismatch> | undefined
+  if (typeof p?.transfer_network !== 'string' || typeof p.invoice_network !== 'string') {
+    return null
+  }
+  return {
+    error_code: TRON_NETWORK_MISMATCH,
+    message: err.message,
+    transfer_network: p.transfer_network,
+    invoice_network: p.invoice_network,
+  }
 }
 
 /** Take a transfer out of the queue without pretending it never arrived. */

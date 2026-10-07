@@ -962,7 +962,53 @@ export interface AdminTronNetwork {
   last_scan_at: string | null
   /** The watcher has not run recently — payments are arriving unnoticed. */
   scan_stale: boolean
+  /**
+   * The stall a fresh scan can hide: the most recent completed scan ran out
+   * of its page budget inside the overlap window, so the cursor is not
+   * advancing and anything newer is unreachable. ISO-8601 when stuck, null
+   * once a scan makes progress again.
+   */
+  budget_exhausted_at: string | null
   last_transfer_at: string | null
+}
+
+/** Body of POST /admin/tron-transfers/{id}/attribute. */
+export interface AdminTronAttributeRequest {
+  invoice_id: number
+  /**
+   * Override the watcher's tolerance band. Omitted on the first try; sent as
+   * `true` only after an admin has seen the AMOUNT_MISMATCH figures and
+   * confirmed — wrong amounts are what manual attribution exists for.
+   */
+  accept_amount?: boolean
+}
+
+/**
+ * 422 `AMOUNT_MISMATCH` on attribute — the amount is outside the matcher's
+ * band (shortfall max($1, 1%), overpay 5%). A CONFIRM step, not a refusal:
+ * re-posting with `accept_amount: true` settles it.
+ */
+export interface AdminTronAmountMismatch {
+  error_code: 'AMOUNT_MISMATCH'
+  message: string
+  /** What the invoice is owed, in USD. */
+  expected_usd: number
+  /** What arrived on chain, in USDT. */
+  received_usdt: number
+  /** received − expected, signed: negative when short, positive when over. */
+  difference: number
+  direction: 'short' | 'over'
+}
+
+/**
+ * 422 `NETWORK_MISMATCH` on attribute — final. A testnet transfer must never
+ * settle a customer's real invoice, nor the reverse.
+ */
+export interface AdminTronNetworkMismatch {
+  error_code: 'NETWORK_MISMATCH'
+  message: string
+  transfer_network: string
+  invoice_network: string
 }
 
 export interface AdminTronCounts {

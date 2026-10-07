@@ -36,16 +36,24 @@ export default function TronAttributeModal({
   const [choice, setChoice] = useState<number | null>(null)
   const [manual, setManual] = useState('')
 
+  // Reset the pick only when a transfer is (re)opened — not on every `busy`
+  // flip or `onCancel` identity change, which used to wipe a typed invoice id
+  // the moment the request answered, including with the amount-mismatch
+  // confirm the admin may still cancel back out of.
   useEffect(() => {
     if (!open) return
     setChoice(transfer?.suggestions[0]?.invoice_id ?? null)
     setManual('')
+  }, [open, transfer])
+
+  useEffect(() => {
+    if (!open) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !busy) onCancel()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, transfer, busy, onCancel])
+  }, [open, busy, onCancel])
 
   if (!open || !transfer) return null
 
