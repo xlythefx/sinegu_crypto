@@ -549,8 +549,13 @@ DB reads only — never an exchange call). Rules:
   `{positions: [{exchange, id}]}` — owner/symbol/side are resolved SERVER-side,
   never taken from the client) → engine `POST /admin/close-positions`, which
   runs the normal exit path per (exchange, symbol, side) narrowed to those
-  uni_ids, **with `announce=False`** (no public post; admin-chat failures
-  only) and waits ≤40 s for per-account results. The engine REFUSES a venue
+  uni_ids and waits ≤40 s for per-account results. **A group that includes
+  the MASTER is announced like any exit** (owner, 2026-10-07 — a silent
+  master close left the channel with an entry and no exit, and the daily
+  recap short a close); the message says nothing about "manual". A
+  customers-only group stays silent (`announce=False`), so a row-by-row
+  close posts once, on the master's row. The master is read from the
+  engine's account list (`is_master`), never from the request. The engine REFUSES a venue
   that is not live — `_process_trade_job` falls back to every live venue with
   no user filter otherwise. A retry now inherits `announce` only if the run
   owed one. Rows on accounts the engine does not trade (disabled, sandbox,
@@ -1191,7 +1196,8 @@ Rules:
   2026-10-03) — the Combined switch exists on Active Positions only.
 - **Each open position has a Close button** (per-row view only): ConfirmModal →
   `POST /admin/open-positions/close` with `{exchange: 'binance', id}` — the same
-  engine exit path as Admin Dashboard → Open positions, no public post. A
+  engine exit path as Admin Dashboard → Open positions (public post only for
+  the master's row). A
   refused row shows the API's `blocked[].reason`. Binance-only like the rest of
   this page.
 - **Editing writes ONE row, so it exists only in the per-row view** — the button

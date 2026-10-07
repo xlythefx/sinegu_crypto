@@ -151,12 +151,17 @@ def close_positions():
     It runs the same exit path a TradingView EXIT runs — re-read first, retry
     on a transient failure, bookkeeping, a trade_logs row — grouped into one
     job per (exchange, symbol, side) and narrowed to exactly the users named.
-    Two differences, both deliberate:
-    - **Nothing is announced publicly.** An admin closing a customer's position
-      is not a strategy exit; the channel would print a close nobody entered.
-      Failures still reach the admin chat.
-    - **It waits for the result** (up to CLOSE_WAIT_SECONDS) so the page can
-      show per-account outcomes rather than "accepted".
+
+    **A group that closes the MASTER's position is announced like any exit**
+    (owner, 2026-10-07): the channel publishes the master's trades, so a
+    master close it never hears about leaves an entry with no exit and a
+    daily recap short one close. The message is the ordinary exit message —
+    nothing says "manual". A group of customers only stays silent: their
+    closes are not a strategy exit, and announcing every such group would
+    post one close several times. Failures still reach the admin chat.
+
+    It also **waits for the result** (up to CLOSE_WAIT_SECONDS) so the page
+    can show per-account outcomes rather than "accepted".
     """
     if not _authorized():
         return jsonify({"error": "Unauthorized"}), 403
@@ -192,11 +197,18 @@ def close_positions():
                             "message": f"The engine is not trading '{exchange}'."}), 400
         groups.setdefault((exchange, symbol, side), set()).add(uni_id)
 
+    # The master is read off the engine's own (cached) account list, never
+    # from the request. An API that sends no `is_master` announces nothing.
+    masters = {
+        exchange: {a.get("uni_id") for a in webhook.fetch_accounts(exchange=exchange) if a.get("is_master")}
+        for exchange in {ex for ex, _, _ in groups}
+    }
+
     futures = {
         _CLOSE_EXECUTOR.submit(
             webhook._process_trade_job,
             f"EXIT_{side}", symbol, None, None, None,
-            targets={exchange: uni_ids}, announce=False,
+            targets={exchange: uni_ids}, announce=bool(uni_ids & masters[exchange]),
         ): (exchange, symbol, side, uni_ids)
         for (exchange, symbol, side), uni_ids in groups.items()
     }

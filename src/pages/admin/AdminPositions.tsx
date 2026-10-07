@@ -528,7 +528,7 @@ export default function AdminPositions() {
           closeTarget
             ? `This closes ${displaySymbol(closeTarget.symbol)} ${closeTarget.side?.toUpperCase() ?? ''} on ${
                 closeTarget.accountName ?? 'this account'
-              } at market price on the exchange — the whole side of that coin on that account. Nothing is posted to the public channel.`
+              } at market price on the exchange — the whole side of that coin on that account. The master's close is posted to the public channel like any exit; customers' closes are not.`
             : ''
         }
         confirmLabel={closingRow ? 'Closing…' : 'Yes, close'}

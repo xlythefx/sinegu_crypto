@@ -1,7 +1,8 @@
 """POST /admin/close-positions — Admin Dashboard → Open positions' "Close".
 
-Closes exactly the positions named, through the normal exit path, silently
-(no public announcement), and waits for the result. The guards matter more
+Closes exactly the positions named, through the normal exit path, and waits
+for the result. Only a group that includes the master is announced publicly
+(the channel is the master's record). The guards matter more
 than the happy path: a job whose venue is not live falls back to EVERY live
 venue with no user filter, so an unknown exchange must be refused up front.
 """
@@ -19,10 +20,18 @@ def _summary(filled=1):
             "details": [{"account": "A", "status": "filled", "closed_quantity": 1.0}]}
 
 
-def _post(client, positions):
+ACCOUNTS = [
+    {"uni_id": "master", "is_master": True},
+    {"uni_id": "u1", "is_master": False},
+    {"uni_id": "u2", "is_master": False},
+]
+
+
+def _post(client, positions, accounts=ACCOUNTS):
     import binance_abcd.routes.webhook as webhook
 
-    with patch.object(webhook, "_process_trade_job", return_value=_summary()) as job:
+    with patch.object(webhook, "_process_trade_job", return_value=_summary()) as job, \
+            patch.object(webhook, "fetch_accounts", return_value=accounts):
         response = client.post("/admin/close-positions", json={"positions": positions}, headers=HEADERS)
     return response, job
 
@@ -50,7 +59,33 @@ def test_a_bad_side_is_refused(client):
     job.assert_not_called()
 
 
-def test_groups_by_symbol_and_side_targets_only_those_users_and_never_announces(client):
+def test_a_group_with_the_master_is_announced_and_a_customer_group_is_not(client):
+    response, job = _post(client, [
+        {"exchange": "binance", "uni_id": "master", "symbol": "RENDERUSDT", "side": "LONG"},
+        {"exchange": "binance", "uni_id": "u1", "symbol": "RENDERUSDT", "side": "LONG"},
+        {"exchange": "binance", "uni_id": "u2", "symbol": "LTCUSDT", "side": "LONG"},
+    ])
+
+    assert response.status_code == 200
+    calls = {c.args[1]: c.kwargs for c in job.call_args_list}
+    assert calls["RENDERUSDT"]["announce"] is True
+    assert calls["RENDERUSDT"]["targets"] == {"binance": {"master", "u1"}}
+    assert calls["LTCUSDT"]["announce"] is False
+
+
+def test_the_master_closed_alone_is_announced(client):
+    """The admin page closes row by row — the master's own job still posts."""
+    _, job = _post(client, [{"exchange": "binance", "uni_id": "master", "symbol": "RENDERUSDT", "side": "LONG"}])
+    assert job.call_args.kwargs["announce"] is True
+
+
+def test_no_master_flag_from_the_api_announces_nothing(client):
+    _, job = _post(client, [{"exchange": "binance", "uni_id": "master", "symbol": "LTCUSDT", "side": "LONG"}],
+                   accounts=[{"uni_id": "master"}])
+    assert job.call_args.kwargs["announce"] is False
+
+
+def test_groups_by_symbol_and_side_targets_only_those_users_customers_stay_silent(client):
     response, job = _post(client, [
         {"exchange": "binance", "uni_id": "u1", "symbol": "ltcusdt", "side": "long"},
         {"exchange": "binance", "uni_id": "u2", "symbol": "LTCUSDT", "side": "LONG"},

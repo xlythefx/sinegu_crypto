@@ -239,7 +239,7 @@ export default function OpenPositionsTab() {
     (pendingLive > 0
       ? `${pendingLive} ${pendingLive === 1 ? 'is on a LIVE account: real money' : 'are on LIVE accounts: real money'}. `
       : 'All of them are on demo accounts. ') +
-    'Nothing is posted to the public channel.'
+    "The master's close is posted to the public channel like any exit; customers' closes are not."
   const confirmTitle = target?.owner
     ? `Exit all positions of ${target.owner}?`
     : `Close ${pending.length === 1 ? 'this position' : `${pending.length} positions`}?`
