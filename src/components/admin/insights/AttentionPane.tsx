@@ -7,6 +7,7 @@ import {
   KeyRound,
   Radio,
   Receipt,
+  ShieldAlert,
   Users,
   Wallet,
 } from 'lucide-react'
@@ -62,6 +63,17 @@ function attentionItems(a: OverviewInsights['attention']): AttentionItem[] {
           ? `${paused} account${paused === 1 ? ' is' : 's are'} paused until paid.`
           : 'Unpaid past the due date.',
       to: '/admin/invoices',
+      urgent: true,
+    })
+  }
+  const disputed = a.disputed_payments ?? 0
+  if (disputed > 0) {
+    items.push({
+      key: 'disputes',
+      icon: ShieldAlert,
+      text: `${disputed} crypto ${disputed === 1 ? 'payment is' : 'payments are'} claimed by two customers`,
+      detail: 'Both entered the same transaction ID. Find out who really sent it, fix the invoices, mark it resolved.',
+      to: '/admin/tron-transfers?status=disputed',
       urgent: true,
     })
   }

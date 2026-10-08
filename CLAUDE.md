@@ -333,6 +333,25 @@ only method a trader is offered.**
   MySQL and SQLite, so it holds in CI too). The sender is useless as a signal:
   most customers pay from an exchange withdrawal, where the on-chain `from` is
   the exchange, not them.
+- **Same amount, two customers — HOLD and ask for the TXID (2026-10-08,
+  Christian's report).** The second invoice wanting a figure is no longer
+  refused (`TRON_AMOUNT_UNAVAILABLE` and the UNIQUE index are gone; a plain
+  index replaced it). `TronIntentService::matchCandidates` = open intents +
+  intents EXPIRED within `late_match_hours` (24) on still-unpaid invoices, one
+  per invoice. The watcher settles only when that is exactly one invoice with
+  an OPEN intent; otherwise it stores `tron_transfers.candidate_invoice_ids`
+  and each candidate's pay sheet (and invoice page) asks for the transaction
+  ID (`TronPaymentClaims`, `POST /payments/tron/intent/{id}/claim`). The late
+  half closes a real hole: a withdrawal clearing after its payer's timer used
+  to settle whoever else was waiting for a similar amount. **A TXID is not
+  proof** (the address is public on any explorer), so a second customer
+  pasting an ID already on another invoice opens a DISPUTE
+  (`tron_payment_claims.outcome = disputed`): the `team-payment-disputed`
+  email (live, once per claim), a red caution strip above both Admin Overview
+  views (`attention.disputed_payments`, hidden from collaborators), and
+  Crypto Transfers `?status=disputed` → "Mark resolved" with a note. The
+  invoices themselves are corrected by hand (Invoice History); resolving only
+  closes the alarm. The prompt never carries the TXID.
 - **The "odd trailing decimals" fingerprint is OFF (`fingerprint_units = 0`) and
   must stay off until measured.** Every major exchange DEDUCTS ITS WITHDRAWAL FEE
   FROM THE AMOUNT THE CUSTOMER TYPES, so a payment arrives short by that fee
@@ -340,7 +359,7 @@ only method a trader is offered.**
   wide enough to absorb it is ~100,000× wider than sub-cent fingerprint spacing.
   You get one or the other, never both. So: exact invoice amount, an asymmetric
   band (shortfall `max($1.00, 1%)`, overpay 5%), and **settle only when EXACTLY
-  ONE open intent matches** — zero or several goes to a human.
+  ONE invoice could own it** — several is held for the TXID (bullet above).
 - **Only the contract address identifies the token.** `symbol` is
   attacker-controlled (anyone can deploy a "USDT"), and so is `decimals`, where
   a contract reporting 0 would make one base unit look like a dollar. Both are

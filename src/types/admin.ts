@@ -940,6 +940,30 @@ export interface AdminTronTransfer {
   attributable: boolean
   attribution_blocked_reason: string | null
   suggestions: AdminTronSuggestion[]
+  /** Invoices whose pay sheet asks for this payment's TXID (it was held). */
+  candidate_invoice_ids: number[]
+  /** Customers who pasted this payment's TXID, oldest first. */
+  claims: AdminTronClaim[]
+  /** An unresolved "two customers claim this payment" row exists. */
+  disputed: boolean
+}
+
+/**
+ * A customer saying "that payment is mine" with its transaction ID.
+ * `accepted` settled their invoice; `disputed` means the payment was already
+ * on `against_invoice_id` — one of the two is wrong, a human decides.
+ */
+export interface AdminTronClaim {
+  id: number
+  invoice_id: number
+  user_id: string
+  outcome: 'accepted' | 'disputed'
+  against_invoice_id: number | null
+  created_at: string | null
+  resolved_at: string | null
+  resolved_by: string | null
+  resolution_note: string | null
+  owner: { uni_id: string; name: string | null; email: string | null } | null
 }
 
 /**
@@ -1025,6 +1049,8 @@ export interface AdminTronCounts {
   settled: number
   ignored: number
   rejected: number
+  /** Transfers with an open dispute — a filter, not a status. */
+  disputed: number
 }
 
 export interface AdminTronTransfersData {

@@ -1,7 +1,9 @@
-import { apiFetch } from './api'
+import { ApiError, apiFetch } from './api'
 import type {
   CoinsbuyDeposit,
   PaymentMethods,
+  TronClaimPrompt,
+  TronClaimResult,
   TronIntent,
   TronIntentStatus,
 } from '../types/payments'
@@ -237,6 +239,20 @@ interface ApiTronIntentStatus {
   } | null
   last_scan_at: string | null
   scan_stale: boolean
+  claim: ApiTronClaimPrompt | null
+}
+
+interface ApiTronClaimPrompt {
+  state: TronClaimPrompt['state']
+  amount: string
+  asset: string
+  seen_at: string | null
+  message: string
+}
+
+function toClaimPrompt(p: ApiTronClaimPrompt | null | undefined): TronClaimPrompt | null {
+  if (!p) return null
+  return { state: p.state, amount: p.amount, asset: p.asset, seenAt: p.seen_at, message: p.message }
 }
 
 /**
@@ -274,6 +290,50 @@ export async function getTronIntentStatus(
     },
     lastScanAt: res.last_scan_at,
     scanStale: res.scan_stale ?? false,
+    claim: toClaimPrompt(res.claim),
+  }
+}
+
+/**
+ * POST /payments/tron/intent/{invoiceId}/claim — "that held payment is mine".
+ *
+ * Accepts a bare TXID or a Tronscan link. A 409 `CLAIM_DISPUTED` is not a
+ * failure to show as an error: the payment is already on someone else's
+ * invoice, the team has been alerted, and the answer still carries the new
+ * prompt state — so it is returned, not thrown. Every other refusal throws
+ * with the server's sentence.
+ */
+export async function claimTronPayment(
+  invoiceId: string | number,
+  txHash: string,
+): Promise<TronClaimResult> {
+  type Res = {
+    code: string
+    message: string
+    settled?: boolean
+    invoice_status?: 'paid' | 'pending'
+    claim?: ApiTronClaimPrompt | null
+  }
+  const shape = (res: Res): TronClaimResult => ({
+    code: res.code,
+    message: res.message,
+    settled: res.settled ?? false,
+    invoiceStatus: res.invoice_status ?? 'pending',
+    claim: toClaimPrompt(res.claim),
+  })
+
+  try {
+    const res = await apiFetch<Res>(`/payments/tron/intent/${Number(invoiceId)}/claim`, {
+      method: 'POST',
+      auth: true,
+      body: { tx_hash: txHash },
+    })
+    return shape(res)
+  } catch (err) {
+    if (err instanceof ApiError && err.errorCode === 'CLAIM_DISPUTED' && err.payload) {
+      return shape(err.payload as Res)
+    }
+    throw err
   }
 }
 

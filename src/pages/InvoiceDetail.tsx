@@ -26,6 +26,8 @@ import BillingHelpSidebar from '../components/billing/BillingHelpSidebar'
 import ExchangeBadge from '../components/billing/ExchangeBadge'
 import InvoiceDocumentModal from '../components/billing/InvoiceDocumentModal'
 import PaymentMethodModal from '../components/billing/PaymentMethodModal'
+import TronClaimPrompt from '../components/billing/TronClaimPrompt'
+import { useTronClaimPrompt } from '../hooks/useTronClaimPrompt'
 import { EXCHANGE_META } from '../components/exchanges/meta'
 import { getInvoice } from '../services/billing'
 import { createStripeCheckout, getPaymentMethods } from '../services/payments'
@@ -166,6 +168,11 @@ export default function InvoiceDetail() {
   }, [id])
 
   useEffect(() => load(), [load])
+
+  // A held crypto payment this invoice could own — asked here too, so closing
+  // the pay sheet never hides the question. The sheet asks it while open.
+  const unpaidWithFee = invoice !== null && invoice.status !== 'paid' && hasFee(invoice)
+  const claim = useTronClaimPrompt(id, unpaidWithFee && !payOpen)
 
   // Stripe returns to `?payment=success&session_id=…`, Coinsbuy to
   // `…&transaction_id=…` (both to `?payment=cancelled` on a cancel).
@@ -342,6 +349,20 @@ export default function InvoiceDetail() {
 
       <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-7 items-start max-[1080px]:grid-cols-1">
         <div className="min-w-0 flex flex-col gap-[18px]">
+          {claim.prompt && !paid && (
+            <div className="animate-[fadeup_0.35s_ease-out]">
+              <TronClaimPrompt
+                invoiceId={invoice.id}
+                prompt={claim.prompt}
+                onPaid={() => {
+                  claim.setPrompt(null)
+                  load()
+                }}
+                onChange={claim.setPrompt}
+              />
+            </div>
+          )}
+
           {/* hero */}
           <section
             className="relative overflow-hidden rounded-card border border-border p-card flex items-center justify-between gap-6 flex-wrap bg-[linear-gradient(150deg,var(--surface),var(--surface2))] animate-[idtPop_0.5s_cubic-bezier(0.22,1,0.36,1)_both] motion-reduce:animate-none before:content-[''] before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[4px] before:bg-[var(--brand,var(--accent))]"

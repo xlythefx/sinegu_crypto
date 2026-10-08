@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom'
-import { useSearchParams } from 'react-router-dom'
-import { AlertTriangle, ArrowRight, Globe, UserPlus } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { AlertTriangle, ArrowRight, Globe, ShieldAlert, UserPlus } from 'lucide-react'
 import Tabs, { type TabItem } from '../../ui/Tabs'
 import AttentionPane from './AttentionPane'
 import PlatformPane from './PlatformPane'
@@ -30,6 +30,7 @@ export default function OverviewTab({ toolbarSlot }: { toolbarSlot?: HTMLElement
   const raw = params.get('view')
   const view: OverviewView = VIEWS.some((v) => v.key === raw) ? (raw as OverviewView) : 'platform'
   const pendingCount = overview.data?.attention.pending_users_count ?? 0
+  const disputed = overview.data?.attention.disputed_payments ?? 0
 
   const select = (next: OverviewView) =>
     setParams(
@@ -49,6 +50,31 @@ export default function OverviewTab({ toolbarSlot }: { toolbarSlot?: HTMLElement
     <div className="flex flex-col gap-stack">
       {/* At the right end of the dashboard's tab row when it offers a slot. */}
       {toolbarSlot ? createPortal(viewTabs, toolbarSlot) : viewTabs}
+      {/* Above BOTH views: money may be sitting on the wrong invoice. Absent
+          for a read-only collaborator (the API omits the count). */}
+      {disputed > 0 && (
+        <Link
+          to="/admin/tron-transfers?status=disputed"
+          className="flex w-full items-center gap-3 rounded-row border border-[color-mix(in_srgb,var(--red)_45%,transparent)] bg-[color-mix(in_srgb,var(--red)_10%,transparent)] px-4 py-3 transition-colors hover:bg-[color-mix(in_srgb,var(--red)_16%,transparent)]"
+        >
+          <span className="relative grid h-8 w-8 flex-none place-items-center rounded-[10px] bg-red text-white">
+            <ShieldAlert size={16} />
+            <span className="absolute -right-1 -top-1 h-2.5 w-2.5 animate-pulse rounded-full bg-red ring-2 ring-surface" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13.5px] font-semibold text-text">
+              {disputed} crypto {disputed === 1 ? 'payment is' : 'payments are'} claimed by two customers
+            </span>
+            <span className="block text-[12.5px] text-muted">
+              One invoice may be paid with someone else&apos;s money. Ask both for their withdrawal record, fix the
+              invoices, then mark it resolved.
+            </span>
+          </span>
+          <span className="inline-flex flex-none items-center gap-1 text-[12.5px] font-bold text-red max-[480px]:hidden">
+            Review <ArrowRight size={14} />
+          </span>
+        </Link>
+      )}
       {/* keyed re-mount replays the reveal on every switch */}
       <div key={view} className="flex flex-col gap-stack animate-[fadeup_0.35s_ease-out]">
         {view === 'platform' ? (

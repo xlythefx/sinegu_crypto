@@ -1035,3 +1035,19 @@ export async function ignoreTronTransfer(
   )
   return { message: res.message }
 }
+
+/**
+ * Close a "two customers claim the same payment" dispute, with a note saying
+ * what was decided. Correcting the invoices is done with the existing tools;
+ * this clears the alarm on the Admin Overview.
+ */
+export async function resolveTronClaim(
+  claimId: number,
+  note?: string,
+): Promise<{ message: string }> {
+  const res = await apiFetch<{ success: boolean; message: string }>(
+    `/admin/tron-transfers/claims/${claimId}/resolve`,
+    { method: 'POST', auth: true, body: { note } },
+  )
+  return { message: res.message }
+}

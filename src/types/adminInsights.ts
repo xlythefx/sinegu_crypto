@@ -30,6 +30,8 @@ export interface OverviewInsights {
     overdue_invoices?: { count: number; amount: number }
     unpaid_invoices?: { count: number; amount: number }
     unmatched_transfers?: number
+    /** Crypto payments two customers both say are theirs, not yet resolved. */
+    disputed_payments?: number
     signals_today: {
       signals: number
       with_problems: number

@@ -8,6 +8,7 @@ import DevDetails from '../ui/DevDetails'
 import { fmtCryptoAmount } from '../../lib/format'
 import TronQrModal from './TronQrModal'
 import TronPaymentStatus, { type TronStage } from './TronPaymentStatus'
+import TronClaimPrompt from './TronClaimPrompt'
 
 interface TronPayPanelProps {
   intent: TronIntent
@@ -71,7 +72,10 @@ export default function TronPayPanel({
 
   const seen = status?.transfer != null
   const expired = remaining <= 0 && !seen
-  const watching = !done && !expired
+  const claim = status?.claim ?? null
+  // A held payment can surface after the timer ran out (that is one of the two
+  // reasons it is held), so the sheet keeps listening while it is asking.
+  const watching = !done && (!expired || claim != null)
   const stage: TronStage = expired ? 'expired' : seen ? 'confirming' : 'waiting'
 
   const settle = useCallback(
@@ -150,6 +154,16 @@ export default function TronPayPanel({
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Only when the server holds a payment this invoice could own. */}
+      {claim && !done && (
+        <TronClaimPrompt
+          invoiceId={intent.invoiceId}
+          prompt={claim}
+          onPaid={() => void load()}
+          onChange={(next) => setStatus((s) => (s ? { ...s, claim: next } : s))}
+        />
+      )}
+
       <TronPaymentStatus
         stage={stage}
         amount={shownAmount}

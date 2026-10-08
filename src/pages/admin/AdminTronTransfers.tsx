@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Fragment, useMemo, useState } from 'react'
+import { Navigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowDownToLine,
   ChevronLeft,
@@ -14,6 +14,7 @@ import DataState from '../../components/dashboard/DataState'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import TronAttributeModal from '../../components/admin/TronAttributeModal'
 import TronAmountMismatchModal from '../../components/admin/TronAmountMismatchModal'
+import { ClaimLine, ResolveDisputeModal } from '../../components/admin/TronClaims'
 import { useApiData } from '../../hooks/useApiData'
 import {
   attributeTronTransfer,
@@ -21,13 +22,13 @@ import {
   ignoreTronTransfer,
   readTronAmountMismatch,
   readTronNetworkMismatch,
+  resolveTronClaim,
 } from '../../services/admin'
 import { ApiError, getApiErrorMessage } from '../../services/api'
 import { fmtDateTime, fmtMoney } from '../../lib/format'
-import { getUser } from '../../lib/session'
-import { isDeveloper } from '../../lib/roles'
 import type {
   AdminTronAmountMismatch,
+  AdminTronClaim,
   AdminTronNetwork,
   AdminTronTransfer,
 } from '../../types/admin'
@@ -37,7 +38,7 @@ import type {
  * exactly — a chip whose number disagrees with its own list is worse than no
  * chip at all.
  */
-type TransferFilter = 'all' | 'unmatched' | 'settled' | 'ignored' | 'rejected'
+type TransferFilter = 'all' | 'disputed' | 'unmatched' | 'settled' | 'ignored' | 'rejected'
 
 const FILTERS: {
   key: TransferFilter
@@ -45,6 +46,8 @@ const FILTERS: {
   match: (t: AdminTronTransfer) => boolean
 }[] = [
   { key: 'all', label: 'All', match: () => true },
+  // Not a status: two customers have pasted this payment's TXID.
+  { key: 'disputed', label: 'Disputed', match: (t) => t.disputed },
   { key: 'unmatched', label: 'Needs attention', match: (t) => t.status === 'unmatched' },
   { key: 'settled', label: 'Settled', match: (t) => t.status === 'settled' },
   { key: 'ignored', label: 'Ignored', match: (t) => t.status === 'ignored' },
@@ -105,15 +108,25 @@ const STRIP_RED = `${STRIP} text-red border-[color-mix(in_srgb,var(--red)_40%,tr
  * Admin → Crypto Transfers. Every USDT-TRC20 arrival, and the decision the
  * automatic matcher refuses to make: which invoice an unplaceable payment pays.
  *
- * Developer-gated for now (the rail is hidden from customers); delete the guard
- * and the sidebar's `developerOnly` flag when it goes public. The server keeps
- * the routes behind the ordinary admin middleware either way, because
- * attributing a payment is strictly less powerful than the manual mark-paid
- * every admin already has.
+ * Open to every admin since the rail went public. The server keeps the routes
+ * behind the ordinary admin middleware, because attributing a payment is
+ * strictly less powerful than the manual mark-paid every admin already has.
+ *
+ * A HELD payment (two customers paying the same amount, or one arriving after
+ * its timer) shows which invoices are being asked for its TXID; a payment two
+ * customers both claimed is DISPUTED — `?status=disputed` is where the Admin
+ * Overview's caution strip lands.
  */
 export default function AdminTronTransfers() {
   const { data, loading, error, reload } = useApiData(getAdminTronTransfers)
-  const [filter, setFilter] = useState<TransferFilter>('unmatched')
+  const [params] = useSearchParams()
+  const [filter, setFilter] = useState<TransferFilter>(() =>
+    FILTERS.some((f) => f.key === params.get('status'))
+      ? (params.get('status') as TransferFilter)
+      : 'unmatched',
+  )
+  const [resolveTarget, setResolveTarget] = useState<AdminTronClaim | null>(null)
+  const [resolveNote, setResolveNote] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [busy, setBusy] = useState(false)
@@ -125,7 +138,6 @@ export default function AdminTronTransfers() {
   // admin has not yet said "attribute anyway".
   const [mismatch, setMismatch] = useState<PendingMismatch | null>(null)
 
-  const user = getUser()
   const transfers = useMemo(() => data?.transfers ?? [], [data])
 
   const visible = useMemo(() => {
@@ -148,8 +160,6 @@ export default function AdminTronTransfers() {
   if (error instanceof ApiError && error.status === 401) {
     return <Navigate to="/auth" replace />
   }
-  // Cosmetic only — the server is the real gate.
-  if (user && !isDeveloper(user.type)) return <Navigate to="/admin" replace />
 
   if (!data) {
     return (
@@ -213,6 +223,23 @@ export default function AdminTronTransfers() {
       reload()
     } catch (err) {
       setActionError(getApiErrorMessage(err, 'Could not ignore the transfer.'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const runResolve = async () => {
+    if (!resolveTarget) return
+    setBusy(true)
+    setActionError(null)
+    try {
+      const res = await resolveTronClaim(resolveTarget.id, resolveNote.trim() || undefined)
+      setNotice(res.message)
+      setResolveTarget(null)
+      setResolveNote('')
+      reload()
+    } catch (err) {
+      setActionError(getApiErrorMessage(err, 'Could not resolve the dispute.'))
     } finally {
       setBusy(false)
     }
@@ -395,7 +422,8 @@ export default function AdminTronTransfers() {
                 </tr>
               )}
               {rows.map((t) => (
-                <tr key={t.id}>
+                <Fragment key={t.id}>
+                <tr className={t.disputed ? 'bg-[color-mix(in_srgb,var(--red)_6%,transparent)]' : undefined}>
                   <td className={TD}>
                     <span className="block font-mono text-[13px] font-bold text-text">
                       {t.amount ?? t.value_raw}
@@ -411,8 +439,19 @@ export default function AdminTronTransfers() {
                     >
                       {STATUS_LABEL[t.status]}
                     </span>
+                    {t.disputed && (
+                      <span className={`ml-1.5 inline-flex rounded-pill border px-2.5 py-1 text-[11px] font-bold ${STATUS_PILL.rejected}`}>
+                        Disputed
+                      </span>
+                    )}
                     {t.reject_reason && (
                       <span className="block text-[11px] text-faint mt-1">{t.reject_reason}</span>
+                    )}
+                    {/* Held by the matcher: these customers are being asked for the TXID. */}
+                    {t.status === 'unmatched' && t.candidate_invoice_ids.length > 0 && (
+                      <span className="block text-[11px] text-faint mt-1">
+                        Held · asking {t.candidate_invoice_ids.map((id) => `#${id}`).join(', ')} for the TXID
+                      </span>
                     )}
                   </td>
                   <td className={TD}>
@@ -465,6 +504,26 @@ export default function AdminTronTransfers() {
                     )}
                   </td>
                 </tr>
+                {t.claims.length > 0 && (
+                  <tr className={t.disputed ? 'bg-[color-mix(in_srgb,var(--red)_6%,transparent)]' : undefined}>
+                    <td colSpan={7} className="border-b border-hair px-3.5 pb-3">
+                      <ul className="flex flex-col gap-1.5">
+                        {t.claims.map((c) => (
+                          <ClaimLine
+                            key={c.id}
+                            claim={c}
+                            busy={busy}
+                            onResolve={() => {
+                              setResolveNote('')
+                              setResolveTarget(c)
+                            }}
+                          />
+                        ))}
+                      </ul>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -515,6 +574,15 @@ export default function AdminTronTransfers() {
         busy={busy}
         onConfirm={() => mismatch && runAttribute(mismatch.invoiceId, true)}
         onCancel={() => setMismatch(null)}
+      />
+
+      <ResolveDisputeModal
+        claim={resolveTarget}
+        note={resolveNote}
+        busy={busy}
+        onNote={setResolveNote}
+        onConfirm={runResolve}
+        onCancel={() => setResolveTarget(null)}
       />
 
       <ConfirmModal

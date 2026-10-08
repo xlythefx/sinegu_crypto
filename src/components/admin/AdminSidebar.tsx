@@ -75,14 +75,9 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { label: 'Bot Engine', url: '/admin/engine', icon: ServerCog },
   { label: 'Signal Log', url: '/admin/trade-logs', icon: ScrollText },
   { label: 'Invoice History', url: '/admin/invoices', icon: FileText },
-  // developerOnly while the direct-wallet rail is hidden from customers. Drop
-  // the flag the day payments.tron.public goes true.
-  {
-    label: 'Crypto Transfers',
-    url: '/admin/tron-transfers',
-    icon: ArrowDownToLine,
-    developerOnly: true,
-  },
+  // Every admin since the rail went public (TRON_PUBLIC=true on prod
+  // 2026-10-02): held payments and disputed claims are worked from here.
+  { label: 'Crypto Transfers', url: '/admin/tron-transfers', icon: ArrowDownToLine },
   { label: 'Affiliate', url: '/admin/referrals', icon: Share2 },
   { label: 'System Resources', url: '/admin/resources', icon: Activity },
   { label: 'Database', url: '/admin/database', icon: Database, developerOnly: true },

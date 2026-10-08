@@ -120,6 +120,34 @@ export interface TronIntentStatus {
    */
   lastScanAt: string | null
   scanStale: boolean
+  /** Non-null when a held payment could be this invoice's — ask for the TXID. */
+  claim: TronClaimPrompt | null
+}
+
+/**
+ * A payment the watcher could not place on its own (two customers paying the
+ * same amount, or it arrived after the timer ran out), and this invoice could
+ * own it. Never carries the transaction ID — that is what the customer proves.
+ *  - `needed`           — nobody has claimed it yet: paste your TXID.
+ *  - `claimed_by_other` — another customer confirmed it; if it was yours, say so.
+ *  - `disputed`         — you claimed a payment already on someone else's
+ *                         invoice; the team is reviewing.
+ */
+export interface TronClaimPrompt {
+  state: 'needed' | 'claimed_by_other' | 'disputed'
+  amount: string
+  asset: string
+  seenAt: string | null
+  message: string
+}
+
+/** What POST /payments/tron/intent/{id}/claim answered. */
+export interface TronClaimResult {
+  code: string
+  message: string
+  settled: boolean
+  invoiceStatus: 'paid' | 'pending'
+  claim: TronClaimPrompt | null
 }
 
 /**
