@@ -41,12 +41,30 @@ export interface SizingDecision {
   streakSize: number | null
 }
 
+/**
+ * The API's verdict on a skip or failure (SignalHealth): `normal` is how the
+ * strategy works (nothing open to close, stack already full) and needs nobody;
+ * `problem` means someone has to act (a refused key, a refused order).
+ */
+export type ReasonSeverity = 'normal' | 'problem'
+
+/**
+ * How the master account did on a signal. `absent` = the master was not in
+ * the fan-out at all — on purpose for a close narrowed to chosen customers,
+ * or on a venue the master has no account on — so it is not a fault.
+ */
+export type MasterOutcome = 'filled' | 'skipped' | 'failed' | 'absent'
+
+/** Account-level list filter: signals with at least one account in it. */
+export type TradeLogOutcome = 'filled' | 'skipped' | 'failed' | 'problem'
+
 /** One account's outcome inside a signal's fan-out. */
 export interface TradeLogDetail {
   account: string | null
   uniId: string | null
   userName: string | null
   status: FanoutStatus | null
+  /** The raw engine text — always shown beside the label, never replaced by it. */
   reason: string | null
   error: string | null
   retryable: boolean | null
@@ -54,6 +72,15 @@ export interface TradeLogDetail {
   fillPrice: number | null
   closedQuantity: number | null
   sizing: SizingDecision | null
+  /** Stable reason key (`key_blocked`, `nothing_to_close`, …); null for a fill. */
+  reasonKey: string | null
+  /** Plain label for `reasonKey`, from the server. */
+  reasonLabel: string | null
+  severity: ReasonSeverity | null
+  /** null = the engine sent no master flag on this row. */
+  isMaster: boolean | null
+  /** false only when account filters are on and this row is not one they found. */
+  match: boolean
 }
 
 /** One append-only row per signal the engine processed. */
@@ -73,6 +100,12 @@ export interface TradeLogRow {
   skipped: number
   details: TradeLogDetail[]
   ts: string | null
+  /** null = the engine sent no master flag on this signal. */
+  master: MasterOutcome | null
+  /** Account outcomes the API calls a problem. */
+  problems: number
+  /** Account outcomes that are skips by design. */
+  normalSkips: number
 }
 
 export interface TradeLogSummary {
@@ -81,6 +114,18 @@ export interface TradeLogSummary {
   filled: number
   failed: number
   skipped: number
+  /** Account outcomes in the filtered window that need someone. */
+  problemAccounts: number
+  /** Account outcomes in the filtered window that are skips by design. */
+  normalSkips: number
+}
+
+/** One reason the filtered window holds, with how many account outcomes carry it. */
+export interface ReasonCount {
+  key: string
+  label: string
+  severity: ReasonSeverity
+  count: number
 }
 
 export interface TradeLogFilters {
@@ -93,6 +138,11 @@ export interface TradeLogFilters {
   result?: string
   from?: string
   to?: string
+  /** Account-level filters — the list endpoint only. */
+  outcome?: TradeLogOutcome | 'all'
+  reason?: string
+  /** Matched against the account name and its owner's name. */
+  account?: string
   limit?: number
   offset?: number
 }
@@ -102,5 +152,53 @@ export interface TradeLogsData {
   summary: TradeLogSummary
   pagination: { limit: number; offset: number; total: number }
   /** Distinct values across the whole table — drives the filter selects. */
-  options: { tickers: string[]; strategies: string[] }
+  options: { tickers: string[]; strategies: string[]; reasons: ReasonCount[] }
+}
+
+/**
+ * One problem grouped by cause: a reason on one account (or, for a rejected
+ * signal, a reason on one coin — `account` is null and `tickers` names it).
+ */
+export interface SignalIssue {
+  key: string
+  reasonKey: string
+  label: string
+  severity: ReasonSeverity
+  account: string | null
+  uniId: string | null
+  userName: string | null
+  isMaster: boolean
+  exchange: ExchangeKind | null
+  tickers: string[]
+  count: number
+  firstAt: string | null
+  lastAt: string | null
+  lastMessage: string | null
+  /** Where to fix it, when there is a page for that. */
+  fix: { label: string; href: string } | null
+}
+
+export type SignalHealthStatus = 'healthy' | 'normal' | 'attention' | 'quiet'
+
+/** The banner: how the last `hours` of signals went, whatever the page filters. */
+export interface SignalHealth {
+  status: SignalHealthStatus
+  hours: number
+  signals: number
+  filled: number
+  normalSkips: number
+  problems: number
+  /** Signals where the master was in the fan-out and did not trade, for a problem reason. */
+  masterMissed: number
+  lastSignalAt: string | null
+  /** The top five; `issuesTotal` says how many there are. */
+  issues: SignalIssue[]
+  issuesTotal: number
+}
+
+export interface TradeLogIssuesData {
+  signals: number
+  issues: SignalIssue[]
+  /** Normal skips in the same window, by reason — shown, never alarming. */
+  normal: ReasonCount[]
 }

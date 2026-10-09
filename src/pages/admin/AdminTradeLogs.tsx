@@ -1,275 +1,166 @@
-import { useCallback, useMemo, useState } from 'react'
-import { Navigate } from 'react-router-dom'
-import {
-  Activity,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  RefreshCw,
-  SkipForward,
-  XCircle,
-} from 'lucide-react'
+import { Navigate, useSearchParams } from 'react-router-dom'
+import { AlertTriangle, Radio, RefreshCw } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
-import TradeLogCard from '../../components/admin/tradeLogs/TradeLogCard'
+import Tabs, { type TabItem } from '../../components/ui/Tabs'
+import HealthBanner from '../../components/admin/tradeLogs/HealthBanner'
+import SignalStats from '../../components/admin/tradeLogs/SignalStats'
+import TradeLogToolbar from '../../components/admin/tradeLogs/TradeLogToolbar'
+import SignalList from '../../components/admin/tradeLogs/SignalList'
+import IssuesList from '../../components/admin/tradeLogs/IssuesList'
+import { SECTION } from '../../components/admin/tradeLogs/tradeLogClasses'
 import { useApiData } from '../../hooks/useApiData'
-import { getTradeLogs } from '../../services/tradeLogs'
+import { useTradeLogFilters } from '../../hooks/useTradeLogFilters'
+import { getTradeLogHealth, getTradeLogIssues, getTradeLogs } from '../../services/tradeLogs'
 import { ApiError } from '../../services/api'
+import type { SignalIssue } from '../../types/tradeLogs'
 
 const TITLE = 'Signal Log'
 const SUBTITLE =
   'Every signal the engine processed, with the sizing decision it made per account.'
 const PER_PAGE = 10
+/** The banner's window — "is anything wrong right now". */
+const HEALTH_HOURS = 24
 
-const ACTIONS = ['all', 'BUY', 'SELL', 'EXIT_LONG', 'EXIT_SHORT'] as const
-const RESULTS = [
-  { key: 'all', label: 'All' },
-  { key: 'success', label: 'Clean' },
-  { key: 'problem', label: 'Had issues' },
-] as const
+type LogView = 'signals' | 'issues'
 
-const STAT_ICON =
-  'w-10 h-10 flex-shrink-0 grid place-items-center rounded-[11px] bg-surface2 border border-border'
-const CHIP_BASE =
-  'border rounded-pill py-[7px] px-3.5 text-[12px] font-semibold cursor-pointer transition-[border-color,color] duration-150'
-const CHIP_OFF =
-  'border-border bg-surface2 text-muted hover:text-text hover:border-accent'
-const CHIP_ON = 'bg-accent border-accent text-on-accent'
-const SELECT =
-  'h-[38px] border border-border rounded-[12px] bg-surface2 text-text px-3 text-[12.5px] font-body cursor-pointer'
-const PAG_BTN =
-  'grid place-items-center w-8 h-8 border border-border bg-surface2 text-text rounded-[9px] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed'
-
+/**
+ * Admin → Signal Log: a health banner (last 24 h, whatever is filtered
+ * below), then two views over the same filters — every signal with its
+ * per-account fan-out, or the problems grouped by cause with where to fix
+ * them. `?view=issues` holds the second; the default omits the param.
+ *
+ * Both views are fetched as their filters change, not when shown, so
+ * switching tabs is instant and the Issues tab can carry its count.
+ */
 export default function AdminTradeLogs() {
-  const [action, setAction] = useState<string>('all')
-  const [result, setResult] = useState<string>('all')
-  const [ticker, setTicker] = useState('all')
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
-  const [page, setPage] = useState(1)
-  const [expanded, setExpanded] = useState<number | null>(null)
+  const [params, setParams] = useSearchParams()
+  const view: LogView = params.get('view') === 'issues' ? 'issues' : 'signals'
+  const f = useTradeLogFilters()
+  const offset = (f.page - 1) * PER_PAGE
 
-  const offset = (page - 1) * PER_PAGE
-
-  const fetcher = useCallback(
-    () =>
-      getTradeLogs({ action, result, ticker, from, to, limit: PER_PAGE, offset }),
-    [action, result, ticker, from, to, offset],
+  const health = useApiData(() => getTradeLogHealth(HEALTH_HOURS), [])
+  const list = useApiData(
+    () => getTradeLogs({ ...f.listFilters, limit: PER_PAGE, offset }),
+    [f.listKey, offset],
   )
-  const { data, loading, error, reload } = useApiData(fetcher, [
-    action,
-    result,
-    ticker,
-    from,
-    to,
-    offset,
-  ])
+  const issues = useApiData(() => getTradeLogIssues(f.signalFilters), [f.signalKey])
 
-  const totalPages = useMemo(
-    () => Math.max(1, Math.ceil((data?.pagination.total ?? 0) / PER_PAGE)),
-    [data],
-  )
+  const select = (next: LogView) =>
+    setParams(
+      (p) => {
+        const out = new URLSearchParams(p)
+        if (next === 'signals') out.delete('view')
+        else out.set('view', next)
+        return out
+      },
+      { replace: true },
+    )
 
-  if (error instanceof ApiError && error.status === 401) {
+  const refresh = () => {
+    health.reload()
+    list.reload()
+    issues.reload()
+  }
+  const refreshing = health.loading || list.loading || issues.loading
+
+  const showSignalsFor = (issue: SignalIssue) => {
+    f.focusIssue(issue.reasonKey, issue.account)
+    select('signals')
+  }
+
+  if (list.error instanceof ApiError && list.error.status === 401) {
     return <Navigate to="/auth" replace />
   }
 
-  if (!data) {
-    return (
-      <AdminLayout title={TITLE} subtitle={SUBTITLE}>
-        <DataState loading={loading} error={error} onRetry={reload} label="signal log" />
-      </AdminLayout>
-    )
-  }
-
-  // Changing a filter must always land back on page 1, or an out-of-range
-  // offset silently returns an empty page.
-  const setFilter = (fn: () => void) => {
-    fn()
-    setPage(1)
-    setExpanded(null)
-  }
-
-  const { summary, logs, options } = data
+  const tabs: TabItem<LogView>[] = [
+    { key: 'signals', label: 'Signals', Icon: Radio },
+    { key: 'issues', label: 'Issues', Icon: AlertTriangle, badge: issues.data?.issues.length },
+  ]
+  const tickers = list.data?.options.tickers ?? []
+  const reasons = list.data?.options.reasons ?? []
 
   return (
     <AdminLayout title={TITLE} subtitle={SUBTITLE}>
-      <div
-        className="grid grid-cols-4 gap-[14px] mb-[18px] max-[900px]:grid-cols-2 max-[520px]:grid-cols-1"
-        data-aos="fade-up"
-      >
-        <StatCard icon={<Activity size={18} />} label="Signals" value={summary.signals} />
-        <StatCard
-          icon={<CheckCircle2 size={18} />}
-          tone="text-green"
-          label="Orders filled"
-          value={summary.filled}
-        />
-        <StatCard
-          icon={<SkipForward size={18} />}
-          tone="text-accent"
-          label="Accounts skipped"
-          value={summary.skipped}
-        />
-        <StatCard
-          icon={<XCircle size={18} />}
-          tone="text-red"
-          label="Accounts failed"
-          value={summary.failed}
-        />
-      </div>
+      <HealthBanner
+        data={health.data}
+        loading={health.loading}
+        error={health.error}
+        onRetry={health.reload}
+        onSeeIssues={() => select('issues')}
+      />
 
-      <section
-        className="rounded-card border border-border bg-surface p-[18px]"
-        data-aos="fade-up"
-        data-aos-delay="100"
-      >
-        <div className="flex items-center justify-between flex-wrap gap-2.5 mb-4">
-          <div className="flex gap-1.5 flex-wrap">
-            {ACTIONS.map((a) => (
-              <button
-                key={a}
-                type="button"
-                className={`${CHIP_BASE} ${action === a ? CHIP_ON : CHIP_OFF}`}
-                onClick={() => setFilter(() => setAction(a))}
-              >
-                {a === 'all' ? 'All actions' : a.replace('_', ' ')}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={reload}
-            disabled={loading}
-            className="inline-flex items-center gap-[6px] rounded-[9px] py-[7px] px-3 text-[12px] font-semibold cursor-pointer border border-border bg-surface2 text-muted transition-[border-color,color] duration-150 disabled:opacity-50 enabled:hover:text-text enabled:hover:border-accent"
-          >
-            <RefreshCw size={13} className={loading ? 'animate-spin' : undefined} />
-            Refresh
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2.5 flex-wrap mb-4">
-          <div className="flex gap-1.5 flex-wrap">
-            {RESULTS.map((r) => (
-              <button
-                key={r.key}
-                type="button"
-                className={`${CHIP_BASE} ${result === r.key ? CHIP_ON : CHIP_OFF}`}
-                onClick={() => setFilter(() => setResult(r.key))}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-          <select
-            className={SELECT}
-            value={ticker}
-            onChange={(e) => setFilter(() => setTicker(e.target.value))}
-            aria-label="Filter by ticker"
-          >
-            <option value="all">All tickers</option>
-            {options.tickers.map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-          <label className="flex items-center gap-2 text-[12px] text-faint">
-            From
-            <input
-              type="date"
-              value={from}
-              onChange={(e) => setFilter(() => setFrom(e.target.value))}
-              className={SELECT}
-            />
-          </label>
-          <label className="flex items-center gap-2 text-[12px] text-faint">
-            To
-            <input
-              type="date"
-              value={to}
-              onChange={(e) => setFilter(() => setTo(e.target.value))}
-              className={SELECT}
-            />
-          </label>
-        </div>
-
-        <div
-          key={`${action}-${result}-${ticker}-${from}-${to}-${page}`}
-          className="flex flex-col gap-2.5 animate-[fadeup_0.35s_ease-out]"
+      <div className="mb-stack flex flex-wrap items-center justify-between gap-3">
+        <Tabs tabs={tabs} active={view} onChange={select} label="Signal Log views" />
+        <button
+          type="button"
+          onClick={refresh}
+          disabled={refreshing}
+          className="inline-flex items-center gap-[6px] rounded-[9px] py-[7px] px-3 text-[12px] font-semibold cursor-pointer border border-border bg-surface2 text-muted transition-[border-color,color] duration-150 disabled:opacity-50 enabled:hover:text-text enabled:hover:border-accent"
         >
-          {logs.length === 0 ? (
-            <p className="text-center text-muted py-[34px] text-[13px]">
-              {summary.signals === 0
-                ? 'No signals logged yet. The engine writes a row here every time TradingView fires.'
-                : 'No signals match your filters.'}
-            </p>
-          ) : (
-            logs.map((log) => (
-              <TradeLogCard
-                key={log.id}
-                log={log}
-                expanded={expanded === log.id}
-                onToggle={() => setExpanded(expanded === log.id ? null : log.id)}
-              />
-            ))
-          )}
-        </div>
-
-        {data.pagination.total > 0 && (
-          <div className="flex items-center justify-between flex-wrap gap-2.5 mt-4 pt-3.5 border-t border-hair">
-            <span className="text-[12px] text-faint">
-              Showing {offset + 1}–{Math.min(offset + logs.length, data.pagination.total)} of{' '}
-              {data.pagination.total}
-            </span>
-            <div className="flex items-center gap-2.5">
-              <button
-                type="button"
-                className={PAG_BTN}
-                onClick={() => { setPage((p) => Math.max(1, p - 1)); setExpanded(null) }}
-                disabled={page <= 1}
-                aria-label="Previous page"
-              >
-                <ChevronLeft size={15} />
-              </button>
-              <span className="text-[12.5px] text-muted">
-                Page {page} of {totalPages}
-              </span>
-              <button
-                type="button"
-                className={PAG_BTN}
-                onClick={() => { setPage((p) => Math.min(totalPages, p + 1)); setExpanded(null) }}
-                disabled={page >= totalPages}
-                aria-label="Next page"
-              >
-                <ChevronRight size={15} />
-              </button>
-            </div>
-          </div>
-        )}
-      </section>
-    </AdminLayout>
-  )
-}
-
-function StatCard({
-  icon,
-  label,
-  value,
-  tone = 'text-muted',
-}: {
-  icon: React.ReactNode
-  label: string
-  value: number
-  tone?: string
-}) {
-  return (
-    <div className="rounded-card border border-border bg-surface p-card flex items-center gap-[13px]">
-      <span className={`${STAT_ICON} ${tone}`}>{icon}</span>
-      <div>
-        <p className="text-[10.5px] uppercase tracking-[0.07em] text-faint mb-[3px]">
-          {label}
-        </p>
-        <p className="text-[19px] font-bold text-text leading-[1.1] font-mono">{value}</p>
+          <RefreshCw size={13} className={refreshing ? 'animate-spin' : undefined} />
+          Refresh
+        </button>
       </div>
-    </div>
+
+      {/* keyed re-mount replays the reveal on every view switch */}
+      <div key={view} className="animate-[fadeup_0.35s_ease-out]">
+        {view === 'signals' ? (
+          <>
+            <SignalStats summary={list.data?.summary ?? null} showSplit={!f.accountFiltersActive} />
+            <section className={SECTION} data-aos="fade-up" data-aos-delay="100">
+              <TradeLogToolbar view="signals" filters={f} tickers={tickers} reasons={reasons} />
+              {list.data ? (
+                <div
+                  key={`${f.listKey}-${f.page}`}
+                  className={`animate-[fadeup_0.35s_ease-out] transition-opacity duration-150 ${list.loading ? 'opacity-60' : ''}`}
+                >
+                  <SignalList
+                    data={list.data}
+                    page={f.page}
+                    perPage={PER_PAGE}
+                    onPage={f.setPage}
+                    accountFiltersActive={f.accountFiltersActive}
+                    anyFilterActive={f.signalFiltersActive || f.accountFiltersActive}
+                    onClear={f.clear}
+                  />
+                </div>
+              ) : (
+                <DataState
+                  loading={list.loading}
+                  error={list.error}
+                  onRetry={list.reload}
+                  label="signal log"
+                />
+              )}
+            </section>
+          </>
+        ) : (
+          <section className={SECTION}>
+            <TradeLogToolbar view="issues" filters={f} tickers={tickers} reasons={reasons} />
+            {issues.data ? (
+              <div
+                key={f.signalKey}
+                className={`animate-[fadeup_0.35s_ease-out] transition-opacity duration-150 ${issues.loading ? 'opacity-60' : ''}`}
+              >
+                <IssuesList
+                  data={issues.data}
+                  from={f.from}
+                  to={f.to}
+                  onShowSignals={showSignalsFor}
+                />
+              </div>
+            ) : (
+              <DataState
+                loading={issues.loading}
+                error={issues.error}
+                onRetry={issues.reload}
+                label="issues"
+              />
+            )}
+          </section>
+        )}
+      </div>
+    </AdminLayout>
   )
 }

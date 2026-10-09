@@ -932,6 +932,22 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   **Admin → Signal Log** (`/admin/trade-logs`, `AdminTradeLogController`,
   read-only — the engine is the only writer). Also mirrored to the local
   JSONL `trading-flask/out/webhook_trades.log`.
+  **Signal health (2026-10-09, `App\Services\Admin\SignalHealth`)** is the
+  ONE place that sorts every account outcome into a reason key + plain label
+  + severity: `normal` (nothing to close, stack full, deposit below minimum,
+  venue untradeable) or `problem` (key refused, deposit unknown, size too
+  small, open size unreadable, margin, no answer, order refused, engine
+  error, rejected signal). Most of the old red was two customers' blocked
+  keys repeating beside normal skips. The page shows a 24 h health banner
+  (`GET /admin/trade-logs/health`: healthy | normal | attention | quiet, top
+  issues with fix links), an Issues view (`/admin/trade-logs/issues`:
+  problems grouped per reason + account, default last 7 days) and account
+  filters on the list (`outcome`, `reason`, `account` — PHP over ≤3,000
+  signals, since `details` is JSON). **A master absent from the fan-out is
+  not a missed signal** (manual closes narrowed to customers; venues the
+  master has no account on) — only a master row with a problem outcome
+  counts. A new engine skip reason needs a line in `SignalHealth::classify`,
+  or it lands as `other_skip` (a problem).
 - **Backend surface:** `sinegutrade-api`'s `/api/engine/{exchange}/*` routes
   (`EngineController`, `EngineSyncController`, `VerifyEngineSecret` middleware,
   `X-Engine-Secret` header). Who may trade is decided THERE: accounts endpoint
