@@ -451,7 +451,6 @@ export default function AssetFormModal({
               </label>
 
               <StreakSizingFields
-                ticker={form.ticker}
                 base={Number(baseSize)}
                 rows={streakRows}
                 onChange={(next) => {

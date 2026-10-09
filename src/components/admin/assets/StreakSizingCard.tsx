@@ -219,7 +219,6 @@ export default function StreakSizingCard({
       )}
 
       <StreakSizingFields
-        ticker={asset.ticker}
         base={asset.base_size}
         rows={rows}
         onChange={(next) => update({ rows: next })}

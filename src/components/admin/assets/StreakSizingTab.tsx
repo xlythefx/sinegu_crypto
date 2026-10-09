@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Info } from 'lucide-react'
+import { HelpCircle, Info } from 'lucide-react'
 import StreakSizingCard from './StreakSizingCard'
+import StreakSizingGuideModal from './StreakSizingGuideModal'
 import { useAssetStreaks } from '../../../hooks/useAssetStreaks'
 import { displaySymbol } from '../../../lib/chart'
 import { draftTouched, type StreakSizingDraft } from '../../../lib/streakSizing'
@@ -9,17 +10,14 @@ import type { AdminAsset } from '../../../types/admin'
 const INPUT =
   'h-[38px] rounded-field border border-border bg-surface2 px-3 text-[13px] text-text outline-none focus:border-accent'
 
-const RULES = [
-  'Each account counts its own trades on a coin. After losses in a row the next entry uses the loss step for that run; after wins in a row, the win step. No step for the run means Base size (the normal size).',
-  'A win ends a losing run and a loss ends a winning one. With no win steps, any win goes straight back to the normal size.',
-  'Gaps carry: loss steps 2 → 3 and 5 → 2 on a base of 5 mean 1 loss trades 5, 2–4 losses trade 3, and 5 or more trade 2. The deepest step of each kind keeps applying.',
-  'Sizes grow with balance exactly like Base size (per 1,000 USDT). Only new entries change; exits are never affected.',
-]
-
-const FOOTNOTE =
-  'A stacked position that closes together counts as one trade. Any profit after fees is a win; break-even or worse is a loss. A new account starts on the normal size. The asset’s max position size still caps every stack, so a win size above the normal one fills it sooner: on a base of 5 with a max of 15, two entries of 7 make 14 and a third is refused.'
-
+/**
+ * The short version, always on screen. The full explanation — the worked
+ * example, the balance scaling, the fine print — is one click away in
+ * StreakSizingGuideModal, so the tab itself never shows an example figure
+ * that could be mistaken for a real setting.
+ */
 function HowItWorks() {
+  const [open, setOpen] = useState(false)
   return (
     <section
       className="flex items-start gap-3 rounded-card border border-border bg-surface p-card"
@@ -30,21 +28,21 @@ function HowItWorks() {
       </span>
       <div className="min-w-0 flex-1">
         <h2 className="font-display text-[15px] font-extrabold">How streak sizing works</h2>
-        <ul className="mt-2.5 grid gap-x-6 gap-y-2 lg:grid-cols-2">
-          {RULES.map((rule) => (
-            <li key={rule} className="flex items-start gap-2 text-[12.5px] leading-[1.55] text-muted">
-              <span
-                className="mt-[7px] h-1.5 w-1.5 flex-none rounded-full bg-accent"
-                aria-hidden="true"
-              />
-              {rule}
-            </li>
-          ))}
-        </ul>
-        <p className="mt-3 border-t border-hair pt-3 text-[11.5px] leading-[1.55] text-faint">
-          {FOOTNOTE}
+        <p className="mt-1.5 text-[13px] leading-[1.6] text-muted">
+          After a number of losses or wins in a row on a coin, the bot opens that account’s next
+          trade at the size you set for that step. No step for the current run means the normal
+          size.
         </p>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="mt-2 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-accent hover:underline"
+        >
+          <HelpCircle size={14} aria-hidden="true" />
+          Get to know more
+        </button>
       </div>
+      <StreakSizingGuideModal open={open} onClose={() => setOpen(false)} />
     </section>
   )
 }

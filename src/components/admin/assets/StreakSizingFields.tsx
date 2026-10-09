@@ -10,7 +10,6 @@ import {
   nextRow,
   parseStreak,
   sameOrder,
-  scalePreview,
   sortRows,
   sortSteps,
   stepPhrase,
@@ -19,11 +18,7 @@ import {
   type RowCheck,
   type StreakRow,
 } from '../../../lib/streakSizing'
-import { fmtQty } from '../../../lib/format'
 import type { StreakKind } from '../../../types/admin'
-
-/** Example balances for the scaling preview — 1,000 is the size as typed. */
-const PREVIEW_BALANCES = [1000, 3000, 10000] as const
 
 /*
  * Rows are laid out against the EDITOR's width (container query), not the
@@ -149,8 +144,6 @@ function hintFor(row: StreakRow, check: RowCheck, base: number): Hint | null {
 }
 
 interface StreakSizingFieldsProps {
-  /** Decides the scaling rule in the preview (BTCUSDT steps in whole sizes). */
-  ticker: string
   /** The asset's Base size — NaN while a form has no valid one yet. */
   base: number
   /** The rows as typed, in the order shown. */
@@ -169,16 +162,15 @@ interface StreakSizingFieldsProps {
  *
  * Every row says what it will actually trade — its share of the normal size,
  * or why it will not be saved — and the summary below restates the whole
- * ladder in both directions, then the same ladder at an example balance,
- * because "3" only means something once you see it is 60% of the normal size
- * and 9 on a 3,000 USDT account.
+ * ladder in both directions. How sizes grow with an account's balance is
+ * explained in the guide window (StreakSizingGuideModal), not here: an example
+ * balance beside the real sizes read as a second set of sizes.
  *
  * Rows are put in order (losses, then wins, each by count) only when focus
  * leaves the editor or a step is added — never while a count is being typed,
  * which would move the row out from under the caret.
  */
 export default function StreakSizingFields({
-  ticker,
   base,
   rows,
   onChange,
@@ -186,7 +178,6 @@ export default function StreakSizingFields({
   muted = false,
 }: StreakSizingFieldsProps) {
   const id = useId()
-  const [balance, setBalance] = useState<number>(3000)
   // The row just added: its size box takes focus once it is on screen.
   const [focusRow, setFocusRow] = useState<number | null>(null)
 
@@ -205,10 +196,6 @@ export default function StreakSizingFields({
     win: deepestStreak(steps, 'win'),
   }
   const stops = ladderStops(base, steps)
-  const scaledStops = stops.map((stop) => ({
-    ...stop,
-    size: Number.isFinite(stop.size) ? scalePreview(ticker, stop.size, balance) : NaN,
-  }))
   const lossRows = rows.filter((r) => r.kind === 'loss').length
   const winRows = rows.length - lossRows
   const next = nextRow(rows)
@@ -359,7 +346,7 @@ export default function StreakSizingFields({
       </div>
 
       {steps.length > 0 && (
-        <div className="flex flex-col gap-3.5 rounded-row border border-hair bg-surface2 p-3.5">
+        <div className="rounded-row border border-hair bg-surface2 p-3.5">
           <div>
             <p className={CAPTION}>
               Size by streak
@@ -368,40 +355,6 @@ export default function StreakSizingFields({
               </span>
             </p>
             <Stops stops={stops} label="Size by streak" />
-          </div>
-
-          <div>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-              <span className={CAPTION}>On an account with</span>
-              <div
-                className="inline-flex rounded-pill border border-border bg-surface p-0.5"
-                role="radiogroup"
-                aria-label="Example balance"
-              >
-                {PREVIEW_BALANCES.map((b) => {
-                  const on = b === balance
-                  return (
-                    <button
-                      key={b}
-                      type="button"
-                      role="radio"
-                      aria-checked={on}
-                      className={`min-h-[26px] rounded-pill px-2.5 font-mono text-[11px] font-semibold transition-colors duration-150 ${
-                        on ? 'bg-accent text-on-accent' : 'text-muted hover:text-text'
-                      }`}
-                      onClick={() => setBalance(b)}
-                    >
-                      {fmtQty(b, 0, 0)}
-                    </button>
-                  )
-                })}
-              </div>
-              <span className={CAPTION}>USDT</span>
-            </div>
-            <Stops
-              stops={scaledStops}
-              label={`Size by streak at ${fmtQty(balance, 0, 0)} USDT`}
-            />
           </div>
         </div>
       )}
