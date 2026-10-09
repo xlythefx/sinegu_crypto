@@ -270,6 +270,70 @@ def _fetch_open_amounts(symbol: str, position_side: str, exchange: str) -> Optio
     return amounts
 
 
+# --- Loss-streak sizing (batched, DB) -----------------------------------------
+#
+# After N losing trades in a row on a coin, an account's next ENTRY uses the
+# size the admin typed for step N (`asset["loss_sizes"]`, {losses: size})
+# instead of base_size — and that size then scales with the balance exactly as
+# base_size does. One win resets to base. The streak is the account's OWN
+# closes on the coin, long and short together, counted by the API
+# (`LossSizing::streaks`), which is the one definition of a loss. Owner's rules,
+# 2026-10-09; an asset with no ladder makes no read and sizes as before.
+
+def _fetch_loss_streaks(symbol: str, exchange: str, depth: int) -> Optional[dict[str, int]]:
+    """One engine-API call: api_key -> losses in a row on symbol, capped at
+    depth. An account absent from the map has no known close there (streak 0).
+    None when the read failed — NOT {}: "nobody is on a streak" and "we could
+    not ask" are different answers, even though both size at base."""
+    data = engine_client.get_json(
+        "loss-streaks", params={"symbol": symbol.upper(), "depth": depth}, exchange=exchange
+    )
+    if data is None:
+        return None
+    raw = data.get("streaks")
+    if raw == []:  # PHP's encoding of an empty map, should one ever slip through
+        return {}
+    if not isinstance(raw, dict):
+        log.warning("[%s] loss-streaks payload malformed: %.200s", exchange, data)
+        return None
+    streaks: dict[str, int] = {}
+    for api_key, losses in raw.items():
+        try:
+            streaks[str(api_key)] = max(0, int(losses))
+        except (TypeError, ValueError):
+            continue
+    return streaks
+
+
+def _loss_size(asset: dict, streak: int) -> tuple[float, int]:
+    """(size before balance scaling, ladder step applied) for a losing streak.
+
+    The deepest configured step at or below the streak applies, so a blank step
+    carries the previous one (steps 1 and 3 set: two losses still use step 1)
+    and the deepest step keeps applying past the end of the ladder. Step 0 =
+    no step reached = the asset's base_size.
+    """
+    ladder = asset.get("loss_sizes") or {}
+    step = 0
+    for losses in sorted(ladder):
+        if losses <= streak:
+            step = losses
+    if step:
+        return float(ladder[step]), step
+    return float(asset["base_size"]), 0
+
+
+def _account_streak(account: dict, asset: Optional[dict], loss_streaks: Optional[dict[str, int]]) -> tuple[int, bool]:
+    """(streak, known) for one account. Unknown — the batched read failed — is
+    sized as streak 0, i.e. base size (owner's call, 2026-10-09): an outage of
+    the history read must not stop or shrink every customer's trades."""
+    if not asset or not asset.get("loss_sizes"):
+        return 0, True
+    if loss_streaks is None:
+        return 0, False
+    return loss_streaks.get(account["api_key"], 0), True
+
+
 # --- Bookkeeping helpers ------------------------------------------------------
 
 def _upsert_position_api(account: dict, symbol: str, position_side: str, amount: float, entry_price: Optional[float]) -> None:
@@ -318,6 +382,7 @@ def _closed_increments(
     asset: Optional[dict],
     symbol: str,
     closed_qty: float,
+    loss_streaks: Optional[dict[str, int]] = None,
 ) -> tuple[Optional[int], Optional[int]]:
     """How many of THIS account's entry-sized units the closed position was
     worth, as (increments, cap) — the exit-side mirror of the entry's depth.
@@ -336,6 +401,12 @@ def _closed_increments(
     a position opened before a large PnL swing is measured against a slightly
     different entry size than the one that opened it. Same approximation the
     entry-side `stacks_now` carries, and the reason this is rounded.
+
+    With loss-streak sizing the unit is the STREAK size: every entry in the
+    stack being closed was opened at the account's current streak step (the
+    streak only moves when a trade closes, and this close is not recorded yet),
+    so dividing by base_size would call three 25-unit entries "two" on a
+    50-unit base. An unreadable streak falls back to base, like the entry.
     """
     if not asset or closed_qty <= 0:
         return None, None
@@ -346,6 +417,9 @@ def _closed_increments(
         return None, None
     if base_size <= 0:
         return None, None
+    streak, _known = _account_streak(account, asset, loss_streaks)
+    if streak:
+        base_size, _step = _loss_size(asset, streak)
     unit = _scale_qty(symbol, base_size, balance)
     if unit <= 0:
         return None, None
@@ -518,6 +592,7 @@ def _run_account(
     asset: Optional[dict],
     open_amounts: Optional[dict[str, float]],
     exit_batch_id: Optional[str] = None,
+    loss_streaks: Optional[dict[str, int]] = None,
 ) -> dict:
     """Execute one signal on one account. Returns a result dict with
     status: filled | skipped | failed (+ retryable flag on failures)."""
@@ -580,7 +655,12 @@ def _run_account(
             # asset presence/base_size already validated job-level (fail closed).
             balance = float(account.get("balance") or 0)
             base_size = float(asset["base_size"])
-            quantity = _scale_qty(symbol, base_size, balance)
+            # Loss-streak sizing swaps the size BEFORE scaling, so a streak step
+            # scales with the balance exactly as base_size does.
+            streak, streak_known = _account_streak(account, asset, loss_streaks)
+            entry_size, streak_step = _loss_size(asset, streak)
+            quantity = _scale_qty(symbol, entry_size, balance)
+            normal_quantity = _scale_qty(symbol, base_size, balance) if streak_step else quantity
             # Audit trail for the balance-proportional sizing: the INPUTS, not just
             # the answer, so any size (or skip) can be explained from the trade_logs
             # row alone without replaying the account's balance at signal time.
@@ -592,7 +672,7 @@ def _run_account(
                 "reference_balance": REFERENCE_BALANCE,
                 "coarse_step": symbol in COARSE_STEP_TICKERS,
                 "quantity": quantity,
-                "size_multiple": round(quantity / base_size, 6) if base_size else None,
+                "size_multiple": round(quantity / entry_size, 6) if entry_size else None,
                 "stacks_now": None,
                 # Two distinct numbers, deliberately both recorded: max_size is
                 # the raw `assets.max_increments` COLUMN (position-size units),
@@ -603,6 +683,17 @@ def _run_account(
                 "max_size": float(asset.get("max_size") or 0),
                 "max_increments": float(asset.get("max_increments") or 0),
             }
+            if asset.get("loss_sizes"):
+                # Only on assets with a ladder, so every other row stays as it was.
+                # `streak_size` is the size before scaling; base_size above stays
+                # the asset's own figure so a row reads "base X, used Y".
+                sizing |= {
+                    "loss_streak": streak,
+                    "streak_known": streak_known,
+                    "streak_step": streak_step,
+                    "streak_size": entry_size,
+                    "normal_quantity": normal_quantity,
+                }
             if quantity <= 0:
                 _bump("accounts_skipped")
                 return base | {"status": "skipped", "reason": "size too small", "sizing": sizing}
@@ -639,11 +730,23 @@ def _run_account(
             elif max_increments > 0:
                 current = api.open_amount(symbol, position_side)
 
+            # With loss-streak sizing the count stays measured in the size THIS
+            # entry opens: every entry of an open stack shares one streak step,
+            # because the streak only moves when a trade on the coin closes. The
+            # one way it can move mid-stack — a close on the OPPOSITE side, or an
+            # admin editing the ladder — is what the size ceiling below catches:
+            # the position may never pass max_increments × the NORMAL entry, the
+            # asset's max position size at this balance.
             stacks_now = None
             if current is not None:
                 stacks_now = round(current / quantity, 4) if quantity else 0.0
                 sizing["stacks_now"] = stacks_now
-                if max_increments > 0 and int(round(stacks_now)) + 1 > max_increments:
+                over_ceiling = (
+                    streak_step > 0
+                    and max_increments > 0
+                    and current + quantity > max_increments * normal_quantity * (1 + 1e-6)
+                )
+                if max_increments > 0 and (int(round(stacks_now)) + 1 > max_increments or over_ceiling):
                     _bump("accounts_skipped")
                     return base | {
                         "status": "skipped",
@@ -727,7 +830,7 @@ def _run_account(
         closed_qty = float(result.get("closed_quantity") or 0)
         entry_price = result.get("entry_price")
         tag = strategy or _recover_strategy(account, symbol, position_side)
-        increments_closed, max_increments = _closed_increments(account, asset, symbol, closed_qty)
+        increments_closed, max_increments = _closed_increments(account, asset, symbol, closed_qty, loss_streaks)
         _upsert_position_api(account, symbol, position_side, 0.0, None)
         _BOOKKEEPING_EXECUTOR.submit(
             _deferred_close_bookkeeping,
@@ -785,7 +888,17 @@ def _plan_exchange(
         open_amounts = _fetch_open_amounts(symbol, position_side, exchange)  # one batched call
         if open_amounts is None:
             log.warning("[%s] engine positions/check unavailable — per-account venue fallback", exchange)
-    return {"asset": asset, "accounts": accounts, "open_amounts": open_amounts}
+
+    # Loss-streak sizing: one batched read for the whole fan-out, only for an
+    # asset with a ladder. Read on exits too — the close message's
+    # `Increments Closed` divides by the streak size the stack was opened at.
+    loss_streaks = None
+    ladder = (asset or {}).get("loss_sizes") or {}
+    if ladder:
+        loss_streaks = _fetch_loss_streaks(symbol, exchange, max(ladder))
+        if loss_streaks is None:
+            log.warning("[%s] loss-streaks unavailable for %s — base size for every account", exchange, symbol)
+    return {"asset": asset, "accounts": accounts, "open_amounts": open_amounts, "loss_streaks": loss_streaks}
 
 
 def _process_trade_job(
@@ -864,7 +977,7 @@ def _process_trade_job(
         for account in plan["accounts"]:
             future = _ACCOUNT_EXECUTOR.submit(
                 _run_account, account, action, symbol, price, leverage, strategy, plan["asset"],
-                plan["open_amounts"], exit_batch_id,
+                plan["open_amounts"], exit_batch_id, plan.get("loss_streaks"),
             )
             futures[future] = account
     results = []

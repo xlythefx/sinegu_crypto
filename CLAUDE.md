@@ -1349,6 +1349,47 @@ for the overlay's `position: fixed` and trap it inside.
      balance-independent by design (it is a property of the asset); only the
      size each account trades scales with its balance, which is what makes one
      cap correct for a 500 and a 50,000 USDT account alike.
+  4. **Loss-streak sizing** (2026-10-09, employer's request; LTC and RENDER
+     first, any asset can use it). After N losing trades in a row on a coin,
+     an account's next ENTRY uses a size the admin TYPED for step N instead of
+     base_size — manual amounts, never percentages — and that size then goes
+     through `_scale_qty` exactly like base_size. One win → base. No win
+     ladder, by decision. Config: `assets.loss_sizing_enabled` +
+     `asset_loss_sizes` (asset_id, losses 1–10, size), edited on Admin →
+     Trading Assets → **Loss-streak sizing** tab (`?tab=loss-sizing`) or inside
+     the asset form; both go through `App\Services\Assets\LossSizing::replace`.
+     Rules:
+     - **The streak is the account's OWN closes on that coin**, long and
+       short together, newest first until the first win, keyed by `api_key`
+       (a new key starts at base). One past-position row = one trade, so a
+       stacked close is one loss. Win = `realized_pnl > 0` (any profit after
+       fees); 0 counts as a loss; a NULL P&L row (bookkeeping not landed) is
+       skipped; sandbox rows never count. `LossSizing::streaks` is the ONE
+       definition, served to the engine as `GET /engine/{x}/loss-streaks?
+       symbol=&depth=` — one window-function query for every account, on the
+       `(api_key, symbol, closed_at)` index, called once per signal and only
+       for an asset with a ladder.
+     - **A blank step carries the previous one**; the deepest step keeps
+       applying past the end; a streak shallower than the first step is base
+       (`webhook._loss_size`).
+     - **An unreadable streak trades BASE size** (owner's call) — recorded as
+       `streak_known: false`. Not "smallest size", not skip.
+     - **The stack cap still divides by this entry's own size.** Every entry
+       of an open stack shares one streak step, because the streak only moves
+       when a trade on the coin closes. The two ways it can move mid-stack (a
+       close on the opposite side, an admin editing the ladder) are covered by
+       a size ceiling: with a step active, `current + quantity` may never pass
+       `max_increments × normal scaled entry` — the asset's max position size.
+     - **`Increments Closed` divides by the streak size** (the exit plan reads
+       the streaks too), so three 25-unit entries on a 50 base close as 3, and
+       the public trade count stays right.
+     - **Absent ladder fields on an asset write mean UNCHANGED** — the asset
+       card's on/off toggle re-posts only the asset fields. A form that sends
+       `loss_sizing_enabled` owns the ladder (no `loss_sizes` = no steps).
+     - Never in the trader catalog (`GET /assets`), like base_size.
+     - Signal Log shows the step per account (`loss_streak`, `streak_step`,
+       `streak_size`, `streak_known`, `normal_quantity` in the sizing block —
+       only written for an asset with a ladder, so other rows are unchanged).
   `total_deposit` comes from `GET /api/engine/{exchange}/accounts` as
   `initial_deposit + (deposits − withdrawals)` over `binance_transactions` —
   **not** raw `initial_deposit`, which `EngineSyncController` writes once and
@@ -1561,7 +1602,7 @@ for the overlay's `position: fixed` and trap it inside.
   `SYNC_POSITION_MODE_ON_STARTUP`. Config-only fix, no code, no test gate:
   `python .claude/deploy_sinegualcrypto.py sync-engine-env` (upserts + restarts).
 - **Commands:** `python -m binance_abcd.main` (waitress), `python -m pytest
-  tests/ -q` (525 tests, no network), `python webhook_tester.py` (Tkinter GUI
+  tests/ -q` (548 tests, no network), `python webhook_tester.py` (Tkinter GUI
   trade sender — local or prod target, red banner on prod).
 - **Naming trap:** root `src/` is the React app; the engine package is
   `binance_abcd/`, deliberately not named `src`. Python and TypeScript

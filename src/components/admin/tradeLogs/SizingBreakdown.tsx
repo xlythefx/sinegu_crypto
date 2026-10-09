@@ -24,10 +24,18 @@ export default function SizingBreakdown({
     sizeMultiple,
     stacksNow,
     maxIncrements,
+    lossStreak,
+    streakKnown,
+    streakStep,
+    streakSize,
   } = sizing
 
   const belowReference =
     balance !== null && referenceBalance !== null && balance < referenceBalance
+  // Loss-streak sizing swaps the size the multiple applies to; base size is
+  // still the asset's own figure. Null on assets without a ladder.
+  const hasStreak = lossStreak !== null
+  const sizeUsed = hasStreak && streakSize !== null ? streakSize : baseSize
 
   // A deposit-gated skip never got as far as sizing, so there is no formula to
   // show — only why the account was refused.
@@ -79,12 +87,24 @@ export default function SizingBreakdown({
           ×{sizeMultiple !== null ? fmtQty(sizeMultiple, 0, 4) : '—'}
         </span>
         <span className="text-faint"> × </span>
-        {baseSize !== null ? fmtQty(baseSize, 0, 8) : '—'}
+        {sizeUsed !== null ? fmtQty(sizeUsed, 0, 8) : '—'}
         <span className="text-faint"> = </span>
         <span className="text-text font-semibold">
           {quantity !== null ? fmtQty(quantity, 0, 8) : '—'} {ticker.replace(/USDT$/, '')}
         </span>
       </p>
+
+      {hasStreak && (
+        <p className="text-[11.5px] text-muted mb-3 leading-snug">
+          {streakKnown === false
+            ? 'Loss-streak sizing: the trade history could not be read, so base size was used.'
+            : streakStep
+              ? `Loss-streak sizing: ${lossStreak} loss${lossStreak === 1 ? '' : 'es'} in a row, so the ${streakStep}-loss size (${fmtQty(sizeUsed ?? 0, 0, 8)}) was used instead of base ${fmtQty(baseSize, 0, 8)}.`
+              : lossStreak
+                ? `Loss-streak sizing: ${lossStreak} loss${lossStreak === 1 ? '' : 'es'} in a row, below the first step, so base size was used.`
+                : 'Loss-streak sizing: no losing streak, so base size was used.'}
+        </p>
+      )}
 
       {belowReference && (
         <p className="text-[11.5px] text-muted mb-3 leading-snug">

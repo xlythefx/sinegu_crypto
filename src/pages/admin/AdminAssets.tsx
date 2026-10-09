@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { Layers, Plus, TrendingDown } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
 import AssetCard from '../../components/admin/AssetCard'
 import AssetFormModal from '../../components/admin/AssetFormModal'
+import LossSizingTab from '../../components/admin/assets/LossSizingTab'
 import ConfirmModal from '../../components/ui/ConfirmModal'
+import Tabs, { type TabItem } from '../../components/ui/Tabs'
 import { useApiData } from '../../hooks/useApiData'
 import {
   createAsset,
@@ -24,8 +27,27 @@ const INPUT =
 const PAG_BTN =
   'rounded-pill border border-border bg-surface2 py-[7px] px-[15px] text-[12.5px] font-semibold text-text hover:border-accent disabled:opacity-45 disabled:cursor-not-allowed'
 
+type AssetsTab = 'assets' | 'loss-sizing'
+
+const TABS: TabItem<AssetsTab>[] = [
+  { key: 'assets', label: 'Assets', Icon: Layers },
+  { key: 'loss-sizing', label: 'Loss-streak sizing', Icon: TrendingDown },
+]
+
 export default function AdminAssets() {
   const { data: assets, loading, error, reload } = useApiData(getAdminAssets)
+
+  // The tab lives in `?tab=` so a link or a reload lands on the same one;
+  // the default tab omits the param.
+  const [params, setParams] = useSearchParams()
+  const tab: AssetsTab = params.get('tab') === 'loss-sizing' ? 'loss-sizing' : 'assets'
+  const selectTab = (next: AssetsTab) =>
+    setParams(next === 'assets' ? {} : { tab: next }, { replace: true })
+  const tabBar = (
+    <div className="mb-stack">
+      <Tabs tabs={TABS} active={tab} onChange={selectTab} label="Trading assets sections" />
+    </div>
+  )
 
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
@@ -171,6 +193,7 @@ export default function AdminAssets() {
   if (!assets) {
     return (
       <AdminLayout title="Trading Assets" subtitle="Manage tradable instruments">
+        {tabBar}
         <DataState
           loading={loading}
           error={error}
@@ -183,139 +206,147 @@ export default function AdminAssets() {
 
   return (
     <AdminLayout title="Trading Assets" subtitle="Manage tradable instruments">
-      <div
-        className="rounded-card border border-border bg-surface p-card"
-        data-aos="fade-up"
-      >
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-3.5">
-          <div>
-            <div className="font-display text-[15px] font-extrabold">
-              All Assets
-            </div>
-            <div className="mt-px text-[12px] text-muted">
-              Showing {filtered.length === 0 ? 0 : start + 1}–
-              {Math.min(start + PAGE_SIZE, filtered.length)} of{' '}
-              {filtered.length} assets
-              <span className="text-faint">
-                {' · '}
-                {enabledCount} tradable, {filtered.length - enabledCount} off
-              </span>
-            </div>
-          </div>
-          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-            <input
-              type="search"
-              className={`${INPUT} min-w-0 flex-1 sm:min-w-[190px] sm:flex-none`}
-              placeholder="Search by ticker, type…"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value)
-                resetToFirstPage()
-              }}
-              aria-label="Search assets"
-            />
-            <select
-              className={INPUT}
-              value={typeFilter}
-              onChange={(e) => {
-                setTypeFilter(e.target.value)
-                resetToFirstPage()
-              }}
-              aria-label="Filter by type"
-            >
-              <option value="all">All types</option>
-              {types.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-            <select
-              className={INPUT}
-              value={tickerFilter}
-              onChange={(e) => {
-                setTickerFilter(e.target.value)
-                resetToFirstPage()
-              }}
-              aria-label="Filter by ticker"
-            >
-              <option value="all">All tickers</option>
-              {tickers.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="inline-flex h-[38px] items-center gap-1.5 rounded-pill bg-accent px-4 text-[13px] font-bold text-on-accent"
-              onClick={openCreate}
-            >
-              <Plus size={15} />
-              New Asset
-            </button>
-          </div>
-        </div>
-
-        {actionError && (
-          <p
-            className="mb-3 rounded-field border border-[color-mix(in_srgb,#ef4444_35%,transparent)] bg-[color-mix(in_srgb,#ef4444_8%,transparent)] py-2.5 px-3.5 text-[13px] text-[#ef4444]"
-            role="alert"
+      {tabBar}
+      {/* keyed re-mount replays the reveal on every tab switch */}
+      <div key={tab} className="animate-[fadeup_0.35s_ease-out]">
+        {tab === 'loss-sizing' ? (
+          <LossSizingTab assets={list} onSaved={reload} />
+        ) : (
+          <div
+            className="rounded-card border border-border bg-surface p-card"
+            data-aos="fade-up"
           >
-            {actionError}
-          </p>
-        )}
-
-        {/* Re-mounted on every filter/page change so the new set reveals
-            instead of hard-cutting (project convention). */}
-        <div
-          key={`${search}-${typeFilter}-${tickerFilter}-${safePage}`}
-          className="animate-[fadeup_0.35s_ease-out]"
-        >
-          {pageRows.length === 0 ? (
-            <p className="rounded-card border border-dashed border-border bg-surface2 px-4 py-10 text-center text-[13px] text-muted">
-              No assets match your search. Adjust the filters or create a new
-              asset.
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 gap-3.5 min-[560px]:grid-cols-2 min-[1180px]:grid-cols-3">
-              {pageRows.map((asset) => (
-                <AssetCard
-                  key={asset.asset_id}
-                  asset={asset}
-                  busy={actionBusy}
-                  onToggle={setToggling}
-                  onEdit={openEdit}
-                  onDelete={setDeleting}
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3.5">
+              <div>
+                <div className="font-display text-[15px] font-extrabold">
+                  All Assets
+                </div>
+                <div className="mt-px text-[12px] text-muted">
+                  Showing {filtered.length === 0 ? 0 : start + 1}–
+                  {Math.min(start + PAGE_SIZE, filtered.length)} of{' '}
+                  {filtered.length} assets
+                  <span className="text-faint">
+                    {' · '}
+                    {enabledCount} tradable, {filtered.length - enabledCount} off
+                  </span>
+                </div>
+              </div>
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                <input
+                  type="search"
+                  className={`${INPUT} min-w-0 flex-1 sm:min-w-[190px] sm:flex-none`}
+                  placeholder="Search by ticker, type…"
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value)
+                    resetToFirstPage()
+                  }}
+                  aria-label="Search assets"
                 />
-              ))}
+                <select
+                  className={INPUT}
+                  value={typeFilter}
+                  onChange={(e) => {
+                    setTypeFilter(e.target.value)
+                    resetToFirstPage()
+                  }}
+                  aria-label="Filter by type"
+                >
+                  <option value="all">All types</option>
+                  {types.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className={INPUT}
+                  value={tickerFilter}
+                  onChange={(e) => {
+                    setTickerFilter(e.target.value)
+                    resetToFirstPage()
+                  }}
+                  aria-label="Filter by ticker"
+                >
+                  <option value="all">All tickers</option>
+                  {tickers.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="inline-flex h-[38px] items-center gap-1.5 rounded-pill bg-accent px-4 text-[13px] font-bold text-on-accent"
+                  onClick={openCreate}
+                >
+                  <Plus size={15} />
+                  New Asset
+                </button>
+              </div>
             </div>
-          )}
-        </div>
 
-        {filtered.length > 0 && totalPages > 1 && (
-          <div className="mt-3.5 flex items-center justify-between border-t border-hair pt-3">
-            <span className="text-[12.5px] text-muted">
-              Page {safePage} of {totalPages}
-            </span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className={PAG_BTN}
-                disabled={safePage === 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+            {actionError && (
+              <p
+                className="mb-3 rounded-field border border-[color-mix(in_srgb,#ef4444_35%,transparent)] bg-[color-mix(in_srgb,#ef4444_8%,transparent)] py-2.5 px-3.5 text-[13px] text-[#ef4444]"
+                role="alert"
               >
-                Previous
-              </button>
-              <button
-                type="button"
-                className={PAG_BTN}
-                disabled={safePage === totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                Next
-              </button>
+                {actionError}
+              </p>
+            )}
+
+            {/* Re-mounted on every filter/page change so the new set reveals
+                instead of hard-cutting (project convention). */}
+            <div
+              key={`${search}-${typeFilter}-${tickerFilter}-${safePage}`}
+              className="animate-[fadeup_0.35s_ease-out]"
+            >
+              {pageRows.length === 0 ? (
+                <p className="rounded-card border border-dashed border-border bg-surface2 px-4 py-10 text-center text-[13px] text-muted">
+                  No assets match your search. Adjust the filters or create a new
+                  asset.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 gap-3.5 min-[560px]:grid-cols-2 min-[1180px]:grid-cols-3">
+                  {pageRows.map((asset) => (
+                    <AssetCard
+                      key={asset.asset_id}
+                      asset={asset}
+                      busy={actionBusy}
+                      onToggle={setToggling}
+                      onEdit={openEdit}
+                      onDelete={setDeleting}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
+
+            {filtered.length > 0 && totalPages > 1 && (
+              <div className="mt-3.5 flex items-center justify-between border-t border-hair pt-3">
+                <span className="text-[12.5px] text-muted">
+                  Page {safePage} of {totalPages}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className={PAG_BTN}
+                    disabled={safePage === 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    className={PAG_BTN}
+                    disabled={safePage === totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

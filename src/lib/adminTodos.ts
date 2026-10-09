@@ -18,6 +18,24 @@ import type { AdminTodo } from '../types/adminTodos'
  *    the note and the date it was settled stay readable.
  */
 export const ADMIN_TODOS: AdminTodo[] = [
+  // ── Loss-streak sizing (2026-10-09) ─────────────────────────────────────
+  {
+    id: 'loss-sizing-configure',
+    feature: 'Loss-streak sizing',
+    kind: 'action',
+    title: 'Type the losing-streak sizes for LTC and RENDER, then switch them on',
+    added: '2026-10-09',
+    why: 'The bot can now trade a smaller size after losses in a row and go back to base size after one win, but every asset starts with the feature OFF and no sizes. Until the sizes are typed in and the switch is on, LTC and RENDER keep trading their normal base size after every loss.',
+    steps: [
+      'Admin → Trading Assets → "Loss-streak sizing" tab. LTCUSDT (base 5) and RENDERUSDT (base 60) are both already set up for Binance.',
+      'On the LTCUSDT card, type the size for each step you want (for example after 1 loss in a row → 4, after 3 → 2.5). A blank step keeps the previous one. Sizes are per 1,000 USDT of balance, exactly like Base size.',
+      'Switch the card ON and Save, then confirm. Do the same for RENDERUSDT.',
+      'Check the "Right now" line on each card: it shows how many accounts are at normal size and how many are on each step today.',
+      'After the next entry signal, open Admin → Signal Log, expand the signal and look at an account on a streak: it says which step was used and why.',
+    ],
+    envKeys: [],
+    links: [{ label: 'Admin → Trading Assets', href: '/admin/assets?tab=loss-sizing' }],
+  },
   // ── Card payments via Stripe (2026-09-30) ───────────────────────────────
   {
     id: 'stripe-register-webhooks',

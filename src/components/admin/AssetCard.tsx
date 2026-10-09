@@ -1,6 +1,7 @@
-import { Pencil, Trash2 } from 'lucide-react'
+import { Pencil, Trash2, TrendingDown } from 'lucide-react'
 import { displaySymbol } from '../../lib/chart'
 import { fmtMediumDate, fmtQty } from '../../lib/format'
+import { ladderShortText } from '../../lib/lossSizing'
 import type { AdminAsset } from '../../types/admin'
 
 interface AssetCardProps {
@@ -143,6 +144,22 @@ export default function AssetCard({
           }
         />
       </div>
+
+      {/* Loss-streak sizing changes what the Base size tile above means after
+          a losing run, so the card says so where the size is read. The ladder
+          itself is edited on the Loss-streak sizing tab or in the form. */}
+      {asset.loss_sizing_enabled && asset.loss_sizes.length > 0 && (
+        <div
+          className="-mt-1 flex min-w-0 items-center gap-2 rounded-row border border-accent-line bg-accent-soft px-3 py-2"
+          title="After losses in a row, the next entry uses these sizes. One win goes back to Base size."
+        >
+          <TrendingDown size={13} className="flex-none text-accent" aria-hidden="true" />
+          <span className="flex-none text-[11px] font-bold text-accent">Streak sizing on</span>
+          <span className="min-w-0 truncate font-mono text-[11px] text-muted">
+            {ladderShortText(asset.loss_sizes)}
+          </span>
+        </div>
+      )}
 
       <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-hair pt-3">
         <button

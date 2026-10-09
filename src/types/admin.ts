@@ -208,6 +208,18 @@ export interface AdminPastTradeUpdate {
 /** Defined with the trader-facing asset types; re-exported for admin callers. */
 export type { AssetSide } from './assets'
 
+/**
+ * One step of an asset's loss-streak ladder: after `losses` losing trades in
+ * a row on the coin, the next entry uses `size` instead of base_size. `size`
+ * is in the same units as base_size (per 1,000 USDT of balance), so it scales
+ * with each account's balance exactly the same way.
+ */
+export interface AssetLossSize {
+  /** Losing trades in a row this step starts at, 1–10. */
+  losses: number
+  size: number
+}
+
 /** One assets row as returned by GET /admin/assets. */
 export interface AdminAsset {
   asset_id: number
@@ -219,11 +231,23 @@ export interface AdminAsset {
   max_increments: number
   base_size: number
   enabled: boolean
+  /** Loss-streak sizing switch. Off = every entry uses base_size. */
+  loss_sizing_enabled: boolean
+  /** Configured steps, shallowest first. A missing step carries the one above it. */
+  loss_sizes: AssetLossSize[]
   created_at: string | null
   updated_at: string | null
 }
 
-/** Payload for creating / updating an asset. */
+/**
+ * Payload for creating / updating an asset.
+ *
+ * The two loss-sizing fields are OPTIONAL on purpose: when
+ * `loss_sizing_enabled` is absent the API leaves the ladder untouched, which
+ * is what the asset card's enable/disable toggle relies on (it re-posts the
+ * asset fields only). A payload that sends it owns the whole ladder — no
+ * `loss_sizes` then means no steps.
+ */
 export interface AssetInput {
   ticker: string
   type: string | null
@@ -232,6 +256,30 @@ export interface AssetInput {
   max_increments: number
   base_size: number
   enabled: boolean
+  loss_sizing_enabled?: boolean
+  loss_sizes?: AssetLossSize[]
+}
+
+/** PUT /admin/assets/{id}/loss-sizing — replaces the switch and the whole ladder. */
+export interface AssetLossSizingInput {
+  loss_sizing_enabled: boolean
+  loss_sizes: AssetLossSize[]
+}
+
+/**
+ * GET /admin/assets/{id}/loss-streaks — how many of the accounts the engine
+ * trades on this asset's venue sit at each losing streak right now. The LAST
+ * bucket (`streak === depth`) means "depth or more". `exchange` is null when
+ * the asset's broker is not a supported venue (then `counts` is empty).
+ */
+export interface AssetLossStreaks {
+  exchange: string | null
+  symbol: string
+  /** Deepest configured step, or 10 with no ladder. */
+  depth: number
+  /** Accounts counted across every bucket. */
+  accounts: number
+  counts: { streak: number; accounts: number }[]
 }
 
 /** One sandbox (test-tagged) user row as returned by GET /admin/sandbox/users. */

@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { ImagePlus, X } from 'lucide-react'
+import { ChevronDown, ImagePlus, X } from 'lucide-react'
+import LossSizingFields from './assets/LossSizingFields'
+import {
+  ladderHasErrors,
+  ladderShortText,
+  stepsFromValues,
+  valuesFromSteps,
+} from '../../lib/lossSizing'
 import type { AdminAsset, AssetInput, AssetSide } from '../../types/admin'
 import type { AssetImageChange } from '../../services/admin'
 
@@ -52,6 +59,13 @@ export default function AssetFormModal({
   const [maxIncrements, setMaxIncrements] = useState('1')
   const [baseSize, setBaseSize] = useState('0.001')
 
+  // Loss-streak sizing. This form always sends the switch and the ladder, so
+  // it owns them: what is shown here is exactly what gets saved.
+  const [lossEnabled, setLossEnabled] = useState(false)
+  const [lossValues, setLossValues] = useState<string[]>([])
+  const [lossOpen, setLossOpen] = useState(false)
+  const [lossError, setLossError] = useState<string | null>(null)
+
   // Image state: the currently-shown preview URL, a newly picked File (to
   // upload), and a "remove existing" flag. `existingImage` is the saved URL.
   const [existingImage, setExistingImage] = useState<string | null>(null)
@@ -76,12 +90,20 @@ export default function AssetFormModal({
       setMaxIncrements(String(asset.max_increments))
       setBaseSize(String(asset.base_size))
       setExistingImage(asset.asset_image)
+      setLossEnabled(asset.loss_sizing_enabled)
+      setLossValues(valuesFromSteps(asset.loss_sizes))
+      // Collapsed unless it is already doing something to this asset's sizes.
+      setLossOpen(asset.loss_sizing_enabled)
     } else {
       setForm(EMPTY)
       setMaxIncrements('1')
       setBaseSize('0.001')
       setExistingImage(null)
+      setLossEnabled(false)
+      setLossValues([])
+      setLossOpen(false)
     }
+    setLossError(null)
     // Reset transient image picks whenever the modal (re)opens
     setPickedFile(null)
     setPreviewUrl(null)
@@ -146,14 +168,24 @@ export default function AssetFormModal({
     return Math.max(1, Math.round(max / base))
   })()
 
+  const lossSteps = stepsFromValues(lossValues)
+
   const submit = (e: FormEvent) => {
     e.preventDefault()
+    if (ladderHasErrors(lossValues)) {
+      setLossOpen(true)
+      setLossError('Fix the loss-streak sizes marked in red before saving.')
+      return
+    }
+    setLossError(null)
     onSubmit(
       {
         ...form,
         ticker: form.ticker.trim().toUpperCase(),
         max_increments: Number(maxIncrements),
         base_size: Number(baseSize),
+        loss_sizing_enabled: lossEnabled,
+        loss_sizes: lossSteps,
       },
       { file: pickedFile, remove: removeImage },
     )
@@ -168,7 +200,7 @@ export default function AssetFormModal({
       aria-label={asset ? 'Edit asset' : 'Create asset'}
     >
       <form
-        className="w-full max-w-[480px] max-h-[90vh] overflow-y-auto bg-surface border border-border rounded-[18px] p-[26px] flex flex-col gap-3.5"
+        className="w-full max-w-[480px] max-h-[90vh] overflow-y-auto bg-surface border border-border rounded-[18px] p-5 sm:p-[26px] flex flex-col gap-3.5"
         onClick={(e) => e.stopPropagation()}
         onSubmit={submit}
       >
@@ -362,6 +394,79 @@ export default function AssetFormModal({
             </small>
           </div>
         </label>
+
+        {/* Loss-streak sizing — collapsed unless already on for this asset. */}
+        <div className="rounded-[12px] border border-border">
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-[12px] py-3 px-3.5 text-left"
+            onClick={() => setLossOpen((o) => !o)}
+            aria-expanded={lossOpen}
+            aria-controls="afm-loss-sizing"
+          >
+            <div className="min-w-0 flex-1">
+              <span className="block text-[13.5px] font-semibold">Loss-streak sizing</span>
+              <small className="block truncate text-[11.5px] text-faint">
+                {!lossEnabled
+                  ? 'Off: every entry uses Base size'
+                  : lossSteps.length === 0
+                    ? 'On, but no steps yet'
+                    : `On · ${ladderShortText(lossSteps)}`}
+              </small>
+            </div>
+            <ChevronDown
+              size={16}
+              className={`flex-none text-muted transition-transform duration-150 ${
+                lossOpen ? 'rotate-180' : ''
+              }`}
+              aria-hidden="true"
+            />
+          </button>
+
+          {lossOpen && (
+            <div
+              id="afm-loss-sizing"
+              className="flex flex-col gap-3.5 border-t border-hair p-3.5"
+            >
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-[18px] w-[18px] flex-none cursor-pointer accent-[var(--accent)]"
+                  checked={lossEnabled}
+                  onChange={(e) => setLossEnabled(e.target.checked)}
+                />
+                <div>
+                  <span className="block text-[13.5px] font-semibold">
+                    Use loss-streak sizing
+                  </span>
+                  <small className="text-[11.5px] leading-[1.5] text-faint">
+                    After losing trades in a row on this coin, the next entry
+                    uses the size set for that step. One win goes straight back
+                    to Base size. Exits are never affected.
+                  </small>
+                </div>
+              </label>
+
+              <LossSizingFields
+                ticker={form.ticker}
+                base={Number(baseSize)}
+                values={lossValues}
+                onChange={(next) => {
+                  setLossValues(next)
+                  setLossError(null)
+                }}
+                baseNote="Base size, set above"
+                muted={!lossEnabled}
+              />
+
+              {lossError && (
+                <p className="text-[12px] text-red" role="alert">
+                  {lossError}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
 
         {error && (
           <p

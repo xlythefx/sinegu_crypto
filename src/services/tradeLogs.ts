@@ -20,6 +20,10 @@ interface ApiSizing {
   size_multiple: number | null
   stacks_now: number | null
   max_increments: number | null
+  loss_streak?: number | null
+  streak_known?: boolean | null
+  streak_step?: number | null
+  streak_size?: number | null
 }
 
 interface ApiDetail {
@@ -67,6 +71,10 @@ function mapSizing(s: ApiSizing | null): SizingDecision | null {
     sizeMultiple: s.size_multiple,
     stacksNow: s.stacks_now,
     maxIncrements: s.max_increments,
+    lossStreak: s.loss_streak ?? null,
+    streakKnown: s.streak_known ?? null,
+    streakStep: s.streak_step ?? null,
+    streakSize: s.streak_size ?? null,
   }
 }
 

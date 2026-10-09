@@ -75,10 +75,33 @@ def _loader(exchange: str):
                 "max_size": max_size,
                 "max_increments": _increment_cap(max_size, base_size),
                 "side": str(asset.get("side") or "ALL").upper(),
+                "loss_sizes": _loss_ladder(asset),
             }
         return by_ticker
 
     return _load_assets
+
+
+def _loss_ladder(asset: dict) -> dict[int, float]:
+    """The asset's loss-streak ladder as ``{losses: size}`` — empty = feature off.
+
+    Empty when the switch is off, when an older API sends no ladder at all, or
+    when every step is unusable; the entry path then sizes exactly as before
+    and makes no streak read. A malformed step is dropped rather than failing
+    the whole asset list: one bad row must not stop every ticker trading.
+    """
+    if not asset.get("loss_sizing_enabled"):
+        return {}
+    ladder: dict[int, float] = {}
+    for step in asset.get("loss_sizes") or []:
+        try:
+            losses = int(step.get("losses"))
+            size = float(step.get("size"))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if 1 <= losses <= 10 and size > 0:
+            ladder[losses] = size
+    return dict(sorted(ladder.items()))
 
 
 def _increment_cap(max_size: float, base_size: float) -> float:

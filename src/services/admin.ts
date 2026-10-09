@@ -28,6 +28,8 @@ import type {
   AdminTronTransfersData,
   AdminUserUpdateInput,
   AssetInput,
+  AssetLossSizingInput,
+  AssetLossStreaks,
   BulkKeyDeleteResult,
   CacheClearResult,
   ClearInvoicesResult,
@@ -113,12 +115,60 @@ export async function getAdminPerformance(
   }
 }
 
+/**
+ * Coerce the loss-sizing fields so every reader can rely on them: an API
+ * that predates the feature sends neither, and the ladder must always be
+ * shallowest-first for the step-carrying logic in `lib/lossSizing.ts`.
+ */
+function normalizeAsset(asset: AdminAsset): AdminAsset {
+  if (!asset) return asset
+  const steps = Array.isArray(asset.loss_sizes) ? asset.loss_sizes : []
+  return {
+    ...asset,
+    loss_sizing_enabled: Boolean(asset.loss_sizing_enabled),
+    loss_sizes: steps
+      .map((s) => ({ losses: Number(s.losses), size: Number(s.size) }))
+      .sort((a, b) => a.losses - b.losses),
+  }
+}
+
 export async function getAdminAssets(): Promise<AdminAsset[]> {
   const res = await apiFetch<{ success: boolean; assets: AdminAsset[] }>(
     '/admin/assets',
     { auth: true },
   )
-  return res.assets
+  return res.assets.map(normalizeAsset)
+}
+
+/**
+ * PUT /admin/assets/{id}/loss-sizing — the Loss-streak sizing tab's save.
+ * Replaces the switch and the whole ladder (an empty list clears it); 422
+ * when a step is outside 1–10, repeated, or not above zero.
+ */
+export async function saveAssetLossSizing(
+  assetId: number,
+  input: AssetLossSizingInput,
+): Promise<AdminAsset> {
+  const res = await apiFetch<{ success: boolean; message: string; asset: AdminAsset }>(
+    `/admin/assets/${assetId}/loss-sizing`,
+    { method: 'PUT', body: input, auth: true },
+  )
+  return normalizeAsset(res.asset)
+}
+
+/** GET /admin/assets/{id}/loss-streaks — accounts at each losing streak right now. */
+export async function getAssetLossStreaks(assetId: number): Promise<AssetLossStreaks> {
+  const res = await apiFetch<{ success: boolean } & AssetLossStreaks>(
+    `/admin/assets/${assetId}/loss-streaks`,
+    { auth: true },
+  )
+  return {
+    exchange: res.exchange ?? null,
+    symbol: res.symbol,
+    depth: res.depth,
+    accounts: res.accounts ?? 0,
+    counts: res.counts ?? [],
+  }
 }
 
 /** Optional image mutation attached to a create/update. */
@@ -139,6 +189,16 @@ function buildAssetForm(input: AssetInput, image?: AssetImageChange): FormData {
   form.append('max_increments', String(input.max_increments))
   form.append('base_size', String(input.base_size))
   form.append('enabled', input.enabled ? '1' : '0')
+  // The ladder rides along ONLY when the caller owns it. Absent = "leave it
+  // as it is" on the API, which is what the card's enable/disable toggle
+  // needs; present with no steps = "no steps".
+  if (input.loss_sizing_enabled !== undefined) {
+    form.append('loss_sizing_enabled', input.loss_sizing_enabled ? '1' : '0')
+    ;(input.loss_sizes ?? []).forEach((step, i) => {
+      form.append(`loss_sizes[${i}][losses]`, String(step.losses))
+      form.append(`loss_sizes[${i}][size]`, String(step.size))
+    })
+  }
   if (image?.file) form.append('asset_image', image.file)
   else if (image?.remove) form.append('remove_image', '1')
   return form
@@ -177,7 +237,7 @@ async function sendAssetForm(
       data.errors,
     )
   }
-  return (data as { asset: AdminAsset }).asset
+  return normalizeAsset((data as { asset: AdminAsset }).asset)
 }
 
 export function createAsset(
