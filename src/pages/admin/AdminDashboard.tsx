@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import {
   BadgeDollarSign,
   Crosshair,
+  History,
   LayoutDashboard,
   Server,
   Users,
@@ -14,10 +15,11 @@ import CustomersTab from '../../components/admin/insights/CustomersTab'
 import MoneyTab from '../../components/admin/insights/MoneyTab'
 import SystemTab from '../../components/admin/insights/SystemTab'
 import OpenPositionsTab from '../../components/admin/insights/OpenPositionsTab'
+import VersionsTab from '../../components/admin/insights/VersionsTab'
 import { useSessionUser } from '../../hooks/useSessionUser'
 import { isCollaborator } from '../../lib/roles'
 
-type DashTab = 'overview' | 'customers' | 'money' | 'system' | 'positions'
+type DashTab = 'overview' | 'customers' | 'money' | 'system' | 'positions' | 'versions'
 
 const TABS: TabItem<DashTab>[] = [
   { key: 'overview', label: 'Overview', Icon: LayoutDashboard },
@@ -25,10 +27,14 @@ const TABS: TabItem<DashTab>[] = [
   { key: 'money', label: 'Money', Icon: BadgeDollarSign },
   { key: 'system', label: 'System', Icon: Server },
   { key: 'positions', label: 'Open positions', Icon: Crosshair },
+  { key: 'versions', label: 'Versions', Icon: History },
 ]
 
-/** A read-only collaborator sees the Overview only (the API 403s the rest). */
-const COLLABORATOR_TABS: readonly DashTab[] = ['overview']
+/**
+ * A read-only collaborator sees the Overview (the API 403s the data tabs) and
+ * Versions, which is static text with links to pages they cannot open hidden.
+ */
+const COLLABORATOR_TABS: readonly DashTab[] = ['overview', 'versions']
 
 /** A pane may portal its own sub-tabs into the right end of the tab row. */
 export interface DashPaneProps {
@@ -41,12 +47,13 @@ const PANES: Record<DashTab, ComponentType<DashPaneProps>> = {
   money: MoneyTab,
   system: SystemTab,
   positions: OpenPositionsTab,
+  versions: VersionsTab,
 }
 
 /**
  * The admin cockpit: one tab per question the owner asks — what needs me,
  * are customers trading, is money coming in, is everything running, what is
- * open right now. The tab lives in `?tab=` so a link or a reload lands on the
+ * open right now — and Versions, what changed lately and how it works. The tab lives in `?tab=` so a link or a reload lands on the
  * same one (an old `?tab=master` / `?tab=strategies` link falls back to
  * Overview, as does a tab the viewer's role may not open).
  */

@@ -528,7 +528,8 @@ cosmetic — real enforcement must be added as admin middleware in `sinegutrade-
 `components/ui/Tabs.tsx`): **Overview** (sub-tabbed via `?view=`, 2026-09-28:
 **Platform** — every user combined — and **Needs attention**, the old
 Overview, in `insights/AttentionPane.tsx`), **Customers**, **Money**,
-**System**. The **Master Account** and **Strategies** tabs were removed at the
+**System**, **Open positions** and **Versions** (the changelog — see "Versions
+page" below). The **Master Account** and **Strategies** tabs were removed at the
 owner's request on 2026-09-28; their components (`insights/MasterTab.tsx`,
 `insights/StrategiesTab.tsx`) are kept but unmounted, and the Strategies view
 lost its "Customers vs master" card for "By exchange" in the same change. Data:
@@ -821,6 +822,30 @@ a stable slug `id` (never renamed once shipped — it is the API's key), the
 The list was seeded with the Discord items below and the owner tasks this file
 already recorded (TRON Nile wallet / rehearsal / withdrawal-fee measurement,
 MEXC funding sign).
+
+## Versions page — Admin → Dashboard → Versions (`/admin?tab=versions`, 2026-10-09)
+
+**Every feature or behaviour change that ships appends an entry to
+`src/lib/adminVersions.ts` IN THE SAME CHANGE** — the owner's request, so the
+owner and their employer can see what is new and how it works without asking.
+Same pattern as the owner to-do list: the page is where they look, a chat
+transcript is not. Entry shape (`types/adminVersions.ts`): a stable slug `id`,
+`date` (YYYY-MM-DD it went live — the page groups one version per day,
+`v2026.10.09`), `kind: 'new' | 'improved' | 'fixed'`, `area` (the owner's word
+for where it lives: Billing, Signal Log, Trading assets…), `title`, `summary`,
+`howItWorks`, optional `technical`, optional `links`. Rules:
+- **`summary` and `howItWorks` are NON-TECHNICAL**: written for the owner's
+  employer — plain sentences, a real example with numbers, no endpoint, table,
+  class or env-key names. Those go in `technical`, which the page folds under
+  "For developers".
+- **Never a secret** — this repo is public.
+- **Newest first.** Old entries are never rewritten except to correct them; a
+  later change to the same feature gets its own entry (the history is the point).
+- A purely internal change nobody can see (a refactor, a test) needs no entry;
+  anything that changes what a customer, an admin or the bot DOES does.
+- Collaborators see this tab too (static text); links to pages they may not
+  open (`collaboratorMayOpen`) are hidden for them.
+Seeded on 2026-10-09 with the changes from 2026-10-01 on.
 
 ## Sign in with Discord + server roles (2026-09-21)
 
