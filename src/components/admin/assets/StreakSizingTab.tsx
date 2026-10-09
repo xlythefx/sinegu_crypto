@@ -1,23 +1,23 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Info } from 'lucide-react'
-import LossSizingCard from './LossSizingCard'
-import { useAssetLossStreaks } from '../../../hooks/useAssetLossStreaks'
+import StreakSizingCard from './StreakSizingCard'
+import { useAssetStreaks } from '../../../hooks/useAssetStreaks'
 import { displaySymbol } from '../../../lib/chart'
-import { draftTouched, type LossSizingDraft } from '../../../lib/lossSizing'
+import { draftTouched, type StreakSizingDraft } from '../../../lib/streakSizing'
 import type { AdminAsset } from '../../../types/admin'
 
 const INPUT =
   'h-[38px] rounded-field border border-border bg-surface2 px-3 text-[13px] text-text outline-none focus:border-accent'
 
 const RULES = [
-  'After a run of losing trades on a coin, the next entry uses the size you set for that step instead of Base size (the normal size). Every account counts its own trades.',
-  'One win puts it straight back to the normal size. Wins never make the size bigger.',
-  'Leave a step blank to keep the size of the step above it. The deepest step keeps applying until the next win.',
+  'Each account counts its own trades on a coin. After losses in a row the next entry uses the loss step for that run; after wins in a row, the win step. No step for the run means Base size (the normal size).',
+  'A win ends a losing run and a loss ends a winning one. With no win steps, any win goes straight back to the normal size.',
+  'Gaps carry: loss steps 2 → 3 and 5 → 2 on a base of 5 mean 1 loss trades 5, 2–4 losses trade 3, and 5 or more trade 2. The deepest step of each kind keeps applying.',
   'Sizes grow with balance exactly like Base size (per 1,000 USDT). Only new entries change; exits are never affected.',
 ]
 
 const FOOTNOTE =
-  'A stacked position that closes together counts as one trade. Any profit after fees is a win; break-even counts as a loss. A new account starts on the normal size. The asset’s max position size still caps every stack.'
+  'A stacked position that closes together counts as one trade. Any profit after fees is a win; break-even or worse is a loss. A new account starts on the normal size. The asset’s max position size still caps every stack, so a win size above the normal one fills it sooner: on a base of 5 with a max of 15, two entries of 7 make 14 and a third is refused.'
 
 function HowItWorks() {
   return (
@@ -29,7 +29,7 @@ function HowItWorks() {
         <Info size={15} aria-hidden="true" />
       </span>
       <div className="min-w-0 flex-1">
-        <h2 className="font-display text-[15px] font-extrabold">How loss-streak sizing works</h2>
+        <h2 className="font-display text-[15px] font-extrabold">How streak sizing works</h2>
         <ul className="mt-2.5 grid gap-x-6 gap-y-2 lg:grid-cols-2">
           {RULES.map((rule) => (
             <li key={rule} className="flex items-start gap-2 text-[12.5px] leading-[1.55] text-muted">
@@ -49,23 +49,23 @@ function HowItWorks() {
   )
 }
 
-interface LossSizingTabProps {
+interface StreakSizingTabProps {
   assets: AdminAsset[]
   /** Re-read the asset list after a save (the Assets tab shows the ladder too). */
   onSaved: () => void
 }
 
 /**
- * Admin → Trading Assets → Loss-streak sizing: every asset's ladder side by
- * side, assets already using it first.
+ * Admin → Trading Assets → Streak Sizing Settings: every asset's ladder side
+ * by side, assets already using it first.
  *
  * Drafts live HERE, not in the cards: the grid re-mounts on every search
  * keystroke (the filter-switch reveal), and an admin who searches for the
  * next coin must not lose the sizes they typed on this one.
  */
-export default function LossSizingTab({ assets, onSaved }: LossSizingTabProps) {
+export default function StreakSizingTab({ assets, onSaved }: StreakSizingTabProps) {
   const [search, setSearch] = useState('')
-  const [drafts, setDrafts] = useState<Record<number, LossSizingDraft>>({})
+  const [drafts, setDrafts] = useState<Record<number, StreakSizingDraft>>({})
   // A saved asset shows its new ladder at once, until the reloaded list
   // (a new array) replaces the one the save was made against.
   const [saved, setSaved] = useState<{ from: AdminAsset[]; byId: Record<number, AdminAsset> }>({
@@ -74,7 +74,7 @@ export default function LossSizingTab({ assets, onSaved }: LossSizingTabProps) {
   })
 
   const ids = useMemo(() => assets.map((a) => a.asset_id), [assets])
-  const { entries, refresh } = useAssetLossStreaks(ids)
+  const { entries, refresh } = useAssetStreaks(ids)
 
   const current = useMemo(() => {
     const byId = saved.from === assets ? saved.byId : {}
@@ -85,7 +85,7 @@ export default function LossSizingTab({ assets, onSaved }: LossSizingTabProps) {
     () =>
       [...current].sort(
         (a, b) =>
-          Number(b.loss_sizing_enabled) - Number(a.loss_sizing_enabled) ||
+          Number(b.streak_sizing_enabled) - Number(a.streak_sizing_enabled) ||
           a.ticker.localeCompare(b.ticker) ||
           (a.broker ?? '').localeCompare(b.broker ?? ''),
       ),
@@ -101,13 +101,16 @@ export default function LossSizingTab({ assets, onSaved }: LossSizingTabProps) {
       )
     : sorted
 
-  const onCount = current.filter((a) => a.loss_sizing_enabled).length
+  const onCount = current.filter((a) => a.streak_sizing_enabled).length
   const unsaved = current.filter((a) => {
     const draft = drafts[a.asset_id]
-    return draft && draftTouched({ enabled: a.loss_sizing_enabled, steps: a.loss_sizes }, draft)
+    return (
+      draft &&
+      draftTouched({ enabled: a.streak_sizing_enabled, steps: a.streak_sizes }, draft)
+    )
   }).length
 
-  const setDraft = useCallback((assetId: number, draft: LossSizingDraft | null) => {
+  const setDraft = useCallback((assetId: number, draft: StreakSizingDraft | null) => {
     setDrafts((all) => {
       const next = { ...all }
       if (draft) next[assetId] = draft
@@ -135,7 +138,7 @@ export default function LossSizingTab({ assets, onSaved }: LossSizingTabProps) {
 
       {/* The toolbar is its own card and the asset cards sit directly under
           it, not inside it: a card in a padded card leaves a phone-width step
-          row too little room for its label. */}
+          row too little room for its controls. */}
       <section
         className="flex flex-wrap items-center justify-between gap-3.5 rounded-card border border-border bg-surface p-card"
         data-aos="fade-up"
@@ -174,7 +177,7 @@ export default function LossSizingTab({ assets, onSaved }: LossSizingTabProps) {
         ) : (
           <div className="grid grid-cols-1 gap-stack min-[1180px]:grid-cols-2">
             {shown.map((asset) => (
-              <LossSizingCard
+              <StreakSizingCard
                 key={asset.asset_id}
                 asset={asset}
                 draft={drafts[asset.asset_id]}

@@ -28,12 +28,15 @@ export interface SizingDecision {
   stacksNow: number | null
   maxIncrements: number | null
   /**
-   * Loss-streak sizing — null unless the asset had a ladder at signal time.
-   * `streakSize` is the size the multiple was applied to (base size at step 0);
-   * `streakKnown: false` means the history read failed and base size was used.
+   * Streak sizing — null unless the asset had a ladder at signal time.
+   * `streakRun` is signed (-3 = three losses in a row, +2 = two wins);
+   * `streakKind`/`streakStep` name the step applied (step 0 = base size);
+   * `streakSize` is the size the multiple was applied to; `streakKnown: false`
+   * means the history read failed and base size was used.
    */
-  lossStreak: number | null
+  streakRun: number | null
   streakKnown: boolean | null
+  streakKind: 'loss' | 'win' | null
   streakStep: number | null
   streakSize: number | null
 }

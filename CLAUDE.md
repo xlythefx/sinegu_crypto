@@ -1349,47 +1349,52 @@ for the overlay's `position: fixed` and trap it inside.
      balance-independent by design (it is a property of the asset); only the
      size each account trades scales with its balance, which is what makes one
      cap correct for a 500 and a 50,000 USDT account alike.
-  4. **Loss-streak sizing** (2026-10-09, employer's request; LTC and RENDER
-     first, any asset can use it). After N losing trades in a row on a coin,
-     an account's next ENTRY uses a size the admin TYPED for step N instead of
-     base_size — manual amounts, never percentages — and that size then goes
-     through `_scale_qty` exactly like base_size. One win → base. No win
-     ladder, by decision. Config: `assets.loss_sizing_enabled` +
-     `asset_loss_sizes` (asset_id, losses 1–10, size), edited on Admin →
-     Trading Assets → **Loss-streak sizing** tab (`?tab=loss-sizing`) or inside
-     the asset form; both go through `App\Services\Assets\LossSizing::replace`.
+  4. **Streak sizing** ("Streak Sizing Settings", 2026-10-09, employer's
+     request; LTC and RENDER first, any asset can use it). After N LOSSES —
+     or N WINS — in a row on a coin, an account's next ENTRY uses a size the
+     admin TYPED for that step instead of base_size — manual amounts, never
+     percentages — and that size then goes through `_scale_qty` exactly like
+     base_size. Shipped loss-only in the morning, generalised to wins the
+     same day (migration `…000002` copied the loss rows). Config:
+     `assets.streak_sizing_enabled` + `asset_streak_sizes` (asset_id, kind
+     `loss`|`win`, streak 1–10, size; unique per asset+kind+streak), edited on
+     Admin → Trading Assets → **Streak Sizing Settings** tab
+     (`?tab=streak-sizing`; the old `?tab=loss-sizing` still opens it) or in
+     the asset form; both go through `App\Services\Assets\StreakSizing::replace`.
      Rules:
-     - **The streak is the account's OWN closes on that coin**, long and
-       short together, newest first until the first win, keyed by `api_key`
-       (a new key starts at base). One past-position row = one trade, so a
-       stacked close is one loss. Win = `realized_pnl > 0` (any profit after
-       fees); 0 counts as a loss; a NULL P&L row (bookkeeping not landed) is
-       skipped; sandbox rows never count. `LossSizing::streaks` is the ONE
-       definition, served to the engine as `GET /engine/{x}/loss-streaks?
-       symbol=&depth=` — one window-function query for every account, on the
-       `(api_key, symbol, closed_at)` index, called once per signal and only
-       for an asset with a ladder.
-     - **A blank step carries the previous one**; the deepest step keeps
-       applying past the end; a streak shallower than the first step is base
-       (`webhook._loss_size`).
-     - **An unreadable streak trades BASE size** (owner's call) — recorded as
+     - **The run is the account's OWN closes on that coin**, long and short
+       together, newest first while the result repeats, keyed by `api_key` (a
+       new key starts at base). It is SIGNED: -3 = three losses in a row, +2 =
+       two wins. The CURRENT run decides, so a win ends a losing run and vice
+       versa — with no win steps, any win means base (the loss-only
+       behaviour). One past-position row = one trade (a stacked close is one).
+       Win = `realized_pnl > 0`; 0 is a loss; a NULL P&L row is skipped;
+       sandbox rows never count. `StreakSizing::runs` is the ONE definition,
+       served to the engine as `GET /engine/{x}/streaks?symbol=&depth=` (one
+       window-function query on the `(api_key, symbol, closed_at)` index, once
+       per signal, only for an asset with a ladder; depth = deepest step of
+       either kind) and to the tab as `GET /admin/assets/{id}/streaks`.
+     - **The deepest step of the run's kind at or below its length applies**;
+       a blank step carries the previous one; past the deepest it keeps
+       applying; none reached = base (`webhook._streak_size`).
+     - **An unreadable run trades BASE size** (owner's call) — recorded as
        `streak_known: false`. Not "smallest size", not skip.
-     - **The stack cap still divides by this entry's own size.** Every entry
-       of an open stack shares one streak step, because the streak only moves
-       when a trade on the coin closes. The two ways it can move mid-stack (a
-       close on the opposite side, an admin editing the ladder) are covered by
-       a size ceiling: with a step active, `current + quantity` may never pass
-       `max_increments × normal scaled entry` — the asset's max position size.
+     - **The stack cap still divides by this entry's own size** (every entry
+       of an open stack shares one step — the run only moves when a trade on
+       the coin closes), plus a size ceiling whenever a step is active:
+       `current + quantity` may never pass `max_increments × normal scaled
+       entry`, the asset's max position size. That also means a WIN step
+       bigger than base fills the cap sooner (base 5, max 15: 7 + 7, no third).
      - **`Increments Closed` divides by the streak size** (the exit plan reads
-       the streaks too), so three 25-unit entries on a 50 base close as 3, and
-       the public trade count stays right.
-     - **Absent ladder fields on an asset write mean UNCHANGED** — the asset
-       card's on/off toggle re-posts only the asset fields. A form that sends
-       `loss_sizing_enabled` owns the ladder (no `loss_sizes` = no steps).
+       the runs too), so the close message and public trade count stay right.
+     - **Absent ladder fields on an asset write mean UNCHANGED** (the card's
+       on/off toggle re-posts only the asset fields); a form that sends
+       `streak_sizing_enabled` owns the ladder. A repeated (kind, streak) is a
+       422 (`StreakSizing::validateDistinct`), checked before any write.
      - Never in the trader catalog (`GET /assets`), like base_size.
-     - Signal Log shows the step per account (`loss_streak`, `streak_step`,
-       `streak_size`, `streak_known`, `normal_quantity` in the sizing block —
-       only written for an asset with a ladder, so other rows are unchanged).
+     - Signal Log shows the step per account (`streak_run`, `streak_kind`,
+       `streak_step`, `streak_size`, `streak_known`, `normal_quantity` in the
+       sizing block — only written for an asset with a ladder).
   `total_deposit` comes from `GET /api/engine/{exchange}/accounts` as
   `initial_deposit + (deposits − withdrawals)` over `binance_transactions` —
   **not** raw `initial_deposit`, which `EngineSyncController` writes once and
@@ -1602,7 +1607,7 @@ for the overlay's `position: fixed` and trap it inside.
   `SYNC_POSITION_MODE_ON_STARTUP`. Config-only fix, no code, no test gate:
   `python .claude/deploy_sinegualcrypto.py sync-engine-env` (upserts + restarts).
 - **Commands:** `python -m binance_abcd.main` (waitress), `python -m pytest
-  tests/ -q` (548 tests, no network), `python webhook_tester.py` (Tkinter GUI
+  tests/ -q` (553 tests, no network), `python webhook_tester.py` (Tkinter GUI
   trade sender — local or prod target, red banner on prod).
 - **Naming trap:** root `src/` is the React app; the engine package is
   `binance_abcd/`, deliberately not named `src`. Python and TypeScript

@@ -1,7 +1,7 @@
-import { Pencil, Trash2, TrendingDown } from 'lucide-react'
+import { Pencil, Trash2, TrendingUpDown } from 'lucide-react'
 import { displaySymbol } from '../../lib/chart'
 import { fmtMediumDate, fmtQty } from '../../lib/format'
-import { ladderShortText } from '../../lib/lossSizing'
+import { ladderShortText } from '../../lib/streakSizing'
 import type { AdminAsset } from '../../types/admin'
 
 interface AssetCardProps {
@@ -145,18 +145,19 @@ export default function AssetCard({
         />
       </div>
 
-      {/* Loss-streak sizing changes what the Base size tile above means after
-          a losing run, so the card says so where the size is read. The ladder
-          itself is edited on the Loss-streak sizing tab or in the form. */}
-      {asset.loss_sizing_enabled && asset.loss_sizes.length > 0 && (
+      {/* Streak sizing changes what the Base size tile above means after a
+          losing or winning run, so the card says so where the size is read.
+          The ladder itself is edited on the Streak Sizing Settings tab or in
+          the form. L = losses in a row, W = wins in a row. */}
+      {asset.streak_sizing_enabled && asset.streak_sizes.length > 0 && (
         <div
           className="-mt-1 flex min-w-0 items-center gap-2 rounded-row border border-accent-line bg-accent-soft px-3 py-2"
-          title="After losses in a row, the next entry uses these sizes. One win goes back to Base size."
+          title={`After losses (L) or wins (W) in a row, the next entry uses these sizes; otherwise Base size. ${ladderShortText(asset.streak_sizes)}`}
         >
-          <TrendingDown size={13} className="flex-none text-accent" aria-hidden="true" />
+          <TrendingUpDown size={13} className="flex-none text-accent" aria-hidden="true" />
           <span className="flex-none text-[11px] font-bold text-accent">Streak sizing on</span>
           <span className="min-w-0 truncate font-mono text-[11px] text-muted">
-            {ladderShortText(asset.loss_sizes)}
+            {ladderShortText(asset.streak_sizes)}
           </span>
         </div>
       )}

@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ChevronDown, ImagePlus, X } from 'lucide-react'
-import LossSizingFields from './assets/LossSizingFields'
+import StreakSizingFields from './assets/StreakSizingFields'
 import {
   ladderHasErrors,
   ladderShortText,
-  stepsFromValues,
-  valuesFromSteps,
-} from '../../lib/lossSizing'
+  rowsFromSteps,
+  stepsFromRows,
+  type StreakRow,
+} from '../../lib/streakSizing'
 import type { AdminAsset, AssetInput, AssetSide } from '../../types/admin'
 import type { AssetImageChange } from '../../services/admin'
 
@@ -59,12 +60,13 @@ export default function AssetFormModal({
   const [maxIncrements, setMaxIncrements] = useState('1')
   const [baseSize, setBaseSize] = useState('0.001')
 
-  // Loss-streak sizing. This form always sends the switch and the ladder, so
-  // it owns them: what is shown here is exactly what gets saved.
-  const [lossEnabled, setLossEnabled] = useState(false)
-  const [lossValues, setLossValues] = useState<string[]>([])
-  const [lossOpen, setLossOpen] = useState(false)
-  const [lossError, setLossError] = useState<string | null>(null)
+  // Streak sizing. This form always sends the switch and the ladder, so it
+  // owns them: what is shown here is exactly what gets saved (rows with no
+  // size are not steps, and are left out).
+  const [streakEnabled, setStreakEnabled] = useState(false)
+  const [streakRows, setStreakRows] = useState<StreakRow[]>([])
+  const [streakOpen, setStreakOpen] = useState(false)
+  const [streakError, setStreakError] = useState<string | null>(null)
 
   // Image state: the currently-shown preview URL, a newly picked File (to
   // upload), and a "remove existing" flag. `existingImage` is the saved URL.
@@ -90,20 +92,20 @@ export default function AssetFormModal({
       setMaxIncrements(String(asset.max_increments))
       setBaseSize(String(asset.base_size))
       setExistingImage(asset.asset_image)
-      setLossEnabled(asset.loss_sizing_enabled)
-      setLossValues(valuesFromSteps(asset.loss_sizes))
+      setStreakEnabled(asset.streak_sizing_enabled)
+      setStreakRows(rowsFromSteps(asset.streak_sizes))
       // Collapsed unless it is already doing something to this asset's sizes.
-      setLossOpen(asset.loss_sizing_enabled)
+      setStreakOpen(asset.streak_sizing_enabled)
     } else {
       setForm(EMPTY)
       setMaxIncrements('1')
       setBaseSize('0.001')
       setExistingImage(null)
-      setLossEnabled(false)
-      setLossValues([])
-      setLossOpen(false)
+      setStreakEnabled(false)
+      setStreakRows([])
+      setStreakOpen(false)
     }
-    setLossError(null)
+    setStreakError(null)
     // Reset transient image picks whenever the modal (re)opens
     setPickedFile(null)
     setPreviewUrl(null)
@@ -168,24 +170,24 @@ export default function AssetFormModal({
     return Math.max(1, Math.round(max / base))
   })()
 
-  const lossSteps = stepsFromValues(lossValues)
+  const streakSteps = stepsFromRows(streakRows)
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (ladderHasErrors(lossValues)) {
-      setLossOpen(true)
-      setLossError('Fix the loss-streak sizes marked in red before saving.')
+    if (ladderHasErrors(streakRows)) {
+      setStreakOpen(true)
+      setStreakError('Fix the streak steps marked in red before saving.')
       return
     }
-    setLossError(null)
+    setStreakError(null)
     onSubmit(
       {
         ...form,
         ticker: form.ticker.trim().toUpperCase(),
         max_increments: Number(maxIncrements),
         base_size: Number(baseSize),
-        loss_sizing_enabled: lossEnabled,
-        loss_sizes: lossSteps,
+        streak_sizing_enabled: streakEnabled,
+        streak_sizes: streakSteps,
       },
       { file: pickedFile, remove: removeImage },
     )
@@ -395,73 +397,74 @@ export default function AssetFormModal({
           </div>
         </label>
 
-        {/* Loss-streak sizing — collapsed unless already on for this asset. */}
+        {/* Streak Sizing Settings — collapsed unless already on for this asset. */}
         <div className="rounded-[12px] border border-border">
           <button
             type="button"
             className="flex w-full items-center gap-3 rounded-[12px] py-3 px-3.5 text-left"
-            onClick={() => setLossOpen((o) => !o)}
-            aria-expanded={lossOpen}
-            aria-controls="afm-loss-sizing"
+            onClick={() => setStreakOpen((o) => !o)}
+            aria-expanded={streakOpen}
+            aria-controls="afm-streak-sizing"
           >
             <div className="min-w-0 flex-1">
-              <span className="block text-[13.5px] font-semibold">Loss-streak sizing</span>
+              <span className="block text-[13.5px] font-semibold">Streak Sizing Settings</span>
               <small className="block truncate text-[11.5px] text-faint">
-                {!lossEnabled
+                {!streakEnabled
                   ? 'Off: every entry uses Base size'
-                  : lossSteps.length === 0
+                  : streakSteps.length === 0
                     ? 'On, but no steps yet'
-                    : `On · ${ladderShortText(lossSteps)}`}
+                    : `On · ${ladderShortText(streakSteps)}`}
               </small>
             </div>
             <ChevronDown
               size={16}
               className={`flex-none text-muted transition-transform duration-150 ${
-                lossOpen ? 'rotate-180' : ''
+                streakOpen ? 'rotate-180' : ''
               }`}
               aria-hidden="true"
             />
           </button>
 
-          {lossOpen && (
+          {streakOpen && (
             <div
-              id="afm-loss-sizing"
+              id="afm-streak-sizing"
               className="flex flex-col gap-3.5 border-t border-hair p-3.5"
             >
               <label className="flex cursor-pointer items-start gap-3">
                 <input
                   type="checkbox"
                   className="mt-0.5 h-[18px] w-[18px] flex-none cursor-pointer accent-[var(--accent)]"
-                  checked={lossEnabled}
-                  onChange={(e) => setLossEnabled(e.target.checked)}
+                  checked={streakEnabled}
+                  onChange={(e) => setStreakEnabled(e.target.checked)}
                 />
                 <div>
                   <span className="block text-[13.5px] font-semibold">
-                    Use loss-streak sizing
+                    Use streak sizing
                   </span>
                   <small className="text-[11.5px] leading-[1.5] text-faint">
-                    After losing trades in a row on this coin, the next entry
-                    uses the size set for that step. One win goes straight back
-                    to Base size. Exits are never affected.
+                    After losing (or winning) trades in a row on this coin, the
+                    next entry uses the size set for that step; otherwise Base
+                    size. Max position size still caps the stack. Exits are
+                    never affected.
                   </small>
                 </div>
               </label>
 
-              <LossSizingFields
+              <StreakSizingFields
                 ticker={form.ticker}
                 base={Number(baseSize)}
-                values={lossValues}
+                rows={streakRows}
                 onChange={(next) => {
-                  setLossValues(next)
-                  setLossError(null)
+                  setStreakRows(next)
+                  setStreakError(null)
                 }}
                 baseNote="Base size, set above"
-                muted={!lossEnabled}
+                muted={!streakEnabled}
               />
 
-              {lossError && (
+              {streakError && (
                 <p className="text-[12px] text-red" role="alert">
-                  {lossError}
+                  {streakError}
                 </p>
               )}
             </div>

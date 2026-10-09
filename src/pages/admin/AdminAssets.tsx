@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Layers, Plus, TrendingDown } from 'lucide-react'
+import { Layers, Plus, TrendingUpDown } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
 import AssetCard from '../../components/admin/AssetCard'
 import AssetFormModal from '../../components/admin/AssetFormModal'
-import LossSizingTab from '../../components/admin/assets/LossSizingTab'
+import StreakSizingTab from '../../components/admin/assets/StreakSizingTab'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import Tabs, { type TabItem } from '../../components/ui/Tabs'
 import { useApiData } from '../../hooks/useApiData'
@@ -27,12 +27,19 @@ const INPUT =
 const PAG_BTN =
   'rounded-pill border border-border bg-surface2 py-[7px] px-[15px] text-[12.5px] font-semibold text-text hover:border-accent disabled:opacity-45 disabled:cursor-not-allowed'
 
-type AssetsTab = 'assets' | 'loss-sizing'
+type AssetsTab = 'assets' | 'streak-sizing'
 
 const TABS: TabItem<AssetsTab>[] = [
   { key: 'assets', label: 'Assets', Icon: Layers },
-  { key: 'loss-sizing', label: 'Loss-streak sizing', Icon: TrendingDown },
+  { key: 'streak-sizing', label: 'Streak Sizing Settings', Icon: TrendingUpDown },
 ]
+
+/**
+ * `?tab=` values that open the streak tab. `loss-sizing` is its name from
+ * before win steps existed — the owner's to-do link and bookmarks still
+ * carry it, so it must keep landing here.
+ */
+const STREAK_TAB_PARAMS = new Set(['streak-sizing', 'loss-sizing'])
 
 export default function AdminAssets() {
   const { data: assets, loading, error, reload } = useApiData(getAdminAssets)
@@ -40,7 +47,9 @@ export default function AdminAssets() {
   // The tab lives in `?tab=` so a link or a reload lands on the same one;
   // the default tab omits the param.
   const [params, setParams] = useSearchParams()
-  const tab: AssetsTab = params.get('tab') === 'loss-sizing' ? 'loss-sizing' : 'assets'
+  const tab: AssetsTab = STREAK_TAB_PARAMS.has(params.get('tab') ?? '')
+    ? 'streak-sizing'
+    : 'assets'
   const selectTab = (next: AssetsTab) =>
     setParams(next === 'assets' ? {} : { tab: next }, { replace: true })
   const tabBar = (
@@ -209,8 +218,8 @@ export default function AdminAssets() {
       {tabBar}
       {/* keyed re-mount replays the reveal on every tab switch */}
       <div key={tab} className="animate-[fadeup_0.35s_ease-out]">
-        {tab === 'loss-sizing' ? (
-          <LossSizingTab assets={list} onSaved={reload} />
+        {tab === 'streak-sizing' ? (
+          <StreakSizingTab assets={list} onSaved={reload} />
         ) : (
           <div
             className="rounded-card border border-border bg-surface p-card"

@@ -1,40 +1,55 @@
 import { useMemo, useState } from 'react'
 import { Activity } from 'lucide-react'
-import LossSizingFields from './LossSizingFields'
+import StreakSizingFields from './StreakSizingFields'
 import ConfirmModal from '../../ui/ConfirmModal'
-import { saveAssetLossSizing } from '../../../services/admin'
+import { saveAssetStreakSizing } from '../../../services/admin'
 import { getApiErrorMessage } from '../../../services/api'
 import { displaySymbol } from '../../../lib/chart'
 import {
   describeLadderChanges,
-  describeStreakCounts,
+  describeRuns,
   draftTouched,
   fmtSize,
   ladderHasErrors,
   ladderSummaryText,
+  rowsFromSteps,
   sameLadder,
-  stepsFromValues,
-  valuesFromSteps,
-  type LossSizingDraft,
-} from '../../../lib/lossSizing'
-import type { LossStreakEntry } from '../../../hooks/useAssetLossStreaks'
-import type { AdminAsset } from '../../../types/admin'
+  stepsFromRows,
+  type StreakSizingDraft,
+} from '../../../lib/streakSizing'
+import type { AssetStreaksEntry } from '../../../hooks/useAssetStreaks'
+import type { AdminAsset, AssetStreakSize } from '../../../types/admin'
 
 const BTN =
   'inline-flex h-9 items-center justify-center rounded-pill px-4 text-[12.5px] font-bold transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45'
 
-interface LossSizingCardProps {
+interface StreakSizingCardProps {
   asset: AdminAsset
   /** Unsaved edits, held by the tab so a search re-mount never drops them. */
-  draft: LossSizingDraft | undefined
+  draft: StreakSizingDraft | undefined
   /** null = discard the draft (back to what is saved). */
-  onDraftChange: (assetId: number, draft: LossSizingDraft | null) => void
-  streaks: LossStreakEntry | undefined
+  onDraftChange: (assetId: number, draft: StreakSizingDraft | null) => void
+  streaks: AssetStreaksEntry | undefined
   onSaved: (asset: AdminAsset) => void
 }
 
-/** "Right now: 41 accounts normal · 3 after 1 loss" — quiet while loading or failed. */
-function RightNow({ entry, enabled }: { entry: LossStreakEntry | undefined; enabled: boolean }) {
+/**
+ * "Right now: 3 accounts normal · 4 after 2+ losses · 1 after 3+ wins" —
+ * every account's CURRENT run, placed on the ladder in the editor (so an
+ * unsaved step shows who it would catch). Quiet while loading or failed.
+ */
+function RightNow({
+  entry,
+  steps,
+  enabled,
+  unsaved,
+}: {
+  entry: AssetStreaksEntry | undefined
+  steps: readonly AssetStreakSize[]
+  enabled: boolean
+  /** The switch or the steps differ from what is saved. */
+  unsaved: boolean
+}) {
   const data = entry?.data
   let text: string
   if (!data) {
@@ -44,16 +59,18 @@ function RightNow({ entry, enabled }: { entry: LossStreakEntry | undefined; enab
   } else if (data.accounts === 0) {
     text = 'No accounts trade on this exchange yet.'
   } else {
-    text = `Right now: ${describeStreakCounts(data).join(' · ')}`
+    text = `Right now: ${describeRuns(data, steps).join(' · ')}`
   }
+  const counted = data !== null && data !== undefined && data.accounts > 0
 
   return (
     <p className="flex items-start gap-2 text-[12px] leading-[1.5] text-muted" aria-live="polite">
       <Activity size={13} className="mt-[3px] flex-none text-faint" aria-hidden="true" />
       <span className={data ? '' : 'text-faint'}>
         {text}
-        {data && data.accounts > 0 && !enabled && (
-          <span className="text-faint"> · not applied while off</span>
+        {counted && !enabled && <span className="text-faint"> · not applied while off</span>}
+        {counted && enabled && unsaved && steps.length > 0 && (
+          <span className="text-faint"> · with your unsaved changes</span>
         )}
       </span>
     </p>
@@ -61,40 +78,41 @@ function RightNow({ entry, enabled }: { entry: LossStreakEntry | undefined; enab
 }
 
 /**
- * One asset's loss-streak ladder: the switch, the step editor, how many
- * accounts sit on a streak right now, and a confirmed save. Nothing is
- * written until Save → Yes — the switch and the rows are a draft.
+ * One asset's streak ladder: the switch, the step editor, where the accounts
+ * sit on it right now, and a confirmed save. Nothing is written until
+ * Save → Yes — the switch and the rows are a draft.
  */
-export default function LossSizingCard({
+export default function StreakSizingCard({
   asset,
   draft,
   onDraftChange,
   streaks,
   onSaved,
-}: LossSizingCardProps) {
+}: StreakSizingCardProps) {
   const [confirming, setConfirming] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const savedState = useMemo(
-    () => ({ enabled: asset.loss_sizing_enabled, steps: asset.loss_sizes }),
-    [asset.loss_sizing_enabled, asset.loss_sizes],
+    () => ({ enabled: asset.streak_sizing_enabled, steps: asset.streak_sizes }),
+    [asset.streak_sizing_enabled, asset.streak_sizes],
   )
-  const savedValues = useMemo(() => valuesFromSteps(asset.loss_sizes), [asset.loss_sizes])
+  // Built once per saved ladder, so the row ids (React keys) stay put until
+  // the first edit copies them into the draft.
+  const savedRows = useMemo(() => rowsFromSteps(asset.streak_sizes), [asset.streak_sizes])
 
-  const enabled = draft?.enabled ?? asset.loss_sizing_enabled
-  const values = draft?.values ?? savedValues
+  const enabled = draft?.enabled ?? asset.streak_sizing_enabled
+  const rows = draft?.rows ?? savedRows
   const touched = draft ? draftTouched(savedState, draft) : false
-  const hasErrors = ladderHasErrors(values)
-  const nextSteps = stepsFromValues(values)
+  const hasErrors = ladderHasErrors(rows)
+  const nextSteps = stepsFromRows(rows)
+  const stepsChanged = !sameLadder(nextSteps, asset.streak_sizes)
   const canSave =
-    touched &&
-    !hasErrors &&
-    (enabled !== asset.loss_sizing_enabled || !sameLadder(nextSteps, asset.loss_sizes))
+    touched && !hasErrors && (enabled !== asset.streak_sizing_enabled || stepsChanged)
 
-  const update = (next: Partial<LossSizingDraft>) => {
+  const update = (next: Partial<StreakSizingDraft>) => {
     setError(null)
-    onDraftChange(asset.asset_id, { enabled, values, ...next })
+    onDraftChange(asset.asset_id, { enabled, rows, ...next })
   }
 
   const reset = () => {
@@ -106,14 +124,14 @@ export default function LossSizingCard({
     setSaving(true)
     setError(null)
     try {
-      const updated = await saveAssetLossSizing(asset.asset_id, {
-        loss_sizing_enabled: enabled,
-        loss_sizes: nextSteps,
+      const updated = await saveAssetStreakSizing(asset.asset_id, {
+        streak_sizing_enabled: enabled,
+        streak_sizes: nextSteps,
       })
       setConfirming(false)
       onSaved(updated)
     } catch (err) {
-      setError(getApiErrorMessage(err, 'Could not save the loss-streak sizes.'))
+      setError(getApiErrorMessage(err, 'Could not save the streak sizes.'))
       setConfirming(false)
     } finally {
       setSaving(false)
@@ -122,11 +140,18 @@ export default function LossSizingCard({
 
   const symbol = displaySymbol(asset.ticker)
   const changes = describeLadderChanges(savedState, { enabled, steps: nextSteps })
+  // A win step above base fills the max position size sooner — the cap still
+  // holds the total, so the admin should know before saving one.
+  const winAboveBase = nextSteps.some((s) => s.kind === 'win' && s.size > asset.base_size)
   const outcome = !enabled
     ? 'While it is off every entry uses the normal size; your steps are kept.'
     : nextSteps.length === 0
       ? 'There are no steps yet, so every entry still uses the normal size.'
-      : `New ladder: ${ladderSummaryText(asset.base_size, nextSteps)}. Applies from the next entry; exits are never affected.`
+      : `New ladder: ${ladderSummaryText(asset.base_size, nextSteps)}. Applies from the next entry; exits are never affected.${
+          winAboveBase
+            ? ` Win sizes above normal still stop at the max position size (${fmtSize(asset.max_increments)}), so a stack reaches it in fewer entries.`
+            : ''
+        }`
   const confirmMessage = `${changes.join(' · ')}. ${outcome}`
 
   const meta = [asset.broker ?? 'No exchange', `Base size ${fmtSize(asset.base_size)}`]
@@ -162,7 +187,7 @@ export default function LossSizingCard({
           type="button"
           role="switch"
           aria-checked={enabled}
-          aria-label={`Loss-streak sizing for ${symbol}`}
+          aria-label={`Streak sizing for ${symbol}`}
           className="inline-flex flex-none items-center gap-2 rounded-pill bg-transparent py-1 pl-2 disabled:cursor-not-allowed disabled:opacity-50"
           onClick={() => update({ enabled: !enabled })}
           disabled={saving}
@@ -193,16 +218,21 @@ export default function LossSizingCard({
         </p>
       )}
 
-      <LossSizingFields
+      <StreakSizingFields
         ticker={asset.ticker}
         base={asset.base_size}
-        values={values}
-        onChange={(next) => update({ values: next })}
+        rows={rows}
+        onChange={(next) => update({ rows: next })}
         baseNote="Base size, edited on the Assets tab"
         muted={!enabled}
       />
 
-      <RightNow entry={streaks} enabled={asset.loss_sizing_enabled} />
+      <RightNow
+        entry={streaks}
+        steps={nextSteps}
+        enabled={enabled}
+        unsaved={enabled !== asset.streak_sizing_enabled || stepsChanged}
+      />
 
       {error && (
         <p
@@ -219,7 +249,7 @@ export default function LossSizingCard({
             hasErrors ? 'text-red' : touched ? 'text-accent' : 'text-faint'
           }`}
         >
-          {hasErrors ? 'Fix the sizes marked in red' : touched ? 'Unsaved changes' : 'No changes'}
+          {hasErrors ? 'Fix the steps marked in red' : touched ? 'Unsaved changes' : 'No changes'}
         </span>
         <div className="flex flex-none gap-2">
           <button

@@ -18,23 +18,25 @@ import type { AdminTodo } from '../types/adminTodos'
  *    the note and the date it was settled stay readable.
  */
 export const ADMIN_TODOS: AdminTodo[] = [
-  // ── Loss-streak sizing (2026-10-09) ─────────────────────────────────────
+  // ── Streak sizing (2026-10-09; win steps added the same day) ───────────
   {
+    // The id predates win steps — it is the API's key, so it stays.
     id: 'loss-sizing-configure',
-    feature: 'Loss-streak sizing',
+    feature: 'Streak sizing',
     kind: 'action',
-    title: 'Type the losing-streak sizes for LTC and RENDER, then switch them on',
+    title: 'Set the losing- and winning-streak sizes for LTC and RENDER, then switch them on',
     added: '2026-10-09',
-    why: 'The bot can now trade a smaller size after losses in a row and go back to base size after one win, but every asset starts with the feature OFF and no sizes. Until the sizes are typed in and the switch is on, LTC and RENDER keep trading their normal base size after every loss.',
+    why: 'The bot can now trade a different size after losses in a row AND after wins in a row (for example smaller after a losing run, bigger after a winning one), and goes back to base size as soon as the run breaks. Every asset starts with the feature OFF and no steps, so until the steps are typed in and the switch is on, LTC and RENDER keep trading their normal base size whatever the run.',
     steps: [
-      'Admin → Trading Assets → "Loss-streak sizing" tab. LTCUSDT (base 5) and RENDERUSDT (base 60) are both already set up for Binance.',
-      'On the LTCUSDT card, type the size for each step you want (for example after 1 loss in a row → 4, after 3 → 2.5). A blank step keeps the previous one. Sizes are per 1,000 USDT of balance, exactly like Base size.',
+      'Admin → Trading Assets → "Streak Sizing Settings" tab. LTCUSDT (base 5) and RENDERUSDT (base 60) are both already set up for Binance.',
+      'On the LTCUSDT card, press "Add step" for each step you want. Pick Loss or Win on the row, type how many in a row it starts at, then the size: for example Loss, after 2 in a row → 3, and Win, after 3 in a row → 7. A step keeps applying until the next step of its kind, and the deepest one keeps applying however long the run lasts. Sizes are per 1,000 USDT of balance, exactly like Base size.',
+      'A win size bigger than base still stops at the max position size, so the stack reaches it in fewer entries (base 5 with max 15: two entries of 7 make 14, a third is refused). Raise the max position size on the Assets tab if that is not what you want.',
       'Switch the card ON and Save, then confirm. Do the same for RENDERUSDT.',
-      'Check the "Right now" line on each card: it shows how many accounts are at normal size and how many are on each step today.',
+      'Check the "Right now" line on each card: it shows how many accounts are at normal size and how many sit on each losing or winning step today.',
       'After the next entry signal, open Admin → Signal Log, expand the signal and look at an account on a streak: it says which step was used and why.',
     ],
     envKeys: [],
-    links: [{ label: 'Admin → Trading Assets', href: '/admin/assets?tab=loss-sizing' }],
+    links: [{ label: 'Admin → Trading Assets', href: '/admin/assets?tab=streak-sizing' }],
   },
   // ── Card payments via Stripe (2026-09-30) ───────────────────────────────
   {

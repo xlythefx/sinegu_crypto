@@ -1,6 +1,7 @@
 import { apiFetch, API_URL, ApiError } from './api'
 import { getToken } from '../lib/session'
 import { mapApiInvoice, type ApiInvoice, type Invoice } from '../lib/billing'
+import { sortSteps } from '../lib/streakSizing'
 import type {
   AdminApiKey,
   AdminApiKeyCounts,
@@ -28,8 +29,9 @@ import type {
   AdminTronTransfersData,
   AdminUserUpdateInput,
   AssetInput,
-  AssetLossSizingInput,
-  AssetLossStreaks,
+  AssetStreakSize,
+  AssetStreakSizingInput,
+  AssetStreaks,
   BulkKeyDeleteResult,
   CacheClearResult,
   ClearInvoicesResult,
@@ -116,19 +118,30 @@ export async function getAdminPerformance(
 }
 
 /**
- * Coerce the loss-sizing fields so every reader can rely on them: an API
- * that predates the feature sends neither, and the ladder must always be
- * shallowest-first for the step-carrying logic in `lib/lossSizing.ts`.
+ * Coerce the streak-sizing fields so every reader can rely on them: an API
+ * that predates the feature sends neither, a step with no `kind` is a loss
+ * step (the only kind there used to be), and the ladder is always loss steps
+ * then win steps, each shallowest first — the order `lib/streakSizing.ts`
+ * and the editor read in.
  */
 function normalizeAsset(asset: AdminAsset): AdminAsset {
   if (!asset) return asset
-  const steps = Array.isArray(asset.loss_sizes) ? asset.loss_sizes : []
+  const raw: Partial<AssetStreakSize>[] = Array.isArray(asset.streak_sizes)
+    ? asset.streak_sizes
+    : []
+  const steps = raw
+    .map(
+      (s): AssetStreakSize => ({
+        kind: s.kind === 'win' ? 'win' : 'loss',
+        streak: Number(s.streak),
+        size: Number(s.size),
+      }),
+    )
+    .filter((s) => Number.isFinite(s.streak) && Number.isFinite(s.size))
   return {
     ...asset,
-    loss_sizing_enabled: Boolean(asset.loss_sizing_enabled),
-    loss_sizes: steps
-      .map((s) => ({ losses: Number(s.losses), size: Number(s.size) }))
-      .sort((a, b) => a.losses - b.losses),
+    streak_sizing_enabled: Boolean(asset.streak_sizing_enabled),
+    streak_sizes: sortSteps(steps),
   }
 }
 
@@ -141,33 +154,41 @@ export async function getAdminAssets(): Promise<AdminAsset[]> {
 }
 
 /**
- * PUT /admin/assets/{id}/loss-sizing — the Loss-streak sizing tab's save.
- * Replaces the switch and the whole ladder (an empty list clears it); 422
- * when a step is outside 1–10, repeated, or not above zero.
+ * PUT /admin/assets/{id}/streak-sizing — the Streak Sizing Settings tab's
+ * save. Replaces the switch and the whole ladder (an empty list clears it);
+ * 422 when a streak is outside 1–10, a (kind, streak) pair repeats, or a size
+ * is not above zero.
  */
-export async function saveAssetLossSizing(
+export async function saveAssetStreakSizing(
   assetId: number,
-  input: AssetLossSizingInput,
+  input: AssetStreakSizingInput,
 ): Promise<AdminAsset> {
   const res = await apiFetch<{ success: boolean; message: string; asset: AdminAsset }>(
-    `/admin/assets/${assetId}/loss-sizing`,
+    `/admin/assets/${assetId}/streak-sizing`,
     { method: 'PUT', body: input, auth: true },
   )
   return normalizeAsset(res.asset)
 }
 
-/** GET /admin/assets/{id}/loss-streaks — accounts at each losing streak right now. */
-export async function getAssetLossStreaks(assetId: number): Promise<AssetLossStreaks> {
-  const res = await apiFetch<{ success: boolean } & AssetLossStreaks>(
-    `/admin/assets/${assetId}/loss-streaks`,
+/**
+ * GET /admin/assets/{id}/streaks — accounts on each run right now. `run` is
+ * signed (negative = losses in a row, positive = wins, 0 = no run yet).
+ */
+export async function getAssetStreaks(assetId: number): Promise<AssetStreaks> {
+  const res = await apiFetch<{ success: boolean } & AssetStreaks>(
+    `/admin/assets/${assetId}/streaks`,
     { auth: true },
   )
+  const runs = Array.isArray(res.runs) ? res.runs : []
   return {
     exchange: res.exchange ?? null,
     symbol: res.symbol,
-    depth: res.depth,
+    depth: Number(res.depth) || 0,
     accounts: res.accounts ?? 0,
-    counts: res.counts ?? [],
+    runs: runs
+      .map((r) => ({ run: Number(r.run), accounts: Number(r.accounts) }))
+      .filter((r) => Number.isFinite(r.run) && Number.isFinite(r.accounts))
+      .sort((a, b) => a.run - b.run),
   }
 }
 
@@ -192,11 +213,12 @@ function buildAssetForm(input: AssetInput, image?: AssetImageChange): FormData {
   // The ladder rides along ONLY when the caller owns it. Absent = "leave it
   // as it is" on the API, which is what the card's enable/disable toggle
   // needs; present with no steps = "no steps".
-  if (input.loss_sizing_enabled !== undefined) {
-    form.append('loss_sizing_enabled', input.loss_sizing_enabled ? '1' : '0')
-    ;(input.loss_sizes ?? []).forEach((step, i) => {
-      form.append(`loss_sizes[${i}][losses]`, String(step.losses))
-      form.append(`loss_sizes[${i}][size]`, String(step.size))
+  if (input.streak_sizing_enabled !== undefined) {
+    form.append('streak_sizing_enabled', input.streak_sizing_enabled ? '1' : '0')
+    ;(input.streak_sizes ?? []).forEach((step, i) => {
+      form.append(`streak_sizes[${i}][kind]`, step.kind)
+      form.append(`streak_sizes[${i}][streak]`, String(step.streak))
+      form.append(`streak_sizes[${i}][size]`, String(step.size))
     })
   }
   if (image?.file) form.append('asset_image', image.file)
