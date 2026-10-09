@@ -1032,3 +1032,27 @@ def notify_billing_missed(step: str, month: str, late_hours: float) -> None:
 def notify_error(context: str, detail: str) -> None:
     """A hard operational error (poller crash, rate limit, job crash)."""
     _send_admin(f"❌ <b>Error</b> — {_esc(context)}\n{_esc(detail)}")
+
+
+def render_kill_switch(exchange: str, ticker: str, losses: Any, reason: str) -> str:
+    try:
+        venue = exchanges.label(exchange) if exchange else ""
+    except Exception:  # noqa: BLE001 - an unknown venue name must not lose the alert
+        venue = str(exchange)
+    lines = [
+        f"🛑 <b>Kill switch — {_esc(ticker)} switched off</b>" + (f" · {_esc(venue)}" if venue else ""),
+        _esc(reason) if reason else f"The master lost {_esc(losses)} trades in a row.",
+        "No new trades on this coin for anyone. Open positions still close on the exit signal.",
+        "Turn it back on in Admin → Trading Assets when ready.",
+    ]
+    return "\n".join(lines)
+
+
+def notify_kill_switch(exchange: str, ticker: str, losses: Any, reason: str) -> None:
+    """The API's kill switch turned a coin off (App\\Services\\Assets\\KillSwitch).
+
+    ADMIN chat only, through `_send_private` — never the public fallback: the
+    channel announces trades, not the operator's risk controls, and a silent
+    coin there reads as the strategy pausing, which is exactly what happened.
+    """
+    _send_private(render_kill_switch(exchange, ticker, losses, reason))

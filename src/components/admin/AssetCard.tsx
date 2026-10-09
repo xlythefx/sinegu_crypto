@@ -1,12 +1,15 @@
-import { Pencil, Trash2, TrendingUpDown } from 'lucide-react'
+import { Pencil, ShieldAlert, Trash2, TrendingUpDown } from 'lucide-react'
+import KilledAssetStrip from './assets/KilledAssetStrip'
 import { displaySymbol } from '../../lib/chart'
 import { fmtMediumDate, fmtQty } from '../../lib/format'
+import { isKilled, killSwitchArmedText } from '../../lib/killSwitch'
 import { ladderShortText } from '../../lib/streakSizing'
 import type { AdminAsset } from '../../types/admin'
 
 interface AssetCardProps {
   asset: AdminAsset
   busy: boolean
+  /** Enable / disable — also what "Turn back on" on a killed coin opens (the page words the confirm). */
   onToggle: (asset: AdminAsset) => void
   onEdit: (asset: AdminAsset) => void
   onDelete: (asset: AdminAsset) => void
@@ -72,6 +75,7 @@ export default function AssetCard({
   onDelete,
 }: AssetCardProps) {
   const meta = [asset.broker, asset.type].filter(Boolean).join(' · ') || '—'
+  const killed = isKilled(asset)
 
   return (
     <article
@@ -119,6 +123,12 @@ export default function AssetCard({
         </span>
       </header>
 
+      {/* Stopped by the kill switch — the first thing on the card, because
+          nobody trades this coin until someone turns it back on. */}
+      {killed && (
+        <KilledAssetStrip asset={asset} onTurnBackOn={() => onToggle(asset)} busy={busy} />
+      )}
+
       <div className="grid grid-cols-2 gap-2.5">
         <Metric
           label="Base size"
@@ -160,6 +170,14 @@ export default function AssetCard({
             {ladderShortText(asset.streak_sizes)}
           </span>
         </div>
+      )}
+
+      {/* A kill switch that is set and counting (a tripped one is the strip above). */}
+      {asset.kill_switch_losses !== null && !killed && (
+        <p className="-mt-1 flex items-start gap-2 px-0.5 text-[11.5px] leading-[1.45] text-muted">
+          <ShieldAlert size={13} className="mt-px flex-none text-faint" aria-hidden="true" />
+          {killSwitchArmedText(asset.kill_switch_losses)}
+        </p>
       )}
 
       <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-hair pt-3">

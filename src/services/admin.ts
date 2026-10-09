@@ -122,7 +122,8 @@ export async function getAdminPerformance(
  * that predates the feature sends neither, a step with no `kind` is a loss
  * step (the only kind there used to be), and the ladder is always loss steps
  * then win steps, each shallowest first — the order `lib/streakSizing.ts`
- * and the editor read in.
+ * and the editor read in. The kill-switch fields get the same treatment: an
+ * API without them reads as "no kill switch, never tripped".
  */
 function normalizeAsset(asset: AdminAsset): AdminAsset {
   if (!asset) return asset
@@ -138,10 +139,18 @@ function normalizeAsset(asset: AdminAsset): AdminAsset {
       }),
     )
     .filter((s) => Number.isFinite(s.streak) && Number.isFinite(s.size))
+  const kill =
+    asset.kill_switch_losses === null || asset.kill_switch_losses === undefined
+      ? null
+      : Number(asset.kill_switch_losses)
   return {
     ...asset,
     streak_sizing_enabled: Boolean(asset.streak_sizing_enabled),
     streak_sizes: sortSteps(steps),
+    kill_switch_losses: kill !== null && Number.isInteger(kill) && kill > 0 ? kill : null,
+    killed_at: asset.killed_at || null,
+    killed_reason: asset.killed_reason || null,
+    kill_switch_armed_at: asset.kill_switch_armed_at || null,
   }
 }
 
@@ -157,7 +166,8 @@ export async function getAdminAssets(): Promise<AdminAsset[]> {
  * PUT /admin/assets/{id}/streak-sizing — the Streak Sizing Settings tab's
  * save. Replaces the switch and the whole ladder (an empty list clears it);
  * 422 when a streak is outside 1–10, a (kind, streak) pair repeats, or a size
- * is not above zero.
+ * is not above zero. `kill_switch_losses` rides along only when the caller
+ * sends it (absent = unchanged, null = off).
  */
 export async function saveAssetStreakSizing(
   assetId: number,
@@ -221,6 +231,13 @@ function buildAssetForm(input: AssetInput, image?: AssetImageChange): FormData {
       form.append(`streak_sizes[${i}][size]`, String(step.size))
     })
   }
+  // Same rule for the kill switch: absent = unchanged, '' = off, '1'..'10' = on.
+  if (input.kill_switch_losses !== undefined) {
+    form.append(
+      'kill_switch_losses',
+      input.kill_switch_losses === null ? '' : String(input.kill_switch_losses),
+    )
+  }
   if (image?.file) form.append('asset_image', image.file)
   else if (image?.remove) form.append('remove_image', '1')
   return form
@@ -279,6 +296,24 @@ export function updateAsset(
     buildAssetForm(input, image),
     'PUT',
   )
+}
+
+/**
+ * Switch one asset on or off and change NOTHING else: the asset's own fields
+ * are re-posted as they are, and the streak ladder and kill switch are left
+ * out so the API keeps them. Turning a coin the kill switch stopped back on
+ * goes through here — the API clears the kill and starts counting again.
+ */
+export function setAssetEnabled(asset: AdminAsset, enabled: boolean): Promise<AdminAsset> {
+  return updateAsset(asset.asset_id, {
+    ticker: asset.ticker,
+    type: asset.type,
+    broker: asset.broker,
+    side: asset.side,
+    max_increments: asset.max_increments,
+    base_size: asset.base_size,
+    enabled,
+  })
 }
 
 export async function deleteAsset(assetId: number): Promise<void> {

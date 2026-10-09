@@ -40,6 +40,8 @@ const GOOD_TO_KNOW = [
   'If the trade history cannot be read when a signal arrives, the bot uses the normal size.',
   'Only new entries change. Closing a position is never affected.',
   'The asset’s max position size still caps every position: with a base of 5 and a max of 15, two entries of 7 make 14, so a third is refused.',
+  'The calculator beside each size and “Build steps for me” turn “decrease by 0.25” or “by 25%” into sizes. They save plain numbers, so rebuild the steps if you change the Base size.',
+  'The kill switch is separate: if the master loses the number of trades in a row you set on a coin, that coin switches off for everyone until you turn it back on.',
 ]
 
 const SECTION_TITLE = 'font-display text-[14px] font-extrabold text-text'

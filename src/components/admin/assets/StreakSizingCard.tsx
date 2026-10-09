@@ -1,10 +1,20 @@
 import { useMemo, useState } from 'react'
 import { Activity } from 'lucide-react'
+import KilledAssetStrip from './KilledAssetStrip'
+import KillSwitchField from './KillSwitchField'
 import StreakSizingFields from './StreakSizingFields'
 import ConfirmModal from '../../ui/ConfirmModal'
-import { saveAssetStreakSizing } from '../../../services/admin'
+import { saveAssetStreakSizing, setAssetEnabled } from '../../../services/admin'
 import { getApiErrorMessage } from '../../../services/api'
 import { displaySymbol } from '../../../lib/chart'
+import {
+  isKilled,
+  killDraftError,
+  killDraftFrom,
+  killDraftValue,
+  killSwitchOutcome,
+  reviveConfirmCopy,
+} from '../../../lib/killSwitch'
 import {
   describeLadderChanges,
   describeRuns,
@@ -18,7 +28,7 @@ import {
   type StreakSizingDraft,
 } from '../../../lib/streakSizing'
 import type { AssetStreaksEntry } from '../../../hooks/useAssetStreaks'
-import type { AdminAsset, AssetStreakSize } from '../../../types/admin'
+import type { AdminAsset, AssetStreakSize, AssetStreakSizingInput } from '../../../types/admin'
 
 const BTN =
   'inline-flex h-9 items-center justify-center rounded-pill px-4 text-[12.5px] font-bold transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45'
@@ -31,6 +41,8 @@ interface StreakSizingCardProps {
   onDraftChange: (assetId: number, draft: StreakSizingDraft | null) => void
   streaks: AssetStreaksEntry | undefined
   onSaved: (asset: AdminAsset) => void
+  /** The asset changed outside the ladder (turned back on) — keep any unsaved draft. */
+  onAssetChanged: (asset: AdminAsset) => void
 }
 
 /**
@@ -79,8 +91,13 @@ function RightNow({
 
 /**
  * One asset's streak ladder: the switch, the step editor, where the accounts
- * sit on it right now, and a confirmed save. Nothing is written until
- * Save → Yes — the switch and the rows are a draft.
+ * sit on it right now, the kill switch, and a confirmed save. Nothing is
+ * written until Save → Yes — the switch, the rows and the kill switch are a
+ * draft.
+ *
+ * A coin the kill switch has stopped shows a red strip at the top with
+ * "Turn back on" (its own confirmation, and it changes nothing but
+ * `enabled`, so an unsaved draft on the card survives it).
  */
 export default function StreakSizingCard({
   asset,
@@ -88,31 +105,46 @@ export default function StreakSizingCard({
   onDraftChange,
   streaks,
   onSaved,
+  onAssetChanged,
 }: StreakSizingCardProps) {
   const [confirming, setConfirming] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [reviving, setReviving] = useState(false)
+  const [reviveBusy, setReviveBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const savedState = useMemo(
-    () => ({ enabled: asset.streak_sizing_enabled, steps: asset.streak_sizes }),
-    [asset.streak_sizing_enabled, asset.streak_sizes],
+    () => ({
+      enabled: asset.streak_sizing_enabled,
+      steps: asset.streak_sizes,
+      killSwitch: asset.kill_switch_losses,
+    }),
+    [asset.streak_sizing_enabled, asset.streak_sizes, asset.kill_switch_losses],
   )
   // Built once per saved ladder, so the row ids (React keys) stay put until
   // the first edit copies them into the draft.
   const savedRows = useMemo(() => rowsFromSteps(asset.streak_sizes), [asset.streak_sizes])
+  const savedKill = useMemo(
+    () => killDraftFrom(asset.kill_switch_losses),
+    [asset.kill_switch_losses],
+  )
 
   const enabled = draft?.enabled ?? asset.streak_sizing_enabled
   const rows = draft?.rows ?? savedRows
+  const kill = draft?.kill ?? savedKill
   const touched = draft ? draftTouched(savedState, draft) : false
   const hasErrors = ladderHasErrors(rows)
+  const killError = killDraftError(kill)
   const nextSteps = stepsFromRows(rows)
   const stepsChanged = !sameLadder(nextSteps, asset.streak_sizes)
-  const canSave =
-    touched && !hasErrors && (enabled !== asset.streak_sizing_enabled || stepsChanged)
+  const ladderChanged = enabled !== asset.streak_sizing_enabled || stepsChanged
+  const nextKill = killDraftValue(kill)
+  const killChanged = nextKill !== undefined && nextKill !== asset.kill_switch_losses
+  const canSave = touched && !hasErrors && !killError && (ladderChanged || killChanged)
 
   const update = (next: Partial<StreakSizingDraft>) => {
     setError(null)
-    onDraftChange(asset.asset_id, { enabled, rows, ...next })
+    onDraftChange(asset.asset_id, { enabled, rows, kill, ...next })
   }
 
   const reset = () => {
@@ -123,11 +155,15 @@ export default function StreakSizingCard({
   const save = async () => {
     setSaving(true)
     setError(null)
+    // The kill switch is sent only when it changes, so saving a ladder never
+    // touches a kill switch that is already counting.
+    const input: AssetStreakSizingInput = {
+      streak_sizing_enabled: enabled,
+      streak_sizes: nextSteps,
+    }
+    if (killChanged) input.kill_switch_losses = nextKill
     try {
-      const updated = await saveAssetStreakSizing(asset.asset_id, {
-        streak_sizing_enabled: enabled,
-        streak_sizes: nextSteps,
-      })
+      const updated = await saveAssetStreakSizing(asset.asset_id, input)
       setConfirming(false)
       onSaved(updated)
     } catch (err) {
@@ -138,12 +174,32 @@ export default function StreakSizingCard({
     }
   }
 
+  const revive = async () => {
+    setReviveBusy(true)
+    setError(null)
+    try {
+      const updated = await setAssetEnabled(asset, true)
+      setReviving(false)
+      onAssetChanged(updated)
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not turn the coin back on.'))
+      setReviving(false)
+    } finally {
+      setReviveBusy(false)
+    }
+  }
+
   const symbol = displaySymbol(asset.ticker)
-  const changes = describeLadderChanges(savedState, { enabled, steps: nextSteps })
+  const killed = isKilled(asset)
+  const changes = describeLadderChanges(savedState, {
+    enabled,
+    steps: nextSteps,
+    killSwitch: killChanged ? (nextKill ?? null) : asset.kill_switch_losses,
+  })
   // A win step above base fills the max position size sooner — the cap still
   // holds the total, so the admin should know before saving one.
   const winAboveBase = nextSteps.some((s) => s.kind === 'win' && s.size > asset.base_size)
-  const outcome = !enabled
+  const ladderOutcome = !enabled
     ? 'While it is off every entry uses the normal size; your steps are kept.'
     : nextSteps.length === 0
       ? 'There are no steps yet, so every entry still uses the normal size.'
@@ -152,10 +208,25 @@ export default function StreakSizingCard({
             ? ` Win sizes above normal still stop at the max position size (${fmtSize(asset.max_increments)}), so a stack reaches it in fewer entries.`
             : ''
         }`
-  const confirmMessage = `${changes.join(' · ')}. ${outcome}`
+  const outcomes = [
+    ladderChanged ? ladderOutcome : null,
+    killChanged ? killSwitchOutcome(asset.kill_switch_losses, nextKill ?? null, symbol) : null,
+  ].filter(Boolean)
+  const confirmMessage = `${changes.join(' · ')}. ${outcomes.join(' ')}`
+  const confirmTitle = ladderChanged
+    ? `Save streak sizing for ${symbol}?`
+    : `Save the kill switch for ${symbol}?`
+  const revivalCopy = reviveConfirmCopy(symbol)
 
   const meta = [asset.broker ?? 'No exchange', `Base size ${fmtSize(asset.base_size)}`]
-  if (!asset.enabled) meta.push('asset is off')
+  if (!asset.enabled) meta.push(killed ? 'switched off' : 'asset is off')
+  const footerNote = hasErrors
+    ? 'Fix the steps marked in red'
+    : killError
+      ? 'Fix the kill switch count'
+      : touched
+        ? 'Unsaved changes'
+        : 'No changes'
 
   return (
     <article
@@ -163,6 +234,15 @@ export default function StreakSizingCard({
         touched ? 'border-accent-line' : 'border-border'
       }`}
     >
+      {/* First on the card: nobody trades this coin until it is turned back on. */}
+      {killed && (
+        <KilledAssetStrip
+          asset={asset}
+          onTurnBackOn={() => setReviving(true)}
+          busy={reviveBusy || saving}
+        />
+      )}
+
       <header className="flex items-center gap-3">
         {asset.asset_image ? (
           <img
@@ -230,7 +310,14 @@ export default function StreakSizingCard({
         entry={streaks}
         steps={nextSteps}
         enabled={enabled}
-        unsaved={enabled !== asset.streak_sizing_enabled || stepsChanged}
+        unsaved={ladderChanged}
+      />
+
+      <KillSwitchField
+        value={kill}
+        onChange={(next) => update({ kill: next })}
+        disabled={saving}
+        symbol={symbol}
       />
 
       {error && (
@@ -245,10 +332,10 @@ export default function StreakSizingCard({
       <footer className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-hair pt-3.5">
         <span
           className={`text-[11.5px] font-semibold ${
-            hasErrors ? 'text-red' : touched ? 'text-accent' : 'text-faint'
+            hasErrors || killError ? 'text-red' : touched ? 'text-accent' : 'text-faint'
           }`}
         >
-          {hasErrors ? 'Fix the steps marked in red' : touched ? 'Unsaved changes' : 'No changes'}
+          {footerNote}
         </span>
         <div className="flex flex-none gap-2">
           <button
@@ -272,12 +359,22 @@ export default function StreakSizingCard({
 
       <ConfirmModal
         open={confirming}
-        title={`Save streak sizing for ${symbol}?`}
+        title={confirmTitle}
         message={confirmMessage}
         confirmLabel={saving ? 'Saving…' : 'Yes, save'}
         cancelLabel="No"
         onConfirm={() => !saving && save()}
         onCancel={() => !saving && setConfirming(false)}
+      />
+
+      <ConfirmModal
+        open={reviving}
+        title={revivalCopy.title}
+        message={revivalCopy.message}
+        confirmLabel={reviveBusy ? 'Turning on…' : revivalCopy.confirmLabel}
+        cancelLabel="No"
+        onConfirm={() => !reviveBusy && revive()}
+        onCancel={() => !reviveBusy && setReviving(false)}
       />
     </article>
   )

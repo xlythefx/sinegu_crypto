@@ -1395,6 +1395,36 @@ for the overlay's `position: fixed` and trap it inside.
      - Signal Log shows the step per account (`streak_run`, `streak_kind`,
        `streak_step`, `streak_size`, `streak_known`, `normal_quantity` in the
        sizing block — only written for an asset with a ladder).
+     - **Step helpers calculate ONCE** (owner chose option A, 2026-10-09):
+       the per-step calculator and "Build steps for me" turn "decrease by
+       0.25 / 25% of base or of the previous step" into plain numbers. A later
+       Base size change does NOT move the steps — the UI says to rebuild.
+  5. **Kill switch** (2026-10-09, employer's request; `App\\Services\\Assets\\KillSwitch`).
+     Per asset, `assets.kill_switch_losses` (1–10, NULL = off): when the
+     **MASTER's** real-money account (owner `type = 'master'`, demo 0, not
+     sandbox) loses that many trades in a row on the coin, the asset is
+     switched OFF for everyone — the same `enabled = 0` an admin sets, so no
+     new entries while exits still close (exits skip asset gates). Rules:
+     - **Only the master counts** — everyone follows its signals; streak
+       sizing reads each account, the kill switch reads the strategy.
+     - **Checked after every `past-positions/sync` that inserted or updated a
+       master row** (a close's P&L can land a sync later), never throwing
+       into the sync. Only closes after `kill_switch_armed_at` count; a NULL
+       P&L row is skipped; a win ends the run.
+     - **Armed** when the count is set/changed and when the coin is turned
+       back ON (`Asset::booted` saving hook — which also clears
+       `killed_at`/`killed_reason`), so the run that tripped it cannot trip
+       it again. Turning back on is MANUAL (the asset's on/off toggle).
+     - **Trips once**: a conditional update on `enabled = 1`, so racing syncs
+       announce once. Announced best-effort three ways: Admin Overview
+       caution strip (`attention.killed_assets`, all staff; cache forgotten on
+       trip and on re-enable), the `team-kill-switch` email (live, team list),
+       and the admin Telegram group via engine `POST /admin/kill-switch`
+       (`EngineCache::killSwitchTripped` → `notify.notify_kill_switch`,
+       `_send_private` — never the public channel).
+     - While a coin is off, its entry signals still arrive and are rejected
+       as `asset_not_configured` in the admin chat — the kill switch message
+       beside them says why.
   `total_deposit` comes from `GET /api/engine/{exchange}/accounts` as
   `initial_deposit + (deposits − withdrawals)` over `binance_transactions` —
   **not** raw `initial_deposit`, which `EngineSyncController` writes once and
@@ -1607,7 +1637,7 @@ for the overlay's `position: fixed` and trap it inside.
   `SYNC_POSITION_MODE_ON_STARTUP`. Config-only fix, no code, no test gate:
   `python .claude/deploy_sinegualcrypto.py sync-engine-env` (upserts + restarts).
 - **Commands:** `python -m binance_abcd.main` (waitress), `python -m pytest
-  tests/ -q` (553 tests, no network), `python webhook_tester.py` (Tkinter GUI
+  tests/ -q` (557 tests, no network), `python webhook_tester.py` (Tkinter GUI
   trade sender — local or prod target, red banner on prod).
 - **Naming trap:** root `src/` is the React app; the engine package is
   `binance_abcd/`, deliberately not named `src`. Python and TypeScript

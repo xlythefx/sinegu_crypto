@@ -1,5 +1,7 @@
 import { useEffect, useId, useState, type FocusEvent } from 'react'
-import { Plus, X } from 'lucide-react'
+import { Calculator, Plus, WandSparkles, X } from 'lucide-react'
+import BuildStepsModal from './BuildStepsModal'
+import StepCalculatorModal from './StepCalculatorModal'
 import {
   checkRows,
   deepestStreak,
@@ -7,9 +9,12 @@ import {
   kindPlural,
   ladderStops,
   MAX_STREAK,
+  newRow,
   nextRow,
   parseStreak,
+  previousStep,
   sameOrder,
+  sizeText,
   sortRows,
   sortSteps,
   stepPhrase,
@@ -18,7 +23,7 @@ import {
   type RowCheck,
   type StreakRow,
 } from '../../../lib/streakSizing'
-import type { StreakKind } from '../../../types/admin'
+import type { AssetStreakSize, StreakKind } from '../../../types/admin'
 
 /*
  * Rows are laid out against the EDITOR's width (container query), not the
@@ -48,6 +53,11 @@ const CAPTION = 'font-mono text-[9.5px] font-semibold uppercase tracking-[0.1em]
 const HINT_TONE = { error: 'text-red', warn: 'text-accent', info: 'text-faint' } as const
 const REMOVE_BTN =
   'inline-flex h-8 w-8 items-center justify-center rounded-btn border border-border bg-surface text-muted transition-colors duration-150 hover:border-red hover:text-red'
+/** "Work out this size" — as tall as the size box it sits against. */
+const CALC_BTN =
+  'inline-flex h-9 w-8 flex-none items-center justify-center rounded-btn border border-border bg-surface text-muted transition-colors duration-150 hover:border-accent hover:text-accent'
+const FOOT_BTN =
+  'inline-flex h-8 items-center gap-1.5 rounded-pill border border-dashed border-border bg-transparent px-3.5 text-[12px] font-semibold text-text transition-colors duration-150 hover:border-accent disabled:cursor-not-allowed disabled:opacity-45'
 
 /** The selected half of the Loss | Win switch — red for losses, green for wins. */
 const KIND_ON: Record<StreakKind, string> = {
@@ -169,6 +179,11 @@ interface StreakSizingFieldsProps {
  * Rows are put in order (losses, then wins, each by count) only when focus
  * leaves the editor or a step is added — never while a count is being typed,
  * which would move the row out from under the caret.
+ *
+ * Two helpers fill sizes in for an admin who thinks in changes rather than
+ * final numbers: the calculator beside each size box (StepCalculatorModal)
+ * and "Build steps for me" (BuildStepsModal). Both only ever write plain
+ * numbers into the rows, exactly as if they had been typed.
  */
 export default function StreakSizingFields({
   base,
@@ -180,6 +195,9 @@ export default function StreakSizingFields({
   const id = useId()
   // The row just added: its size box takes focus once it is on screen.
   const [focusRow, setFocusRow] = useState<number | null>(null)
+  // The row whose calculator is open, and whether the builder is.
+  const [calcRow, setCalcRow] = useState<number | null>(null)
+  const [building, setBuilding] = useState(false)
 
   useEffect(() => {
     if (focusRow === null) return
@@ -216,148 +234,202 @@ export default function StreakSizingFields({
     if (!sameOrder(sorted, rows)) onChange(sorted)
   }
 
+  const calc = calcRow === null ? undefined : rows.find((r) => r.id === calcRow)
+  const calcCount = calc ? parseStreak(calc.streak) : null
+  const applyCalc = (size: string) => {
+    if (!calc) return
+    setRow(calc.id, { size })
+    setCalcRow(null)
+    setFocusRow(calc.id)
+  }
+  /** The builder's steps replace every row of that kind; the other kind is left alone. */
+  const applyBuilt = (kind: StreakKind, built: AssetStreakSize[]) => {
+    onChange(
+      sortRows([
+        ...rows.filter((r) => r.kind !== kind),
+        ...built.map((s) => newRow(kind, s.streak, sizeText(s.size))),
+      ]),
+    )
+    setBuilding(false)
+  }
+
   return (
-    <div
-      className={`@container flex flex-col gap-3 transition-opacity duration-150 ${
-        muted ? 'opacity-60 focus-within:opacity-100 hover:opacity-100' : ''
-      }`}
-      onBlur={settle}
-    >
-      <div className="flex flex-col gap-2">
-        {/* No run, or a run shorter than any step — read-only: it IS the asset's Base size. */}
-        <div className={ROW}>
-          <span className={NORMAL_LABEL}>Normal (no streak step)</span>
-          <span className={`${NORMAL_HINT} text-faint`}>{baseNote}</span>
-          <div className={`col-start-3 ${ROW_SIDE}`}>
-            <span
-              className={`${VALUE_BOX} inline-flex items-center justify-end border border-dashed border-border text-muted`}
-              title="Base size"
-            >
-              {baseOk ? fmtSize(base) : '—'}
-            </span>
-          </div>
-          <span className={`col-start-4 block w-8 ${ROW_SIDE}`} aria-hidden="true" />
-        </div>
-
-        {rows.map((row, index) => {
-          const check = checks[index]
-          const count = parseStreak(row.streak)
-          const isDeepest = check.step !== null && check.step.streak === deepest[row.kind]
-          const hint = hintFor(row, check, base)
-          const hintId = `${id}-hint-${row.id}`
-          const countInvalid = check.countError !== null
-          const sizeInvalid = check.sizeError !== null
-          const phrase =
-            count === null
-              ? `in this ${row.kind} step`
-              : stepPhrase(row.kind, count, isDeepest)
-          return (
-            <div key={row.id} className={ROW}>
-              <div className="col-start-1 row-start-1">
-                <KindSwitch
-                  kind={row.kind}
-                  onChange={(kind) => setRow(row.id, { kind })}
-                  label="Step counts losses or wins in a row"
-                />
-              </div>
-
-              <label className={STEP_SENTENCE}>
-                After
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  max={MAX_STREAK}
-                  step={1}
-                  className={`${COUNT_BOX} ${countInvalid ? 'border-red' : 'border-border'}`}
-                  value={row.streak}
-                  onChange={(e) => setRow(row.id, { streak: e.target.value })}
-                  aria-invalid={countInvalid}
-                  aria-describedby={hint ? hintId : undefined}
-                />
-                {isDeepest
-                  ? `or more ${kindPlural(row.kind)}`
-                  : count === 1
-                    ? row.kind
-                    : kindPlural(row.kind)}{' '}
-                in a row
-              </label>
-
-              {hint && (
-                <span id={hintId} className={`${STEP_HINT} ${HINT_TONE[hint.tone]}`}>
-                  {hint.text}
-                </span>
-              )}
-
-              <div className={`col-start-3 ${ROW_SIDE}`}>
-                <input
-                  id={`${id}-size-${row.id}`}
-                  type="number"
-                  inputMode="decimal"
-                  step="any"
-                  className={`${VALUE_BOX} block border bg-surface text-text outline-none placeholder:text-faint focus:border-accent ${
-                    sizeInvalid ? 'border-red' : 'border-border'
-                  }`}
-                  value={row.size}
-                  placeholder="size"
-                  onChange={(e) => setRow(row.id, { size: e.target.value })}
-                  aria-label={`Size ${phrase}`}
-                  aria-invalid={sizeInvalid}
-                  aria-describedby={hint ? hintId : undefined}
-                />
-              </div>
-
-              <div className={`col-start-4 ${ROW_SIDE}`}>
-                <button
-                  type="button"
-                  className={REMOVE_BTN}
-                  onClick={() => removeRow(row.id)}
-                  aria-label={`Remove the step ${phrase}`}
-                  title="Remove this step"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {rows.length === 0 && (
-        <p className="rounded-row border border-dashed border-border px-3.5 py-3 text-[12px] leading-[1.5] text-muted">
-          No steps yet, so every entry uses the normal size. Add a step to set
-          the size used after losses (or wins) in a row.
-        </p>
-      )}
-
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <button
-          type="button"
-          className="inline-flex h-8 items-center gap-1.5 rounded-pill border border-dashed border-border bg-transparent px-3.5 text-[12px] font-semibold text-text transition-colors duration-150 hover:border-accent disabled:cursor-not-allowed disabled:opacity-45"
-          onClick={addRow}
-          disabled={!next}
-        >
-          <Plus size={13} />
-          Add step
-        </button>
-        <span className="text-[11px] text-faint">
-          {lossRows} loss · {winRows} win · up to {MAX_STREAK} each
-        </span>
-      </div>
-
-      {steps.length > 0 && (
-        <div className="rounded-row border border-hair bg-surface2 p-3.5">
-          <div>
-            <p className={CAPTION}>
-              Size by streak
-              <span className="ml-1.5 normal-case tracking-normal">
-                · L = losses in a row, W = wins in a row
+    <>
+      <div
+        className={`@container flex flex-col gap-3 transition-opacity duration-150 ${
+          muted ? 'opacity-60 focus-within:opacity-100 hover:opacity-100' : ''
+        }`}
+        onBlur={settle}
+      >
+        <div className="flex flex-col gap-2">
+          {/* No run, or a run shorter than any step — read-only: it IS the asset's Base size. */}
+          <div className={ROW}>
+            <span className={NORMAL_LABEL}>Normal (no streak step)</span>
+            <span className={`${NORMAL_HINT} text-faint`}>{baseNote}</span>
+            <div className={`col-start-3 ${ROW_SIDE}`}>
+              <span
+                className={`${VALUE_BOX} inline-flex items-center justify-end border border-dashed border-border text-muted`}
+                title="Base size"
+              >
+                {baseOk ? fmtSize(base) : '—'}
               </span>
-            </p>
-            <Stops stops={stops} label="Size by streak" />
+            </div>
+            <span className={`col-start-4 block w-8 ${ROW_SIDE}`} aria-hidden="true" />
           </div>
+
+          {rows.map((row, index) => {
+            const check = checks[index]
+            const count = parseStreak(row.streak)
+            const isDeepest = check.step !== null && check.step.streak === deepest[row.kind]
+            const hint = hintFor(row, check, base)
+            const hintId = `${id}-hint-${row.id}`
+            const countInvalid = check.countError !== null
+            const sizeInvalid = check.sizeError !== null
+            const phrase =
+              count === null
+                ? `in this ${row.kind} step`
+                : stepPhrase(row.kind, count, isDeepest)
+            return (
+              <div key={row.id} className={ROW}>
+                <div className="col-start-1 row-start-1">
+                  <KindSwitch
+                    kind={row.kind}
+                    onChange={(kind) => setRow(row.id, { kind })}
+                    label="Step counts losses or wins in a row"
+                  />
+                </div>
+
+                <label className={STEP_SENTENCE}>
+                  After
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={MAX_STREAK}
+                    step={1}
+                    className={`${COUNT_BOX} ${countInvalid ? 'border-red' : 'border-border'}`}
+                    value={row.streak}
+                    onChange={(e) => setRow(row.id, { streak: e.target.value })}
+                    aria-invalid={countInvalid}
+                    aria-describedby={hint ? hintId : undefined}
+                  />
+                  {isDeepest
+                    ? `or more ${kindPlural(row.kind)}`
+                    : count === 1
+                      ? row.kind
+                      : kindPlural(row.kind)}{' '}
+                  in a row
+                </label>
+
+                {hint && (
+                  <span id={hintId} className={`${STEP_HINT} ${HINT_TONE[hint.tone]}`}>
+                    {hint.text}
+                  </span>
+                )}
+
+                <div className={`col-start-3 flex items-center gap-1.5 ${ROW_SIDE}`}>
+                  {/* Left of the box, so it never sits next to the remove button. */}
+                  <button
+                    type="button"
+                    className={CALC_BTN}
+                    onClick={() => setCalcRow(row.id)}
+                    aria-label={`Work out this size (${phrase})`}
+                    title="Work out this size"
+                  >
+                    <Calculator size={14} aria-hidden="true" />
+                  </button>
+                  <input
+                    id={`${id}-size-${row.id}`}
+                    type="number"
+                    inputMode="decimal"
+                    step="any"
+                    className={`${VALUE_BOX} block border bg-surface text-text outline-none placeholder:text-faint focus:border-accent ${
+                      sizeInvalid ? 'border-red' : 'border-border'
+                    }`}
+                    value={row.size}
+                    placeholder="size"
+                    onChange={(e) => setRow(row.id, { size: e.target.value })}
+                    aria-label={`Size ${phrase}`}
+                    aria-invalid={sizeInvalid}
+                    aria-describedby={hint ? hintId : undefined}
+                  />
+                </div>
+
+                <div className={`col-start-4 ${ROW_SIDE}`}>
+                  <button
+                    type="button"
+                    className={REMOVE_BTN}
+                    onClick={() => removeRow(row.id)}
+                    aria-label={`Remove the step ${phrase}`}
+                    title="Remove this step"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            )
+          })}
         </div>
+
+        {rows.length === 0 && (
+          <p className="rounded-row border border-dashed border-border px-3.5 py-3 text-[12px] leading-[1.5] text-muted">
+            No steps yet, so every entry uses the normal size. Add a step to set
+            the size used after losses (or wins) in a row.
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" className={FOOT_BTN} onClick={addRow} disabled={!next}>
+              <Plus size={13} />
+              Add step
+            </button>
+            <button type="button" className={FOOT_BTN} onClick={() => setBuilding(true)}>
+              <WandSparkles size={13} aria-hidden="true" />
+              Build steps for me
+            </button>
+          </div>
+          <span className="text-[11px] text-faint">
+            {lossRows} loss · {winRows} win · up to {MAX_STREAK} each
+          </span>
+        </div>
+
+        {steps.length > 0 && (
+          <div className="rounded-row border border-hair bg-surface2 p-3.5">
+            <div>
+              <p className={CAPTION}>
+                Size by streak
+                <span className="ml-1.5 normal-case tracking-normal">
+                  · L = losses in a row, W = wins in a row
+                </span>
+              </p>
+              <Stops stops={stops} label="Size by streak" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Outside the editor div: the windows are portaled, and React still
+          bubbles their focus events up this tree — inside, they would trip the
+          editor's re-sort on blur. */}
+      {calc && (
+        <StepCalculatorModal
+          kind={calc.kind}
+          streak={calcCount}
+          base={base}
+          previous={calcCount === null ? null : previousStep(steps, calc.kind, calcCount)}
+          onApply={applyCalc}
+          onClose={() => setCalcRow(null)}
+        />
       )}
-    </div>
+      {building && (
+        <BuildStepsModal
+          base={base}
+          existing={{ loss: lossRows, win: winRows }}
+          onApply={applyBuilt}
+          onClose={() => setBuilding(false)}
+        />
+      )}
+    </>
   )
 }

@@ -242,6 +242,21 @@ export interface AdminAsset {
    * first. A gap carries the step below it of the same kind (or base_size).
    */
   streak_sizes: AssetStreakSize[]
+  /**
+   * Kill switch: after this many losing trades in a row by the MASTER account
+   * on this coin (1–10), the API switches the coin off for everyone
+   * (`enabled` = false). null = no kill switch. Independent of streak sizing.
+   */
+  kill_switch_losses: number | null
+  /**
+   * When the kill switch switched the coin off (UTC); null = it has not.
+   * Turning the coin back on clears it. Killed = `!enabled && killed_at`.
+   */
+  killed_at: string | null
+  /** The server's own sentence for why it tripped, e.g. "The master lost 3 trades in a row on LTCUSDT." */
+  killed_reason: string | null
+  /** When the kill switch started counting (set, or the coin turned back on); only later losses count. */
+  kill_switch_armed_at: string | null
   created_at: string | null
   updated_at: string | null
 }
@@ -254,6 +269,9 @@ export interface AdminAsset {
  * which is what the asset card's enable/disable toggle relies on (it
  * re-posts the asset fields only). A payload that sends it owns the whole
  * ladder — no `streak_sizes` then means no steps.
+ *
+ * `kill_switch_losses` follows the same rule: absent = unchanged, null = no
+ * kill switch, 1–10 = the master's losses in a row that switch the coin off.
  */
 export interface AssetInput {
   ticker: string
@@ -265,12 +283,17 @@ export interface AssetInput {
   enabled: boolean
   streak_sizing_enabled?: boolean
   streak_sizes?: AssetStreakSize[]
+  kill_switch_losses?: number | null
 }
 
-/** PUT /admin/assets/{id}/streak-sizing — replaces the switch and the whole ladder. */
+/**
+ * PUT /admin/assets/{id}/streak-sizing — replaces the switch and the whole
+ * ladder. `kill_switch_losses` is optional: absent = unchanged, null = off.
+ */
 export interface AssetStreakSizingInput {
   streak_sizing_enabled: boolean
   streak_sizes: AssetStreakSize[]
+  kill_switch_losses?: number | null
 }
 
 /**

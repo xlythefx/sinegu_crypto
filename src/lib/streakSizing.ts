@@ -1,5 +1,10 @@
 import type { AssetStreakSize, AssetStreaks, StreakKind } from '../types/admin'
 import { fmtQty } from './format'
+import {
+  describeKillSwitchChange,
+  killDraftTouched,
+  type KillSwitchDraft,
+} from './killSwitch'
 
 /**
  * Streak sizing — the client half (no React).
@@ -361,12 +366,18 @@ export function ladderShortText(steps: readonly AssetStreakSize[]): string {
 export interface LadderState {
   enabled: boolean
   steps: readonly AssetStreakSize[]
+  /** The kill switch's master-loss count; null = no kill switch. */
+  killSwitch: number | null
 }
 
-/** Unsaved edits to one asset's ladder: the switch plus the raw editor rows. */
+/**
+ * Unsaved edits to one asset's Streak Sizing Settings card: the switch, the
+ * raw editor rows and the kill switch as typed.
+ */
 export interface StreakSizingDraft {
   enabled: boolean
   rows: StreakRow[]
+  kill: KillSwitchDraft
 }
 
 const rowsText = (rows: readonly StreakRow[]) =>
@@ -376,16 +387,28 @@ const rowsText = (rows: readonly StreakRow[]) =>
 export function draftTouched(saved: LadderState, draft: StreakSizingDraft): boolean {
   return (
     draft.enabled !== saved.enabled ||
-    rowsText(draft.rows) !== rowsText(rowsFromSteps(saved.steps))
+    rowsText(draft.rows) !== rowsText(rowsFromSteps(saved.steps)) ||
+    killDraftTouched(saved.killSwitch, draft.kill)
   )
 }
 
 /**
  * Before → after, one line per thing that changes — what a confirmation
  * reads back so the admin approves exactly what will be written:
- * "Loss 2 → 3 (was 4)", "Win 3 → 7 (new)", "Loss 5 removed".
+ * "Loss 2 → 3 (was 4)", "Win 3 → 7 (new)", "Loss 5 removed", and the kill
+ * switch last ("Kill switch on: 3 losses in a row (was off)").
  */
 export function describeLadderChanges(before: LadderState, after: LadderState): string[] {
+  const lines = describeStepChanges(before, after)
+  const kill = describeKillSwitchChange(before.killSwitch, after.killSwitch)
+  if (kill) lines.push(kill)
+  return lines
+}
+
+function describeStepChanges(
+  before: Omit<LadderState, 'killSwitch'>,
+  after: Omit<LadderState, 'killSwitch'>,
+): string[] {
   const lines: string[] = []
   if (before.enabled !== after.enabled) {
     lines.push(after.enabled ? 'Turns streak sizing on' : 'Turns streak sizing off')
@@ -472,4 +495,163 @@ export function describeRuns(streaks: AssetStreaks, steps: readonly AssetStreakS
     if (accounts) parts.push({ accounts, label: stepRangeLabel(step, steps) })
   }
   return withNoun(parts)
+}
+
+/* --------------------------------------------------------- step helpers -- */
+
+/*
+ * The two helpers in the editor — "Work out this size" beside a step and
+ * "Build steps for me" — let an admin think in "decrease by 0.25" or
+ * "decrease by 25%" instead of final sizes. Both only ever FILL the size
+ * boxes: the result is worked out once and saved as a plain number, exactly
+ * as if it had been typed. Nothing here is stored as a rule, so changing the
+ * Base size later does not move the steps — they have to be rebuilt.
+ */
+
+/** Which way a helper moves the size. */
+export type SizeDirection = 'decrease' | 'increase'
+
+/** "by 0.25" (an amount of the same units as the size) or "by 25%". */
+export type SizeChangeMode = 'amount' | 'percent'
+
+/** One change: "decrease by 0.25" / "increase by 25%". `value` is the 0.25, or the 25. */
+export interface SizeChange {
+  direction: SizeDirection
+  mode: SizeChangeMode
+  value: number
+}
+
+/** The direction a new helper starts on: smaller after losses, bigger after wins. */
+export function defaultDirection(kind: StreakKind): SizeDirection {
+  return kind === 'loss' ? 'decrease' : 'increase'
+}
+
+/** A size rounded to what the API stores (6 decimals) — the only rounding the helpers do. */
+export function roundSize(n: number): number {
+  return Number.isFinite(n) ? Number(n.toFixed(MAX_DECIMALS)) : NaN
+}
+
+/** A worked-out size as a size box holds it: plain digits, no grouping, no trailing zeros. */
+export function sizeText(n: number): string {
+  return String(roundSize(n))
+}
+
+/**
+ * One change applied once, rounded to 6 decimals: `from ∓ value` for an
+ * amount, `from × (1 ∓ value/100)` for a percent. NaN when `from` or `value`
+ * is not a usable number. The result may be 0 or below — the caller decides
+ * that is not a size.
+ */
+export function applySizeChange(from: number, change: SizeChange): number {
+  if (!Number.isFinite(from) || !Number.isFinite(change.value) || change.value <= 0) return NaN
+  const sign = change.direction === 'decrease' ? -1 : 1
+  return roundSize(
+    change.mode === 'amount'
+      ? from + sign * change.value
+      : from * (1 + (sign * change.value) / 100),
+  )
+}
+
+/**
+ * The step a calculator's "Previous step" means: the deepest configured step
+ * of the same kind SHALLOWER than `streak` (null = there is none, so the
+ * previous size is the normal size).
+ */
+export function previousStep(
+  steps: readonly AssetStreakSize[],
+  kind: StreakKind,
+  streak: number,
+): AssetStreakSize | null {
+  let best: AssetStreakSize | null = null
+  for (const s of steps) {
+    if (s.kind === kind && s.streak < streak && (!best || s.streak > best.streak)) best = s
+  }
+  return best
+}
+
+/** What "Build steps for me" was asked for. */
+export interface StepBuilderInput extends SizeChange {
+  kind: StreakKind
+  /** A new step every this many losses (or wins) in a row: 1–10. */
+  every: number
+  /**
+   * Percent only — what each step's percent is OF. 'previous' compounds
+   * (each step 25% below the one before); 'normal' takes another 25% of the
+   * normal size off each time. An amount gives the same steps either way.
+   */
+  of: 'previous' | 'normal'
+  /** Stop once the size reaches this; null = no limit. */
+  until: number | null
+  /** The normal (Base) size the first step starts from. */
+  base: number
+}
+
+export interface StepBuilderResult {
+  steps: AssetStreakSize[]
+  /**
+   * Why the list ends: it reached the `until` size, the next step would be 0
+   * or less, or the next count would pass 10. null when there is an error.
+   */
+  end: 'until' | 'zero' | 'limit' | null
+  /** What to fix before anything can be built; `steps` is empty then. */
+  error: string | null
+}
+
+/**
+ * The steps "Build steps for me" generates, at counts every, 2×every,
+ * 3×every… up to 10 (so never more than 10 steps of a kind). With k the
+ * step's number (1, 2, 3…) and N the normal size:
+ *
+ *   amount              size_k = N ∓ k × amount
+ *   percent of normal   size_k = N × (1 ∓ k × p/100)
+ *   percent of previous size_k = size_(k−1) × (1 ∓ p/100)   (compounding)
+ *
+ * Each size is rounded to 6 decimals, and the compounding one compounds
+ * from the ROUNDED size before it — the number that is actually saved, so
+ * the calculator's "Previous step" gives the same answer. A step that would
+ * pass `until` is set to exactly `until` and is the last one; a step at 0 or
+ * below is never made (the list just stops).
+ *
+ * Worked example (the owner's): N = 1, every 2 losses, decrease by 0.25
+ * until 0.5 → after 2 losses 0.75, after 4 losses 0.5.
+ */
+export function buildStreakSteps(input: StepBuilderInput): StepBuilderResult {
+  const fail = (error: string): StepBuilderResult => ({ steps: [], end: null, error })
+  const { base, every, direction, mode, value, of, until, kind } = input
+  if (!(Number.isFinite(base) && base > 0)) return fail('Set a Base size first')
+  if (!Number.isInteger(every) || every < 1 || every > MAX_STREAK) {
+    return fail(`Use a whole number from 1 to ${MAX_STREAK} for “every”`)
+  }
+  if (!(Number.isFinite(value) && value > 0)) return fail('Type how much to change the size by')
+  if (until !== null) {
+    if (!(Number.isFinite(until) && until > 0)) return fail('The “until” size must be more than 0')
+    if (direction === 'decrease' && until >= base) {
+      return fail(`To go down, the “until” size must be below the normal size (${fmtSize(base)})`)
+    }
+    if (direction === 'increase' && until <= base) {
+      return fail(`To go up, the “until” size must be above the normal size (${fmtSize(base)})`)
+    }
+  }
+
+  const sign = direction === 'decrease' ? -1 : 1
+  const steps: AssetStreakSize[] = []
+  let previous = base
+  for (let k = 1; k * every <= MAX_STREAK; k++) {
+    const raw =
+      mode === 'amount'
+        ? base + sign * k * value
+        : of === 'normal'
+          ? base * (1 + (sign * k * value) / 100)
+          : previous * (1 + (sign * value) / 100)
+    const size = roundSize(raw)
+    const reached = until !== null && (direction === 'decrease' ? size <= until : size >= until)
+    if (reached) {
+      steps.push({ kind, streak: k * every, size: until })
+      return { steps, end: 'until', error: null }
+    }
+    if (!(size > 0)) return { steps, end: 'zero', error: null }
+    steps.push({ kind, streak: k * every, size })
+    previous = size
+  }
+  return { steps, end: 'limit', error: null }
 }

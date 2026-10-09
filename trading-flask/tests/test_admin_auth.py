@@ -32,7 +32,7 @@ def test_the_webhook_secret_is_refused_once_the_admin_secret_differs(client, mon
     monkeypatch.setattr(hooks, "ADMIN_SECRET", ADMIN_SECRET)
     assert hooks.WEBHOOK_SECRET == WEBHOOK_SECRET
     for path in ("/admin/refresh-accounts", "/admin/refresh-assets", "/admin/close-positions",
-                 "/admin/ledger", "/admin/reports/preview"):
+                 "/admin/ledger", "/admin/reports/preview", "/admin/kill-switch"):
         response = client.post(path, json={}, headers={"X-Admin-Secret": WEBHOOK_SECRET})
         assert response.status_code == 403, path
     assert client.get("/admin/stats", headers={"X-Admin-Secret": WEBHOOK_SECRET}).status_code == 403

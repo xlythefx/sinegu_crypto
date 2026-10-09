@@ -4,6 +4,7 @@ import StreakSizingCard from './StreakSizingCard'
 import StreakSizingGuideModal from './StreakSizingGuideModal'
 import { useAssetStreaks } from '../../../hooks/useAssetStreaks'
 import { displaySymbol } from '../../../lib/chart'
+import { isKilled } from '../../../lib/killSwitch'
 import { draftTouched, type StreakSizingDraft } from '../../../lib/streakSizing'
 import type { AdminAsset } from '../../../types/admin'
 
@@ -55,7 +56,8 @@ interface StreakSizingTabProps {
 
 /**
  * Admin → Trading Assets → Streak Sizing Settings: every asset's ladder side
- * by side, assets already using it first.
+ * by side — coins the kill switch has stopped first, then assets already
+ * using streak sizing.
  *
  * Drafts live HERE, not in the cards: the grid re-mounts on every search
  * keystroke (the filter-switch reveal), and an admin who searches for the
@@ -83,6 +85,7 @@ export default function StreakSizingTab({ assets, onSaved }: StreakSizingTabProp
     () =>
       [...current].sort(
         (a, b) =>
+          Number(isKilled(b)) - Number(isKilled(a)) ||
           Number(b.streak_sizing_enabled) - Number(a.streak_sizing_enabled) ||
           a.ticker.localeCompare(b.ticker) ||
           (a.broker ?? '').localeCompare(b.broker ?? ''),
@@ -100,11 +103,15 @@ export default function StreakSizingTab({ assets, onSaved }: StreakSizingTabProp
     : sorted
 
   const onCount = current.filter((a) => a.streak_sizing_enabled).length
+  const killedCount = current.filter(isKilled).length
   const unsaved = current.filter((a) => {
     const draft = drafts[a.asset_id]
     return (
       draft &&
-      draftTouched({ enabled: a.streak_sizing_enabled, steps: a.streak_sizes }, draft)
+      draftTouched(
+        { enabled: a.streak_sizing_enabled, steps: a.streak_sizes, killSwitch: a.kill_switch_losses },
+        draft,
+      )
     )
   }).length
 
@@ -117,17 +124,34 @@ export default function StreakSizingTab({ assets, onSaved }: StreakSizingTabProp
     })
   }, [])
 
-  const handleSaved = useCallback(
-    (asset: AdminAsset) => {
-      setDraft(asset.asset_id, null)
+  /** Show a changed asset at once, until the reloaded list replaces it. */
+  const showChanged = useCallback(
+    (asset: AdminAsset) =>
       setSaved((s) => ({
         from: assets,
         byId: { ...(s.from === assets ? s.byId : {}), [asset.asset_id]: asset },
-      }))
+      })),
+    [assets],
+  )
+
+  const handleSaved = useCallback(
+    (asset: AdminAsset) => {
+      setDraft(asset.asset_id, null)
+      showChanged(asset)
       refresh(asset.asset_id)
       onSaved()
     },
-    [assets, refresh, onSaved, setDraft],
+    [showChanged, refresh, onSaved, setDraft],
+  )
+
+  // Turned back on after the kill switch: only `enabled` moved, so a draft
+  // the admin is in the middle of stays.
+  const handleAssetChanged = useCallback(
+    (asset: AdminAsset) => {
+      showChanged(asset)
+      onSaved()
+    },
+    [showChanged, onSaved],
   )
 
   return (
@@ -146,6 +170,12 @@ export default function StreakSizingTab({ assets, onSaved }: StreakSizingTabProp
           <p className="mt-px text-[12px] text-muted">
             {onCount} of {assets.length} {assets.length === 1 ? 'asset uses' : 'assets use'}{' '}
             streak sizing
+            {killedCount > 0 && (
+              <span className="font-semibold text-red">
+                {' '}
+                · {killedCount} switched off by the kill switch
+              </span>
+            )}
             {unsaved > 0 && (
               <span className="font-semibold text-accent"> · {unsaved} unsaved</span>
             )}
@@ -182,6 +212,7 @@ export default function StreakSizingTab({ assets, onSaved }: StreakSizingTabProp
                 onDraftChange={setDraft}
                 streaks={entries[asset.asset_id]}
                 onSaved={handleSaved}
+                onAssetChanged={handleAssetChanged}
               />
             ))}
           </div>

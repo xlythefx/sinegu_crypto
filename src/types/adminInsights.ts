@@ -16,6 +16,19 @@ export interface BlockedKeyRow {
   days_left: number | null
 }
 
+/** A coin the kill switch has switched off for everyone (and nobody has turned back on yet). */
+export interface KilledAssetRow {
+  asset_id: number
+  ticker: string
+  broker: string | null
+  /** The master's losses in a row that tripped it; null = not recorded. */
+  losses: number | null
+  /** UTC. */
+  killed_at: string | null
+  /** The server's own sentence, e.g. "The master lost 3 trades in a row on LTCUSDT." */
+  reason: string | null
+}
+
 /**
  * Keys marked optional are ABSENT for a read-only collaborator (the API's
  * AdminInsightsController::LIMITED_HIDDEN_OVERVIEW_KEYS): billing and key
@@ -32,6 +45,12 @@ export interface OverviewInsights {
     unmatched_transfers?: number
     /** Crypto payments two customers both say are theirs, not yet resolved. */
     disputed_payments?: number
+    /**
+     * Coins currently switched off by the kill switch. Sent to every staff
+     * role (collaborators included); optional only because an API that
+     * predates the kill switch does not send it.
+     */
+    killed_assets?: KilledAssetRow[]
     signals_today: {
       signals: number
       with_problems: number

@@ -295,6 +295,31 @@ def reports_preview():
     })
 
 
+@admin_bp.route("/kill-switch", methods=["POST"])
+def kill_switch():
+    """The API's kill switch turned a coin off — tell the admin Telegram group.
+
+    Body: ``{"exchange", "ticker", "losses", "reason"}``. The API decided and
+    already switched the asset off (and pinged refresh-assets); the engine only
+    owns the bot token and the admin chat, so this is a messenger, nothing more.
+    """
+    if not _authorized():
+        return jsonify({"error": "Unauthorized"}), 403
+    from binance_abcd import notify
+
+    body = request.get_json(silent=True) or {}
+    ticker = str(body.get("ticker") or "").strip().upper()
+    if not ticker:
+        return jsonify({"error": "ticker is required"}), 400
+    notify.notify_kill_switch(
+        str(body.get("exchange") or "").strip().lower(),
+        ticker,
+        body.get("losses"),
+        str(body.get("reason") or "").strip(),
+    )
+    return jsonify({"success": True, "telegram": notify.telegram_enabled()})
+
+
 @admin_bp.route("/stats", methods=["GET"])
 def stats():
     if not _authorized():

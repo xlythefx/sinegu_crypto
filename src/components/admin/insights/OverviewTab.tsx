@@ -1,11 +1,66 @@
 import { createPortal } from 'react-dom'
 import { Link, useSearchParams } from 'react-router-dom'
-import { AlertTriangle, ArrowRight, Globe, ShieldAlert, UserPlus } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Globe, Power, ShieldAlert, UserPlus } from 'lucide-react'
 import Tabs, { type TabItem } from '../../ui/Tabs'
 import AttentionPane from './AttentionPane'
 import PlatformPane from './PlatformPane'
 import { useApiData } from '../../../hooks/useApiData'
+import { useSessionUser } from '../../../hooks/useSessionUser'
+import { displaySymbol } from '../../../lib/chart'
+import { fmtDateTime } from '../../../lib/format'
+import { killedFallbackReason } from '../../../lib/killSwitch'
+import { canSeeAdmin } from '../../../lib/roles'
 import { getOverviewInsights } from '../../../services/adminInsights'
+import type { KilledAssetRow } from '../../../types/adminInsights'
+
+const RED_STRIP =
+  'rounded-row border border-[color-mix(in_srgb,var(--red)_45%,transparent)] bg-[color-mix(in_srgb,var(--red)_10%,transparent)] px-4 py-3'
+
+/**
+ * "Kill switch: LTC/USDT is switched off — {why} ({when})", one per coin the
+ * kill switch has stopped. Every staff role sees it (it changes what the
+ * whole platform trades); only a full admin gets the link, because Trading
+ * Assets is a page a collaborator cannot open. Narrow, the link drops under
+ * the text instead of being hidden — it is the way to act on the strip.
+ */
+function KilledAssetNotice({ row, canAct }: { row: KilledAssetRow; canAct: boolean }) {
+  const symbol = displaySymbol(row.ticker)
+  const reason = row.reason ?? killedFallbackReason(row.losses)
+  return (
+    <div
+      className={`grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 sm:grid-cols-[auto_minmax(0,1fr)_auto] ${RED_STRIP}`}
+    >
+      <span className="relative grid h-8 w-8 flex-none place-items-center self-start rounded-[10px] bg-red text-white sm:self-center">
+        <Power size={16} aria-hidden="true" />
+        <span className="absolute -right-1 -top-1 h-2.5 w-2.5 animate-pulse rounded-full bg-red ring-2 ring-surface" />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[13.5px] font-semibold text-text">
+          Kill switch: {symbol}
+          {row.broker ? ` on ${row.broker}` : ''} is switched off
+        </span>
+        <span className="block text-[12.5px] leading-[1.5] text-muted">
+          {reason}
+          {row.killed_at && (
+            <span className="whitespace-nowrap text-faint"> ({fmtDateTime(row.killed_at)})</span>
+          )}
+        </span>
+        <span className="mt-0.5 block text-[12px] leading-[1.5] text-faint">
+          No new trades on this coin for anyone until it is turned back on. Open positions still
+          close normally.
+        </span>
+      </span>
+      {canAct && (
+        <Link
+          to="/admin/assets"
+          className="col-start-2 inline-flex items-center gap-1 justify-self-start text-[12.5px] font-bold text-red hover:underline sm:col-start-3 sm:justify-self-end"
+        >
+          Turn back on in Trading Assets <ArrowRight size={14} aria-hidden="true" />
+        </Link>
+      )}
+    </div>
+  )
+}
 
 type OverviewView = 'platform' | 'attention'
 
@@ -31,6 +86,10 @@ export default function OverviewTab({ toolbarSlot }: { toolbarSlot?: HTMLElement
   const view: OverviewView = VIEWS.some((v) => v.key === raw) ? (raw as OverviewView) : 'platform'
   const pendingCount = overview.data?.attention.pending_users_count ?? 0
   const disputed = overview.data?.attention.disputed_payments ?? 0
+  const killedAssets = overview.data?.attention.killed_assets ?? []
+  // Collaborators see the kill-switch strips too, without the link to a page
+  // they cannot open.
+  const fullAdmin = canSeeAdmin(useSessionUser()?.type)
 
   const select = (next: OverviewView) =>
     setParams(
@@ -75,6 +134,10 @@ export default function OverviewTab({ toolbarSlot }: { toolbarSlot?: HTMLElement
           </span>
         </Link>
       )}
+      {/* Above BOTH views too: a coin is off for everyone until someone acts. */}
+      {killedAssets.map((row) => (
+        <KilledAssetNotice key={row.asset_id} row={row} canAct={fullAdmin} />
+      ))}
       {/* keyed re-mount replays the reveal on every switch */}
       <div key={view} className="flex flex-col gap-stack animate-[fadeup_0.35s_ease-out]">
         {view === 'platform' ? (

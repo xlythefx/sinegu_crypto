@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ChevronDown, ImagePlus, X } from 'lucide-react'
+import KillSwitchField from './assets/KillSwitchField'
 import StreakSizingFields from './assets/StreakSizingFields'
+import { fmtDateTime } from '../../lib/format'
+import {
+  isKilled,
+  killDraftError,
+  killDraftFrom,
+  killDraftValue,
+  type KillSwitchDraft,
+} from '../../lib/killSwitch'
 import {
   ladderHasErrors,
   ladderShortText,
@@ -67,6 +76,8 @@ export default function AssetFormModal({
   const [streakRows, setStreakRows] = useState<StreakRow[]>([])
   const [streakOpen, setStreakOpen] = useState(false)
   const [streakError, setStreakError] = useState<string | null>(null)
+  // The kill switch, owned the same way: always sent ('' = off).
+  const [kill, setKill] = useState<KillSwitchDraft>(() => killDraftFrom(null))
 
   // Image state: the currently-shown preview URL, a newly picked File (to
   // upload), and a "remove existing" flag. `existingImage` is the saved URL.
@@ -94,8 +105,9 @@ export default function AssetFormModal({
       setExistingImage(asset.asset_image)
       setStreakEnabled(asset.streak_sizing_enabled)
       setStreakRows(rowsFromSteps(asset.streak_sizes))
-      // Collapsed unless it is already doing something to this asset's sizes.
-      setStreakOpen(asset.streak_sizing_enabled)
+      setKill(killDraftFrom(asset.kill_switch_losses))
+      // Collapsed unless it is already doing something to this asset.
+      setStreakOpen(asset.streak_sizing_enabled || asset.kill_switch_losses !== null)
     } else {
       setForm(EMPTY)
       setMaxIncrements('1')
@@ -103,6 +115,7 @@ export default function AssetFormModal({
       setExistingImage(null)
       setStreakEnabled(false)
       setStreakRows([])
+      setKill(killDraftFrom(null))
       setStreakOpen(false)
     }
     setStreakError(null)
@@ -171,12 +184,19 @@ export default function AssetFormModal({
   })()
 
   const streakSteps = stepsFromRows(streakRows)
+  const killValue = killDraftValue(kill)
+  const killed = asset !== null && isKilled(asset)
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (ladderHasErrors(streakRows)) {
       setStreakOpen(true)
       setStreakError('Fix the streak steps marked in red before saving.')
+      return
+    }
+    if (killDraftError(kill) || killValue === undefined) {
+      setStreakOpen(true)
+      setStreakError('Fix the kill switch count before saving.')
       return
     }
     setStreakError(null)
@@ -188,10 +208,23 @@ export default function AssetFormModal({
         base_size: Number(baseSize),
         streak_sizing_enabled: streakEnabled,
         streak_sizes: streakSteps,
+        kill_switch_losses: killValue,
       },
       { file: pickedFile, remove: removeImage },
     )
   }
+
+  const streakSummary = [
+    !streakEnabled
+      ? 'Off: every entry uses Base size'
+      : streakSteps.length === 0
+        ? 'On, but no steps yet'
+        : `On · ${ladderShortText(streakSteps)}`,
+  ]
+  if (killed) streakSummary.push('switched off by the kill switch')
+  else if (typeof killValue === 'number') {
+    streakSummary.push(`kill switch after ${killValue} ${killValue === 1 ? 'loss' : 'losses'}`)
+  } else if (kill.on) streakSummary.push('kill switch on')
 
   return (
     <div
@@ -394,6 +427,15 @@ export default function AssetFormModal({
             <small className="text-[11.5px] text-faint">
               Allow this asset to be used for trading
             </small>
+            {/* Ticking it on a killed coin is the "turn back on". */}
+            {killed && (
+              <small className="mt-1 block text-[11.5px] font-semibold leading-[1.5] text-red">
+                Switched off by the kill switch
+                {asset?.killed_at ? ` on ${fmtDateTime(asset.killed_at)}` : ''}.{' '}
+                {form.enabled ? 'Saving' : 'Ticking this'} turns it back on, and the master’s
+                losses are counted again from then.
+              </small>
+            )}
           </div>
         </label>
 
@@ -409,11 +451,7 @@ export default function AssetFormModal({
             <div className="min-w-0 flex-1">
               <span className="block text-[13.5px] font-semibold">Streak Sizing Settings</span>
               <small className="block truncate text-[11.5px] text-faint">
-                {!streakEnabled
-                  ? 'Off: every entry uses Base size'
-                  : streakSteps.length === 0
-                    ? 'On, but no steps yet'
-                    : `On · ${ladderShortText(streakSteps)}`}
+                {streakSummary.join(' · ')}
               </small>
             </div>
             <ChevronDown
@@ -459,6 +497,16 @@ export default function AssetFormModal({
                 }}
                 baseNote="Base size, set above"
                 muted={!streakEnabled}
+              />
+
+              <KillSwitchField
+                value={kill}
+                onChange={(next) => {
+                  setKill(next)
+                  setStreakError(null)
+                }}
+                disabled={saving}
+                symbol={form.ticker.trim() || undefined}
               />
 
               {streakError && (

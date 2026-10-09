@@ -13,10 +13,13 @@ import {
   createAsset,
   deleteAsset,
   getAdminAssets,
+  setAssetEnabled,
   updateAsset,
   type AssetImageChange,
 } from '../../services/admin'
 import { getApiErrorMessage } from '../../services/api'
+import { displaySymbol } from '../../lib/chart'
+import { isKilled, reviveConfirmCopy } from '../../lib/killSwitch'
 import type { AdminAsset, AssetInput } from '../../types/admin'
 
 /** 12 divides evenly by the 1/2/3-column grid, so no ragged last row. */
@@ -164,15 +167,9 @@ export default function AdminAssets() {
     setActionBusy(true)
     setActionError(null)
     try {
-      await updateAsset(toggling.asset_id, {
-        ticker: toggling.ticker,
-        type: toggling.type,
-        broker: toggling.broker,
-        side: toggling.side,
-        max_increments: toggling.max_increments,
-        base_size: toggling.base_size,
-        enabled: !toggling.enabled,
-      })
+      // Only `enabled` changes; the ladder and the kill switch are left out
+      // so the API keeps them. On a killed coin this is "turn it back on".
+      await setAssetEnabled(toggling, !toggling.enabled)
       setToggling(null)
       reload()
     } catch (err) {
@@ -198,6 +195,13 @@ export default function AdminAssets() {
       setActionBusy(false)
     }
   }
+
+  // Turning a coin the kill switch stopped back on also restarts its count,
+  // so both confirmations say so.
+  const toggleKilled = toggling !== null && isKilled(toggling)
+  const revive = toggling ? reviveConfirmCopy(displaySymbol(toggling.ticker)) : null
+  const formRevives =
+    editing !== null && isKilled(editing) && pending !== null && pending.input.enabled
 
   if (!assets) {
     return (
@@ -377,7 +381,11 @@ export default function AdminAssets() {
         title={editing ? 'Save changes?' : 'Create asset?'}
         message={
           editing
-            ? 'This will update the asset in the database.'
+            ? `This will update the asset in the database.${
+                formRevives
+                  ? ' It also turns the coin back on: new trades start again on the next signal, and the kill switch counts the master’s losses again from now.'
+                  : ''
+              }`
             : 'This will add a new asset to the database.'
         }
         confirmLabel={editing ? 'Yes, save' : 'Yes, create'}
@@ -388,13 +396,25 @@ export default function AdminAssets() {
 
       <ConfirmModal
         open={toggling !== null}
-        title={`${toggling?.enabled ? 'Disable' : 'Enable'} ${toggling?.ticker}?`}
-        message={
-          toggling?.enabled
-            ? 'The bots will stop trading this asset.'
-            : 'The bots will be allowed to trade this asset again.'
+        title={
+          toggleKilled && revive
+            ? revive.title
+            : `${toggling?.enabled ? 'Disable' : 'Enable'} ${toggling?.ticker}?`
         }
-        confirmLabel={toggling?.enabled ? 'Yes, disable' : 'Yes, enable'}
+        message={
+          toggleKilled && revive
+            ? revive.message
+            : toggling?.enabled
+              ? 'The bots will stop trading this asset.'
+              : 'The bots will be allowed to trade this asset again.'
+        }
+        confirmLabel={
+          toggleKilled && revive
+            ? revive.confirmLabel
+            : toggling?.enabled
+              ? 'Yes, disable'
+              : 'Yes, enable'
+        }
         cancelLabel="No"
         danger={toggling?.enabled ?? false}
         onConfirm={onConfirmToggle}
