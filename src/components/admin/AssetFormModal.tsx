@@ -42,6 +42,11 @@ interface AssetFormModalProps {
   asset: AdminAsset | null
   saving: boolean
   error: string | null
+  /**
+   * Create mode only: the broker the form opens on (e.g. 'MEXC' from that
+   * exchange's "Add coin" button). Ignored when editing.
+   */
+  defaultBroker?: string | null
   onSubmit: (input: AssetInput, image: AssetImageChange) => void
   onCancel: () => void
 }
@@ -62,6 +67,7 @@ export default function AssetFormModal({
   asset,
   saving,
   error,
+  defaultBroker,
   onSubmit,
   onCancel,
 }: AssetFormModalProps) {
@@ -109,7 +115,7 @@ export default function AssetFormModal({
       // Collapsed unless it is already doing something to this asset.
       setStreakOpen(asset.streak_sizing_enabled || asset.kill_switch_losses !== null)
     } else {
-      setForm(EMPTY)
+      setForm(defaultBroker ? { ...EMPTY, broker: defaultBroker } : EMPTY)
       setMaxIncrements('1')
       setBaseSize('0.001')
       setExistingImage(null)
@@ -124,7 +130,7 @@ export default function AssetFormModal({
     setPreviewUrl(null)
     setRemoveImage(false)
     setImageError(null)
-  }, [open, asset])
+  }, [open, asset, defaultBroker])
 
   // Revoke object URLs so we don't leak blobs.
   useEffect(() => {

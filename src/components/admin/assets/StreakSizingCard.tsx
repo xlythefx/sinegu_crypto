@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Activity } from 'lucide-react'
+import AssetLogo from './AssetLogo'
 import KilledAssetStrip from './KilledAssetStrip'
 import KillSwitchField from './KillSwitchField'
 import StreakSizingFields from './StreakSizingFields'
 import ConfirmModal from '../../ui/ConfirmModal'
+import { EXCHANGE_META, exchangeFromBroker } from '../../exchanges/meta'
 import { saveAssetStreakSizing, setAssetEnabled } from '../../../services/admin'
 import { getApiErrorMessage } from '../../../services/api'
 import { displaySymbol } from '../../../lib/chart'
@@ -191,6 +193,10 @@ export default function StreakSizingCard({
 
   const symbol = displaySymbol(asset.ticker)
   const killed = isKilled(asset)
+  // The exchange leads, as on the Assets tab: LTC on Binance and LTC on MEXC
+  // are two ladders, and only this word and the corner tile tell them apart.
+  const exchange = exchangeFromBroker(asset.broker)
+  const venue = exchange ? EXCHANGE_META[exchange].label : asset.broker?.trim() || 'No exchange'
   const changes = describeLadderChanges(savedState, {
     enabled,
     steps: nextSteps,
@@ -214,11 +220,11 @@ export default function StreakSizingCard({
   ].filter(Boolean)
   const confirmMessage = `${changes.join(' · ')}. ${outcomes.join(' ')}`
   const confirmTitle = ladderChanged
-    ? `Save streak sizing for ${symbol}?`
-    : `Save the kill switch for ${symbol}?`
+    ? `Save streak sizing for ${symbol} on ${venue}?`
+    : `Save the kill switch for ${symbol} on ${venue}?`
   const revivalCopy = reviveConfirmCopy(symbol)
 
-  const meta = [asset.broker ?? 'No exchange', `Base size ${fmtSize(asset.base_size)}`]
+  const meta = [`Base size ${fmtSize(asset.base_size)}`]
   if (!asset.enabled) meta.push(killed ? 'switched off' : 'asset is off')
   const footerNote = hasErrors
     ? 'Fix the steps marked in red'
@@ -244,30 +250,24 @@ export default function StreakSizingCard({
       )}
 
       <header className="flex items-center gap-3">
-        {asset.asset_image ? (
-          <img
-            className="h-10 w-10 flex-none rounded-full border border-border bg-surface2 object-cover"
-            src={asset.asset_image}
-            alt=""
-          />
-        ) : (
-          <span className="inline-flex h-10 w-10 flex-none items-center justify-center rounded-full bg-accent-soft font-mono text-[15px] font-bold text-accent">
-            {asset.ticker[0]}
-          </span>
-        )}
+        <AssetLogo ticker={asset.ticker} image={asset.asset_image} exchange={exchange} />
 
         <div className="min-w-0 flex-1">
           <p className="truncate font-mono text-[15px] font-extrabold tracking-[-0.01em]">
             {symbol}
           </p>
-          <p className="mt-0.5 text-[11.5px] leading-snug text-muted">{meta.join(' · ')}</p>
+          <p className="mt-0.5 text-[11.5px] leading-snug text-muted">
+            <span className={exchange ? 'font-semibold text-text' : ''}>{venue}</span>
+            {' · '}
+            {meta.join(' · ')}
+          </p>
         </div>
 
         <button
           type="button"
           role="switch"
           aria-checked={enabled}
-          aria-label={`Streak sizing for ${symbol}`}
+          aria-label={`Streak sizing for ${symbol} on ${venue}`}
           className="inline-flex flex-none items-center gap-2 rounded-pill bg-transparent py-1 pl-2 disabled:cursor-not-allowed disabled:opacity-50"
           onClick={() => update({ enabled: !enabled })}
           disabled={saving}

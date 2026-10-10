@@ -6,6 +6,12 @@ export interface ExchangeMeta {
   label: string
   /** Brand color (matches the dots used in the top-bar filter). */
   color: string
+  /**
+   * Square brand tile served from `public/` (the site root). Render it through
+   * `ExchangeLogo`, which sizes and rounds it and falls back to the label's
+   * initial if the file fails to load.
+   */
+  logo: string
   available: boolean
   blurb: string
   /**
@@ -39,6 +45,7 @@ export const EXCHANGE_META: Record<ExchangeKind, ExchangeMeta> = {
   binance: {
     label: 'Binance',
     color: '#f0b90b',
+    logo: '/binance-logo.jpg',
     available: true,
     blurb: 'Connect your Binance account with trade-only API keys',
     hasTestnet: true,
@@ -47,6 +54,7 @@ export const EXCHANGE_META: Record<ExchangeKind, ExchangeMeta> = {
   bybit: {
     label: 'Bybit',
     color: '#f7a600',
+    logo: '/bybit-logo.png',
     available: true,
     blurb: 'Connect your Bybit USDT perpetuals account with trade-only API keys',
     hasTestnet: true,
@@ -55,6 +63,7 @@ export const EXCHANGE_META: Record<ExchangeKind, ExchangeMeta> = {
   mexc: {
     label: 'MEXC',
     color: '#1972e2',
+    logo: '/mexc-logo.jpg',
     available: true,
     blurb: 'Connect your MEXC futures account with trade-only API keys',
     hasTestnet: true,
@@ -81,6 +90,20 @@ export function canConnectExchange(
 /** The venues the connect wizard may offer this user, in display order. */
 export function connectableExchanges(role: UserRole | undefined): ExchangeKind[] {
   return AVAILABLE_EXCHANGES.filter((k) => canConnectExchange(k, role))
+}
+
+/**
+ * The exchange an `assets.broker` label names ('Binance', 'Bybit', 'MEXC'),
+ * or null when it is empty or names something else. Case-insensitive: the
+ * label is free text in the DB, and the engine's lookup by it is too (MySQL
+ * collation).
+ */
+export function exchangeFromBroker(broker: string | null | undefined): ExchangeKind | null {
+  const raw = (broker ?? '').trim().toLowerCase()
+  if (!raw) return null
+  return (
+    EXCHANGE_ORDER.find((k) => k === raw || EXCHANGE_META[k].label.toLowerCase() === raw) ?? null
+  )
 }
 
 /** Rows from an API that predates the `exchange` column are Binance rows. */

@@ -1,5 +1,7 @@
 import { Pencil, ShieldAlert, Trash2, TrendingUpDown } from 'lucide-react'
+import AssetLogo from './assets/AssetLogo'
 import KilledAssetStrip from './assets/KilledAssetStrip'
+import { EXCHANGE_META, exchangeFromBroker } from '../exchanges/meta'
 import { displaySymbol } from '../../lib/chart'
 import { fmtMediumDate, fmtQty } from '../../lib/format'
 import { isKilled, killSwitchArmedText } from '../../lib/killSwitch'
@@ -74,7 +76,10 @@ export default function AssetCard({
   onEdit,
   onDelete,
 }: AssetCardProps) {
-  const meta = [asset.broker, asset.type].filter(Boolean).join(' · ') || '—'
+  // The exchange leads the subtitle and sits on the logo's corner: the same
+  // coin is one card per venue, and they are otherwise identical.
+  const exchange = exchangeFromBroker(asset.broker)
+  const venue = exchange ? EXCHANGE_META[exchange].label : asset.broker?.trim() || 'No exchange'
   const killed = isKilled(asset)
 
   return (
@@ -84,31 +89,21 @@ export default function AssetCard({
       }`}
     >
       <header className="flex items-start gap-3">
-        {asset.asset_image ? (
-          <img
-            className={`h-10 w-10 flex-none rounded-full border border-border bg-surface2 object-cover ${
-              asset.enabled ? '' : 'grayscale'
-            }`}
-            src={asset.asset_image}
-            alt=""
-          />
-        ) : (
-          <span
-            className={`inline-flex h-10 w-10 flex-none items-center justify-center rounded-full font-mono text-[15px] font-bold ${
-              asset.enabled
-                ? 'bg-accent-soft text-accent'
-                : 'bg-surface2 text-faint'
-            }`}
-          >
-            {asset.ticker[0]}
-          </span>
-        )}
+        <AssetLogo
+          ticker={asset.ticker}
+          image={asset.asset_image}
+          exchange={exchange}
+          dimmed={!asset.enabled}
+        />
 
         <div className="min-w-0 flex-1">
           <p className="truncate font-mono text-[15px] font-extrabold tracking-[-0.01em]">
             {displaySymbol(asset.ticker)}
           </p>
-          <p className="mt-0.5 truncate text-[11.5px] text-muted">{meta}</p>
+          <p className="mt-0.5 truncate text-[11.5px] text-muted">
+            <span className={exchange ? 'font-semibold text-text' : ''}>{venue}</span>
+            {asset.type && ` · ${asset.type}`}
+          </p>
         </div>
 
         <span
@@ -186,7 +181,7 @@ export default function AssetCard({
           className="inline-flex items-center gap-2 rounded-pill bg-transparent py-1 pr-2 disabled:cursor-not-allowed disabled:opacity-50"
           onClick={() => onToggle(asset)}
           disabled={busy}
-          aria-label={`${asset.enabled ? 'Disable' : 'Enable'} ${asset.ticker}`}
+          aria-label={`${asset.enabled ? 'Disable' : 'Enable'} ${asset.ticker} on ${venue}`}
         >
           <span
             className={`relative inline-block h-5 w-9 flex-none rounded-pill border transition-[background,border-color] duration-150 ${
@@ -216,7 +211,7 @@ export default function AssetCard({
             className={`${ICON_BTN_BASE} hover:border-accent hover:text-text`}
             onClick={() => onEdit(asset)}
             disabled={busy}
-            aria-label={`Edit ${asset.ticker}`}
+            aria-label={`Edit ${asset.ticker} on ${venue}`}
             title="Edit asset"
           >
             <Pencil size={15} />
@@ -226,7 +221,7 @@ export default function AssetCard({
             className={`${ICON_BTN_BASE} hover:border-red hover:text-red`}
             onClick={() => onDelete(asset)}
             disabled={busy}
-            aria-label={`Delete ${asset.ticker}`}
+            aria-label={`Delete ${asset.ticker} on ${venue}`}
             title="Delete asset"
           >
             <Trash2 size={15} />

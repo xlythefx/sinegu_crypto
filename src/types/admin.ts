@@ -648,6 +648,15 @@ export interface EngineMetrics extends Record<string, number | undefined> {
 export interface EngineHealth {
   accounts_cache_age?: number | null
   assets_cache_age?: number | null
+  /**
+   * One key per venue the engine is trading (its `BINANCE_ABCD_EXCHANGES`),
+   * each with that venue's cache ages. Absent from an older engine — read
+   * that as unknown, never as "trades nothing".
+   */
+  exchanges?: Record<
+    string,
+    { accounts_cache_age?: number | null; assets_cache_age?: number | null } | null
+  > | null
   metrics?: EngineMetrics | null
   pollers?: string[] | null
   /** Timestamp (epoch or preformatted string) while rate limited, else null. */

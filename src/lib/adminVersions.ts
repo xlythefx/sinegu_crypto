@@ -13,6 +13,28 @@ import type { AdminChange } from '../types/adminVersions'
  *    later change to the same feature gets its own entry.
  */
 export const ADMIN_CHANGES: AdminChange[] = [
+  // ── 2026-10-10 ───────────────────────────────────────────────────────────
+  {
+    id: 'assets-by-exchange',
+    date: '2026-10-10',
+    kind: 'improved',
+    area: 'Trading assets',
+    title: 'Trading Assets grouped by exchange, with logos',
+    summary:
+      'Trading Assets now shows Binance, MEXC and Bybit coins in their own sections, with each exchange’s logo and each coin’s logo, so the same coin on two exchanges is never confused.',
+    howItWorks: [
+      'Pick an exchange at the top (or All) to see only its coins. Each section shows how many coins it has and how many are switched on.',
+      '“Add coin” inside a section opens the form with that exchange already chosen.',
+      'Every card carries its exchange’s logo, and Litecoin and Render show their own coin logos.',
+      'Each exchange’s copy of a coin keeps its own settings: size, streak steps and kill switch are set separately on Binance and on MEXC.',
+      'The Streak Sizing Settings tab is grouped the same way.',
+    ],
+    technical: [
+      'Coin logos ship in the frontend public/ folder; assets.asset_image stores the site path (/litecoin-logo.jpg), which Asset::EXTERNAL_IMAGE passes through untouched.',
+      'Exchange logos live in components/exchanges/meta.ts.',
+    ],
+    links: [{ label: 'Trading Assets', href: '/admin/assets' }],
+  },
   // ── 2026-10-09 ───────────────────────────────────────────────────────────
   {
     id: 'signal-log-health',

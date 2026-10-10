@@ -1,12 +1,22 @@
 import { useCallback, useMemo, useState } from 'react'
 import { HelpCircle, Info } from 'lucide-react'
+import ExchangeSection from './ExchangeSection'
 import StreakSizingCard from './StreakSizingCard'
 import StreakSizingGuideModal from './StreakSizingGuideModal'
+import { EXCHANGE_META, exchangeFromBroker } from '../../exchanges/meta'
+import {
+  coinCount,
+  groupByExchange,
+  groupLabel,
+  notTradingNote,
+  type ExchangeFilter,
+} from './exchangeGroups'
 import { useAssetStreaks } from '../../../hooks/useAssetStreaks'
 import { displaySymbol } from '../../../lib/chart'
 import { isKilled } from '../../../lib/killSwitch'
 import { draftTouched, type StreakSizingDraft } from '../../../lib/streakSizing'
 import type { AdminAsset } from '../../../types/admin'
+import type { ExchangeKind } from '../../../types/exchanges'
 
 const INPUT =
   'h-[38px] rounded-field border border-border bg-surface2 px-3 text-[13px] text-text outline-none focus:border-accent'
@@ -50,20 +60,30 @@ function HowItWorks() {
 
 interface StreakSizingTabProps {
   assets: AdminAsset[]
+  /** The page's exchange switcher (`?exchange=`): every venue, or one. */
+  exchange: ExchangeFilter
+  /** Venues the engine trades right now; null = unknown (say nothing). */
+  traded: ReadonlySet<ExchangeKind> | null
   /** Re-read the asset list after a save (the Assets tab shows the ladder too). */
   onSaved: () => void
 }
 
 /**
- * Admin → Trading Assets → Streak Sizing Settings: every asset's ladder side
- * by side — coins the kill switch has stopped first, then assets already
- * using streak sizing.
+ * Admin → Trading Assets → Streak Sizing Settings: every asset's ladder,
+ * one section per exchange (LTC on Binance and LTC on MEXC are two ladders),
+ * and inside a section coins the kill switch has stopped first, then assets
+ * already using streak sizing.
  *
  * Drafts live HERE, not in the cards: the grid re-mounts on every search
- * keystroke (the filter-switch reveal), and an admin who searches for the
- * next coin must not lose the sizes they typed on this one.
+ * keystroke and exchange switch (the filter-switch reveal), and an admin who
+ * moves on to the next coin must not lose the sizes they typed on this one.
  */
-export default function StreakSizingTab({ assets, onSaved }: StreakSizingTabProps) {
+export default function StreakSizingTab({
+  assets,
+  exchange,
+  traded,
+  onSaved,
+}: StreakSizingTabProps) {
   const [search, setSearch] = useState('')
   const [drafts, setDrafts] = useState<Record<number, StreakSizingDraft>>({})
   // A saved asset shows its new ladder at once, until the reloaded list
@@ -94,17 +114,31 @@ export default function StreakSizingTab({ assets, onSaved }: StreakSizingTabProp
   )
 
   const query = search.trim().toLowerCase()
-  const shown = query
-    ? sorted.filter(
-        (a) =>
-          a.ticker.toLowerCase().includes(query) ||
-          displaySymbol(a.ticker).toLowerCase().includes(query),
-      )
-    : sorted
+  const matches = (a: AdminAsset) =>
+    !query ||
+    a.ticker.toLowerCase().includes(query) ||
+    displaySymbol(a.ticker).toLowerCase().includes(query)
 
-  const onCount = current.filter((a) => a.streak_sizing_enabled).length
-  const killedCount = current.filter(isKilled).length
-  const unsaved = current.filter((a) => {
+  // One section per exchange, each keeping the sort above. The search only
+  // narrows what a section SHOWS; its header counts every coin it has.
+  const sections = groupByExchange(sorted, exchange).map((g) => ({
+    ...g,
+    shown: g.assets.filter(matches),
+  }))
+  // Searching across every venue: a venue with no match is noise, so it
+  // drops out. One venue picked: its section stays, saying nothing matched.
+  const visibleSections =
+    query && exchange === 'all' ? sections.filter((s) => s.shown.length > 0) : sections
+
+  // The toolbar describes what the switcher selected.
+  const inScope = (a: AdminAsset) =>
+    exchange === 'all' || exchangeFromBroker(a.broker) === exchange
+  const scoped = current.filter(inScope)
+  const onCount = scoped.filter((a) => a.streak_sizing_enabled).length
+  const killedCount = scoped.filter(isKilled).length
+  // Drafts are page-wide, so an unsaved one on a venue the switcher hides is
+  // still counted — and said to be elsewhere, or it would look lost.
+  const unsavedAssets = current.filter((a) => {
     const draft = drafts[a.asset_id]
     return (
       draft &&
@@ -113,7 +147,9 @@ export default function StreakSizingTab({ assets, onSaved }: StreakSizingTabProp
         draft,
       )
     )
-  }).length
+  })
+  const unsaved = unsavedAssets.length
+  const unsavedElsewhere = unsavedAssets.filter((a) => !inScope(a)).length
 
   const setDraft = useCallback((assetId: number, draft: StreakSizingDraft | null) => {
     setDrafts((all) => {
@@ -168,8 +204,9 @@ export default function StreakSizingTab({ assets, onSaved }: StreakSizingTabProp
         <div className="min-w-0">
           <h2 className="font-display text-[15px] font-extrabold">Sizes per asset</h2>
           <p className="mt-px text-[12px] text-muted">
-            {onCount} of {assets.length} {assets.length === 1 ? 'asset uses' : 'assets use'}{' '}
+            {onCount} of {scoped.length} {scoped.length === 1 ? 'asset uses' : 'assets use'}{' '}
             streak sizing
+            {exchange !== 'all' && ` on ${EXCHANGE_META[exchange].label}`}
             {killedCount > 0 && (
               <span className="font-semibold text-red">
                 {' '}
@@ -177,7 +214,12 @@ export default function StreakSizingTab({ assets, onSaved }: StreakSizingTabProp
               </span>
             )}
             {unsaved > 0 && (
-              <span className="font-semibold text-accent"> · {unsaved} unsaved</span>
+              <span className="font-semibold text-accent">
+                {' '}
+                · {unsaved} unsaved
+                {unsavedElsewhere > 0 &&
+                  ` (${unsavedElsewhere} on ${unsavedElsewhere === 1 ? 'another exchange' : 'other exchanges'})`}
+              </span>
             )}
           </p>
         </div>
@@ -191,30 +233,65 @@ export default function StreakSizingTab({ assets, onSaved }: StreakSizingTabProp
         />
       </section>
 
-      {/* Re-mounted on every search so the new set reveals (project
-          convention). The search box stays outside, or each keystroke would
-          unmount it and drop focus; drafts and streak counts live above, so
-          nothing typed or fetched is lost. */}
-      <div key={query} className="animate-[fadeup_0.35s_ease-out]">
-        {shown.length === 0 ? (
+      {/* Re-mounted on every search and exchange switch so the new set
+          reveals (project convention). The search box stays outside, or each
+          keystroke would unmount it and drop focus; drafts and streak counts
+          live above, so nothing typed or fetched is lost. */}
+      <div key={`${exchange}-${query}`} className="animate-[fadeup_0.35s_ease-out]">
+        {visibleSections.length === 0 ? (
           <p className="rounded-card border border-dashed border-border bg-surface px-4 py-10 text-center text-[13px] text-muted">
-            {assets.length === 0
-              ? 'No assets yet. Create one on the Assets tab first.'
-              : `No asset matches “${search.trim()}”.`}
+            No asset matches “{search.trim()}”.
           </p>
         ) : (
-          <div className="grid grid-cols-1 gap-stack min-[1180px]:grid-cols-2">
-            {shown.map((asset) => (
-              <StreakSizingCard
-                key={asset.asset_id}
-                asset={asset}
-                draft={drafts[asset.asset_id]}
-                onDraftChange={setDraft}
-                streaks={entries[asset.asset_id]}
-                onSaved={handleSaved}
-                onAssetChanged={handleAssetChanged}
-              />
-            ))}
+          <div className="flex flex-col gap-7">
+            {visibleSections.map((s) => {
+              const label = groupLabel(s.exchange)
+              const on = s.assets.filter((a) => a.streak_sizing_enabled).length
+              const killed = s.assets.filter(isKilled).length
+              return (
+                <ExchangeSection
+                  key={s.exchange ?? 'none'}
+                  exchange={s.exchange}
+                  summary={
+                    s.assets.length === 0 ? (
+                      `No ${label} coins yet — add one on the Assets tab.`
+                    ) : (
+                      <>
+                        {coinCount(s.assets.length)} · {on} using streak sizing
+                        {killed > 0 && (
+                          <span className="font-semibold text-red"> · {killed} switched off</span>
+                        )}
+                      </>
+                    )
+                  }
+                  note={notTradingNote(
+                    s.exchange,
+                    traded,
+                    'these sizes apply once it is switched on.',
+                  )}
+                >
+                  {s.assets.length === 0 ? null : s.shown.length === 0 ? (
+                    <p className="rounded-card border border-dashed border-border bg-surface px-4 py-6 text-center text-[13px] text-muted">
+                      No {label} coin matches “{search.trim()}”.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-stack min-[1180px]:grid-cols-2">
+                      {s.shown.map((asset) => (
+                        <StreakSizingCard
+                          key={asset.asset_id}
+                          asset={asset}
+                          draft={drafts[asset.asset_id]}
+                          onDraftChange={setDraft}
+                          streaks={entries[asset.asset_id]}
+                          onSaved={handleSaved}
+                          onAssetChanged={handleAssetChanged}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </ExchangeSection>
+              )
+            })}
           </div>
         )}
       </div>
