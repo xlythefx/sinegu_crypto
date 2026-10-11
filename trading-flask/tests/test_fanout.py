@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,10 +16,12 @@ def _entry_ok(api, symbol, side, quantity, price):
     return {"result": {"orderId": 1}, "symbol": symbol, "quantity": quantity, "price": price}
 
 
-def _run_job(fake_accounts, fake_assets, action="BUY", ticker="BTCUSDT", entry=None, exit_=None,
-             price=100.0, **kwargs):
-    """Run a job with accounts/assets/engine/Binance all patched; returns
-    (summary, handle_entry mock, handle_exit mock, api_instances)."""
+@contextmanager
+def _patched(fake_accounts, fake_assets, entry=None, exit_=None):
+    """Accounts/assets/engine/Binance all patched; yields (handle_entry mock,
+    handle_exit mock, api_instances). Enter it on ONE thread only: mock.patch is
+    not thread-safe — two threads entering and leaving the same patch restore
+    each other's mock as the "original", which then leaks into every later test."""
     api_instances = []
 
     def _fake_api(api_key, secret_key, base_url=None):
@@ -41,6 +44,14 @@ def _run_job(fake_accounts, fake_assets, action="BUY", ticker="BTCUSDT", entry=N
         patch.object(webhook.engine_client, "post_json", return_value={"success": True}),
         patch.object(webhook.engine_client, "delete_json", return_value={"success": True}),
     ):
+        yield entry_mock, exit_mock, api_instances
+
+
+def _run_job(fake_accounts, fake_assets, action="BUY", ticker="BTCUSDT", entry=None, exit_=None,
+             price=100.0, **kwargs):
+    """Run one job inside _patched; returns (summary, handle_entry mock,
+    handle_exit mock, api_instances)."""
+    with _patched(fake_accounts, fake_assets, entry=entry, exit_=exit_) as (entry_mock, exit_mock, api_instances):
         summary = webhook._process_trade_job(action, ticker, price, None, "strat", **kwargs)
     return summary, entry_mock, exit_mock, api_instances
 
@@ -254,15 +265,17 @@ def test_symbol_lock_serializes_same_account(fake_accounts, fake_assets):
             active.release()
         return _entry_ok(api, symbol, side, quantity, price)
 
-    one_account = fake_accounts[:1]
-    threads = [
-        threading.Thread(target=_run_job, args=(one_account, fake_assets), kwargs={"entry": entry})
-        for _ in range(2)
-    ]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join(timeout=10)
+    # Patched once, on this thread — see _patched for why the jobs must not
+    # each enter it.
+    with _patched(fake_accounts[:1], fake_assets, entry=entry):
+        threads = [
+            threading.Thread(target=webhook._process_trade_job, args=("BUY", "BTCUSDT", 100.0, None, "strat"))
+            for _ in range(2)
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=10)
     assert overlaps == []
 
 
