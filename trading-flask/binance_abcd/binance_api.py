@@ -22,6 +22,7 @@ from typing import Any, Callable, Dict, List, Optional
 import requests
 
 from binance_abcd import key_status
+from binance_abcd.exchange_api import read_failure_text
 from binance_abcd.hooks import API_TIMEOUT, BINANCE_API_BASE, POSITION_MODE_CACHE_TTL
 from binance_abcd.http_client import get_session
 
@@ -112,6 +113,14 @@ _MODE_VERIFIED_LOCK = threading.Lock()
 # --- LOT_SIZE stepSize per symbol, cached per futures base_url ----------------
 _STEP_SIZE_CACHE: Dict[str, Dict[str, str]] = {}
 _STEP_SIZE_LOCK = threading.Lock()
+
+# --- Every symbol the host lists, per futures base_url (expiry, symbols) -------
+# Separate from the stepSize cache, which never expires: this one answers "is
+# it listed?", and a coin listed after the engine started must not read as
+# missing until the next restart. Only consulted after something failed.
+_LISTED_CACHE: Dict[str, tuple[float, frozenset]] = {}
+_LISTED_LOCK = threading.Lock()
+_LISTED_TTL_SECONDS = 600.0
 
 
 def _quantize_to_step(quantity: float, step: str) -> Optional[str]:
@@ -218,6 +227,9 @@ class BinanceAPI:
         self.secret_key = (secret_key or "").strip()
         self.base_url = (base_url or BINANCE_API_BASE).rstrip("/")
         self.timeout = timeout
+        # Why the last GET failed (read_failure_text) — what turns "could not
+        # read positions" into the cause. Reset by every GET.
+        self.last_read_error: Optional[str] = None
 
     def _handle_rate_limit(self, response: requests.Response | None) -> None:
         if response is not None and response.status_code in (418, 429):
@@ -247,7 +259,9 @@ class BinanceAPI:
     ) -> Optional[Any]:
         """`account_scoped=False` for public data (exchangeInfo): such a call
         succeeds with any key, so it must never clear a blocked flag."""
+        self.last_read_error = None
         if not _check_clear():
+            self.last_read_error = f"GET {path}: not sent — rate-limit backoff in force"
             return None
         params = dict(params or {})
         params["timestamp"] = int(time.time() * 1000)
@@ -267,6 +281,14 @@ class BinanceAPI:
             log.error("[Binance] GET %s: %s", path, exc)
             if response is not None and response.text:
                 log.error("[Binance] response: %.500s", response.text)
+            parsed = _parse_binance_error_body(response.text or "") if response is not None else None
+            self.last_read_error = read_failure_text(
+                path,
+                http_status=response.status_code if response is not None else None,
+                code=(parsed or {}).get("code"), message=(parsed or {}).get("msg"),
+                timed_out=isinstance(exc, requests.Timeout),
+                transport_error=type(exc).__name__ if response is None else None,
+            )
             return None
 
     def _request_post(self, path: str, params: Optional[Dict[str, Any]] = None) -> Optional[Any]:
@@ -363,6 +385,28 @@ class BinanceAPI:
                     _STEP_SIZE_CACHE[self.base_url] = cache
                     log.info("[Binance] cached stepSize for %d symbols (%s)", len(cache), self.base_url)
         return cache.get(symbol)
+
+    def listed(self, symbol: str) -> Optional[bool]:
+        """Does THIS host list the symbol? None when exchangeInfo could not be
+        read. Per base_url: the demo host does not list everything production
+        does."""
+        now = time.time()
+        cached = _LISTED_CACHE.get(self.base_url)
+        if cached is None or cached[0] <= now:
+            with _LISTED_LOCK:
+                cached = _LISTED_CACHE.get(self.base_url)
+                if cached is None or cached[0] <= now:
+                    data = self._request_get("/fapi/v1/exchangeInfo", {}, account_scoped=False)
+                    symbols = frozenset(
+                        str(entry.get("symbol")).upper()
+                        for entry in ((data or {}).get("symbols") or [])
+                        if isinstance(entry, dict) and entry.get("symbol")
+                    )
+                    if not symbols:
+                        return None  # unknown, and not cached: the next ask retries
+                    cached = (now + _LISTED_TTL_SECONDS, symbols)
+                    _LISTED_CACHE[self.base_url] = cached
+        return symbol.upper() in cached[1]
 
     # --- account reads --------------------------------------------------------
 

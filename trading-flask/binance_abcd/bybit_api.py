@@ -57,7 +57,7 @@ from typing import Any, Dict, Optional
 import requests
 
 from binance_abcd import key_status
-from binance_abcd.exchange_api import failure
+from binance_abcd.exchange_api import failure, read_failure_text
 from binance_abcd.hooks import (
     API_TIMEOUT,
     BYBIT_API_BASE,
@@ -188,12 +188,16 @@ def num(value: Any) -> Optional[float]:
 # --- Public data cache (module-level: shared by every account) -----------------
 _INSTRUMENTS_LOCK = threading.Lock()
 _INSTRUMENTS_CACHE: Dict[str, tuple[float, Dict[str, dict]]] = {}  # base_url -> (expires, {symbol: row})
+# base_urls whose cached list stopped at the page cap: tradable, but absence
+# from it proves nothing, so listed() answers None for them.
+_INSTRUMENTS_PARTIAL: set[str] = set()
 
 
 def reset_caches() -> None:
     """Test hook."""
     with _INSTRUMENTS_LOCK:
         _INSTRUMENTS_CACHE.clear()
+        _INSTRUMENTS_PARTIAL.clear()
 
 
 class BybitFuturesAPI:
@@ -215,6 +219,9 @@ class BybitFuturesAPI:
         # Held as a STRING because the header and the signed payload must be
         # byte-identical; re-formatting an int at each use is how they drift.
         self.recv_window = str(int(recv_window_ms or 5000))
+        # Why the last GET failed (read_failure_text) — what turns "could not
+        # read positions" into the cause. Reset by every GET.
+        self.last_read_error: Optional[str] = None
 
     # --- signing / transport ------------------------------------------------
 
@@ -280,6 +287,7 @@ class BybitFuturesAPI:
         succeeds with any key, so it must never clear a blocked flag."""
         qs = _query_string(params)
         url = f"{self.base_url}{path}" + (f"?{qs}" if qs else "")
+        self.last_read_error = None
         try:
             resp = get_session().get(url, headers=self._headers(qs), timeout=self.timeout)
             resp.raise_for_status()
@@ -287,18 +295,30 @@ class BybitFuturesAPI:
             response = getattr(exc, "response", None)
             http_status = response.status_code if response is not None else None
             text = (response.text or "")[:500] if response is not None else ""
+            parsed = self._parse_body(text)
             self._log_regional_block(path, http_status, text)
-            self._judge_body(self._parse_body(text), account_scoped, key_status.READ)
+            self._judge_body(parsed, account_scoped, key_status.READ)
             log.error("[Bybit] GET %s: %s%s", path, exc, f" — {text}" if text else "")
+            self.last_read_error = read_failure_text(
+                path, http_status=http_status,
+                code=(parsed or {}).get("retCode"), message=(parsed or {}).get("retMsg"),
+                timed_out=isinstance(exc, requests.Timeout),
+                transport_error=type(exc).__name__ if response is None else None,
+            )
             return None
         try:
             envelope = resp.json()
         except ValueError:
             log.error("[Bybit] GET %s: non-JSON response %.200s", path, resp.text)
+            self.last_read_error = read_failure_text(path, http_status=resp.status_code, message="non-JSON response")
             return None
         if not isinstance(envelope, dict) or _int_code(envelope.get("retCode")) != 0:
             self._judge_body(envelope, account_scoped, key_status.READ)
             log.error("[Bybit] GET %s refused: %.300s", path, envelope)
+            body = envelope if isinstance(envelope, dict) else {}
+            self.last_read_error = read_failure_text(
+                path, code=body.get("retCode"), message=body.get("retMsg") or "request refused",
+            )
             return None
         if account_scoped:
             key_status.report_ok(self.api_key, EXCHANGE, scope=key_status.READ)
@@ -418,7 +438,7 @@ class BybitFuturesAPI:
             cached = _INSTRUMENTS_CACHE.get(self.base_url)
             if cached and cached[0] > now:
                 return cached[1]
-            rows, _complete = self._paged(
+            rows, complete = self._paged(
                 "/v5/market/instruments-info",
                 {"category": CATEGORY, "limit": 1000},
                 max_pages=3,
@@ -432,12 +452,24 @@ class BybitFuturesAPI:
                 for r in rows if isinstance(r, dict) and r.get("symbol")
             }
             _INSTRUMENTS_CACHE[self.base_url] = (now + BYBIT_INSTRUMENTS_CACHE_TTL, parsed)
+            if complete:
+                _INSTRUMENTS_PARTIAL.discard(self.base_url)
+            else:
+                _INSTRUMENTS_PARTIAL.add(self.base_url)
             log.info("[Bybit] cached %d instrument specs (%s)", len(parsed), self.base_url)
             return parsed
 
     def instrument(self, symbol: str) -> Optional[dict]:
         specs = self.instruments()
         return specs.get(symbol.upper()) if specs else None
+
+    def listed(self, symbol: str) -> Optional[bool]:
+        """Does THIS host list the symbol? None when the list could not be read
+        whole. Per base_url: Demo Trading need not list what production does."""
+        specs = self.instruments()
+        if specs is None or self.base_url in _INSTRUMENTS_PARTIAL:
+            return None
+        return symbol.upper() in specs
 
     def max_leverage(self, symbol: str) -> Optional[int]:
         spec = self.instrument(symbol)

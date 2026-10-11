@@ -463,6 +463,15 @@ and clears them. Where the depth cannot be read from either source and the asset
 *has* a cap, the entry is skipped (`stack depth unknown`) rather than placed
 blind — entry-only, so an unreadable account can still close what it holds.
 
+**A coin the network does not list is a skip, not a failure.** Demo hosts list
+fewer symbols than production (MEXC's futures testnet has no LTC_USDT). When a
+read or an order has already failed, the adapter's `not_listed()` checks the
+host's own symbol list; an affirmative absence becomes the skip reason
+`not listed on <Venue> Demo|Production` — no retry, no alert. An unreadable
+list is unknown and leaves the failure (and its retry) exactly as it was.
+Every other failed read carries its cause: `could not read positions (GET
+/fapi/v3/positionRisk: HTTP 408 -1007 …)`.
+
 **Deposit gate.** An account may only OPEN a position once its `total_deposit`
 (deposited capital net of withdrawals, from the accounts endpoint) reaches
 `MIN_DEPOSIT` (1000). The gate reads **deposit, not balance**: fund $1,500 and

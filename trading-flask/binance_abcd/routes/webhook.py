@@ -45,6 +45,7 @@ from binance_abcd.hooks import (
     WEBHOOK_SECRET,
 )
 from binance_abcd.trading_handler import (
+    NOT_LISTED,
     get_order_fill_summary,
     handle_entry,
     handle_exit,
@@ -778,13 +779,18 @@ def _run_account(
                 # either source. Entering blind is how a stack walks past its
                 # limit, so this fails closed — the same rule the asset and
                 # deposit gates follow. Entry-only: exits never reach here, so
-                # an unreadable account can still close what it holds.
+                # an unreadable account can still close what it holds. A coin
+                # this network does not list is the more precise answer.
                 _bump("accounts_skipped")
-                return base | {"status": "skipped", "reason": "stack depth unknown", "sizing": sizing}
+                reason = api.not_listed(symbol) or "stack depth unknown"
+                return base | {"status": "skipped", "reason": reason, "sizing": sizing}
 
             _maybe_set_leverage(api, symbol, leverage)
             result = handle_entry(api, symbol, "BUY" if action == "BUY" else "SELL", quantity, price)
 
+            if result is not None and result.get("status") == NOT_LISTED:
+                _bump("accounts_skipped")
+                return base | {"status": "skipped", "reason": result["reason"], "sizing": sizing}
             if result is None or result.get("result") is None:
                 _bump("accounts_failed")
                 # Entries retry ONLY when the request never reached the exchange
@@ -833,6 +839,11 @@ def _run_account(
         if result.get("status", "").startswith("no "):
             _bump("accounts_skipped")
             return base | {"status": "skipped", "reason": result["status"]}
+        if result.get("status") == NOT_LISTED:
+            # No position can exist on a contract the network does not list:
+            # a skip, never a failure the retry queue would chase for 5 minutes.
+            _bump("accounts_skipped")
+            return base | {"status": "skipped", "reason": result["reason"]}
         if result.get("result") is None:
             _bump("accounts_failed")
             # Unconfirmed exits are safe to retry — every attempt re-reads the

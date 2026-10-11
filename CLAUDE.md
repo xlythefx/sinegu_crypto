@@ -1345,6 +1345,18 @@ for the overlay's `position: fixed` and trap it inside.
     announce=)` carries the right to publish: a retry inherits it only when the
     live run filled nothing, and the queue clears it once any run fills. One
     close, one message.
+  - **A coin the network does not list is a SKIP that names the network**
+    (2026-10-11): `"not listed on MEXC Demo"` / `"… Production"`. MEXC's
+    futures testnet lists ~155 contracts and no LTC_USDT, so the demo MEXC
+    account's LTC exit read "could not read positions", retried 5× and went
+    red over a position that could not exist. `ExchangeClient.not_listed()`
+    is asked ONLY after a read or an order already failed, and only an
+    affirmative absence from a list that WAS read counts (unreadable = unknown
+    = the retry stands) — so it can never stop an exit that would have
+    worked. The network is read off the client's `base_url`. Every other read
+    failure carries the venue's cause (`last_read_error`: endpoint, HTTP
+    status, the venue's code + message — never the signed URL).
+    `SignalHealth`: `not_listed_demo` normal, `not_listed` problem.
 - **Poller weight is not evenly spread.** Per account per tick, balances /
   positions / transfers cost weight 5; past-positions (`/fapi/v1/income`) costs
   **30**. Against Binance's 2400/min per-IP ceiling that one loop is ~95% of the

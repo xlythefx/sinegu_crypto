@@ -19,8 +19,8 @@ from binance_abcd.binance_api import (
     mark_position_mode_verified,
 )
 from binance_abcd import ledger
-from binance_abcd.exchange_api import mode_key, want_hedge
-from binance_abcd.hooks import POSITION_MODE
+from binance_abcd.exchange_api import mode_key, not_listed_reason, want_hedge
+from binance_abcd.hooks import BINANCE_TESTNET_API_BASE, POSITION_MODE
 
 log = logging.getLogger(__name__)
 
@@ -77,6 +77,15 @@ class BinanceAdapter:
 
     def ticker_to_symbol(self, ticker: str) -> str:
         return ticker.upper()
+
+    def not_listed(self, ticker: str) -> Optional[str]:
+        if self.api.listed(ticker.upper()) is False:
+            return not_listed_reason("Binance", self.base_url, BINANCE_TESTNET_API_BASE)
+        return None
+
+    def last_read_error(self) -> Optional[str]:
+        error = getattr(self.api, "last_read_error", None)
+        return error if isinstance(error, str) else None
 
     # --- position mode --------------------------------------------------------
 

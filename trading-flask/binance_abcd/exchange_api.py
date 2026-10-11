@@ -75,6 +75,48 @@ def is_failure(result: Any) -> bool:
     return result is None or (isinstance(result, dict) and bool(result.get("_error")))
 
 
+def network_label(venue: str, base_url: str, demo_base_url: str) -> str:
+    """'MEXC Demo' / 'MEXC Production' — which of the venue's two hosts this
+    client talks to. Read off the URL the requests actually go to, so the
+    label can never disagree with where the order went."""
+    demo = base_url.rstrip("/") == demo_base_url.rstrip("/")
+    return f"{venue} {'Demo' if demo else 'Production'}"
+
+
+def not_listed_reason(venue: str, base_url: str, demo_base_url: str) -> str:
+    """The skip reason for a ticker the venue's own symbol list does not carry.
+    It names the NETWORK because the lists differ: MEXC's futures testnet
+    lists ~155 contracts and LTC_USDT is not one of them, while production
+    trades it — so "not listed" without "Demo" reads as a broken asset."""
+    return f"not listed on {network_label(venue, base_url, demo_base_url)}"
+
+
+def read_failure_text(
+    path: str,
+    *,
+    http_status: Optional[int] = None,
+    code: Any = None,
+    message: Any = None,
+    timed_out: bool = False,
+    transport_error: Optional[str] = None,
+) -> str:
+    """What a failed GET says in an alert: the endpoint and the venue's own
+    answer — 'GET /fapi/v3/positionRisk: HTTP 400 -1121 Invalid symbol.' Never
+    the URL: Binance signs in the query string."""
+    venue_said = " ".join(str(p) for p in (code, message) if p not in (None, ""))
+    if timed_out:
+        what = "timed out"
+    elif transport_error:
+        what = f"no answer ({transport_error})"
+    elif venue_said:
+        what = f"HTTP {http_status} {venue_said}" if http_status else venue_said
+    elif http_status:
+        what = f"HTTP {http_status}"
+    else:
+        what = "unreadable answer"
+    return f"GET {path}: {what}"[:300]
+
+
 class ExchangeClient(Protocol):
     """One account's signed client, in the core's vocabulary (see module docs)."""
 
@@ -105,6 +147,19 @@ class ExchangeClient(Protocol):
     def open_amount(self, ticker: str, position_side: str) -> Optional[float]:
         """abs(open coins) on that side — the stack-cap fallback when the
         engine API is down. None = read failed; 0.0 = flat."""
+        ...
+
+    def not_listed(self, ticker: str) -> Optional[str]:
+        """'not listed on MEXC Demo' when the venue's symbol list — fetched
+        fine — does not carry the ticker on THIS network; None when it is
+        listed or the list itself could not be read (unknown is never "not
+        listed"). Asked only AFTER a read or an order failed, so it can never
+        stop an exit that would have worked."""
+        ...
+
+    def last_read_error(self) -> Optional[str]:
+        """Why the most recent GET failed (read_failure_text), or None. Read it
+        straight after the failed call — the next request resets it."""
         ...
 
     def set_leverage(self, ticker: str, leverage: int) -> Optional[dict]:

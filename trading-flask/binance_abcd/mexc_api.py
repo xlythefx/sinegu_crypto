@@ -50,7 +50,7 @@ from typing import Any, Dict, List, Optional
 import requests
 
 from binance_abcd import key_status
-from binance_abcd.exchange_api import failure
+from binance_abcd.exchange_api import failure, read_failure_text
 from binance_abcd.hooks import (
     API_TIMEOUT,
     MEXC_API_BASE,
@@ -199,6 +199,9 @@ class MexcFuturesAPI:
         self.base_url = (base_url or MEXC_API_BASE).rstrip("/")
         self.timeout = timeout
         self.recv_window = int(recv_window or 0)
+        # Why the last GET failed (read_failure_text) — what turns "could not
+        # read positions" into the cause. Reset by every GET.
+        self.last_read_error: Optional[str] = None
 
     # --- signing / transport ------------------------------------------------
 
@@ -249,23 +252,37 @@ class MexcFuturesAPI:
         key, so it must never clear a blocked flag."""
         param_string = _param_string(params)
         url = f"{self.base_url}{path}" + (f"?{param_string}" if param_string else "")
+        self.last_read_error = None
         try:
             resp = get_session().get(url, headers=self._headers(param_string), timeout=self.timeout)
             resp.raise_for_status()
         except requests.RequestException as exc:
             response = getattr(exc, "response", None)
             text = (response.text or "")[:500] if response is not None else ""
-            self._judge_body(self._parse_body(text), account_scoped, key_status.READ)
+            parsed = self._parse_body(text)
+            self._judge_body(parsed, account_scoped, key_status.READ)
             log.error("[MEXC] GET %s: %s%s", path, exc, f" — {text}" if text else "")
+            self.last_read_error = read_failure_text(
+                path,
+                http_status=response.status_code if response is not None else None,
+                code=(parsed or {}).get("code"), message=(parsed or {}).get("message"),
+                timed_out=isinstance(exc, requests.Timeout),
+                transport_error=type(exc).__name__ if response is None else None,
+            )
             return None
         try:
             envelope = resp.json()
         except ValueError:
             log.error("[MEXC] GET %s: non-JSON response %.200s", path, resp.text)
+            self.last_read_error = read_failure_text(path, http_status=resp.status_code, message="non-JSON response")
             return None
         if not isinstance(envelope, dict) or envelope.get("success") is not True:
             self._judge_body(envelope, account_scoped, key_status.READ)
             log.error("[MEXC] GET %s refused: %.300s", path, envelope)
+            body = envelope if isinstance(envelope, dict) else {}
+            self.last_read_error = read_failure_text(
+                path, code=body.get("code"), message=body.get("message") or "request refused",
+            )
             return None
         if account_scoped:
             key_status.report_ok(self.api_key, EXCHANGE, scope=key_status.READ)
@@ -353,6 +370,13 @@ class MexcFuturesAPI:
     def contract(self, symbol: str) -> Optional[dict]:
         contracts = self.contracts()
         return contracts.get(symbol.upper()) if contracts else None
+
+    def listed(self, symbol: str) -> Optional[bool]:
+        """Does THIS host list the contract? None when the list could not be
+        read. The futures testnet lists far fewer than production (155 on
+        2026-10-11, no LTC_USDT), so the answer is per base_url."""
+        contracts = self.contracts()
+        return None if contracts is None else symbol.upper() in contracts
 
     def contract_size(self, symbol: str) -> Optional[float]:
         """Coins per contract; None when the contract is unknown or the spec is

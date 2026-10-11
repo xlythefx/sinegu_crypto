@@ -31,6 +31,24 @@ from binance_abcd.hooks import (
 
 log = logging.getLogger(__name__)
 
+# Result status for a ticker the venue's own list does not carry on this
+# network ("not listed on MEXC Demo"). The fan-out records it as a SKIP: no
+# order can be placed and no position can exist, so retrying it — or raising
+# "manual action required" after five tries, as an LTC exit on the MEXC
+# testnet did on 2026-10-11 — is noise about nothing.
+NOT_LISTED = "not_listed"
+
+
+def _not_listed(api: ExchangeClient, ticker: str) -> Optional[Dict[str, Any]]:
+    """The skip result when the venue says the ticker is not listed, else None.
+    Asked only after something FAILED: the answer comes from a cached symbol
+    list, and a stale list must never be what stops a working order."""
+    reason = api.not_listed(ticker.upper())
+    if not reason:
+        return None
+    log.warning("[%s] %s %s — skipped", api.exchange, ticker.upper(), reason)
+    return {"result": None, "status": NOT_LISTED, "reason": reason, "symbol": ticker}
+
 
 def ensure_position_mode(api: ExchangeClient, ticker: str) -> Optional[Dict[str, Any]]:
     """Error dict when the account's position mode can't be aligned; None when fine.
@@ -128,8 +146,12 @@ def handle_entry(api: ExchangeClient, ticker: str, side: str, quantity: float, p
         return pm_err
     result = api.place_market_entry(ticker.upper(), side, quantity)
     if _order_failed(result):
-        log.error("[%s] %s failed for %s", api.exchange, side, ticker)
-        return _failure_dict(result, ticker)
+        skip = _not_listed(api, ticker)
+        if skip is not None:
+            return skip
+        failure = _failure_dict(result, ticker)
+        log.error("[%s] %s failed for %s: %s", api.exchange, side, ticker, failure["error"])
+        return failure
     return {"result": result, "symbol": ticker, "quantity": quantity, "price": price}
 
 
@@ -173,12 +195,17 @@ def handle_exit(api: ExchangeClient, ticker: str, position_side: str, price: Opt
 
         risk = position_risk_map(api, sym)
         if risk is None:
+            why = api.last_read_error()  # before _not_listed: its own request resets it
+            skip = _not_listed(api, sym)
+            if skip is not None:
+                return skip
             failure = {
-                "result": None, "error": "could not read positions",
+                "result": None,
+                "error": f"could not read positions ({why})" if why else "could not read positions",
                 "exchange_response": "", "symbol": ticker, "transient": True,
             }
-            log.warning("[%s] EXIT_%s %s: positions unreadable (attempt %d/%d)",
-                        api.exchange, position_side, sym, attempt, attempts)
+            log.warning("[%s] EXIT_%s %s: positions unreadable (attempt %d/%d)%s",
+                        api.exchange, position_side, sym, attempt, attempts, f": {why}" if why else "")
             continue
 
         if want_hedge():

@@ -35,8 +35,8 @@ from binance_abcd.binance_api import (
     invalidate_position_mode,
     mark_position_mode_verified,
 )
-from binance_abcd.exchange_api import failure, is_failure, mode_key, want_hedge
-from binance_abcd.hooks import MEXC_DEFAULT_LEVERAGE, MEXC_OPEN_TYPE
+from binance_abcd.exchange_api import failure, is_failure, mode_key, not_listed_reason, want_hedge
+from binance_abcd.hooks import MEXC_DEFAULT_LEVERAGE, MEXC_OPEN_TYPE, MEXC_TESTNET_API_BASE
 from binance_abcd.mexc_api import (
     MODE_HEDGE,
     MODE_ONE_WAY,
@@ -115,6 +115,23 @@ class MexcAdapter:
         if symbol is None:
             raise ValueError(f"{ticker!r} is not a USDT-quoted ticker — no MEXC contract to map it to")
         return symbol
+
+    def not_listed(self, ticker: str) -> Optional[str]:
+        try:
+            symbol = self.ticker_to_symbol(ticker)
+        except ValueError:
+            return None  # answered elsewhere: no contract to map it to at all
+        if self.api.listed(symbol) is False:
+            return not_listed_reason("MEXC", self.base_url, MEXC_TESTNET_API_BASE)
+        return None
+
+    def last_read_error(self) -> Optional[str]:
+        error = getattr(self.api, "last_read_error", None)
+        return error if isinstance(error, str) else None
+
+    def _unreadable(self, before: str) -> str:
+        why = self.last_read_error()
+        return f"could not read positions before {before}" + (f" ({why})" if why else "")
 
     # --- position mode --------------------------------------------------------
 
@@ -252,7 +269,7 @@ class MexcAdapter:
             # Fail closed, like the stack cap: an entry placed without knowing
             # the existing position's leverage/openType is one MEXC may refuse
             # (7004) or, worse, open under a different margin mode.
-            return failure("could not read positions before entry", transient=True)
+            return failure(self._unreadable("entry"), transient=True)
         existing = next((r for r in rows if _int(r.get("positionType")) == position_type), None)
         if existing is not None:
             leverage = _int(existing.get("leverage"))
@@ -299,7 +316,7 @@ class MexcAdapter:
         if row is None:
             rows = self._read_positions(symbol)
             if rows is None:
-                return failure("could not read positions before close", transient=True)
+                return failure(self._unreadable("close"), transient=True)
             row = self._seen.get((symbol, position_type))
             if row is None:
                 return failure(f"no open {position_side.lower()} position on {symbol}", code=2009, transient=False)

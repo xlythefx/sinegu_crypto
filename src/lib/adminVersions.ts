@@ -13,6 +13,29 @@ import type { AdminChange } from '../types/adminVersions'
  *    later change to the same feature gets its own entry.
  */
 export const ADMIN_CHANGES: AdminChange[] = [
+  // ── 2026-10-12 ───────────────────────────────────────────────────────────
+  {
+    id: 'coin-not-listed-skip',
+    date: '2026-10-12',
+    kind: 'fixed',
+    area: 'Signal Log',
+    title: 'A coin the exchange does not list is now a clear skip, not a false alarm',
+    summary:
+      'When an exchange does not offer a coin, the bot now says so plainly — “not listed on MEXC Demo” or “not listed on MEXC Production” — instead of raising a red “manual action required” alert for a trade that could never exist.',
+    howItWorks: [
+      'Example: on 11 Oct the MEXC test account received the LTC signals, but MEXC’s demo exchange does not offer LTC at all. The buys failed, and the close was reported as “could not read positions”, retried for five minutes and escalated to a red alert, although nothing was open.',
+      'Now the same signals show in the Signal Log as skipped with the reason “not listed on MEXC Demo”, and no alert is sent. On a real-money account the reason says “Production”, and the Signal Log marks it as a problem to fix.',
+      'Demo and production exchanges offer different coins: MEXC’s demo lists about 155, and LTC is not one of them.',
+      'Other read failures now say what actually went wrong (for example “timed out” or the exchange’s own error message) instead of only “could not read positions”.',
+      'Safety rule: a close is only skipped when the exchange’s coin list was read successfully and the coin is missing from it. If the list cannot be read, the bot keeps retrying exactly as before.',
+    ],
+    technical: [
+      'ExchangeClient.not_listed(ticker) — asked only after a read or an order failed; per-host symbol lists (MEXC contract/detail, Binance exchangeInfo with a 10-min TTL, Bybit instruments-info only when every page was read).',
+      'Skip reason "not listed on {Venue} {Demo|Production}", the network read off the client’s base URL. SignalHealth: not_listed_demo (normal), not_listed (problem), positions_unreadable (problem).',
+      'Each venue client records last_read_error (endpoint + HTTP status + the venue’s code and message, never the signed URL), carried into "could not read positions (…)".',
+    ],
+    links: [{ label: 'Open the Signal Log', href: '/admin/trade-logs' }],
+  },
   // ── 2026-10-10 ───────────────────────────────────────────────────────────
   {
     id: 'assets-by-exchange',

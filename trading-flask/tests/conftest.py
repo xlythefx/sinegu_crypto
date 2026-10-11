@@ -95,6 +95,7 @@ def _reset_exchange_state():
     """Per-test amnesia for the module-level venue caches and the key-status
     dedupe, so one test's contract/instrument map or blocked-key memory never
     leaks into the next."""
+    import binance_abcd.binance_api as binance_api
     import binance_abcd.bybit_api as bybit_api
     import binance_abcd.key_status as key_status
     import binance_abcd.mexc_api as mexc_api
@@ -102,10 +103,12 @@ def _reset_exchange_state():
     key_status.reset()
     mexc_api.reset_caches()
     bybit_api.reset_caches()
+    binance_api._LISTED_CACHE.clear()
     yield
     key_status.reset()
     mexc_api.reset_caches()
     bybit_api.reset_caches()
+    binance_api._LISTED_CACHE.clear()
 
 
 @pytest.fixture()

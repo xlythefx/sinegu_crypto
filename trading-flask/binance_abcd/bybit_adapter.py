@@ -49,7 +49,7 @@ from binance_abcd.bybit_api import (
     num,
     to_symbol,
 )
-from binance_abcd.exchange_api import failure, is_failure
+from binance_abcd.exchange_api import failure, is_failure, not_listed_reason
 from binance_abcd.hooks import BYBIT_DEMO_API_BASE
 
 log = logging.getLogger(__name__)
@@ -171,6 +171,23 @@ class BybitAdapter:
                 "USDC symbols, and BTCUSD is an INVERSE contract, so a guess lands on the wrong one"
             )
         return symbol
+
+    def not_listed(self, ticker: str) -> Optional[str]:
+        try:
+            symbol = self.ticker_to_symbol(ticker)
+        except ValueError:
+            return None  # answered elsewhere: no USDT symbol to map it to at all
+        if self.api.listed(symbol) is False:
+            return not_listed_reason("Bybit", self.base_url, BYBIT_DEMO_API_BASE)
+        return None
+
+    def last_read_error(self) -> Optional[str]:
+        error = getattr(self.api, "last_read_error", None)
+        return error if isinstance(error, str) else None
+
+    def _unreadable(self, before: str) -> str:
+        why = self.last_read_error()
+        return f"could not read positions before {before}" + (f" ({why})" if why else "")
 
     # --- position mode --------------------------------------------------------
 
@@ -348,7 +365,7 @@ class BybitAdapter:
         # Fail closed, like MEXC's entry: an order placed without knowing the
         # account's real position mode carries a positionIdx Bybit may reject.
         if self._read_positions(symbol) is None:
-            return failure("could not read positions before entry", transient=True)
+            return failure(self._unreadable("entry"), transient=True)
         result = self.api.create_order(
             symbol,
             SIDE_BUY if position_side == "LONG" else SIDE_SELL,
@@ -368,7 +385,7 @@ class BybitAdapter:
         row = self._seen.get((symbol, side))
         if row is None:
             if self._read_positions(symbol) is None:
-                return failure("could not read positions before close", transient=True)
+                return failure(self._unreadable("close"), transient=True)
             row = self._seen.get((symbol, side))
             if row is None:
                 return failure(

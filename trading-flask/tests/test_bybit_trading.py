@@ -55,6 +55,9 @@ class FakeBybit:
     def instrument(self, symbol):
         return BTC if symbol == "BTCUSDT" else None
 
+    def listed(self, symbol):
+        return symbol == "BTCUSDT"
+
     def max_leverage(self, symbol):
         return 100 if symbol == "BTCUSDT" else None
 

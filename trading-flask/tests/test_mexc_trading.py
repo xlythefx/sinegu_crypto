@@ -44,6 +44,9 @@ class FakeMexc:
     def contract(self, symbol):
         return self.contracts().get(symbol)
 
+    def listed(self, symbol):
+        return symbol in self.contracts()
+
     def contract_size(self, symbol):
         return 0.0001 if symbol == "BTC_USDT" else None
 
