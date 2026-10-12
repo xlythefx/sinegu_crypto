@@ -847,6 +847,38 @@ for where it lives: Billing, Signal Log, Trading assets…), `title`, `summary`,
   open (`collaboratorMayOpen`) are hidden for them.
 Seeded on 2026-10-09 with the changes from 2026-10-01 on.
 
+## Binance offer — 15% for accounts opened through our link (2026-10-13)
+
+A customer whose Binance account was CREATED through our referral link
+(`ref=HPU7VNUZ`) pays **15% instead of 20% on REALIZED profit** — the
+unrealized share is unchanged — from the billing month we confirm the account,
+for as long as they trade with us on it. Only new Binance accounts can qualify
+(Binance: one account per person, the code is linked at sign-up).
+- **One spelling:** `lib/binanceOffer.ts` holds the code, the URL, both rates
+  and the offer copy. Every surface (offer page `/binance-offer`, Part 1 of
+  `/docs/binance`, later the landing section and the wizard) reads it.
+- **`/docs/binance` has two parts** (`lib/binanceGuide.ts` `GUIDE_PARTS`):
+  Part 1 creates the account (register with the code → 2FA → KYC → USDT),
+  Part 2 is the old connect steps (`CONNECT_STEPS`). Each part numbers its own
+  steps — "Part 2, step 6" references stay valid. "I already have Binance"
+  folds Part 1 away and is remembered per device.
+- **The discount is a mark on the BINANCE ACCOUNT plus one editable partner
+  rate — never a user role.** Monthly invoicing, insights and Discord roles
+  all key on `type = 'user'`, so a new type would silently stop billing them;
+  and "affiliate" already names our own referral system. Billing rule (to
+  build): marked account → realized rate = min(user's rate, partner rate) for
+  every billing month ending after the confirm date. **Until that ships, an
+  admin confirms each customer and sets "Realized fee %" by hand** (to-do
+  `binance-offer-confirm-by-hand`). Not yet linked from the landing page or
+  the wizard — that waits for the billing half.
+- Binance facts (2026-10-13 research): the customer's UID is `uid` on spot
+  `GET /api/v3/account` (weight 20, Reading permission — the matching key for
+  automation); referees are listed in Referral Pro → My Referrals with no
+  referrer API; the entry-tier referral commission lasts 12 months, the
+  discount does not. **Binance Link / OMS Toolkit pays only on users with NO
+  referral code**, so it and this link can never both pay on one customer
+  (decision `binance-link-program`).
+
 ## Sign in with Discord + server roles (2026-09-21)
 
 `POST /auth/discord/*` (`DiscordAuthController`), `App\Services\Discord\{DiscordGateway,DiscordRoleSync}`,

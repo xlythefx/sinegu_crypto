@@ -18,6 +18,8 @@ import Faq from './pages/Faq'
 import NotFound from './pages/NotFound'
 import TradingBot from './pages/TradingBot'
 import BinanceGuide from './pages/BinanceGuide'
+import BinanceOffer from './pages/BinanceOffer'
+import { BINANCE_OFFER_PATH } from './lib/binanceOffer'
 import Dashboard from './pages/Dashboard'
 import Positions from './pages/Positions'
 import Exchanges from './pages/Exchanges'
@@ -71,6 +73,7 @@ function App() {
             <Route path="/faq" element={<Faq />} />
             <Route path="/trading-bot" element={<TradingBot />} />
             <Route path="/docs/binance" element={<BinanceGuide />} />
+            <Route path={BINANCE_OFFER_PATH} element={<BinanceOffer />} />
             <Route path="/dashboard/analytics" element={<Analytics />} />
             <Route path="/dashboard/strategies/:strategyKey" element={<StrategyDetail />} />
             <Route path="/dashboard/positions" element={<Positions />} />

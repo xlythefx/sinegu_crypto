@@ -18,6 +18,69 @@ import type { AdminTodo } from '../types/adminTodos'
  *    the note and the date it was settled stay readable.
  */
 export const ADMIN_TODOS: AdminTodo[] = [
+  // ── Binance offer (2026-10-13) ──────────────────────────────────────────
+  {
+    id: 'binance-offer-confirm-by-hand',
+    feature: 'Binance offer',
+    kind: 'action',
+    title: 'Confirm Binance-offer customers by hand and set their fee to 15%',
+    added: '2026-10-13',
+    why: 'The new offer page and Part 1 of the Binance guide promise 15% instead of 20% on realized profit to anyone who opens a Binance account through our link. Billing does not apply that by itself yet — until it does, a customer who qualifies is still invoiced 20% unless their rate is changed by hand.',
+    steps: [
+      'Open the referral link once yourself and check that Binance’s sign-up screen shows Referral ID HPU7VNUZ.',
+      'When a customer says they signed up through the link (or a new Binance customer connects), open Binance → Referral Pro → Referrals → My Referrals and search for their Binance account ID (UID). If you cannot tell which one is theirs, ask the customer for their UID — it is under their profile on Binance.',
+      'If it is on the list: Admin → User Management → open the customer → the fee settings card → set “Realized fee %” to 15 and save. Leave the unrealized fee as it is.',
+      'Do it before the 1st of next month: the invoice for a month is made on the 1st of the month after, at the rate set at that moment — so a customer confirmed any day in October is billed 15% for October.',
+      'Write the customer and the date in the note here until billing tracks it on its own.',
+    ],
+    links: [
+      { label: 'Admin → User Management', href: '/admin/users' },
+      { label: 'The offer page', href: '/binance-offer' },
+    ],
+  },
+  {
+    id: 'binance-offer-kickback-share',
+    feature: 'Binance offer',
+    kind: 'decision',
+    title: 'Share part of Binance’s referral payment with the customer, or keep it all?',
+    added: '2026-10-13',
+    why: 'Binance lets a referrer hand part of its referral payment straight back to the customer as cheaper Binance futures fees — a slider per referral code, up to 20% of what Binance pays. That would be on top of our own 15%. The offer page currently says “you pay Binance exactly what anyone else pays”, which stays true only while we keep it all. Worth knowing too: Binance’s FAQ says the entry tier pays referrals for 12 months from the customer opening Futures, while our 15% lasts as long as they trade with us.',
+    steps: [
+      'Decide: keep the whole Binance payment, or give the customer a share of it on Binance’s side.',
+      'Check in Binance → Referral Pro what the “5%” on this link actually is — the FAQ’s entry tier pays 10% on futures, so 5% may already mean half is being shared.',
+      'If you share it: move the slider for this referral code in Binance → Referral Pro, and ask for the offer page wording to be updated in the same go.',
+      'Write the decision in the note here.',
+    ],
+  },
+  {
+    id: 'binance-offer-terms',
+    feature: 'Binance offer',
+    kind: 'decision',
+    title: 'Add the 15% Binance-offer rate to the Terms & Conditions',
+    added: '2026-10-13',
+    why: 'Section 05 of the Terms (Fees and Payment) lists 20% of realized earnings as the fee, with no mention of the lower rate the offer promises. A customer on the offer is billed less than the Terms say, which is in their favour but should still be written down.',
+    steps: [
+      'Decide the wording (for example: “15% of realized net positive earnings for accounts opened through Pixel Alpha’s Binance referral link and confirmed by us”), and whether a lawyer should see it.',
+      'Send the wording to be added to the Terms — the Terms page is text in the website, so it is a small website change.',
+    ],
+    links: [{ label: 'Terms & Conditions', href: '/terms' }],
+  },
+  {
+    id: 'binance-link-program',
+    feature: 'Binance offer',
+    kind: 'decision',
+    title: 'Look at Binance Link (now “OMS Toolkit”) — it pays more, but not on referral-link customers',
+    added: '2026-10-13',
+    why: 'Binance runs a separate programme for platforms that trade through their customers’ own API keys — exactly what the bot does. It reportedly pays 30–50% of the trading fees (the referral link’s entry tier pays 10%), on every order the bot tags. The catch: it only pays on customers who opened Binance after we join it AND signed up with NO referral code — so a customer who used our referral link never counts for it. The two cannot both pay on the same customer, which decides how the offer page should tell people to sign up.',
+    steps: [
+      'Decide whether to apply. It needs a business verification with Binance’s VIP / Institutional team; no published minimum was found.',
+      'If yes: the offer would change from “sign up with our referral code” to “sign up with no referral code at all” — the website copy and the guide’s first step change with it, and the bot starts tagging its Binance orders with the partner ID (a developer change).',
+      'If no: nothing changes; record the decision in the note here.',
+    ],
+    links: [
+      { label: 'Binance Link — Link and Trade docs', href: 'https://developers.binance.com/docs/binance_link/link-and-trade/futures' },
+    ],
+  },
   // ── Streak sizing (2026-10-09; win steps added the same day) ───────────
   {
     // The id predates win steps — it is the API's key, so it stays.

@@ -1,5 +1,15 @@
+import {
+  BINANCE_OFFER_PATH,
+  BINANCE_REFERRAL_CODE,
+  BINANCE_REFERRAL_URL,
+  OFFER_FEE_PCT,
+  STANDARD_FEE_PCT,
+} from './binanceOffer'
+
 /**
- * Content for the public Binance connection guide (`/docs/binance`).
+ * Content for the public Binance guide (`/docs/binance`), in two parts:
+ * Part 1 creates the Binance account (through our referral link — the Binance
+ * offer), Part 2 connects it. Someone who already has Binance skips Part 1.
  *
  * Data, not JSX, for the same reason the legal documents are: the wording
  * follows Binance's own screens, and Binance renames things. When a screenshot
@@ -9,6 +19,9 @@
  * `**bold**` inside any string is rendered as emphasis; nothing else is
  * parsed. Bold is reserved for the words the reader will see on Binance's
  * screen (button and menu names), so they can match them at a glance.
+ *
+ * Each part numbers its own steps, so "step 6" in Part 2's warnings and the
+ * troubleshooting answers keeps meaning what it meant before Part 1 existed.
  */
 export interface GuideStep {
   /**
@@ -42,7 +55,61 @@ export const MIN_DEPOSIT_USDT = '1,000'
 
 export const API_MANAGEMENT_URL = 'https://www.binance.com/en/my/settings/api-management'
 
-export const GUIDE_STEPS: GuideStep[] = [
+/** Part 1 — for a reader with no Binance account yet. */
+export const ACCOUNT_STEPS: GuideStep[] = [
+  {
+    id: 'register',
+    title: 'Create your Binance account with our link',
+    summary: `Use our link and your account qualifies for the Binance offer: you pay Pixel Alpha ${OFFER_FEE_PCT}% of your profit instead of ${STANDARD_FEE_PCT}%.`,
+    actions: [
+      `Open Binance with the button below. The Referral ID **${BINANCE_REFERRAL_CODE}** fills in by itself.`,
+      'Sign up with your **email** or **phone number** (or **Google** / **Apple**) and choose a strong password.',
+      `Before you press **Create Account**, check that the **Referral ID** box shows **${BINANCE_REFERRAL_CODE}**. If the box is folded away, tap **Referral ID (Optional)** to see it.`,
+      'Enter the verification code Binance sends you. Your account now exists.',
+    ],
+    warning: `Binance links the Referral ID when the account is created. An account made without **${BINANCE_REFERRAL_CODE}** in the box does not qualify for the offer — so check it before you press Create Account.`,
+    link: { label: 'Create Binance account', href: BINANCE_REFERRAL_URL },
+  },
+  {
+    id: 'secure',
+    title: 'Log in and turn on two-factor security',
+    summary:
+      'Binance will not create API keys for an account without two-factor security (2FA), and it is what keeps your money safe if your password ever leaks.',
+    actions: [
+      'Log in at **binance.com** or in the Binance app.',
+      'Click your **profile icon** and open **Security** (on the app: **Profile → Security**).',
+      'Turn on **Authenticator App** — Google Authenticator or Binance Authenticator — and follow Binance’s steps.',
+    ],
+    tip: 'Write the backup key down and keep it offline. It is the only way back into your account if you lose your phone.',
+  },
+  {
+    id: 'verify',
+    title: 'Verify your identity',
+    summary:
+      'Binance requires identity verification (KYC) before you can trade futures or create API keys.',
+    actions: [
+      'Click your **profile icon** and open **Identification** (on the app: tap **Verify** on your profile).',
+      'Choose your country and follow the steps: your personal details, a photo of your ID — passport, ID card or driving licence — and a short face check.',
+      'Wait for approval. It often takes a few minutes and sometimes a day or two; Binance emails you when it is done.',
+    ],
+    tip: 'Use your name exactly as it is on your ID, and photograph the ID in good light with no glare — most delays come from a blurry photo.',
+  },
+  {
+    id: 'deposit',
+    title: 'Put USDT in your Binance account',
+    summary: `The bot trades USDT. You need at least **${MIN_DEPOSIT_USDT} USDT** — it lands in your Spot wallet, and Part 2 moves it to Futures.`,
+    actions: [
+      'To buy with a card or bank transfer: open **Buy Crypto**, choose **USDT**, enter the amount and pay.',
+      'To send USDT you already hold somewhere else: open **Wallet → Deposit**, choose **USDT**, pick a **network** and send it to the address Binance shows.',
+      'Wait until the USDT shows in your **Spot** wallet.',
+    ],
+    warning:
+      'Sending from another wallet or exchange? Pick the SAME network on both sides (for example **TRC20** on both). USDT sent on the wrong network can be lost for good.',
+  },
+]
+
+/** Part 2 — connecting an existing (or freshly made) account. */
+export const CONNECT_STEPS: GuideStep[] = [
   {
     id: 'open-futures',
     title: 'Turn on Futures on your Binance account',
@@ -149,5 +216,40 @@ export const GUIDE_STEPS: GuideStep[] = [
     ],
     tip: `Once connected, the bot trades your futures balance on the next signal — as long as at least ${MIN_DEPOSIT_USDT} USDT is in your Futures wallet.`,
     link: { label: 'Connect Binance', to: '/dashboard/exchanges/connect' },
+  },
+]
+
+export interface GuidePart {
+  /** Stable — the "I already have Binance" choice is saved against it. */
+  id: 'account' | 'connect'
+  label: string
+  title: string
+  intro: string
+  steps: GuideStep[]
+  /** A reader who already has Binance may skip this part. */
+  skippable?: boolean
+  /** Shown at the head of the part, linking to `offer.to`. */
+  offer?: { text: string; to: string }
+}
+
+export const GUIDE_PARTS: GuidePart[] = [
+  {
+    id: 'account',
+    label: 'Part 1',
+    title: 'Create your Binance account',
+    intro: 'New to Binance? Start here: create the account, secure it, verify your identity and add USDT.',
+    steps: ACCOUNT_STEPS,
+    skippable: true,
+    offer: {
+      text: `Create it with our link and pay ${OFFER_FEE_PCT}% of your profit instead of ${STANDARD_FEE_PCT}%.`,
+      to: BINANCE_OFFER_PATH,
+    },
+  },
+  {
+    id: 'connect',
+    label: 'Part 2',
+    title: 'Connect Binance to Pixel Alpha',
+    intro: 'Open Futures, move your USDT there and make a trade-only key — about ten minutes.',
+    steps: CONNECT_STEPS,
   },
 ]
