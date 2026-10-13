@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import FeeLine from './FeeLine'
+import CloseSourceChip from '../admin/positions/CloseSourceChip'
 import type { ClosedTrade } from './types'
 
 export const ITEMS_PER_PAGE = 10
@@ -67,6 +68,13 @@ export default function ClosedPositionsTable({
                       </span>
                       {t.ticker}
                     </div>
+                    {/* Admin user detail only (the trader adapters never set it);
+                        under the ticker because Closed At hides on phones. */}
+                    {t.closeSource === 'outside' && (
+                      <div className="mt-1.5 pl-[39px]">
+                        <CloseSourceChip source={t.closeSource} />
+                      </div>
+                    )}
                   </td>
                   <td className={`${TD} font-mono`}>${t.price}</td>
                   <td className={`${TD} text-muted text-[12.5px]`}>{t.strategy}</td>

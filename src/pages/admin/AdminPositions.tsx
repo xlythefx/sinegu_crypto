@@ -447,6 +447,7 @@ export default function AdminPositions() {
           onClear={() => setFilters(EMPTY_FILTERS)}
           view={effectiveView}
           onView={tab === 'active' ? setView : undefined}
+          showClosedBy={tab === 'closed'}
           accounts={accounts}
           tickers={tickers}
           brokers={brokers}
@@ -459,7 +460,7 @@ export default function AdminPositions() {
             text search is deliberately left out: it changes per keystroke, and
             replaying the reveal on every letter is a flicker, not a reveal. */}
         <div
-          key={`${tab}-${effectiveView}-${filters.account}-${filters.ticker}-${filters.broker}-${safePage}`}
+          key={`${tab}-${effectiveView}-${filters.account}-${filters.ticker}-${filters.broker}-${filters.closedBy}-${safePage}`}
           className="animate-[fadeup_0.35s_ease-out]"
         >
           <PositionsTable

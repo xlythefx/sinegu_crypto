@@ -28,6 +28,7 @@ import type {
   AdminTronTransfer,
   AdminTronTransfersData,
   AdminUserUpdateInput,
+  AssetHistoryPage,
   AssetInput,
   AssetStreakSize,
   AssetStreakSizingInput,
@@ -143,6 +144,8 @@ function normalizeAsset(asset: AdminAsset): AdminAsset {
     asset.kill_switch_losses === null || asset.kill_switch_losses === undefined
       ? null
       : Number(asset.kill_switch_losses)
+  const pending = asset.pending_sizing
+  const num = (v: unknown) => (v === null || v === undefined || v === '' ? null : Number(v))
   return {
     ...asset,
     streak_sizing_enabled: Boolean(asset.streak_sizing_enabled),
@@ -151,6 +154,29 @@ function normalizeAsset(asset: AdminAsset): AdminAsset {
     killed_at: asset.killed_at || null,
     killed_reason: asset.killed_reason || null,
     kill_switch_armed_at: asset.kill_switch_armed_at || null,
+    pending_sizing: pending
+      ? {
+          base_size: Number(pending.base_size),
+          max_increments: Number(pending.max_increments),
+          streak_sizing_enabled: Boolean(pending.streak_sizing_enabled),
+          streak_sizes: sortSteps(
+            (Array.isArray(pending.streak_sizes) ? pending.streak_sizes : []).map(
+              (s): AssetStreakSize => ({
+                kind: s.kind === 'win' ? 'win' : 'loss',
+                streak: Number(s.streak),
+                size: Number(s.size),
+              }),
+            ),
+          ),
+          since: pending.since || null,
+          by_name: pending.by_name || null,
+          waits_for: pending.waits_for ?? null,
+        }
+      : null,
+    main_account: {
+      balance: num(asset.main_account?.balance),
+      price: num(asset.main_account?.price),
+    },
   }
 }
 
@@ -217,8 +243,11 @@ function buildAssetForm(input: AssetInput, image?: AssetImageChange): FormData {
   if (input.type) form.append('type', input.type)
   if (input.broker) form.append('broker', input.broker)
   form.append('side', input.side)
-  form.append('max_increments', String(input.max_increments))
-  form.append('base_size', String(input.base_size))
+  // Sizing rides along only when the caller owns it: absent = unchanged on
+  // the API, which is what the on/off switch needs. Re-sending the live
+  // sizes would cancel a size change that is waiting for a close.
+  if (input.max_increments !== undefined) form.append('max_increments', String(input.max_increments))
+  if (input.base_size !== undefined) form.append('base_size', String(input.base_size))
   form.append('enabled', input.enabled ? '1' : '0')
   // The ladder rides along ONLY when the caller owns it. Absent = "leave it
   // as it is" on the API, which is what the card's enable/disable toggle
@@ -299,10 +328,11 @@ export function updateAsset(
 }
 
 /**
- * Switch one asset on or off and change NOTHING else: the asset's own fields
- * are re-posted as they are, and the streak ladder and kill switch are left
- * out so the API keeps them. Turning a coin the kill switch stopped back on
- * goes through here — the API clears the kill and starts counting again.
+ * Switch one asset on or off and change NOTHING else: the identifying fields
+ * are re-posted as they are, and the sizing, the streak ladder and the kill
+ * switch are left out so the API keeps them, including a size change that is
+ * waiting for a close. Turning a coin the kill switch stopped back on goes
+ * through here: the API clears the kill and starts counting again.
  */
 export function setAssetEnabled(asset: AdminAsset, enabled: boolean): Promise<AdminAsset> {
   return updateAsset(asset.asset_id, {
@@ -310,10 +340,50 @@ export function setAssetEnabled(asset: AdminAsset, enabled: boolean): Promise<Ad
     type: asset.type,
     broker: asset.broker,
     side: asset.side,
-    max_increments: asset.max_increments,
-    base_size: asset.base_size,
     enabled,
   })
+}
+
+/** POST /admin/assets/{id}/pending-sizing/apply: put the waiting size live now, without waiting for the close. */
+export async function applyPendingSizing(assetId: number): Promise<AdminAsset> {
+  const res = await apiFetch<{ success: boolean; asset: AdminAsset }>(
+    `/admin/assets/${assetId}/pending-sizing/apply`,
+    { method: 'POST', auth: true },
+  )
+  return normalizeAsset(res.asset)
+}
+
+/** DELETE /admin/assets/{id}/pending-sizing: drop the waiting size change; the live size stays. */
+export async function cancelPendingSizing(assetId: number): Promise<AdminAsset> {
+  const res = await apiFetch<{ success: boolean; asset: AdminAsset }>(
+    `/admin/assets/${assetId}/pending-sizing`,
+    { method: 'DELETE', auth: true },
+  )
+  return normalizeAsset(res.asset)
+}
+
+/**
+ * GET /admin/assets/history: every change to asset settings, newest first.
+ * `assetId` narrows to one coin card, `broker` to one exchange; `beforeId`
+ * pages back.
+ */
+export async function getAssetHistory(
+  opts: { assetId?: number; broker?: string; beforeId?: number; limit?: number } = {},
+): Promise<AssetHistoryPage> {
+  const params = new URLSearchParams()
+  if (opts.assetId) params.set('asset_id', String(opts.assetId))
+  if (opts.broker) params.set('broker', opts.broker)
+  if (opts.beforeId) params.set('before_id', String(opts.beforeId))
+  if (opts.limit) params.set('limit', String(opts.limit))
+  const qs = params.toString()
+  const res = await apiFetch<{ success: boolean } & AssetHistoryPage>(
+    qs ? `/admin/assets/history?${qs}` : '/admin/assets/history',
+    { auth: true },
+  )
+  return {
+    changes: Array.isArray(res.changes) ? res.changes : [],
+    has_more: Boolean(res.has_more),
+  }
 }
 
 export async function deleteAsset(assetId: number): Promise<void> {

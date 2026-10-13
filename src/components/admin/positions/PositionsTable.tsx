@@ -3,6 +3,7 @@ import { displaySymbol } from '../../../lib/chart'
 import { fmtDateTime, fmtMoney, fmtQty, fmtSignedMoney } from '../../../lib/format'
 import type { PositionRow, PositionView, RowFeeSource } from '../../../lib/adminPositionRows'
 import { Pill } from '../../ui/Pill'
+import CloseSourceChip from './CloseSourceChip'
 
 // shared table primitives (mirrors the user Positions tables)
 const TH_BASE =
@@ -228,7 +229,14 @@ export default function PositionsTable({
                 )}
                 {closed && (
                   <td className={`${TD_R} text-muted font-mono`}>
-                    {r.closedAt ? fmtDateTime(r.closedAt) : '—'}
+                    {/* who closed it sits under WHEN it closed — the chip only
+                        appears for a close made outside the bot */}
+                    <div className="inline-flex flex-col items-end gap-1">
+                      <span className="whitespace-nowrap">
+                        {r.closedAt ? fmtDateTime(r.closedAt) : '—'}
+                      </span>
+                      <CloseSourceChip source={r.closeSource} />
+                    </div>
                   </td>
                 )}
                 <td className={TD_R}>

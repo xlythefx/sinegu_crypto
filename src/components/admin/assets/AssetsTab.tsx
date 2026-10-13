@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Plus } from 'lucide-react'
 import AssetCard from '../AssetCard'
 import AssetFormModal from '../AssetFormModal'
+import AssetHistoryModal from './AssetHistoryModal'
 import ExchangeSection from './ExchangeSection'
 import ConfirmModal from '../../ui/ConfirmModal'
 import { EXCHANGE_META } from '../../exchanges/meta'
@@ -22,6 +23,8 @@ import {
 import { getApiErrorMessage } from '../../../services/api'
 import { displaySymbol } from '../../../lib/chart'
 import { isKilled, reviveConfirmCopy } from '../../../lib/killSwitch'
+import { intendedSizing } from '../../../lib/assetSizing'
+import { sameLadder } from '../../../lib/streakSizing'
 import type { AdminAsset, AssetInput } from '../../../types/admin'
 import type { ExchangeKind } from '../../../types/exchanges'
 
@@ -29,6 +32,18 @@ const INPUT =
   'h-[38px] rounded-field border border-border bg-surface2 px-3 text-[13px] text-text outline-none focus:border-accent [&>option]:bg-surface [&>option]:text-text'
 const ADD_BTN =
   'inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-pill border border-border bg-surface2 px-3.5 text-[12.5px] font-semibold text-text transition-[border-color] duration-150 hover:border-accent'
+/** The form changes the sizing it was opened with (the waiting values when a change waits). */
+function sizingChanges(asset: AdminAsset, input: AssetInput | undefined): boolean {
+  if (!input) return false
+  const now = intendedSizing(asset)
+  return (
+    (input.base_size !== undefined && input.base_size !== now.base_size) ||
+    (input.max_increments !== undefined && input.max_increments !== now.max_increments) ||
+    (input.streak_sizing_enabled !== undefined && input.streak_sizing_enabled !== now.streak_sizing_enabled) ||
+    (input.streak_sizes !== undefined && !sameLadder(input.streak_sizes, now.streak_sizes))
+  )
+}
+
 const EMPTY_BOX =
   'rounded-card border border-dashed border-border bg-surface px-4 py-6 text-center text-[13px] text-muted'
 
@@ -69,6 +84,7 @@ export default function AssetsTab({ assets, exchange, traded, onChanged }: Asset
   // toggle + delete confirmations
   const [toggling, setToggling] = useState<AdminAsset | null>(null)
   const [deleting, setDeleting] = useState<AdminAsset | null>(null)
+  const [historyFor, setHistoryFor] = useState<AdminAsset | null>(null)
   const [actionBusy, setActionBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -337,6 +353,8 @@ export default function AssetsTab({ assets, exchange, traded, onChanged }: Asset
                           onToggle={setToggling}
                           onEdit={openEdit}
                           onDelete={setDeleting}
+                          onHistory={setHistoryFor}
+                          onAssetChanged={onChanged}
                         />
                       ))}
                     </div>
@@ -367,6 +385,10 @@ export default function AssetsTab({ assets, exchange, traded, onChanged }: Asset
         message={
           editing
             ? `This will update the asset in the database.${
+                sizingChanges(editing, pending?.input)
+                  ? ' If the main account has this coin open, the new size waits for that position to close; otherwise it applies from the next signal.'
+                  : ''
+              }${
                 formRevives
                   ? ' It also turns the coin back on: new trades start again on the next signal, and the kill switch counts the master’s losses again from now.'
                   : ''
@@ -407,6 +429,8 @@ export default function AssetsTab({ assets, exchange, traded, onChanged }: Asset
         onConfirm={onConfirmToggle}
         onCancel={() => setToggling(null)}
       />
+
+      {historyFor && <AssetHistoryModal asset={historyFor} onClose={() => setHistoryFor(null)} />}
 
       <ConfirmModal
         open={deleting !== null}

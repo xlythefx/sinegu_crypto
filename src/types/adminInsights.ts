@@ -29,6 +29,21 @@ export interface KilledAssetRow {
   reason: string | null
 }
 
+/** A trade closed on the exchange WITHOUT the bot (API CloseSource) in the last 7 days. */
+export interface OutsideCloseRow {
+  id: number
+  exchange: ExchangeKind
+  uni_id: string
+  account_name: string | null
+  demo: boolean
+  symbol: string
+  side: string
+  /** After fees; null when the close carries no P&L yet. */
+  realized_pnl: number | null
+  /** UTC ISO. */
+  closed_at: string | null
+}
+
 /**
  * Keys marked optional are ABSENT for a read-only collaborator (the API's
  * AdminInsightsController::LIMITED_HIDDEN_OVERVIEW_KEYS): billing and key
@@ -61,6 +76,12 @@ export interface OverviewInsights {
       reasons: Record<string, number>
     }
     paused_for_payment?: number
+    /**
+     * Trades closed outside the bot in the last 7 days — informational (the
+     * next signal treats that account as empty). Optional only because an API
+     * from before 2026-10-14 does not send it.
+     */
+    outside_closes?: { count: number; latest: OutsideCloseRow[] }
   }
   headline: {
     /** null = no real master account on record. */

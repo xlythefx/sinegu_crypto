@@ -14,6 +14,7 @@ import {
 import { useAssetStreaks } from '../../../hooks/useAssetStreaks'
 import { displaySymbol } from '../../../lib/chart'
 import { isKilled } from '../../../lib/killSwitch'
+import { intendedSizing } from '../../../lib/assetSizing'
 import { draftTouched, type StreakSizingDraft } from '../../../lib/streakSizing'
 import type { AdminAsset } from '../../../types/admin'
 import type { ExchangeKind } from '../../../types/exchanges'
@@ -143,7 +144,11 @@ export default function StreakSizingTab({
     return (
       draft &&
       draftTouched(
-        { enabled: a.streak_sizing_enabled, steps: a.streak_sizes, killSwitch: a.kill_switch_losses },
+        {
+          enabled: intendedSizing(a).streak_sizing_enabled,
+          steps: intendedSizing(a).streak_sizes,
+          killSwitch: a.kill_switch_losses,
+        },
         draft,
       )
     )

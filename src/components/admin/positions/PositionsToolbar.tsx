@@ -1,12 +1,19 @@
 import { useMemo, useRef, useState } from 'react'
-import { Building2, Layers, List, Rows3, Search, Tags, User, X } from 'lucide-react'
+import { Building2, Hand, Layers, List, Rows3, Search, Tags, User, X } from 'lucide-react'
 import { displaySymbol } from '../../../lib/chart'
 import {
   hasActiveFilters,
   type AccountOption,
+  type ClosedByFilter,
   type PositionFilters,
   type PositionView,
 } from '../../../lib/adminPositionRows'
+
+const CLOSED_BY_OPTIONS: { value: ClosedByFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'outside', label: 'Outside the bot' },
+  { value: 'bot', label: 'By the bot' },
+]
 
 interface Props {
   filters: PositionFilters
@@ -15,6 +22,9 @@ interface Props {
   view: PositionView
   /** Omitted where rows are never merged (Past Positions) — hides the switch. */
   onView?: (v: PositionView) => void
+  /** Past Positions only: show the "Closed by" facet (open positions have
+   *  not been closed by anyone). */
+  showClosedBy?: boolean
   accounts: AccountOption[]
   tickers: string[]
   brokers: string[]
@@ -44,6 +54,7 @@ export default function PositionsToolbar({
   onClear,
   view,
   onView,
+  showClosedBy = false,
   accounts,
   tickers,
   brokers,
@@ -88,7 +99,7 @@ export default function PositionsToolbar({
     inputRef.current?.focus()
   }
 
-  const active = hasActiveFilters(filters)
+  const active = hasActiveFilters(filters, showClosedBy)
 
   return (
     <div className="flex flex-wrap items-center gap-2.5 py-[18px] px-5">
@@ -209,6 +220,29 @@ export default function PositionsToolbar({
           ))}
         </select>
       </label>
+
+      {/* who closed the trade — the bot, or someone on the exchange */}
+      {showClosedBy && (
+        <label
+          className={FIELD}
+          title="Outside the bot = closed on the exchange by the customer, their own take-profit/stop-loss, or a liquidation. Older trades and the last few minutes are not judged, so they only show under All."
+        >
+          <Hand size={14} />
+          <span className="text-[12px] font-semibold whitespace-nowrap">Closed by</span>
+          <select
+            className={SELECT}
+            value={filters.closedBy}
+            onChange={(e) => onChange({ closedBy: e.target.value as ClosedByFilter })}
+            aria-label="Filter by who closed the trade"
+          >
+            {CLOSED_BY_OPTIONS.map((o) => (
+              <option className={OPTION} key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       {/* combined ↔ per-row */}
       {onView && (

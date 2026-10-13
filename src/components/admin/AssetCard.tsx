@@ -1,6 +1,7 @@
-import { Pencil, ShieldAlert, Trash2, TrendingUpDown } from 'lucide-react'
+import { History, Pencil, ShieldAlert, Trash2, TrendingUpDown } from 'lucide-react'
 import AssetLogo from './assets/AssetLogo'
 import KilledAssetStrip from './assets/KilledAssetStrip'
+import PendingSizingStrip from './assets/PendingSizingStrip'
 import { EXCHANGE_META, exchangeFromBroker } from '../exchanges/meta'
 import { displaySymbol } from '../../lib/chart'
 import { fmtMediumDate, fmtQty } from '../../lib/format'
@@ -15,6 +16,10 @@ interface AssetCardProps {
   onToggle: (asset: AdminAsset) => void
   onEdit: (asset: AdminAsset) => void
   onDelete: (asset: AdminAsset) => void
+  /** Opens this coin's change history. */
+  onHistory: (asset: AdminAsset) => void
+  /** A waiting size change was applied or dropped from the card. */
+  onAssetChanged: (asset: AdminAsset) => void
 }
 
 const SIDE_TONE: Record<AdminAsset['side'], string> = {
@@ -75,6 +80,8 @@ export default function AssetCard({
   onToggle,
   onEdit,
   onDelete,
+  onHistory,
+  onAssetChanged,
 }: AssetCardProps) {
   // The exchange leads the subtitle and sits on the logo's corner: the same
   // coin is one card per venue, and they are otherwise identical.
@@ -122,6 +129,12 @@ export default function AssetCard({
           nobody trades this coin until someone turns it back on. */}
       {killed && (
         <KilledAssetStrip asset={asset} onTurnBackOn={() => onToggle(asset)} busy={busy} />
+      )}
+
+      {/* A size change waiting for the main account's position to close —
+          the tiles below are what the bot trades until then. */}
+      {asset.pending_sizing && (
+        <PendingSizingStrip asset={asset} onChanged={onAssetChanged} busy={busy} />
       )}
 
       <div className="grid grid-cols-2 gap-2.5">
@@ -206,6 +219,15 @@ export default function AssetCard({
         </button>
 
         <div className="flex flex-none gap-1.5">
+          <button
+            type="button"
+            className={`${ICON_BTN_BASE} hover:border-accent hover:text-text`}
+            onClick={() => onHistory(asset)}
+            aria-label={`Change history of ${asset.ticker} on ${venue}`}
+            title="Change history"
+          >
+            <History size={15} />
+          </button>
           <button
             type="button"
             className={`${ICON_BTN_BASE} hover:border-accent hover:text-text`}

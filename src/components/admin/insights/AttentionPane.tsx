@@ -16,6 +16,7 @@ import MetricTile from '../../analytics/MetricTile'
 import { EXCHANGE_META } from '../../exchanges/meta'
 import { BarRow, EmptyNote, GRID_2, InsightCard, TILES } from './parts'
 import PendingApprovalsCard from './PendingApprovalsCard'
+import OutsideClosesCard from './OutsideClosesCard'
 import type { ApiDataState } from '../../../hooks/useApiData'
 import { fmtMoney, fmtSignedMoney } from '../../../lib/format'
 import { reasonLabel } from '../../../lib/insightLabels'
@@ -309,6 +310,15 @@ export default function AttentionPane({
         </InsightCard>
         )}
       </div>
+
+      {/* Informational, not a fault — so it comes after everything actionable. */}
+      {a.outside_closes && a.outside_closes.count > 0 && (
+        <OutsideClosesCard
+          count={a.outside_closes.count}
+          latest={a.outside_closes.latest}
+          mayOpen={mayOpen}
+        />
+      )}
     </div>
   )
 }

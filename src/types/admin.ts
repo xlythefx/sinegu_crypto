@@ -153,6 +153,15 @@ export interface AdminOpenPosition {
   broker: string
 }
 
+/**
+ * Who closed a trade (API CloseSource, 2026-10-14): `bot` = the trading
+ * engine's exit (a TradingView exit, a retry or an admin's manual close),
+ * `outside` = closed on the exchange without the bot (the customer by hand,
+ * their own take-profit / stop-loss, a liquidation). null = not judged yet
+ * (history from before the signal log, sandbox rows, the last few minutes).
+ */
+export type CloseSource = 'bot' | 'outside' | null
+
 /** One closed trade from GET /admin/positions. */
 export interface AdminPastTrade {
   id: number
@@ -176,6 +185,8 @@ export interface AdminPastTrade {
   closed_at: string
   position_amt: number
   broker: string
+  /** Optional: an API from before 2026-10-14 does not send it. */
+  close_source?: CloseSource
 }
 
 /** GET /admin/positions — open positions + closed trades across all accounts. */
@@ -259,6 +270,67 @@ export interface AdminAsset {
   kill_switch_armed_at: string | null
   created_at: string | null
   updated_at: string | null
+  /**
+   * A size change (base size, max position size, streak steps) saved while
+   * the main account held this coin: it WAITS and goes live when that
+   * position closes (API PendingSizing). null = nothing waiting. The live
+   * columns above are what the bot trades right now.
+   */
+  pending_sizing: AssetPendingSizing | null
+  /**
+   * The main account's balance on this coin's exchange and the coin's last
+   * signal price: the inputs for "one entry = 2,100 RENDER = $4,600". Either
+   * may be null (no main account there, no signal yet).
+   */
+  main_account: { balance: number | null; price: number | null }
+}
+
+/** What a waiting size change waits for: the main account's position, or (no main account on the venue) any open one. */
+export type PendingHolder =
+  | { who: 'main'; side: 'LONG' | 'SHORT'; amount: number }
+  | { who: 'accounts'; accounts: number }
+
+export interface AssetPendingSizing {
+  base_size: number
+  max_increments: number
+  streak_sizing_enabled: boolean
+  streak_sizes: AssetStreakSize[]
+  /** UTC ISO. */
+  since: string | null
+  by_name: string | null
+  /** null = nothing holds the coin any more; it goes live within a minute. */
+  waits_for: PendingHolder | null
+}
+
+/** One line of Admin -> Trading Assets -> Change history (GET /admin/assets/history). */
+export type AssetChangeEvent =
+  | 'created'
+  | 'updated'
+  | 'waiting'
+  | 'applied'
+  | 'cancelled'
+  | 'deleted'
+  | 'kill_switch'
+
+export interface AssetChangeRow {
+  id: number
+  asset_id: number | null
+  ticker: string
+  broker: string | null
+  event: AssetChangeEvent
+  /** The admin, or "Automatic" / "Kill switch" for the system. */
+  actor_name: string | null
+  is_system: boolean
+  /** field -> {from, to}: base_size, max_increments, enabled, side, kill_switch_losses, streak_sizing_enabled, streak_sizes, ... */
+  changes: Record<string, { from: unknown; to: unknown }>
+  note: string | null
+  /** UTC ISO. */
+  created_at: string | null
+}
+
+export interface AssetHistoryPage {
+  changes: AssetChangeRow[]
+  has_more: boolean
 }
 
 /**
@@ -278,8 +350,9 @@ export interface AssetInput {
   type: string | null
   broker: string | null
   side: AssetSide
-  max_increments: number
-  base_size: number
+  /** Optional on an update: absent = unchanged (the card's on/off switch sends neither). */
+  max_increments?: number
+  base_size?: number
   enabled: boolean
   streak_sizing_enabled?: boolean
   streak_sizes?: AssetStreakSize[]

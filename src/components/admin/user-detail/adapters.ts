@@ -40,5 +40,6 @@ export function toClosedRow(t: AdminPastTrade, pctBase: number): ClosedTrade {
     feeSource: t.fee_source,
     positions: 1,
     closedAt: fmtDateTime(t.closed_at),
+    closeSource: t.close_source ?? null,
   }
 }

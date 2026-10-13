@@ -847,6 +847,55 @@ for where it lives: Billing, Signal Log, Trading assets…), `title`, `summary`,
   open (`collaboratorMayOpen`) are hidden for them.
 Seeded on 2026-10-09 with the changes from 2026-10-01 on.
 
+## Asset safety rails + "closed outside the bot" (2026-10-14)
+
+Built after the 13 Oct RENDER incident (a customer closed their short by hand
+on Binance; the next signal gave that one account a fresh first entry while
+everyone else was full, which read as "the bot reopened it").
+
+- **Sizing waits for the close** (`App\Services\Assets\PendingSizing`). Base
+  size, max position size and the streak ladder decide how many entries a
+  stack may hold: the engine measures an open stack in THIS entry size, so a
+  mid-stack change re-measures it (2 × 60 open, base → 120 reads "1 of 3" and
+  allows two more of 120). A sizing change saved while the MAIN account holds
+  the coin on that venue is stored in `assets.pending_sizing` and goes live
+  when that position closes; nothing open → live at once; a venue with no main
+  account waits until no account there holds it. On/off, side, kill switch,
+  name and image are NEVER delayed. Goes live from `EngineSyncController`
+  (positions upsert-delete, positions sync, past-positions sync) and
+  `assets:apply-pending` every minute; the engine only ever reads the live
+  columns. Rules that keep it from being undone by accident:
+  - **An absent sizing field is UNCHANGED** — `PUT /admin/assets/{id}` takes
+    base/max as optional, and `setAssetEnabled` sends neither. Re-posting the
+    live sizes would read as "put the old sizes back" and drop the waiting
+    change (`cancelled`).
+  - **Forms edit the INTENDED sizing** (`lib/assetSizing.ts` `intendedSizing`
+    = pending ?? live): the asset form and the streak card open on the waiting
+    values, so saving an unrelated field keeps it waiting.
+  - Explicit ways out: `POST …/pending-sizing/apply` ("Apply now", confirmed)
+    and `DELETE …/pending-sizing` ("Cancel change"), on the card's strip.
+  - **`max_increments` (max position SIZE) < `base_size` is refused** (422 on
+    the form; the streak tab, which posts no base/max, is not blocked by a
+    pre-existing bad pair).
+- **Change history** (`asset_changes`, `App\Services\Assets\AssetHistory`,
+  `GET /admin/assets/history`): every asset write records from → to, who, when
+  — created / updated / waiting / applied / cancelled / deleted / kill_switch
+  (the kill switch and an automatic apply are the system, `actor_uni_id`
+  NULL). Best-effort writes. Admin → Trading Assets → **Change history** tab
+  and a History button on each card. Starts 2026-10-14; nothing earlier exists.
+- **Closed by** (`{x}_pastpositions.close_source`: `bot` | `outside` | NULL,
+  `App\Services\Positions\CloseSource`, `positions:classify-closes` every 5
+  min, `--days`, `--dry-run`). `bot` = `increments_closed` set (the engine's
+  close path) OR an `EXIT_*` trade_logs row within ±15 min naming the owner
+  as filled; anything else = `outside` (by hand, own TP/SL, liquidation).
+  Judged once, 3+ min after the close, only from the first trade log on;
+  sandbox / `SBXINV-` never. An admin's manual close goes through the engine
+  and is `bot` — telling it apart would need the engine to mark manual
+  closes. Shown admin-only: Trading Positions (chip + "Closed by" filter),
+  user detail Positions (chip + filter), Overview → Needs attention
+  (`attention.outside_closes`, last 7 days, informational). Left out of
+  streak runs; the kill switch is unchanged.
+
 ## Binance offer — 15% for accounts opened through our link (2026-10-13)
 
 A customer whose Binance account was CREATED through our referral link
@@ -1454,7 +1503,9 @@ for the overlay's `position: fixed` and trap it inside.
        versa — with no win steps, any win means base (the loss-only
        behaviour). One past-position row = one trade (a stacked close is one).
        Win = `realized_pnl > 0`; 0 is a loss; a NULL P&L row is skipped;
-       sandbox rows never count. `StreakSizing::runs` is the ONE definition,
+       sandbox rows never count, nor does a close made OUTSIDE the bot
+       (`close_source = outside`, 2026-10-14 — see "Asset safety rails").
+       `StreakSizing::runs` is the ONE definition,
        served to the engine as `GET /engine/{x}/streaks?symbol=&depth=` (one
        window-function query on the `(api_key, symbol, closed_at)` index, once
        per signal, only for an asset with a ladder; depth = deepest step of

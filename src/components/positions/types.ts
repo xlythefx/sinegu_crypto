@@ -1,4 +1,5 @@
 import type { FeeSource } from '../../types/dashboard'
+import type { CloseSource } from '../../types/admin'
 
 export type Exchange = 'Binance' | 'Bybit' | 'MEXC'
 export type ExchangeFilter = 'all' | Exchange
@@ -31,4 +32,9 @@ export interface ClosedTrade {
   feeSource: FeeSource
   positions: number
   closedAt: string
+  /**
+   * Admin only: who closed it. The trader pages never set it, so the
+   * "Closed outside the bot" chip never shows to a customer.
+   */
+  closeSource?: CloseSource
 }

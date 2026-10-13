@@ -3,12 +3,14 @@ import { Activity } from 'lucide-react'
 import AssetLogo from './AssetLogo'
 import KilledAssetStrip from './KilledAssetStrip'
 import KillSwitchField from './KillSwitchField'
+import PendingSizingStrip from './PendingSizingStrip'
 import StreakSizingFields from './StreakSizingFields'
 import ConfirmModal from '../../ui/ConfirmModal'
 import { EXCHANGE_META, exchangeFromBroker } from '../../exchanges/meta'
 import { saveAssetStreakSizing, setAssetEnabled } from '../../../services/admin'
 import { getApiErrorMessage } from '../../../services/api'
 import { displaySymbol } from '../../../lib/chart'
+import { intendedSizing } from '../../../lib/assetSizing'
 import {
   isKilled,
   killDraftError,
@@ -115,31 +117,35 @@ export default function StreakSizingCard({
   const [reviveBusy, setReviveBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // The ladder this card edits is what the admin last SET — a change waiting
+  // for the main account's position to close, if there is one — so saving
+  // the kill switch alone never drops a waiting ladder.
+  const sizing = useMemo(() => intendedSizing(asset), [asset])
   const savedState = useMemo(
     () => ({
-      enabled: asset.streak_sizing_enabled,
-      steps: asset.streak_sizes,
+      enabled: sizing.streak_sizing_enabled,
+      steps: sizing.streak_sizes,
       killSwitch: asset.kill_switch_losses,
     }),
-    [asset.streak_sizing_enabled, asset.streak_sizes, asset.kill_switch_losses],
+    [sizing, asset.kill_switch_losses],
   )
   // Built once per saved ladder, so the row ids (React keys) stay put until
   // the first edit copies them into the draft.
-  const savedRows = useMemo(() => rowsFromSteps(asset.streak_sizes), [asset.streak_sizes])
+  const savedRows = useMemo(() => rowsFromSteps(sizing.streak_sizes), [sizing])
   const savedKill = useMemo(
     () => killDraftFrom(asset.kill_switch_losses),
     [asset.kill_switch_losses],
   )
 
-  const enabled = draft?.enabled ?? asset.streak_sizing_enabled
+  const enabled = draft?.enabled ?? sizing.streak_sizing_enabled
   const rows = draft?.rows ?? savedRows
   const kill = draft?.kill ?? savedKill
   const touched = draft ? draftTouched(savedState, draft) : false
   const hasErrors = ladderHasErrors(rows)
   const killError = killDraftError(kill)
   const nextSteps = stepsFromRows(rows)
-  const stepsChanged = !sameLadder(nextSteps, asset.streak_sizes)
-  const ladderChanged = enabled !== asset.streak_sizing_enabled || stepsChanged
+  const stepsChanged = !sameLadder(nextSteps, sizing.streak_sizes)
+  const ladderChanged = enabled !== sizing.streak_sizing_enabled || stepsChanged
   const nextKill = killDraftValue(kill)
   const killChanged = nextKill !== undefined && nextKill !== asset.kill_switch_losses
   const canSave = touched && !hasErrors && !killError && (ladderChanged || killChanged)
@@ -204,14 +210,14 @@ export default function StreakSizingCard({
   })
   // A win step above base fills the max position size sooner — the cap still
   // holds the total, so the admin should know before saving one.
-  const winAboveBase = nextSteps.some((s) => s.kind === 'win' && s.size > asset.base_size)
+  const winAboveBase = nextSteps.some((s) => s.kind === 'win' && s.size > sizing.base_size)
   const ladderOutcome = !enabled
     ? 'While it is off every entry uses the normal size; your steps are kept.'
     : nextSteps.length === 0
       ? 'There are no steps yet, so every entry still uses the normal size.'
-      : `New ladder: ${ladderSummaryText(asset.base_size, nextSteps)}. Applies from the next entry; exits are never affected.${
+      : `New ladder: ${ladderSummaryText(sizing.base_size, nextSteps)}. Applies from the next entry — or, if the main account has this coin open, once that position closes. Exits are never affected.${
           winAboveBase
-            ? ` Win sizes above normal still stop at the max position size (${fmtSize(asset.max_increments)}), so a stack reaches it in fewer entries.`
+            ? ` Win sizes above normal still stop at the max position size (${fmtSize(sizing.max_increments)}), so a stack reaches it in fewer entries.`
             : ''
         }`
   const outcomes = [
@@ -224,7 +230,9 @@ export default function StreakSizingCard({
     : `Save the kill switch for ${symbol} on ${venue}?`
   const revivalCopy = reviveConfirmCopy(symbol)
 
-  const meta = [`Base size ${fmtSize(asset.base_size)}`]
+  const meta = [
+    `Base size ${fmtSize(sizing.base_size)}${sizing.base_size !== asset.base_size ? ' (waiting)' : ''}`,
+  ]
   if (!asset.enabled) meta.push(killed ? 'switched off' : 'asset is off')
   const footerNote = hasErrors
     ? 'Fix the steps marked in red'
@@ -247,6 +255,11 @@ export default function StreakSizingCard({
           onTurnBackOn={() => setReviving(true)}
           busy={reviveBusy || saving}
         />
+      )}
+
+      {/* A size change waiting for a close — the editor below shows it. */}
+      {asset.pending_sizing && (
+        <PendingSizingStrip asset={asset} onChanged={onAssetChanged} busy={reviveBusy || saving} />
       )}
 
       <header className="flex items-center gap-3">
@@ -299,7 +312,7 @@ export default function StreakSizingCard({
       )}
 
       <StreakSizingFields
-        base={asset.base_size}
+        base={sizing.base_size}
         rows={rows}
         onChange={(next) => update({ rows: next })}
         baseNote="Base size, edited on the Assets tab"

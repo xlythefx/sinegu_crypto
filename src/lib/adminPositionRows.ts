@@ -10,7 +10,7 @@
  *  Both views come out of here as the SAME `PositionRow` shape, so the table
  *  renders one body and the view only decides how many ids each line owns. */
 
-import type { AdminOpenPosition, AdminPastTrade } from '../types/admin'
+import type { AdminOpenPosition, AdminPastTrade, CloseSource } from '../types/admin'
 import type { FeeSource } from '../types/dashboard'
 import { displaySymbol } from './chart'
 
@@ -19,6 +19,11 @@ export type PositionView = 'grouped' | 'rows'
 /** A merged line's fee source: the one value its rows share, or `mixed`. */
 export type RowFeeSource = FeeSource | 'mixed'
 
+/** Who closed a past trade: `outside` = on the exchange without the bot,
+ *  `bot` = the engine's exit. A trade that was never judged (null — old
+ *  history, sandbox rows, the last few minutes) matches `all` only. */
+export type ClosedByFilter = 'all' | 'outside' | 'bot'
+
 /** Every filter the toolbar owns. `all` means "no filter on this facet". */
 export interface PositionFilters {
   search: string
@@ -26,6 +31,8 @@ export interface PositionFilters {
   account: string
   ticker: string
   broker: string
+  /** Past trades only — open positions have not been closed by anyone. */
+  closedBy: ClosedByFilter
 }
 
 export const EMPTY_FILTERS: PositionFilters = {
@@ -33,15 +40,24 @@ export const EMPTY_FILTERS: PositionFilters = {
   account: 'all',
   ticker: 'all',
   broker: 'all',
+  closedBy: 'all',
 }
 
-export function hasActiveFilters(f: PositionFilters): boolean {
+/** `withClosedBy` = false where the "Closed by" facet does not apply (open
+ *  positions), so a value left over from the past tab is not counted. */
+export function hasActiveFilters(f: PositionFilters, withClosedBy = true): boolean {
   return (
     f.search.trim() !== '' ||
     f.account !== 'all' ||
     f.ticker !== 'all' ||
-    f.broker !== 'all'
+    f.broker !== 'all' ||
+    (withClosedBy && f.closedBy !== 'all')
   )
+}
+
+/** One past trade against the "Closed by" facet. */
+export function matchesClosedBy(t: AdminPastTrade, closedBy: ClosedByFilter): boolean {
+  return closedBy === 'all' || (t.close_source ?? null) === closedBy
 }
 
 /** One account as offered by the "per user" filter. */
@@ -80,6 +96,10 @@ export interface PositionRow {
   /** Closed trades only. */
   closedAt: string | null
   broker: string
+  /** Closed trades only: who closed it (null = not judged, or a merged line
+   *  whose rows disagree). Optional so callers building a row by hand
+   *  (the P&L calendar's editor) need not invent one. */
+  closeSource?: CloseSource
 }
 
 type AnyRow = AdminOpenPosition | AdminPastTrade
@@ -104,11 +124,13 @@ function haystack(r: AnyRow): string {
 }
 
 /** Facets are AND-ed, and every whitespace-separated search term must match —
- *  so "master ltc" narrows to that account's LTC rows. */
+ *  so "master ltc" narrows to that account's LTC rows. "Closed by" applies to
+ *  past trades only; an open position ignores it. */
 export function matchesFilters(r: AnyRow, f: PositionFilters): boolean {
   if (f.account !== 'all' && String(r.account_id ?? '') !== f.account) return false
   if (f.ticker !== 'all' && r.symbol !== f.ticker) return false
   if (f.broker !== 'all' && r.broker !== f.broker) return false
+  if ('closed_at' in r && !matchesClosedBy(r, f.closedBy)) return false
   const q = f.search.trim().toLowerCase()
   if (!q) return true
   const hay = haystack(r)
@@ -245,6 +267,7 @@ export function buildTradeRows(
         strategy: t.strategy,
         closedAt: t.closed_at,
         broker: t.broker,
+        closeSource: t.close_source ?? null,
       }))
       .sort((a, b) => ((a.closedAt ?? '') < (b.closedAt ?? '') ? 1 : -1))
   }
@@ -274,6 +297,8 @@ export function buildTradeRows(
       g.feeSource = mergeFeeSource(g.feeSource, t.fee_source)
       g.priceSum += t.price
       g.qty = (g.qty ?? 0) + t.position_amt
+      // A merged line names a closer only when every row agrees.
+      if ((g.closeSource ?? null) !== (t.close_source ?? null)) g.closeSource = null
       if (t.strategy) g.strategies.add(t.strategy)
       if (g.closedAt === null || t.closed_at > g.closedAt) g.closedAt = t.closed_at
     } else {
@@ -299,6 +324,7 @@ export function buildTradeRows(
         strategy: null,
         closedAt: t.closed_at,
         broker: t.broker,
+        closeSource: t.close_source ?? null,
         strategies: new Set(t.strategy ? [t.strategy] : []),
       })
     }

@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Layers, TrendingUpDown } from 'lucide-react'
+import { History, Layers, TrendingUpDown } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
+import AssetHistoryTab from '../../components/admin/assets/AssetHistoryTab'
 import AssetsTab from '../../components/admin/assets/AssetsTab'
 import ExchangeSwitcher from '../../components/admin/assets/ExchangeSwitcher'
 import StreakSizingTab from '../../components/admin/assets/StreakSizingTab'
@@ -16,11 +17,12 @@ import { useApiData } from '../../hooks/useApiData'
 import { useTradedExchanges } from '../../hooks/useTradedExchanges'
 import { getAdminAssets } from '../../services/admin'
 
-type TabKey = 'assets' | 'streak-sizing'
+type TabKey = 'assets' | 'streak-sizing' | 'history'
 
 const TABS: TabItem<TabKey>[] = [
   { key: 'assets', label: 'Assets', Icon: Layers },
   { key: 'streak-sizing', label: 'Streak Sizing Settings', Icon: TrendingUpDown },
+  { key: 'history', label: 'Change history', Icon: History },
 ]
 
 /**
@@ -40,7 +42,9 @@ export default function AdminAssets() {
   const [params, setParams] = useSearchParams()
   const tab: TabKey = STREAK_TAB_PARAMS.has(params.get('tab') ?? '')
     ? 'streak-sizing'
-    : 'assets'
+    : params.get('tab') === 'history'
+      ? 'history'
+      : 'assets'
   const exchange = parseExchangeFilter(params.get('exchange'))
 
   const setParam = (key: 'tab' | 'exchange', value: string | null) =>
@@ -88,6 +92,8 @@ export default function AdminAssets() {
               traded={traded}
               onSaved={reload}
             />
+          ) : tab === 'history' ? (
+            <AssetHistoryTab exchange={exchange} />
           ) : (
             <AssetsTab assets={list} exchange={exchange} traded={traded} onChanged={reload} />
           )}

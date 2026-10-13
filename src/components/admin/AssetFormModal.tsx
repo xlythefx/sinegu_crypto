@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { ChevronDown, ImagePlus, X } from 'lucide-react'
+import { ChevronDown, Hourglass, ImagePlus, X } from 'lucide-react'
 import KillSwitchField from './assets/KillSwitchField'
 import StreakSizingFields from './assets/StreakSizingFields'
 import { fmtDateTime } from '../../lib/format'
+import { holderText, intendedSizing, mainEntryText } from '../../lib/assetSizing'
 import {
   isKilled,
   killDraftError,
@@ -97,23 +98,27 @@ export default function AssetFormModal({
   useEffect(() => {
     if (!open) return
     if (asset) {
+      // The sizing fields open on what the admin last SET: a change that is
+      // waiting for a close, if there is one. Opening on the live values
+      // would make an unrelated save put them back — and drop the change.
+      const sizing = intendedSizing(asset)
       setForm({
         ticker: asset.ticker,
         type: asset.type,
         broker: asset.broker,
         side: asset.side,
-        max_increments: asset.max_increments,
-        base_size: asset.base_size,
+        max_increments: sizing.max_increments,
+        base_size: sizing.base_size,
         enabled: asset.enabled,
       })
-      setMaxIncrements(String(asset.max_increments))
-      setBaseSize(String(asset.base_size))
+      setMaxIncrements(String(sizing.max_increments))
+      setBaseSize(String(sizing.base_size))
       setExistingImage(asset.asset_image)
-      setStreakEnabled(asset.streak_sizing_enabled)
-      setStreakRows(rowsFromSteps(asset.streak_sizes))
+      setStreakEnabled(sizing.streak_sizing_enabled)
+      setStreakRows(rowsFromSteps(sizing.streak_sizes))
       setKill(killDraftFrom(asset.kill_switch_losses))
       // Collapsed unless it is already doing something to this asset.
-      setStreakOpen(asset.streak_sizing_enabled || asset.kill_switch_losses !== null)
+      setStreakOpen(sizing.streak_sizing_enabled || asset.kill_switch_losses !== null)
     } else {
       setForm(defaultBroker ? { ...EMPTY, broker: defaultBroker } : EMPTY)
       setMaxIncrements('1')
@@ -189,12 +194,22 @@ export default function AssetFormModal({
     return Math.max(1, Math.round(max / base))
   })()
 
+  // One entry may never be bigger than the whole position (the API refuses it too).
+  const maxTooSmall = (() => {
+    const max = Number(maxIncrements)
+    const base = Number(baseSize)
+    return Number.isFinite(max) && Number.isFinite(base) && max > 0 && base > 0 && max < base
+  })()
+  const entryText = asset ? mainEntryText(asset, Number(baseSize)) : null
+  const waiting = asset?.pending_sizing ?? null
+
   const streakSteps = stepsFromRows(streakRows)
   const killValue = killDraftValue(kill)
   const killed = asset !== null && isKilled(asset)
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
+    if (maxTooSmall) return
     if (ladderHasErrors(streakRows)) {
       setStreakOpen(true)
       setStreakError('Fix the streak steps marked in red before saving.')
@@ -253,6 +268,17 @@ export default function AssetFormModal({
             ? 'Update the configuration for this asset.'
             : 'Add a new trading asset to the system.'}
         </p>
+
+        {asset && waiting && (
+          <div className="flex items-start gap-2.5 rounded-row border border-accent-line bg-accent-soft px-3.5 py-3">
+            <Hourglass size={14} className="mt-[3px] flex-none text-accent" aria-hidden="true" />
+            <p className="text-[12.5px] leading-[1.55] text-text">
+              A size change is waiting for {holderText(asset.ticker, waiting.waits_for)} to close.
+              The size fields below show the <b>waiting</b> values — saving keeps it waiting (or
+              replaces it). To drop it, use <b>Cancel change</b> on the card.
+            </p>
+          </div>
+        )}
 
         <div className="flex items-center gap-3.5">
           <div
@@ -398,11 +424,17 @@ export default function AssetFormModal({
               difference is invisible until a position stacks further than it
               should. Mirrors the same derivation in AssetCard and assets_api.
             */}
-            <span className="mt-1 font-mono text-[11px] text-muted">
-              {stackDepth === null
-                ? 'set a base size to see the stack depth'
-                : `= ${stackDepth} entr${stackDepth === 1 ? 'y' : 'ies'} max per position`}
-            </span>
+            {maxTooSmall ? (
+              <span className="mt-1 text-[11.5px] font-semibold leading-[1.45] text-red" role="alert">
+                Smaller than the base size — one entry would already be over the limit.
+              </span>
+            ) : (
+              <span className="mt-1 font-mono text-[11px] text-muted">
+                {stackDepth === null
+                  ? 'set a base size to see the stack depth'
+                  : `= ${stackDepth} entr${stackDepth === 1 ? 'y' : 'ies'} max per position`}
+              </span>
+            )}
           </label>
           <label className={FIELD}>
             <span className={FIELD_LABEL}>Base size *</span>
@@ -420,6 +452,15 @@ export default function AssetFormModal({
             </span>
           </label>
         </div>
+
+        {/* What the size means in coins and dollars on the account the
+            strategy is measured on — "120" alone hides that it is 2,100
+            RENDER on a 17,500 USDT account. */}
+        {entryText && (
+          <p className="-mt-1 rounded-row border border-border bg-surface2 px-3 py-2 font-mono text-[11.5px] leading-[1.5] text-muted">
+            {entryText}
+          </p>
+        )}
 
         <label className="flex items-center gap-3 border border-border rounded-[12px] py-3 px-3.5 cursor-pointer">
           <input
@@ -545,7 +586,7 @@ export default function AssetFormModal({
           <button
             type="submit"
             className={`${BTN_BASE} border-0 bg-accent text-on-accent`}
-            disabled={saving}
+            disabled={saving || maxTooSmall}
           >
             {saving ? 'Saving…' : asset ? 'Save Changes' : 'Create Asset'}
           </button>

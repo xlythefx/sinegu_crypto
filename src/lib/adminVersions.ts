@@ -13,6 +13,74 @@ import type { AdminChange } from '../types/adminVersions'
  *    later change to the same feature gets its own entry.
  */
 export const ADMIN_CHANGES: AdminChange[] = [
+  // ── 2026-10-14 ───────────────────────────────────────────────────────────
+  {
+    id: 'asset-size-waits-for-close',
+    date: '2026-10-14',
+    kind: 'improved',
+    area: 'Trading assets',
+    title: 'A new coin size waits for the open position to close',
+    summary:
+      'If you change a coin’s size while the main account has that coin open, the new size now waits and goes live by itself when that position closes. Changing size in the middle of a stack used to make the bot miscount how full the stack was.',
+    howItWorks: [
+      'Example: LTC trades at base 60 with a max of 180 (3 entries). The main account holds 2 entries. You change the base to 120 and the max to 360. Before, the bot would have measured the open 120 as “1 entry of 120” and allowed two more — a position of 360, twice what you meant. Now the 60 / 180 sizes stay until the LTC position closes, and the next position starts at 120 / 360.',
+      'While it waits, the coin card shows a yellow “New size waiting” strip: what changes, what it is waiting for (for example “the main account’s LTC short”), and who saved it. The size shown in the card’s tiles is what the bot trades right now.',
+      'Two buttons on the strip: “Apply now” puts the new size live straight away (for emergencies — it asks first), and “Cancel change” drops it and keeps the current size.',
+      'If nothing is open when you save, the new size applies straight away, as before. On an exchange where there is no main account (MEXC today), it waits until no account there holds the coin.',
+      'Switching a coin on or off, Long/Short only, and the kill switch are never delayed — turning a coin off is a safety action.',
+      'New check: the max position size can no longer be smaller than the base size (one entry would already be over the limit). The edit form also shows what one entry means for the main account, for example “one entry ≈ 2,136 RENDER ≈ $4,600”.',
+    ],
+    technical: [
+      'assets.pending_sizing (JSON: base_size, max_increments, streak_sizing_enabled, streak_sizes) + pending_since / pending_by / pending_by_name. App\\Services\\Assets\\PendingSizing: save() → applied | waiting | cancelled | unchanged; holder() reads {x}_positions for the master’s real-money keys (any account when the venue has no master).',
+      'Goes live from EngineSyncController (positions/upsert delete, positions/sync, past-positions/sync) and `assets:apply-pending` every minute. The engine only ever reads the live columns.',
+      'PUT /admin/assets/{id}: base_size / max_increments optional on update (absent = unchanged — the on/off switch no longer re-posts sizes). POST /admin/assets/{id}/pending-sizing/apply, DELETE /admin/assets/{id}/pending-sizing. Streak ladder edits (streak tab and form) go through the same rule; the kill switch does not.',
+      'GET /admin/assets carries pending_sizing (+ waits_for) and main_account {balance, price} for the one-entry preview (lib/assetSizing.ts, scalePreview).',
+    ],
+    links: [{ label: 'Open Trading Assets', href: '/admin/assets' }],
+  },
+  {
+    id: 'asset-change-history',
+    date: '2026-10-14',
+    kind: 'new',
+    area: 'Trading assets',
+    title: 'Change history for every coin’s settings',
+    summary:
+      'Every change to a coin’s settings is now recorded: what changed, from what to what, who did it and when — including the automatic ones, like a waiting size going live or the kill switch switching a coin off.',
+    howItWorks: [
+      'Example line: “Changed · RENDER/USDT · Binance — Base size 60 → 120 · Max position size 180 → 360 — by Ops Admin, 12 Oct 06:02”.',
+      'Each coin card has a new History button (the clock icon) that opens that coin’s list. Trading Assets also has a new “Change history” tab with every coin, filtered by the exchange switcher at the top.',
+      'Recorded: base size, max position size, streak sizing on/off and its steps, the kill switch, on/off, Long/Short, name, exchange and logo — plus coins being added and deleted.',
+      'The history starts on 14 Oct 2026. Earlier changes were not recorded anywhere.',
+    ],
+    technical: [
+      'asset_changes (asset_id, ticker, broker, event created|updated|waiting|applied|cancelled|deleted|kill_switch, actor_uni_id/actor_name, changes JSON {field: {from, to}}, note). App\\Services\\Assets\\AssetHistory (best-effort writes). GET /admin/assets/history?asset_id=&broker=&before_id=&limit=.',
+    ],
+    links: [{ label: 'Open the change history', href: '/admin/assets?tab=history' }],
+  },
+  {
+    id: 'closed-outside-the-bot',
+    date: '2026-10-14',
+    kind: 'new',
+    area: 'Positions',
+    title: 'Trades closed outside the bot are marked',
+    summary:
+      'A trade the customer closed themselves on the exchange — by hand, with their own take-profit or stop-loss, or by a liquidation — is now marked “Closed outside the bot” on the admin screens. It also no longer counts toward that account’s streak sizing.',
+    howItWorks: [
+      'Example: on 12 Oct a customer closed their RENDER short by hand on Binance. At the next signal the bot saw that account as empty and opened a fresh first entry while every other account was full — which looked like “the bot reopened it”. That close is now marked, so the reason is visible.',
+      'Where you see it: Trading Positions → Past Positions (a chip on the row, and a “Closed by” filter), a user’s Positions tab, and Overview → Needs attention (“Closed outside the bot · last 7 days”). It is information, not an error.',
+      'How it is decided: every close the bot makes is in the Signal Log. A close with no bot exit for that account and coin at that time is marked outside the bot, a few minutes after it happens.',
+      'Streak sizing: an outside close is not a strategy trade, so it no longer moves that account’s winning or losing run.',
+      'Closes made by an admin from the Open positions page go through the bot, so they count as closed by the bot.',
+    ],
+    technical: [
+      '{x}_pastpositions.close_source (bot | outside | NULL). App\\Services\\Positions\\CloseSource: bot when increments_closed is set or an EXIT_* trade_logs row within ±15 min lists the owner as filled; judged 3+ min after the close, only from the first trade log on; sandbox / SBXINV- rows never. `positions:classify-closes` every 5 min (--days, --dry-run).',
+      'StreakSizing::runs skips close_source = outside. Admin /positions, /admin/users/{id}/positions and insights overview attention.outside_closes carry it.',
+    ],
+    links: [
+      { label: 'Open Trading Positions', href: '/admin/positions' },
+      { label: 'Open Needs attention', href: '/admin?view=attention' },
+    ],
+  },
   // ── 2026-10-13 ───────────────────────────────────────────────────────────
   {
     id: 'binance-offer-page-and-guide-part-1',
