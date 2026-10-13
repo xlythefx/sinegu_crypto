@@ -19,7 +19,8 @@ export function toActiveRow(p: AdminOpenPosition): ActivePosition {
   const notional = Math.abs(p.position_amt * p.price)
   return {
     ticker: displaySymbol(p.symbol),
-    avgPrice: fmtNum(p.price),
+    // The ENTRY (the exchange's average over what is open); `price` is the mark.
+    avgPrice: fmtNum(p.entry_price ?? p.price),
     exchange: brokerToExchange(p.broker),
     unrealizedPnl: p.unrealized_pnl,
     pnlPct: notional > 0 ? (p.unrealized_pnl / notional) * 100 : 0,

@@ -79,8 +79,8 @@ export interface PositionRow {
   accountBalance: number
   symbol: string
   price: number
-  /** Closed trades only: entry price (averaged over the rows that carry one on
-   *  a merged line); null when none recorded it. Open positions: null. */
+  /** Entry price, averaged over the rows that carry one on a merged line; null
+   *  when none recorded it. Open positions: the exchange's average entry. */
   entryPrice: number | null
   pnl: number
   /** Closed trades only: exchange fee already out of `pnl` (summed on a
@@ -178,7 +178,7 @@ export function buildPositionRows(
         accountBalance: p.account_balance,
         symbol: p.symbol,
         price: p.price,
-        entryPrice: null,
+        entryPrice: p.entry_price ?? null,
         pnl: p.unrealized_pnl,
         fee: null,
         feeSource: null,
@@ -191,15 +191,23 @@ export function buildPositionRows(
       .sort(byAccountThenSymbol)
   }
 
-  const map = new Map<string, PositionRow & { priceSum: number }>()
+  const map = new Map<
+    string,
+    PositionRow & { priceSum: number; entrySum: number; entryCount: number }
+  >()
   for (const p of rows) {
     const key = `${p.account_id}|${p.symbol}`
+    const entry = p.entry_price ?? null
     const g = map.get(key)
     if (g) {
       g.ids.push(p.id)
       g.count += 1
       g.pnl += p.unrealized_pnl
       g.priceSum += p.price
+      if (entry !== null) {
+        g.entrySum += entry
+        g.entryCount += 1
+      }
       g.qty = (g.qty ?? 0) + p.position_amt
     } else {
       map.set(key, {
@@ -214,6 +222,8 @@ export function buildPositionRows(
         price: 0,
         priceSum: p.price,
         entryPrice: null,
+        entrySum: entry ?? 0,
+        entryCount: entry === null ? 0 : 1,
         pnl: p.unrealized_pnl,
         fee: null,
         feeSource: null,
@@ -226,7 +236,11 @@ export function buildPositionRows(
     }
   }
   return Array.from(map.values())
-    .map(({ priceSum, ...g }) => ({ ...g, price: priceSum / g.count }))
+    .map(({ priceSum, entrySum, entryCount, ...g }) => ({
+      ...g,
+      price: priceSum / g.count,
+      entryPrice: entryCount > 0 ? entrySum / entryCount : null,
+    }))
     .sort(byAccountThenSymbol)
 }
 

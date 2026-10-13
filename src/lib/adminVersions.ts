@@ -15,6 +15,24 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-10-14 ───────────────────────────────────────────────────────────
   {
+    id: 'open-position-entry-price',
+    date: '2026-10-14',
+    kind: 'improved',
+    area: 'Trading positions',
+    title: 'Open positions show their entry price',
+    summary:
+      'The Active Positions list now shows each position’s entry price above its current price. Before, it showed only the current price, so you could not see that one account was holding a different position from everyone else.',
+    howItWorks: [
+      'The price column is now “Entry / Now”: the top line (“In”) is the average price the account entered at, the bottom line (“Now”) is the current market price.',
+      'The entry is the exchange’s own average over everything still open in that position. Example: on 13 Oct every customer’s RENDER short read “In 2.0505” (three entries), while one customer’s read “In 2.212” — he had closed his position by hand the day before, so the bot opened a fresh one for him at the next signal.',
+      'A user’s page in User Management shows the same entry price in its Avg Price column, which until now was showing the current price by mistake.',
+    ],
+    technical: [
+      'GET /admin/positions and GET /admin/users/{uniId}/positions: open rows carry entry_price ({x}_positions.entry_price, from the exchange’s positionRisk); price stays the mark. Merged lines average the entries that carry one.',
+    ],
+    links: [{ label: 'Open Trading Positions', href: '/admin/positions' }],
+  },
+  {
     id: 'asset-size-waits-for-close',
     date: '2026-10-14',
     kind: 'improved',

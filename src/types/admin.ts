@@ -148,7 +148,10 @@ export interface AdminOpenPosition {
   symbol: string
   position_side: string
   position_amt: number
+  /** The MARK price (now), falling back to the entry when no mark is stored. */
   price: number
+  /** The exchange's average entry over everything still open in the position. */
+  entry_price: number | null
   unrealized_pnl: number
   broker: string
 }

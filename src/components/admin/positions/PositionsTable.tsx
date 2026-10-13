@@ -102,8 +102,17 @@ function FeeCell({ fee, source }: { fee: number | null; source: RowFeeSource }) 
   )
 }
 
-/** Entry and exit of a closed trade in one cell, entry first. */
-function EntryExitCell({ entry, exit }: { entry: number | null; exit: number }) {
+/** Entry first, then where it went: the exit of a closed trade ("Out") or
+ *  the current mark of an open position ("Now"). */
+function EntryExitCell({
+  entry,
+  exit,
+  exitLabel = 'Out',
+}: {
+  entry: number | null
+  exit: number
+  exitLabel?: string
+}) {
   return (
     <div className="inline-flex flex-col items-end gap-px font-mono whitespace-nowrap">
       <span className="text-[12.5px]">
@@ -111,7 +120,7 @@ function EntryExitCell({ entry, exit }: { entry: number | null; exit: number }) 
         {entry === null ? <span className="text-faint">—</span> : fmtMoney(entry)}
       </span>
       <span className="text-[12.5px]">
-        <span className="text-faint text-[10px] uppercase tracking-[0.05em] mr-1.5">Out</span>
+        <span className="text-faint text-[10px] uppercase tracking-[0.05em] mr-1.5">{exitLabel}</span>
         {fmtMoney(exit)}
       </span>
     </div>
@@ -168,7 +177,7 @@ export default function PositionsTable({
             <th className={TH}>Ticker</th>
             <th className={TH}>Broker</th>
             {closed && <th className={TH}>Strategy</th>}
-            <th className={TH_R}>{closed ? 'Entry / Exit' : 'Price'}</th>
+            <th className={TH_R}>{closed ? 'Entry / Exit' : 'Entry / Now'}</th>
             <th className={TH_R}>{closed ? 'P&L' : 'Unrealized P&L'}</th>
             {closed && <th className={`${TH_R} max-[900px]:hidden`}>Fee</th>}
             {grouped && <th className={TH_C}>Count</th>}
@@ -208,11 +217,11 @@ export default function PositionsTable({
                   <td className={`${TD} text-muted`}>{r.strategy ?? '—'}</td>
                 )}
                 <td className={`${TD_R} font-mono`}>
-                  {closed ? (
-                    <EntryExitCell entry={r.entryPrice} exit={r.price} />
-                  ) : (
-                    fmtMoney(r.price)
-                  )}
+                  <EntryExitCell
+                    entry={r.entryPrice}
+                    exit={r.price}
+                    exitLabel={closed ? 'Out' : 'Now'}
+                  />
                 </td>
                 <td className={TD_R}>
                   <PnlCell pnl={r.pnl} balance={r.accountBalance} />
