@@ -598,6 +598,98 @@ def _position_entry_price(
     return entry if entry > 0 else None
 
 
+# Skip reason when the MAIN account's stack on this coin and side is already
+# full: nobody else may add either. SignalHealth files it as normal.
+MAIN_ACCOUNT_FULL = "main account at max"
+
+
+def _entry_quantities(symbol: str, asset: dict, account: dict, streak_runs: Optional[dict[str, int]]) -> dict:
+    """What one entry on `account` would be: the size before scaling (base or
+    the streak step), the scaled quantity, and the quantity at NORMAL size.
+    Streak sizing swaps the size BEFORE scaling, so a streak step scales with
+    the balance exactly as base_size does."""
+    balance = float(account.get("balance") or 0)
+    base_size = float(asset["base_size"])
+    run, streak_known = _account_run(account, asset, streak_runs)
+    entry_size, streak_kind, streak_step = _streak_size(asset, run)
+    quantity = _scale_qty(symbol, entry_size, balance)
+    normal_quantity = _scale_qty(symbol, base_size, balance) if streak_step else quantity
+    return {
+        "balance": balance, "base_size": base_size, "run": run, "streak_known": streak_known,
+        "entry_size": entry_size, "streak_kind": streak_kind, "streak_step": streak_step,
+        "quantity": quantity, "normal_quantity": normal_quantity,
+    }
+
+
+def _stack_verdict(
+    current: float, quantity: float, normal_quantity: float, streak_step: int, max_increments: float,
+) -> tuple[float, bool]:
+    """(stacks_now, full) — THE stack-cap rule. Every account's own check and
+    the main-account gate both call this, so "the main account is full" can
+    never mean something different from the main account being refused.
+
+    Counted in the size THIS entry would open, compared in WHOLE entries (the
+    ratio rounded), plus a size ceiling whenever a streak step is active:
+    `current + quantity` may never pass max_increments x the NORMAL entry."""
+    stacks_now = round(current / quantity, 4) if quantity else 0.0
+    over_ceiling = (
+        streak_step > 0
+        and max_increments > 0
+        and current + quantity > max_increments * normal_quantity * (1 + 1e-6)
+    )
+    full = max_increments > 0 and (int(round(stacks_now)) + 1 > max_increments or over_ceiling)
+    return stacks_now, full
+
+
+def _main_account_full(
+    symbol: str,
+    position_side: str,
+    asset: dict,
+    accounts: list[dict],
+    open_amounts: Optional[dict[str, float]],
+    streak_runs: Optional[dict[str, int]],
+) -> Optional[dict]:
+    """The main account's stack on this coin and side, when it is FULL —
+    {"account", "increment", "max_increments"} — else None.
+
+    Owner's rule (2026-10-14): when the main account is at max, nobody adds.
+    On 13 Oct a 4th RENDER signal found the main account at 3/3 and refused
+    it, but one customer who had closed by hand on Binance read 0/3 and got a
+    fresh first entry — and the public channel announced it as a reopen.
+
+    None — so every account keeps only its own cap — whenever the answer is
+    not KNOWN to be "full": no main account on this venue (MEXC today), an
+    asset with no cap, an open size that could not be read, or a main account
+    whose entry would be zero."""
+    max_increments = float(asset.get("max_increments") or 0)
+    if max_increments <= 0:
+        return None
+    master = next((a for a in accounts if a.get("is_master") and not tradeable(a)), None)
+    if master is None:
+        return None
+    if open_amounts is not None:
+        current = open_amounts.get(master["api_key"], 0.0)
+    else:
+        try:
+            current = client_for(master).open_amount(symbol, position_side)
+        except Exception:  # noqa: BLE001 - unknown is "not full", never a crash
+            log.exception("main-account open size read failed for %s", symbol)
+            current = None
+    if current is None:
+        return None
+    q = _entry_quantities(symbol, asset, master, streak_runs)
+    if q["quantity"] <= 0:
+        return None
+    stacks_now, full = _stack_verdict(current, q["quantity"], q["normal_quantity"], q["streak_step"], max_increments)
+    if not full:
+        return None
+    return {
+        "account": master.get("name"),
+        "increment": int(round(stacks_now)),
+        "max_increments": int(max_increments),
+    }
+
+
 def _run_account(
     account: dict,
     action: str,
@@ -609,9 +701,11 @@ def _run_account(
     open_amounts: Optional[dict[str, float]],
     exit_batch_id: Optional[str] = None,
     streak_runs: Optional[dict[str, int]] = None,
+    main_full: Optional[dict] = None,
 ) -> dict:
     """Execute one signal on one account. Returns a result dict with
-    status: filled | skipped | failed (+ retryable flag on failures)."""
+    status: filled | skipped | failed (+ retryable flag on failures).
+    `main_full` is _main_account_full's verdict for this venue (entries only)."""
     name = account.get("name") or account.get("api_key", "")[:8]
     exchange = exchange_of(account)
     base = {
@@ -669,14 +763,11 @@ def _run_account(
                 }
 
             # asset presence/base_size already validated job-level (fail closed).
-            balance = float(account.get("balance") or 0)
-            base_size = float(asset["base_size"])
-            # Streak sizing swaps the size BEFORE scaling, so a streak step
-            # scales with the balance exactly as base_size does.
-            run, streak_known = _account_run(account, asset, streak_runs)
-            entry_size, streak_kind, streak_step = _streak_size(asset, run)
-            quantity = _scale_qty(symbol, entry_size, balance)
-            normal_quantity = _scale_qty(symbol, base_size, balance) if streak_step else quantity
+            q = _entry_quantities(symbol, asset, account, streak_runs)
+            balance, base_size = q["balance"], q["base_size"]
+            run, streak_known = q["run"], q["streak_known"]
+            entry_size, streak_kind, streak_step = q["entry_size"], q["streak_kind"], q["streak_step"]
+            quantity, normal_quantity = q["quantity"], q["normal_quantity"]
             # Audit trail for the balance-proportional sizing: the INPUTS, not just
             # the answer, so any size (or skip) can be explained from the trade_logs
             # row alone without replaying the account's balance at signal time.
@@ -757,14 +848,9 @@ def _run_account(
             # entry, the asset's max position size at this balance.
             stacks_now = None
             if current is not None:
-                stacks_now = round(current / quantity, 4) if quantity else 0.0
+                stacks_now, full = _stack_verdict(current, quantity, normal_quantity, streak_step, max_increments)
                 sizing["stacks_now"] = stacks_now
-                over_ceiling = (
-                    streak_step > 0
-                    and max_increments > 0
-                    and current + quantity > max_increments * normal_quantity * (1 + 1e-6)
-                )
-                if max_increments > 0 and (int(round(stacks_now)) + 1 > max_increments or over_ceiling):
+                if full:
                     _bump("accounts_skipped")
                     return base | {
                         "status": "skipped",
@@ -784,6 +870,21 @@ def _run_account(
                 _bump("accounts_skipped")
                 reason = api.not_listed(symbol) or "stack depth unknown"
                 return base | {"status": "skipped", "reason": reason, "sizing": sizing}
+
+            # The main account is already full on this coin and side: nobody
+            # adds, even an account with room of its own (one that closed by
+            # hand, or connected late). Checked after the account's own cap so
+            # a full account still reads "maxed sizing".
+            if main_full and not account.get("is_master"):
+                _bump("accounts_skipped")
+                return base | {
+                    "status": "skipped",
+                    "reason": MAIN_ACCOUNT_FULL,
+                    "sizing": sizing,
+                    "increment": int(round(stacks_now)) if stacks_now is not None else None,
+                    "max_increments": int(max_increments) or None,
+                    "main_increment": main_full["increment"],
+                }
 
             _maybe_set_leverage(api, symbol, leverage)
             result = handle_entry(api, symbol, "BUY" if action == "BUY" else "SELL", quantity, price)
@@ -882,6 +983,7 @@ def _plan_exchange(
     action: str,
     symbol: str,
     uni_filter: Optional[set[str]],
+    main_gate: bool = False,
 ) -> dict:
     """What one exchange will do with the signal.
 
@@ -889,6 +991,9 @@ def _plan_exchange(
     ``{"empty": True}`` when it has no eligible accounts, otherwise the asset,
     the accounts and the batched open-amounts read. Each venue is planned on
     its own so a ticker not configured on MEXC cannot stop Binance trading it.
+
+    `main_gate` turns on the main-account rule (_main_account_full) — a live
+    signal to everyone only, never a targeted manual trade or a retry.
     """
     is_entry = action in ENTRY_ACTIONS
     asset = get_asset(symbol, exchange)
@@ -925,7 +1030,16 @@ def _plan_exchange(
         streak_runs = _fetch_streaks(symbol, exchange, _streak_depth(asset))
         if streak_runs is None:
             log.warning("[%s] streaks unavailable for %s — base size for every account", exchange, symbol)
-    return {"asset": asset, "accounts": accounts, "open_amounts": open_amounts, "streak_runs": streak_runs}
+
+    main_full = None
+    if is_entry and main_gate and uni_filter is None:
+        main_full = _main_account_full(
+            symbol, "LONG" if action == "BUY" else "SHORT", asset, accounts, open_amounts, streak_runs,
+        )
+    return {
+        "asset": asset, "accounts": accounts, "open_amounts": open_amounts,
+        "streak_runs": streak_runs, "main_full": main_full,
+    }
 
 
 def _process_trade_job(
@@ -968,8 +1082,13 @@ def _process_trade_job(
     if not run:
         run = list(live)
 
+    # The main-account rule applies to a live signal sent to everyone. A
+    # retry re-places what one account missed of THIS signal (the main account
+    # may have filled it meanwhile), and a targeted manual trade is an admin's
+    # deliberate choice — neither is held back.
+    main_gate = is_entry and not is_retry and not targets and target_uni_ids is None
     plans = {
-        ex: _plan_exchange(ex, action, symbol, targets.get(ex) if targets else target_uni_ids)
+        ex: _plan_exchange(ex, action, symbol, targets.get(ex) if targets else target_uni_ids, main_gate)
         for ex in run
     }
     runnable = {ex: plan for ex, plan in plans.items() if "accounts" in plan}
@@ -1004,7 +1123,7 @@ def _process_trade_job(
         for account in plan["accounts"]:
             future = _ACCOUNT_EXECUTOR.submit(
                 _run_account, account, action, symbol, price, leverage, strategy, plan["asset"],
-                plan["open_amounts"], exit_batch_id, plan.get("streak_runs"),
+                plan["open_amounts"], exit_batch_id, plan.get("streak_runs"), plan.get("main_full"),
             )
             futures[future] = account
     results = []
@@ -1225,6 +1344,11 @@ def _notify_job(
                 action, symbol,
                 [(_account_label(r, name_venues), r.get("increment"), r.get("max_increments"))
                  for r in results if r.get("reason") == "maxed sizing"],
+                held_back=[
+                    (_account_label(r, name_venues), r.get("increment"), r.get("max_increments"),
+                     r.get("main_increment"))
+                    for r in results if r.get("reason") == MAIN_ACCOUNT_FULL
+                ],
             )
         if failed and not is_retry:
             # Two audiences, one fan-out: what the engine is about to re-place

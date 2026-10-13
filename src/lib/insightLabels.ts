@@ -9,6 +9,7 @@ const REASONS: Record<string, string> = {
   'deposit unknown': 'Deposit not known yet',
   'size too small': 'Balance too small for one trade',
   'maxed sizing': 'Already at the maximum position',
+  'main account at max': 'Held back — the main account is already full',
   'stack depth unknown': 'Could not read the open position',
   'order failed': 'Order refused by the exchange',
   position_mode_mismatch: 'Wrong position mode on the exchange',

@@ -1483,6 +1483,18 @@ for the overlay's `position: fixed` and trap it inside.
      balance-independent by design (it is a property of the asset); only the
      size each account trades scales with its balance, which is what makes one
      cap correct for a 500 and a 50,000 USDT account alike.
+     **The MAIN account's full stack holds everyone back** (owner,
+     2026-10-14): when the master is already full on the coin and side, no
+     account adds — even one with room of its own (on 13 Oct a customer who
+     had closed his RENDER short by hand read 0/3 and got a fresh entry while
+     the master sat at 3/3). `_main_account_full` judges the master per venue
+     in `_plan_exchange` with the SAME `_stack_verdict` every account's own
+     cap uses; skip reason `main account at max` (+ `main_increment`), checked
+     AFTER the account's own cap so a full account still reads `maxed
+     sizing`; SignalHealth `main_full` (normal); the admin note lists them as
+     "Held back". Live, untargeted entries only — never a retry, a targeted
+     manual trade, or an exit; no master on the venue (MEXC) or an unreadable
+     master size = not full.
   4. **Streak sizing** ("Streak Sizing Settings", 2026-10-09, employer's
      request; LTC and RENDER first, any asset can use it). After N LOSSES —
      or N WINS — in a row on a coin, an account's next ENTRY uses a size the

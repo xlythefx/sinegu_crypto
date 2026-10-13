@@ -15,6 +15,26 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-10-14 ───────────────────────────────────────────────────────────
   {
+    id: 'main-account-full-holds-everyone',
+    date: '2026-10-14',
+    kind: 'improved',
+    area: 'Bot',
+    title: 'When the main account is full on a coin, nobody else adds',
+    summary:
+      'If the main account already holds its maximum on a coin (for example 3 of 3 entries on a RENDER short), the bot now opens no new entry on that coin and side for anyone — even a customer whose own stack still has room.',
+    howItWorks: [
+      'Example: on 13 Oct a 4th RENDER SELL arrived while the main account was at 3 of 3. The bot refused it for the main account and five customers, but one customer had closed his position by hand the day before, so his stack read 0 — and he got a fresh first entry, which the channel announced as a new trade. Now he is held back too, and nothing is announced.',
+      'Every account still has its own limit as well: a customer at 3 of 3 is refused even when the main account is at 2 of 3.',
+      'Closes are never held back — every account can always exit.',
+      'It applies to signals from TradingView. A manual trade an admin places for chosen users, and the automatic re-try of an entry that failed, are not held back. On an exchange with no main account (MEXC today), each account keeps only its own limit.',
+      'In the Signal Log these accounts show “Main account already full”, a normal outcome, not a problem. The admin Telegram group lists them under “Held back — the main account is already full”.',
+    ],
+    technical: [
+      'trading-flask routes/webhook.py: _main_account_full() per venue in _plan_exchange (live, untargeted entries only), using the same _stack_verdict() as every account’s own cap; skip reason "main account at max" (+ main_increment), checked after the account’s own cap. Unknown main open size = not full.',
+      'SignalHealth: main_full (normal). notify_max_increments(held_back=…).',
+    ],
+  },
+  {
     id: 'open-position-entry-price',
     date: '2026-10-14',
     kind: 'improved',

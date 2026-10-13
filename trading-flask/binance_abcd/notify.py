@@ -53,7 +53,7 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 from binance_abcd import discord_notify, exchanges, hooks, key_status, published_closes
 from binance_abcd.http_client import get_session
@@ -860,7 +860,9 @@ def notify_retry_abandoned(action: str, ticker: str, uni_ids: list, attempts: in
     _send_admin("\n".join(lines))
 
 
-def notify_max_increments(action: str, ticker: str, entries: list[tuple]) -> None:
+def notify_max_increments(
+    action: str, ticker: str, entries: list[tuple], held_back: Sequence[tuple] = (),
+) -> None:
     """Calm ADMIN note: accounts whose same-side position is already at its
     `max_increments` cap, so this add placed nothing.
 
@@ -872,8 +874,13 @@ def notify_max_increments(action: str, ticker: str, entries: list[tuple]) -> Non
     `entries` = list of (account_name, increment, max_increments); increment
     may be None when the depth could not be derived, and then the line just
     says the account is already at its cap.
+
+    `held_back` = (account_name, increment, max_increments, main_increment):
+    accounts with room of their own that were held back because the MAIN
+    account was already full (webhook.MAIN_ACCOUNT_FULL) — typically one that
+    closed its position by hand, so it reads 0 while everyone else is full.
     """
-    if not entries:
+    if not entries and not held_back:
         return
     lines = [f"📊 <b>Max increments reached — {_esc(ticker)} ({_esc(action)})</b>"]
     for name, inc, limit in entries[:20]:
@@ -888,7 +895,17 @@ def notify_max_increments(action: str, ticker: str, entries: list[tuple]) -> Non
             lines.append(f"  • {_esc(name)} — at increment #{count} (max) · no add placed")
     if len(entries) > 20:
         lines.append(f"  … +{len(entries) - 20} more")
-    lines.append(f"({len(entries)} account(s) affected)")
+    if held_back:
+        main = next((m for *_, m in held_back if m is not None), None)
+        cap = next((c for _, _, c, _ in held_back if c), None)
+        main_text = f" ({main}/{cap})" if main is not None and cap else ""
+        lines.append(f"Held back — the main account is already full{main_text}:")
+        for name, inc, limit, _main in list(held_back)[:20]:
+            depth = f"{int(inc)}/{int(limit)}" if inc is not None and limit else "has room"
+            lines.append(f"  • {_esc(name)} — {depth} · no entry placed")
+        if len(held_back) > 20:
+            lines.append(f"  … +{len(held_back) - 20} more")
+    lines.append(f"({len(entries) + len(held_back)} account(s) affected)")
     _send_admin("\n".join(lines))
 
 
