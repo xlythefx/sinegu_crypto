@@ -2,6 +2,21 @@ import type { ExchangeKind } from './exchanges'
 
 export type TradeAction = 'BUY' | 'SELL' | 'EXIT_LONG' | 'EXIT_SHORT'
 export type FanoutStatus = 'filled' | 'skipped' | 'failed'
+/** The plain words for an action: which side of the market … */
+export type TradeSideWord = 'LONG' | 'SHORT'
+/** … and whether it opens (BUY / SELL) or closes (EXIT_*) a position. */
+export type TradeKindWord = 'entry' | 'exit'
+
+/** The closed trade an exit produced on one account (from its closed-trades table). */
+export interface TradeLogClose {
+  quantity: number
+  entryPrice: number | null
+  exitPrice: number | null
+  /** After fees; null until the close has been synced. */
+  realizedPnl: number | null
+  exchangeFee: number | null
+  closedAt: string | null
+}
 
 /**
  * The engine's balance-proportional sizing decision for one account, recorded
@@ -71,6 +86,11 @@ export interface TradeLogDetail {
   quantity: number | null
   fillPrice: number | null
   closedQuantity: number | null
+  /** Exits: the closed trade (entry → exit, P&L); null when not synced or not an exit. */
+  close: TradeLogClose | null
+  /** Entries: stack depth after this fill. Exits: increments taken off. */
+  increment: number | null
+  maxIncrements: number | null
   sizing: SizingDecision | null
   /** Stable reason key (`key_blocked`, `nothing_to_close`, …); null for a fill. */
   reasonKey: string | null
@@ -83,11 +103,25 @@ export interface TradeLogDetail {
   match: boolean
 }
 
+/** One re-run of a signal for the accounts that failed it, folded under it. */
+export interface TradeLogRetry {
+  id: number
+  success: boolean
+  filled: number
+  failed: number
+  skipped: number
+  details: TradeLogDetail[]
+  ts: string | null
+}
+
 /** One append-only row per signal the engine processed. */
 export interface TradeLogRow {
+  kind: 'signal'
   id: number
   exchange: ExchangeKind
   action: TradeAction
+  side: TradeSideWord
+  type: TradeKindWord
   ticker: string
   success: boolean
   price: number | null
@@ -106,7 +140,38 @@ export interface TradeLogRow {
   problems: number
   /** Account outcomes that are skips by design. */
   normalSkips: number
+  /** Re-runs of this signal, oldest first. */
+  retries: TradeLogRetry[]
 }
+
+/**
+ * A position closed on the exchange WITHOUT the bot — the customer by hand,
+ * their own take-profit / stop-loss, a liquidation. Not a signal: it sits in
+ * the same timeline so the story of a position reads in order, but never
+ * counts in the signal figures.
+ */
+export interface OutsideCloseRow {
+  kind: 'outside_close'
+  /** "outside-{exchange}-{id}" — unique across the timeline. */
+  id: string
+  exchange: ExchangeKind
+  ticker: string
+  side: TradeSideWord
+  type: 'exit'
+  account: string | null
+  uniId: string | null
+  userName: string | null
+  demo: boolean
+  quantity: number
+  entryPrice: number | null
+  exitPrice: number | null
+  realizedPnl: number | null
+  exchangeFee: number | null
+  ts: string | null
+}
+
+/** One line of the timeline. */
+export type TradeLogItem = TradeLogRow | OutsideCloseRow
 
 export interface TradeLogSummary {
   signals: number
@@ -118,6 +183,8 @@ export interface TradeLogSummary {
   problemAccounts: number
   /** Account outcomes in the filtered window that are skips by design. */
   normalSkips: number
+  /** Closes made outside the bot in the filtered view (not signals). */
+  outsideCloses: number
 }
 
 /** One reason the filtered window holds, with how many account outcomes carry it. */
@@ -130,6 +197,12 @@ export interface ReasonCount {
 
 export interface TradeLogFilters {
   exchange?: string
+  /** 'long' | 'short' */
+  side?: string
+  /** 'entry' | 'exit' */
+  type?: string
+  /** 'all' (default) | 'signals' | 'outside' — the list only. */
+  source?: string
   action?: string
   ticker?: string
   category?: string
@@ -148,11 +221,11 @@ export interface TradeLogFilters {
 }
 
 export interface TradeLogsData {
-  logs: TradeLogRow[]
+  logs: TradeLogItem[]
   summary: TradeLogSummary
   pagination: { limit: number; offset: number; total: number }
   /** Distinct values across the whole table — drives the filter selects. */
-  options: { tickers: string[]; strategies: string[]; reasons: ReasonCount[] }
+  options: { tickers: string[]; exchanges: string[]; strategies: string[]; reasons: ReasonCount[] }
 }
 
 /**

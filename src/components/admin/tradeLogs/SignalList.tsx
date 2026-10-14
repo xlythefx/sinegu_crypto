@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import OutsideCloseCard from './OutsideCloseCard'
 import TradeLogCard from './TradeLogCard'
 import type { TradeLogsData } from '../../../types/tradeLogs'
 
@@ -38,8 +39,8 @@ export default function SignalList({
       <div className="flex flex-col items-center gap-2.5 py-[34px] text-center">
         <p className="text-[13px] text-muted">
           {anyFilterActive
-            ? 'No signals match your filters.'
-            : 'No signals logged yet. The engine writes a row here every time TradingView fires.'}
+            ? 'Nothing matches your filters.'
+            : 'Nothing logged yet. The engine writes a row here every time TradingView fires.'}
         </p>
         {anyFilterActive && (
           <button
@@ -57,15 +58,19 @@ export default function SignalList({
   return (
     <>
       <div className="flex flex-col gap-2.5">
-        {logs.map((log) => (
-          <TradeLogCard
-            key={log.id}
-            log={log}
-            expanded={expanded === log.id}
-            onToggle={() => setExpanded(expanded === log.id ? null : log.id)}
-            accountFiltersActive={accountFiltersActive}
-          />
-        ))}
+        {logs.map((item) =>
+          item.kind === 'outside_close' ? (
+            <OutsideCloseCard key={item.id} row={item} />
+          ) : (
+            <TradeLogCard
+              key={item.id}
+              log={item}
+              expanded={expanded === item.id}
+              onToggle={() => setExpanded(expanded === item.id ? null : item.id)}
+              accountFiltersActive={accountFiltersActive}
+            />
+          ),
+        )}
       </div>
 
       {total > 0 && (

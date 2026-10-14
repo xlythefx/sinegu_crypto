@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Check, ChevronDown, ChevronRight } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, RotateCw } from 'lucide-react'
 import ExchangeBadge from '../../billing/ExchangeBadge'
+import SideTypePill from './SideTypePill'
 import SizingBreakdown from './SizingBreakdown'
 import {
   COUNT_CHIP,
@@ -10,7 +11,7 @@ import {
   SEVERITY_TONE,
   TONE,
 } from './tradeLogClasses'
-import { fmtDateTime, fmtMoney, fmtQty } from '../../../lib/format'
+import { fmtDateTime, fmtMoney, fmtQty, fmtSignedMoney } from '../../../lib/format'
 import {
   masterBadge,
   masterDetailOf,
@@ -18,16 +19,31 @@ import {
   severityOf,
   sortDetails,
 } from '../../../lib/signalHealth'
-import type { TradeLogDetail, TradeLogRow } from '../../../types/tradeLogs'
-
-const ACTION_PILL: Record<TradeLogRow['action'], string> = {
-  BUY: 'bg-[color-mix(in_srgb,var(--green)_16%,transparent)] text-green',
-  SELL: 'bg-[color-mix(in_srgb,var(--red)_16%,transparent)] text-red',
-  EXIT_LONG: 'bg-surface2 text-muted',
-  EXIT_SHORT: 'bg-surface2 text-muted',
-}
+import type { TradeLogDetail, TradeLogRetry, TradeLogRow } from '../../../types/tradeLogs'
 
 const META = 'text-[11.5px] text-faint'
+
+/** Average executed price over the accounts that filled; null when none reported one. */
+function avgFill(details: TradeLogDetail[]): number | null {
+  const prices = details.filter((d) => d.status === 'filled' && d.fillPrice !== null).map((d) => d.fillPrice as number)
+  return prices.length ? prices.reduce((a, b) => a + b, 0) / prices.length : null
+}
+
+/** The main account's closed trade on an exit (its own run, or a retry that closed it). */
+function mainClose(log: TradeLogRow): TradeLogDetail | null {
+  const runs = [log.details, ...log.retries.map((r) => r.details)]
+  for (const details of runs) {
+    const d = details.find((x) => x.isMaster && x.close?.realizedPnl != null)
+    if (d) return d
+  }
+  return null
+}
+
+function retryTone(r: TradeLogRetry): string {
+  if (r.failed > 0) return TONE.bad
+  if (r.filled > 0) return TONE.good
+  return TONE.neutral
+}
 
 /** Status pill: a skip is grey when it is a skip by design, red when it is a problem. */
 function statusTone(detail: TradeLogDetail): string {
@@ -50,7 +66,10 @@ export default function TradeLogCard({
   accountFiltersActive: boolean
 }) {
   const [showAll, setShowAll] = useState(false)
-  const isEntry = log.action === 'BUY' || log.action === 'SELL'
+  const isEntry = log.type === 'entry'
+  const fill = isEntry ? avgFill(log.details) : null
+  const main = isEntry ? null : mainClose(log)
+  const lastRetry = log.retries[log.retries.length - 1] ?? null
   const rejected = log.category === 'rejected'
   const rejectReason = log.details[0]?.reason ?? log.details[0]?.error ?? null
   const master = rejected ? null : masterBadge(log.master, masterDetailOf(log))
@@ -80,9 +99,7 @@ export default function TradeLogCard({
 
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className={`${PILL} ${ACTION_PILL[log.action]}`}>
-              {log.action.replace('_', ' ')}
-            </span>
+            <SideTypePill side={log.side} type={log.type} />
             <span className="font-mono text-[13.5px] font-semibold text-text">{log.ticker}</span>
             <ExchangeBadge exchange={log.exchange} />
             {log.category && log.category !== 'signal' && !rejected && (
@@ -94,7 +111,14 @@ export default function TradeLogCard({
           <div className="flex items-center gap-x-3 gap-y-1 flex-wrap">
             <span className={META}>{log.ts ? fmtDateTime(log.ts) : '—'}</span>
             {log.price !== null && (
-              <span className={`${META} font-mono`}>@ {fmtMoney(log.price)}</span>
+              <span className={`${META} font-mono`} title="The price TradingView sent">
+                signal @ {fmtMoney(log.price, 4)}
+              </span>
+            )}
+            {fill !== null && (
+              <span className={`${META} font-mono`} title="Average price the accounts actually filled at">
+                filled @ {fmtMoney(fill, 4)}
+              </span>
             )}
             {log.leverage !== null && (
               <span className={`${META} font-mono`}>{log.leverage}×</span>
@@ -119,6 +143,23 @@ export default function TradeLogCard({
               {log.problems > 0 && (
                 <span className={`${COUNT_CHIP} ${TONE.bad} font-semibold`}>
                   {plural(log.problems, 'problem', 'problems')}
+                </span>
+              )}
+              {lastRetry && (
+                <span
+                  className={`${COUNT_CHIP} ${retryTone(lastRetry)}`}
+                  title="The engine re-ran this signal for the accounts that failed it — the re-runs are listed when you open the row."
+                >
+                  <RotateCw size={11} aria-hidden="true" />
+                  retried {log.retries.length}×
+                </span>
+              )}
+              {main?.close?.realizedPnl != null && (
+                <span
+                  className={`${COUNT_CHIP} border-hair font-semibold ${main.close.realizedPnl >= 0 ? 'text-green' : 'text-red'}`}
+                  title="The main account's result on this close, after fees"
+                >
+                  main {fmtSignedMoney(main.close.realizedPnl)}
                 </span>
               )}
             </>
@@ -179,10 +220,57 @@ export default function TradeLogCard({
                 )}
               </>
             )}
+
+            {/* Re-runs of this signal, folded here instead of listed as rows. */}
+            {log.retries.length > 0 && (
+              <div className="mt-1.5 flex flex-col gap-2 border-t border-hair pt-3">
+                <p className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-faint">
+                  Retries · {log.retries.length}
+                </p>
+                {log.retries.map((retry, n) => (
+                  <div key={retry.id} className="rounded-[12px] border border-hair bg-surface2 p-3">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-text">
+                        <RotateCw size={12} aria-hidden="true" />
+                        Retry {n + 1}
+                      </span>
+                      <span className={META}>{retry.ts ? fmtDateTime(retry.ts) : '—'}</span>
+                      <span className={`${COUNT_CHIP} ${retryTone(retry)}`}>
+                        {retry.filled} filled · {retry.failed} failed
+                        {retry.skipped ? ` · ${retry.skipped} skipped` : ''}
+                      </span>
+                    </div>
+                    <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+                      {sortDetails(retry.details).map((detail, i) => (
+                        <RetryLine key={`${detail.uniId ?? 'x'}-${detail.account ?? i}`} detail={detail} />
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
     </article>
+  )
+}
+
+/** One account in a retry, on one line: who, the outcome, and why or what it made. */
+function RetryLine({ detail }: { detail: TradeLogDetail }) {
+  const status = detail.status ?? 'failed'
+  const why = detail.reasonLabel ?? detail.reason ?? detail.error
+  const pnl = detail.close?.realizedPnl ?? null
+  return (
+    <li className="flex list-none flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px]">
+      <span className="font-semibold text-text">{detail.account ?? 'Unknown account'}</span>
+      <span className={`${PILL} border ${statusTone(detail)}`}>{status}</span>
+      {pnl !== null ? (
+        <span className={`font-mono font-semibold ${pnl >= 0 ? 'text-green' : 'text-red'}`}>{fmtSignedMoney(pnl)}</span>
+      ) : (
+        why && <span className="min-w-0 break-words font-mono text-[11.5px] text-faint">{why}</span>
+      )}
+    </li>
   )
 }
 
@@ -221,6 +309,9 @@ function AccountRow({
           {detail.userName && <p className="text-[11.5px] text-faint">{detail.userName}</p>}
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
+          {isEntry && detail.status === 'filled' && detail.quantity !== null && (
+            <span className="font-mono text-[12px] text-muted">{fmtQty(detail.quantity, 0, 8)}</span>
+          )}
           {!isEntry && detail.closedQuantity !== null && (
             <span className="font-mono text-[12px] text-muted">
               closed {fmtQty(detail.closedQuantity, 0, 8)}
@@ -228,12 +319,48 @@ function AccountRow({
           )}
           {detail.fillPrice !== null && (
             <span className="font-mono text-[12px] text-muted">
-              @ {fmtMoney(detail.fillPrice)}
+              @ {fmtMoney(detail.fillPrice, 4)}
+            </span>
+          )}
+          {detail.status === 'filled' && detail.increment !== null && (
+            <span
+              className="font-mono text-[12px] text-faint"
+              title={isEntry ? 'Stack depth after this entry' : 'Increments this close took off'}
+            >
+              {isEntry ? 'stack ' : ''}
+              {detail.increment}
+              {detail.maxIncrements ? `/${detail.maxIncrements}` : ''}
+              {isEntry ? '' : ' increments'}
             </span>
           )}
           <span className={`${PILL} border ${statusTone(detail)}`}>{status}</span>
         </div>
       </div>
+
+      {/* Exits: the closed trade this close produced — what was paid in, what
+          came out, and what it made after fees. */}
+      {!isEntry && detail.status === 'filled' && (
+        <p className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[12px] text-muted">
+          {detail.close ? (
+            <>
+              <span>
+                In {detail.close.entryPrice !== null ? fmtMoney(detail.close.entryPrice, 4) : '—'} → Out{' '}
+                {detail.close.exitPrice !== null ? fmtMoney(detail.close.exitPrice, 4) : '—'}
+              </span>
+              {detail.close.realizedPnl !== null && (
+                <span className={`font-semibold ${detail.close.realizedPnl >= 0 ? 'text-green' : 'text-red'}`}>
+                  {fmtSignedMoney(detail.close.realizedPnl)}
+                </span>
+              )}
+              {detail.close.exchangeFee !== null && (
+                <span className="text-faint">fee {fmtMoney(detail.close.exchangeFee)}</span>
+              )}
+            </>
+          ) : (
+            <span className="font-body text-faint">Closed trade not synced yet — the price and P&amp;L appear within a few minutes.</span>
+          )}
+        </p>
+      )}
 
       {(detail.reasonLabel || raw) && (
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 mb-2">

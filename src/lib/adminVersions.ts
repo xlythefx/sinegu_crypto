@@ -15,6 +15,30 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-10-14 ───────────────────────────────────────────────────────────
   {
+    id: 'signal-log-timeline',
+    date: '2026-10-14',
+    kind: 'improved',
+    area: 'Signal Log',
+    title: 'Signal Log: long/short, entry/exit, results, retries folded, and closes made on the exchange',
+    summary:
+      'The Signal Log now reads as one timeline of what happened to positions: every row says LONG or SHORT and Entry or Exit, an exit shows what each account paid in, got out and made, retries sit inside the signal they repeat, and positions a customer closed themselves on the exchange appear as their own amber rows. The filters were rebuilt.',
+    howItWorks: [
+      'Each row starts with a green LONG or red SHORT tag and the word Entry or Exit — instead of the bot’s BUY / SELL / EXIT_LONG / EXIT_SHORT.',
+      'Entries show the price TradingView sent and the average price the accounts actually filled at; each account shows its coins and how deep its stack now is (for example “stack 2/3”).',
+      'Exits show the main account’s result on the row (for example “main −$460.91”), and inside, every account’s “In 2.0506 → Out 2.1209”, its P&L after fees and the fee.',
+      'Retries: when the bot re-ran a signal for accounts that failed it, those re-runs are now inside the original row (“retried 5×”) instead of five extra rows.',
+      'Closed outside the bot: when a customer closes a position on Binance themselves (or their own take-profit / stop-loss fires, or it is liquidated), it appears in the timeline as an amber row with the account, coin, side, prices and P&L. Example: BOT ALEX G’s RENDER short closed by hand on 12 Oct 14:56 sits right before the 13 Oct signal that gave him a fresh entry. These rows never count in the signal totals.',
+      'Closes an admin makes from the portal are shown as ordinary exits.',
+      'Filters: exchange, Long/Short, Entry/Exit, source (bot signals or closes outside the bot), coin, account outcome, reason, account search and quick date ranges (today, 24 h, 7 days, 30 days, custom). They are kept in the page address, so a reload or a shared link shows the same view, and active filters show as chips you can remove one by one.',
+    ],
+    technical: [
+      'GET /admin/trade-logs: side=long|short, type=entry|exit, source=all|signals|outside; items carry kind signal|outside_close, side, type, retries[] and details[].close; summary.outside_closes; filters.exchanges.',
+      'Retries fold under the latest earlier non-retry row with the same exchange+action+ticker within 60 min (AdminTradeLogController::foldRetries). Closed trades matched within ±15 min, never close_source=outside.',
+      'Frontend: shared filter kit in components/ui/filters + hooks/useUrlFilters (the convention every admin list should follow).',
+    ],
+    links: [{ label: 'Open the Signal Log', href: '/admin/trade-logs' }],
+  },
+  {
     id: 'positions-show-long-short',
     date: '2026-10-14',
     kind: 'fixed',

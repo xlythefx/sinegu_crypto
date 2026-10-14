@@ -17,7 +17,7 @@ import type { SignalIssue } from '../../types/tradeLogs'
 
 const TITLE = 'Signal Log'
 const SUBTITLE =
-  'Every signal the engine processed, with the sizing decision it made per account.'
+  'Every signal the bot processed — long or short, entry or exit, what each account did — plus positions customers closed themselves on the exchange.'
 const PER_PAGE = 10
 /** The banner's window — "is anything wrong right now". */
 const HEALTH_HOURS = 24
@@ -78,7 +78,15 @@ export default function AdminTradeLogs() {
     { key: 'issues', label: 'Issues', Icon: AlertTriangle, badge: issues.data?.issues.length },
   ]
   const tickers = list.data?.options.tickers ?? []
+  const exchanges = list.data?.options.exchanges ?? []
   const reasons = list.data?.options.reasons ?? []
+  const listSummary = list.data
+    ? `${list.data.pagination.total.toLocaleString()} ${list.data.pagination.total === 1 ? 'row' : 'rows'}${
+        list.data.summary.outsideCloses
+          ? ` · ${list.data.summary.outsideCloses} closed outside the bot`
+          : ''
+      }`
+    : undefined
 
   return (
     <AdminLayout title={TITLE} subtitle={SUBTITLE}>
@@ -108,8 +116,15 @@ export default function AdminTradeLogs() {
         {view === 'signals' ? (
           <>
             <SignalStats summary={list.data?.summary ?? null} showSplit={!f.accountFiltersActive} />
+            <TradeLogToolbar
+              view="signals"
+              filters={f}
+              tickers={tickers}
+              exchanges={exchanges}
+              reasons={reasons}
+              summary={listSummary}
+            />
             <section className={SECTION} data-aos="fade-up" data-aos-delay="100">
-              <TradeLogToolbar view="signals" filters={f} tickers={tickers} reasons={reasons} />
               {list.data ? (
                 <div
                   key={`${f.listKey}-${f.page}`}
@@ -121,7 +136,7 @@ export default function AdminTradeLogs() {
                     perPage={PER_PAGE}
                     onPage={f.setPage}
                     accountFiltersActive={f.accountFiltersActive}
-                    anyFilterActive={f.signalFiltersActive || f.accountFiltersActive}
+                    anyFilterActive={f.activeCount > 0}
                     onClear={f.clear}
                   />
                 </div>
@@ -136,8 +151,15 @@ export default function AdminTradeLogs() {
             </section>
           </>
         ) : (
+          <>
+          <TradeLogToolbar
+            view="issues"
+            filters={f}
+            tickers={tickers}
+            exchanges={exchanges}
+            reasons={reasons}
+          />
           <section className={SECTION}>
-            <TradeLogToolbar view="issues" filters={f} tickers={tickers} reasons={reasons} />
             {issues.data ? (
               <div
                 key={f.signalKey}
@@ -145,8 +167,8 @@ export default function AdminTradeLogs() {
               >
                 <IssuesList
                   data={issues.data}
-                  from={f.from}
-                  to={f.to}
+                  from={f.range.from}
+                  to={f.range.to}
                   onShowSignals={showSignalsFor}
                 />
               </div>
@@ -159,6 +181,7 @@ export default function AdminTradeLogs() {
               />
             )}
           </section>
+          </>
         )}
       </div>
     </AdminLayout>

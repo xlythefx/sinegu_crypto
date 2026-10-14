@@ -1,115 +1,104 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useUrlFilters } from './useUrlFilters'
+import { isDatePreset, rangeFor } from '../lib/dateRange'
 import type { TradeLogFilters, TradeLogOutcome } from '../types/tradeLogs'
 
 export type OutcomeFilter = TradeLogOutcome | 'all'
 
-/** How long the customer box waits for typing to stop before it searches. */
-const SEARCH_DELAY_MS = 300
+/** Every Signal Log filter and its "off" value — what an unfiltered URL means. */
+const DEFAULTS = {
+  exchange: 'all',
+  side: 'all',
+  type: 'all',
+  source: 'all',
+  ticker: 'all',
+  outcome: 'all',
+  reason: 'all',
+  account: '',
+  date: 'all',
+  from: '',
+  to: '',
+}
+
+const ALLOWED = {
+  side: ['all', 'long', 'short'],
+  type: ['all', 'entry', 'exit'],
+  source: ['all', 'signals', 'outside'],
+  outcome: ['all', 'filled', 'skipped', 'failed', 'problem'],
+  date: ['all', 'today', '24h', '7d', '30d', 'custom'],
+}
 
 /**
- * Filter state for Admin → Signal Log, shared by its two views.
+ * Filter state for Admin → Signal Log, kept in the URL (useUrlFilters) so a
+ * reload or a shared link lands on the same view. Shared by its two views.
  *
  * Two kinds of filter, kept apart because the endpoints treat them apart:
- * - SIGNAL filters (action, ticker, dates) narrow which signals are read —
- *   both the list and the Issues view honour them;
- * - ACCOUNT filters (outcome, reason, customer) look inside each signal's
- *   fan-out — the list only.
+ * - SIGNAL filters (exchange, side, type, coin, dates) narrow which signals
+ *   are read — both the list and the Issues view honour them;
+ * - LIST-ONLY filters (source, account outcome, reason, account search) — the
+ *   Issues view has its own grouping.
  *
  * The page number is DERIVED from the filters it was chosen under, so any
- * filter change lands back on page 1 with no reset effect (an out-of-range
- * offset would silently return an empty page).
+ * filter change lands back on page 1 with no reset effect.
  */
 export function useTradeLogFilters() {
-  const [action, setAction] = useState('all')
-  const [ticker, setTicker] = useState('all')
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
-  const [outcome, setOutcome] = useState<OutcomeFilter>('all')
-  const [reason, setReason] = useState('all')
-  // What the box shows vs. what is searched: the search waits for typing to
-  // stop, but emptying the box applies at once.
-  const [accountInput, setAccountInputState] = useState('')
-  const [account, setAccount] = useState('')
-  const timer = useRef<number | undefined>(undefined)
-
-  useEffect(() => () => window.clearTimeout(timer.current), [])
-
-  const setAccountNow = (value: string) => {
-    window.clearTimeout(timer.current)
-    setAccountInputState(value)
-    setAccount(value.trim())
-  }
-
-  const setAccountInput = (value: string) => {
-    setAccountInputState(value)
-    window.clearTimeout(timer.current)
-    const q = value.trim()
-    if (q === '') {
-      setAccount('')
-      return
-    }
-    timer.current = window.setTimeout(() => setAccount(q), SEARCH_DELAY_MS)
-  }
+  const url = useUrlFilters(DEFAULTS, { allowed: ALLOWED })
+  const f = url.filters
+  const preset = isDatePreset(f.date) ? f.date : 'all'
+  const range = useMemo(() => rangeFor(preset, { from: f.from, to: f.to }), [preset, f.from, f.to])
 
   const signalFilters = useMemo<TradeLogFilters>(
-    () => ({ action, ticker, from, to }),
-    [action, ticker, from, to],
+    () => ({
+      exchange: f.exchange,
+      side: f.side,
+      type: f.type,
+      ticker: f.ticker,
+      from: range.from,
+      to: range.to,
+    }),
+    [f.exchange, f.side, f.type, f.ticker, range.from, range.to],
   )
   const listFilters = useMemo<TradeLogFilters>(
-    () => ({ ...signalFilters, outcome, reason, account }),
-    [signalFilters, outcome, reason, account],
+    () => ({
+      ...signalFilters,
+      source: f.source,
+      outcome: f.outcome as OutcomeFilter,
+      reason: f.reason,
+      account: f.account,
+    }),
+    [signalFilters, f.source, f.outcome, f.reason, f.account],
   )
-  const signalKey = `${action}|${ticker}|${from}|${to}`
-  const listKey = `${signalKey}|${outcome}|${reason}|${account}`
+  const signalKey = `${f.exchange}|${f.side}|${f.type}|${f.ticker}|${range.from}|${range.to}`
+  const listKey = `${signalKey}|${f.source}|${f.outcome}|${f.reason}|${f.account}`
 
   const [paging, setPaging] = useState({ key: listKey, page: 1 })
   const page = paging.key === listKey ? paging.page : 1
   const setPage = (next: number) => setPaging({ key: listKey, page: next })
 
-  const signalFiltersActive = action !== 'all' || ticker !== 'all' || from !== '' || to !== ''
-  const accountFiltersActive = outcome !== 'all' || reason !== 'all' || account !== ''
-
-  const clear = () => {
-    setAction('all')
-    setTicker('all')
-    setFrom('')
-    setTo('')
-    setOutcome('all')
-    setReason('all')
-    setAccountNow('')
-  }
+  const accountFiltersActive = f.outcome !== 'all' || f.reason !== 'all' || f.account !== ''
 
   /** Narrow the list to one issue's cause (and account, when it has one). */
-  const focusIssue = (reasonKey: string, accountName: string | null) => {
-    setOutcome('all')
-    setReason(reasonKey)
-    setAccountNow(accountName ?? '')
-  }
+  const focusIssue = (reasonKey: string, accountName: string | null) =>
+    url.setMany({ outcome: 'all', reason: reasonKey, account: accountName ?? '' })
 
   return {
-    action,
-    setAction,
-    ticker,
-    setTicker,
-    from,
-    setFrom,
-    to,
-    setTo,
-    outcome,
-    setOutcome,
-    reason,
-    setReason,
-    accountInput,
-    setAccountInput,
+    ...f,
+    datePreset: preset,
+    /** The YYYY-MM-DD bounds the date preset (or the custom pair) works out to. */
+    range,
+    set: url.set,
+    setMany: url.setMany,
+    reset: url.reset,
+    clear: url.clear,
+    isActive: url.isActive,
+    activeCount: url.activeCount,
     page,
     setPage,
     signalFilters,
     listFilters,
     signalKey,
     listKey,
-    signalFiltersActive,
     accountFiltersActive,
-    clear,
     focusIssue,
   }
 }

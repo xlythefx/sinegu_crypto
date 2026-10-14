@@ -9,7 +9,10 @@ import type {
   SizingDecision,
   TradeLogDetail,
   TradeLogFilters,
+  OutsideCloseRow,
+  TradeLogClose,
   TradeLogIssuesData,
+  TradeLogItem,
   TradeLogRow,
   TradeLogsData,
 } from '../types/tradeLogs'
@@ -45,6 +48,16 @@ interface ApiDetail {
   quantity: number | null
   fill_price: number | null
   closed_quantity: number | null
+  close?: {
+    quantity: number
+    entry_price: number | null
+    exit_price: number | null
+    realized_pnl: number | null
+    exchange_fee: number | null
+    closed_at: string | null
+  } | null
+  increment?: number | null
+  max_increments?: number | null
   sizing: ApiSizing | null
   reason_key?: string | null
   reason_label?: string | null
@@ -53,7 +66,39 @@ interface ApiDetail {
   match?: boolean
 }
 
+interface ApiRetry {
+  id: number
+  success: boolean
+  filled: number
+  failed: number
+  skipped: number
+  details: ApiDetail[]
+  ts: string | null
+}
+
+interface ApiOutsideClose {
+  kind: 'outside_close'
+  id: string
+  exchange: OutsideCloseRow['exchange']
+  ticker: string
+  side: OutsideCloseRow['side']
+  account: string | null
+  uni_id: string | null
+  user_name: string | null
+  demo: boolean
+  quantity: number
+  entry_price: number | null
+  exit_price: number | null
+  realized_pnl: number | null
+  exchange_fee: number | null
+  ts: string | null
+}
+
 interface ApiLog {
+  kind?: 'signal'
+  side?: TradeLogRow['side']
+  type?: TradeLogRow['type']
+  retries?: ApiRetry[]
   id: number
   exchange: TradeLogRow['exchange']
   action: TradeLogRow['action']
@@ -125,6 +170,9 @@ function mapDetail(d: ApiDetail): TradeLogDetail {
     quantity: d.quantity,
     fillPrice: d.fill_price,
     closedQuantity: d.closed_quantity,
+    close: mapClose(d.close),
+    increment: d.increment ?? null,
+    maxIncrements: d.max_increments ?? null,
     sizing: mapSizing(d.sizing),
     reasonKey: d.reason_key ?? null,
     reasonLabel: d.reason_label ?? null,
@@ -134,11 +182,62 @@ function mapDetail(d: ApiDetail): TradeLogDetail {
   }
 }
 
-function mapLog(l: ApiLog): TradeLogRow {
+function mapClose(c: ApiDetail['close']): TradeLogClose | null {
+  if (!c) return null
   return {
+    quantity: c.quantity,
+    entryPrice: c.entry_price,
+    exitPrice: c.exit_price,
+    realizedPnl: c.realized_pnl,
+    exchangeFee: c.exchange_fee,
+    closedAt: c.closed_at,
+  }
+}
+
+function mapOutside(o: ApiOutsideClose): OutsideCloseRow {
+  return {
+    kind: 'outside_close',
+    id: o.id,
+    exchange: o.exchange,
+    ticker: o.ticker,
+    side: o.side,
+    type: 'exit',
+    account: o.account,
+    uniId: o.uni_id,
+    userName: o.user_name,
+    demo: Boolean(o.demo),
+    quantity: o.quantity,
+    entryPrice: o.entry_price,
+    exitPrice: o.exit_price,
+    realizedPnl: o.realized_pnl,
+    exchangeFee: o.exchange_fee,
+    ts: o.ts,
+  }
+}
+
+function mapItem(item: ApiLog | ApiOutsideClose): TradeLogItem {
+  return item.kind === 'outside_close' ? mapOutside(item) : mapLog(item)
+}
+
+function mapLog(l: ApiLog): TradeLogRow {
+  const exit = l.action === 'EXIT_LONG' || l.action === 'EXIT_SHORT'
+  return {
+    kind: 'signal',
     id: l.id,
     exchange: l.exchange,
     action: l.action,
+    // An API older than the side/type words: derive them from the action.
+    side: l.side ?? (l.action === 'SELL' || l.action === 'EXIT_SHORT' ? 'SHORT' : 'LONG'),
+    type: l.type ?? (exit ? 'exit' : 'entry'),
+    retries: (l.retries ?? []).map((r) => ({
+      id: r.id,
+      success: r.success,
+      filled: r.filled,
+      failed: r.failed,
+      skipped: r.skipped,
+      details: (r.details ?? []).map(mapDetail),
+      ts: r.ts,
+    })),
     ticker: l.ticker,
     success: l.success,
     price: l.price,
@@ -188,6 +287,8 @@ function signalParams(filters: TradeLogFilters): URLSearchParams {
     }
   }
   put('exchange', filters.exchange)
+  put('side', filters.side)
+  put('type', filters.type)
   put('action', filters.action)
   put('ticker', filters.ticker)
   put('category', filters.category)
@@ -217,12 +318,13 @@ export async function getTradeLogs(
   if (filters.outcome && filters.outcome !== 'all') qs.set('outcome', filters.outcome)
   if (filters.reason && filters.reason !== 'all') qs.set('reason', filters.reason)
   if (filters.account) qs.set('account', filters.account)
+  if (filters.source && filters.source !== 'all') qs.set('source', filters.source)
   if (filters.limit !== undefined) qs.set('limit', String(filters.limit))
   if (filters.offset !== undefined) qs.set('offset', String(filters.offset))
 
   const res = await apiFetch<{
     success: boolean
-    logs: ApiLog[]
+    logs: (ApiLog | ApiOutsideClose)[]
     summary: {
       signals: number
       clean_signals: number
@@ -231,13 +333,14 @@ export async function getTradeLogs(
       skipped: number
       problem_accounts?: number
       normal_skips?: number
+      outside_closes?: number
     }
     pagination: { limit: number; offset: number; total: number }
-    filters: { tickers: string[]; strategies: string[]; reasons?: ReasonCount[] }
+    filters: { tickers: string[]; exchanges?: string[]; strategies: string[]; reasons?: ReasonCount[] }
   }>(withQuery('/admin/trade-logs', qs), { auth: true })
 
   return {
-    logs: res.logs.map(mapLog),
+    logs: res.logs.map(mapItem),
     summary: {
       signals: res.summary.signals,
       cleanSignals: res.summary.clean_signals,
@@ -246,10 +349,12 @@ export async function getTradeLogs(
       skipped: res.summary.skipped,
       problemAccounts: res.summary.problem_accounts ?? res.summary.failed,
       normalSkips: res.summary.normal_skips ?? 0,
+      outsideCloses: res.summary.outside_closes ?? 0,
     },
     pagination: res.pagination,
     options: {
       tickers: res.filters?.tickers ?? [],
+      exchanges: res.filters?.exchanges ?? [],
       strategies: res.filters?.strategies ?? [],
       reasons: res.filters?.reasons ?? [],
     },

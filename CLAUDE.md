@@ -1054,6 +1054,18 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   master has no account on) — only a master row with a problem outcome
   counts. A new engine skip reason needs a line in `SignalHealth::classify`,
   or it lands as `other_skip` (a problem).
+  **One timeline (2026-10-14):** every row says LONG / SHORT and Entry / Exit
+  (`side` / `type`, also filters); **retries fold under the signal they re-run**
+  (`retries[]`; a `retry` row within 60 min after a signal with the same
+  exchange + action + ticker), so `summary.signals` counts signals and only
+  `filled` adds a retry's fills; exits carry each account's closed trade
+  (`details[].close`: entry → exit, P&L after fees, matched from
+  `{x}_pastpositions` within ±15 min, never an `outside` row); and **closes made
+  OUTSIDE the bot** (`close_source = outside`) are rows of their own
+  (`kind: outside_close`, amber, "Closed outside the bot") that never count in
+  the signal summary — `source=all|signals|outside`. An admin's close from the
+  portal is deliberately an ordinary exit (owner). Filters live in the URL
+  (`useTradeLogFilters` over the shared `useUrlFilters`).
 - **Backend surface:** `sinegutrade-api`'s `/api/engine/{exchange}/*` routes
   (`EngineController`, `EngineSyncController`, `VerifyEngineSecret` middleware,
   `X-Engine-Secret` header). Who may trade is decided THERE: accounts endpoint
@@ -1940,6 +1952,13 @@ When it grows into a full dashboard, migrate to `features/<domain>/` folders
   new payload loads ("Updating…"), no re-keyed reveal; cards with nothing to
   measure in the view are tinted down (`Dimmable`), and the first load shows
   `AnalyticsSkeleton`.
+- **Filters (2026-10-14):** every admin list filters through the shared kit
+  `src/components/ui/filters` (FilterPanel, FilterGroup, Segmented,
+  FilterSelect, SearchField, DateRangeFilter, ActiveFilters) with state in the
+  URL via `hooks/useUrlFilters` and date windows from `lib/dateRange` — the
+  convention is written at the top of `FilterPanel.tsx` (scope → narrowing →
+  dates; removable chips under the panel; the panel outside the re-keyed
+  list). First user: the Signal Log; migrate other lists to it when touched.
 - **Confirmation modals:** every significant/destructive action (delete, stop bot, disconnect exchange, irreversible submit) must be confirmed with the standard yes/no modal `src/components/ui/ConfirmModal.tsx` before executing.
 - **Proper spacing:** give every element room to breathe — consistent padding/margins from the design-token spacing scale, no text touching or clipping against container edges, buttons, or icons (e.g. a title crowding a popover's close button), and comfortable gaps between rows, cards, and controls. Cramped layouts are a bug; fix spacing before shipping.
 - **This is a PWA — responsiveness is non-negotiable:** every page and component must work and look right from small mobile screens up to desktop. Always design mobile-first, use fluid/responsive layouts (flex/grid, relative units, sensible breakpoints), keep tap targets comfortable, and verify each screen at mobile, tablet, and desktop widths before shipping. Never ship a layout that only works at desktop width.
