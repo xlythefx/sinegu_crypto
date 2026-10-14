@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { AlertCircle, AtSign, CheckCircle2 } from 'lucide-react'
-import { HandleInput } from '../auth/ContactHandleFields'
+import HandleInput from '../auth/HandleInput'
 import { DiscordMark } from '../ui/BrandIcons'
 import { useApiData } from '../../hooks/useApiData'
 import { getApiErrorMessage } from '../../services/api'

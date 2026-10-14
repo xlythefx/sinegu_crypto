@@ -1,27 +1,26 @@
 import { useState, type FormEvent } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { FileCheck2 } from 'lucide-react'
 import AuthFrame, { AuthBrand } from '../components/auth/AuthFrame'
 import {
-  BUTTON,
   BUTTON_GHOST,
-  CHECKBOX,
-  CHECKBOX_LABEL,
   ERROR,
   ICON_CHIP,
   INPUT,
-  LINK,
   PILL,
+  STEP_TITLE,
   SUBTITLE,
   TITLE,
 } from '../components/auth/authClasses'
 import { DiscordMark } from '../components/ui/BrandIcons'
-import HeardAboutGrid from '../components/auth/HeardAboutGrid'
-import ContactHandleFields from '../components/auth/ContactHandleFields'
-import { handleError, type SignupSource } from '../lib/signupSources'
+import WizardProgress from '../components/auth/wizard/WizardProgress'
+import WizardNav from '../components/auth/wizard/WizardNav'
+import SocialsStep from '../components/auth/wizard/SocialsStep'
+import SourceStep from '../components/auth/wizard/SourceStep'
 import { forgetReferralCode, recallReferralCode } from '../lib/referral'
 import { isLoggedIn } from '../lib/session'
 import { postAuthPath } from '../lib/emailVerification'
+import { DISCORD_SIGNUP_STEPS } from '../lib/registerWizard'
+import { useSignupWizard } from '../hooks/useSignupWizard'
 import { ApiError } from '../services/api'
 import { completeDiscordSignup } from '../services/discord'
 import { DISCORD_SIGNUP_KEY } from './DiscordCallback'
@@ -50,24 +49,32 @@ function readPending(state: unknown): PendingSignup | null {
 }
 
 /**
- * `/auth/discord/terms` — the one step between "Discord says who you are"
- * and "you have an account": the Terms, exactly as the register form asks
- * for them, plus the name Discord suggested (editable). The account row does
- * not exist until this is accepted; the API holds the profile for 15 minutes.
+ * `/auth/discord/terms` — between "Discord says who you are" and "you have an
+ * account": the register wizard's screens minus the login Discord already
+ * answered — name (Discord's suggestion, editable) → Telegram (optional) →
+ * how you heard about us + the Terms. The account row does not exist until
+ * the last screen is accepted; the API holds the profile for 15 minutes.
  */
 export default function DiscordTerms() {
   const location = useLocation()
   const navigate = useNavigate()
   const [pending] = useState(() => readPending(location.state))
-  const [name, setName] = useState(pending?.profile.name ?? '')
-  const [accepted, setAccepted] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const refCode = recallReferralCode()
-  // Optional, as on the register form ("Friend" pre-ticked for an invite).
-  const [heardFrom, setHeardFrom] = useState<SignupSource[]>(() => (refCode ? ['friend'] : []))
-  const [heardOther, setHeardOther] = useState('')
-  const [telegram, setTelegram] = useState('')
+  const w = useSignupWizard(DISCORD_SIGNUP_STEPS, {
+    name: pending?.profile.name ?? '',
+    // Discord proved the email; there is no login step here.
+    email: '',
+    password: '',
+    confirm: '',
+    telegram: '',
+    discord: null,
+    // An invite link means a friend sent them — pre-ticked; they can untick it.
+    heardFrom: refCode ? ['friend'] : [],
+    heardOther: '',
+    terms: false,
+  })
+  const v = w.values
 
   // Already signed in (this or another tab finished) — nothing left to accept.
   if (isLoggedIn()) return <Navigate to="/dashboard" replace />
@@ -95,22 +102,13 @@ export default function DiscordTerms() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    setError(null)
-    if (!accepted) {
-      setError('Please accept the Terms to create your account.')
-      return
-    }
-    const handleProblem = handleError(telegram, null)
-    if (handleProblem) {
-      setError(handleProblem)
-      return
-    }
+    if (!w.advance()) return
     setLoading(true)
     try {
-      const { user } = await completeDiscordSignup(signupToken, name.trim() || null, refCode, {
-        heardFrom,
-        heardFromOther: heardOther,
-        telegram,
+      const { user } = await completeDiscordSignup(signupToken, v.name.trim() || null, refCode, {
+        heardFrom: v.heardFrom,
+        heardFromOther: v.heardOther,
+        telegram: v.telegram,
       })
       try {
         sessionStorage.removeItem(DISCORD_SIGNUP_KEY)
@@ -121,113 +119,95 @@ export default function DiscordTerms() {
       // Discord vouched for the address → straight in; otherwise a code was mailed.
       navigate(postAuthPath(user), { replace: true })
     } catch (err) {
-      if (err instanceof ApiError) {
-        if (err.errorCode === 'SIGNUP_EXPIRED') {
-          setError('That took too long — please start again with Discord.')
-        } else if (err.status === 429) {
-          setError('Too many attempts. Wait a minute and try again.')
-        } else {
-          const firstFieldError = err.errors ? Object.values(err.errors)[0]?.[0] : undefined
-          setError(firstFieldError ?? err.message)
-        }
+      if (err instanceof ApiError && err.errorCode === 'SIGNUP_EXPIRED') {
+        w.setError('That took too long — please start again with Discord.')
       } else {
-        setError('Something went wrong. Please try again.')
+        w.fail(err)
       }
     } finally {
       setLoading(false)
     }
   }
 
+  const nextLabel = w.isLast
+    ? 'Create my account'
+    : w.step.key === 'socials' && !v.telegram.trim()
+      ? 'Skip for now'
+      : 'Continue'
+
   return (
     <AuthFrame back={{ to: '/auth', label: '← Sign in' }}>
       <AuthBrand />
-      <span className={ICON_CHIP}>
-        <FileCheck2 size={20} />
-      </span>
-      <h1 className={`${TITLE} mt-4`}>One last step</h1>
-      <p className={SUBTITLE}>
-        Discord confirmed who you are. Check your name, accept the Terms, and your
-        account is ready — it goes into the approval queue like every new one.
-      </p>
+      <WizardProgress steps={DISCORD_SIGNUP_STEPS} current={w.index} onJump={w.goTo} />
 
-      <div className="mb-5 flex items-center gap-3 rounded-[12px] border border-border bg-surface2 p-3">
-        <img
-          src={profile.avatar_url}
-          alt=""
-          className="h-10 w-10 shrink-0 rounded-full bg-surface object-cover"
-        />
-        <div className="min-w-0">
-          <p className="truncate font-mono text-[12px] text-muted">@{profile.username}</p>
-          <p className="truncate text-[13px] [overflow-wrap:anywhere]">{profile.email}</p>
-        </div>
-        <span className="ml-auto text-[#5865F2]">
-          <DiscordMark size={18} />
-        </span>
-      </div>
+      {/* Re-keyed per step so each screen replays the reveal. */}
+      <div key={w.step.key} className="animate-[fadeup_0.35s_ease-out]">
+        <h1 className={STEP_TITLE}>{w.step.title}</h1>
+        <p className={SUBTITLE}>{w.step.subtitle}</p>
 
-      <form className="flex flex-col gap-3.5" onSubmit={submit}>
-        <input
-          type="text"
-          placeholder="Full name"
-          className={INPUT}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          maxLength={255}
-          required
-        />
-        <div className="mt-1.5 flex flex-col gap-3.5 border-t border-border pt-4">
-          <HeardAboutGrid
-            value={heardFrom}
-            onChange={setHeardFrom}
-            other={heardOther}
-            onOtherChange={setHeardOther}
-          />
-          <div>
-            <p className="mb-2.5 text-[13px] font-semibold text-text">
-              Telegram <span className="font-normal text-faint">Optional</span>
+        <form className="flex flex-col gap-3.5" onSubmit={submit} noValidate>
+          {w.step.key === 'name' && (
+            <>
+              <div className="flex items-center gap-3 rounded-[12px] border border-border bg-surface2 p-3">
+                <img
+                  src={profile.avatar_url}
+                  alt=""
+                  className="h-10 w-10 shrink-0 rounded-full bg-surface object-cover"
+                />
+                <div className="min-w-0">
+                  <p className="truncate font-mono text-[12px] text-muted">@{profile.username}</p>
+                  <p className="truncate text-[13px] [overflow-wrap:anywhere]">{profile.email}</p>
+                </div>
+                <span className="ml-auto text-[#5865F2]">
+                  <DiscordMark size={18} />
+                </span>
+              </div>
+              <input
+                type="text"
+                placeholder="Full name"
+                className={INPUT}
+                value={v.name}
+                onChange={(e) => w.set('name')(e.target.value)}
+                autoComplete="name"
+                maxLength={255}
+                autoFocus
+              />
+              {refCode && (
+                <p className={PILL}>
+                  Referral code applied:{' '}
+                  <span className="font-bold tracking-[0.08em]">{refCode}</span>
+                </p>
+              )}
+            </>
+          )}
+          {w.step.key === 'socials' && (
+            <SocialsStep telegram={v.telegram} onTelegram={w.set('telegram')} />
+          )}
+          {w.step.key === 'source' && (
+            <SourceStep
+              heardFrom={v.heardFrom}
+              onHeardFrom={w.set('heardFrom')}
+              heardOther={v.heardOther}
+              onHeardOther={w.set('heardOther')}
+              terms={v.terms}
+              onTerms={w.set('terms')}
+            />
+          )}
+
+          {w.error && (
+            <p className={ERROR} role="alert">
+              {w.error}
             </p>
-            <ContactHandleFields telegram={telegram} onTelegramChange={setTelegram} />
-            <p className="mt-1.5 text-[11.5px] text-faint">You can add or change it later in Settings.</p>
-          </div>
-        </div>
-        <label className={CHECKBOX_LABEL}>
-          <input
-            type="checkbox"
-            className={CHECKBOX}
-            checked={accepted}
-            onChange={(e) => setAccepted(e.target.checked)}
-            required
+          )}
+
+          <WizardNav
+            onBack={w.index > 0 ? () => w.goTo(w.index - 1) : undefined}
+            nextLabel={nextLabel}
+            busy={loading}
+            final={w.isLast}
           />
-          <span>
-            I have read and agree to the{' '}
-            <Link to="/terms" target="_blank" className={LINK}>
-              Terms
-            </Link>
-            ,{' '}
-            <Link to="/privacy" target="_blank" className={LINK}>
-              Privacy Policy
-            </Link>{' '}
-            and{' '}
-            <Link to="/risk" target="_blank" className={LINK}>
-              Risk Disclosure
-            </Link>
-            , and I understand that leveraged trading can lose my capital.
-          </span>
-        </label>
-        {error && (
-          <p className={ERROR} role="alert">
-            {error}
-          </p>
-        )}
-        {refCode && (
-          <p className={PILL}>
-            Referral code applied: <span className="font-bold tracking-[0.08em]">{refCode}</span>
-          </p>
-        )}
-        <button type="submit" className={BUTTON} disabled={loading}>
-          {loading ? 'Please wait…' : 'Create my account'}
-        </button>
-      </form>
+        </form>
+      </div>
     </AuthFrame>
   )
 }

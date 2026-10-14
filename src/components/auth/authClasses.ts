@@ -32,6 +32,10 @@ export const TITLE =
 
 export const SUBTITLE = 'mb-6 text-[14px] leading-[1.6] text-muted'
 
+/** A sign-up wizard step's question — a size down from TITLE, so most fit one line. */
+export const STEP_TITLE =
+  'mb-1.5 font-display text-[29px] leading-[1.12] font-extrabold tracking-[-0.02em] max-[760px]:text-[25px]'
+
 /** The icon chip above a single-column page's title (forgot password, Discord steps). */
 export const ICON_CHIP =
   'inline-flex h-11 w-11 items-center justify-center rounded-btn border border-accent-line bg-accent-soft text-accent'

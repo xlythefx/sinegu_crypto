@@ -30,6 +30,8 @@ interface Props {
   onChange: (next: SignupSource[]) => void
   other: string
   onOtherChange: (text: string) => void
+  /** Keep the question for screen readers only — the wizard step's title already asks it. */
+  hideLegend?: boolean
 }
 
 /**
@@ -39,13 +41,19 @@ interface Props {
  * get the native control; the tile is only its skin. Ticking "Other" opens a
  * free-text line under the grid.
  */
-export default function HeardAboutGrid({ value, onChange, other, onOtherChange }: Props) {
+export default function HeardAboutGrid({
+  value,
+  onChange,
+  other,
+  onOtherChange,
+  hideLegend = false,
+}: Props) {
   const toggle = (slug: SignupSource) =>
     onChange(value.includes(slug) ? value.filter((s) => s !== slug) : [...value, slug])
 
   return (
     <fieldset className="m-0 min-w-0 border-0 p-0">
-      <legend className="mb-2.5 p-0 text-[13px] font-semibold text-text">
+      <legend className={hideLegend ? 'sr-only' : 'mb-2.5 p-0 text-[13px] font-semibold text-text'}>
         Where did you hear about us?{' '}
         <span className="font-normal text-faint">Optional · tick all that apply</span>
       </legend>
