@@ -15,6 +15,30 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-10-14 ───────────────────────────────────────────────────────────
   {
+    id: 'positions-show-long-short',
+    date: '2026-10-14',
+    kind: 'fixed',
+    area: 'Trading positions',
+    title: 'Every position says LONG or SHORT, and shows where it went in and out',
+    summary:
+      'Closed trades on the admin Positions page showed “BUY” for a short. That was the order that closed the trade, not its direction. Every positions list now says LONG or SHORT, and the customer’s own Positions page now shows the entry and exit prices as well.',
+    howItWorks: [
+      'Example: on 13 Oct the RENDER trades went in at $2.05 and out at $2.12, at a loss. They were shorts, closed by buying the coins back, so the page printed “BUY”. They now read SHORT, in red. A long reads LONG, in green.',
+      'Under each coin you see its direction and size, for example “SHORT 2,340.000”. The price column shows “In” (the entry) above “Out” (the exit) for a closed trade, or above “Now” (the current price) for an open one.',
+      'Same on the customer’s Positions page (Active and Past Positions), on a user’s Positions tab in User Management, and on the admin Positions page.',
+      'Editing a closed trade now picks LONG or SHORT. The closing order is filled in to match automatically, so the two can never disagree.',
+    ],
+    technical: [
+      'GET /admin/positions and GET /admin/users/{uniId}/positions: closed trades now carry position_side (and entry_price on the per-user one). `side` stays the closing order (BUY closes a short).',
+      'PUT /admin/past-positions/{id} accepts position_side LONG|SHORT and derives side from it (and position_side from side when only side is sent).',
+      'lib/tradeSide.ts is the one place that resolves a direction: position_side first, else the closing order for a trade, else the sign of the size for an open BOTH row.',
+    ],
+    links: [
+      { label: 'Open Trading Positions', href: '/admin/positions' },
+      { label: 'Open My Positions', href: '/dashboard/positions' },
+    ],
+  },
+  {
     id: 'main-account-full-holds-everyone',
     date: '2026-10-14',
     kind: 'improved',

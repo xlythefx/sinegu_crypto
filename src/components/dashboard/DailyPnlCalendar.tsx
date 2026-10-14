@@ -10,6 +10,7 @@ import { getUser } from '../../lib/session'
 import { displaySymbol } from '../../lib/chart'
 import { fmtMediumDate, fmtSignedPct } from '../../lib/format'
 import type { PositionRow } from '../../lib/adminPositionRows'
+import { closedTradeSide } from '../../lib/tradeSide'
 import DayTradesModal from './DayTradesModal'
 import PositionEditModal, {
   type PositionEditPayload,
@@ -86,7 +87,9 @@ function toEditableRow(t: DayTrade): PositionRow {
     pnl: t.realized_pnl,
     fee: t.exchange_fee,
     feeSource: t.fee_source,
-    side: t.side,
+    // The direction, not the closing order — the editor writes LONG / SHORT.
+    side: closedTradeSide(t.position_side, t.side),
+    direction: closedTradeSide(t.position_side, t.side),
     qty: t.position_amt,
     strategy: t.strategy,
     closedAt: t.closed_at,

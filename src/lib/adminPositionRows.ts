@@ -13,6 +13,7 @@
 import type { AdminOpenPosition, AdminPastTrade, CloseSource } from '../types/admin'
 import type { FeeSource } from '../types/dashboard'
 import { displaySymbol } from './chart'
+import { closedTradeSide, openPositionSide, type TradeSide } from './tradeSide'
 
 export type PositionView = 'grouped' | 'rows'
 
@@ -88,8 +89,14 @@ export interface PositionRow {
   fee: number | null
   /** Closed trades only; `mixed` when a merged line's rows disagree. */
   feeSource: RowFeeSource
-  /** LONG / SHORT / BUY / SELL — per-row only; a merge can span both. */
+  /** What the row editor edits — per-row only; a merge can span both. Open
+   *  positions: the stored `position_side` (LONG / SHORT / BOTH). Closed
+   *  trades: the trade's direction, LONG / SHORT — never the closing order. */
   side: string | null
+  /** The direction the table prints (LONG / SHORT), resolved once here: a
+   *  closed trade's `position_side`, else its closing order (BUY closes a
+   *  short); an open BOTH row by the sign of its size. Per-row only. */
+  direction: TradeSide | null
   /** Position size — per-row only, for the same reason. */
   qty: number | null
   strategy: string | null
@@ -183,6 +190,7 @@ export function buildPositionRows(
         fee: null,
         feeSource: null,
         side: p.position_side || null,
+        direction: openPositionSide(p.position_side, p.position_amt),
         qty: p.position_amt,
         strategy: null,
         closedAt: null,
@@ -228,6 +236,7 @@ export function buildPositionRows(
         fee: null,
         feeSource: null,
         side: null,
+        direction: null,
         qty: p.position_amt,
         strategy: null,
         closedAt: null,
@@ -276,7 +285,8 @@ export function buildTradeRows(
         pnl: t.realized_pnl,
         fee: t.exchange_fee,
         feeSource: t.fee_source,
-        side: t.side || null,
+        side: closedTradeSide(t.position_side, t.side),
+        direction: closedTradeSide(t.position_side, t.side),
         qty: t.position_amt,
         strategy: t.strategy,
         closedAt: t.closed_at,
@@ -334,6 +344,7 @@ export function buildTradeRows(
         fee: t.exchange_fee,
         feeSource: t.fee_source,
         side: null,
+        direction: null,
         qty: t.position_amt,
         strategy: null,
         closedAt: t.closed_at,

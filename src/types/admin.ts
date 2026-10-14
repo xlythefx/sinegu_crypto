@@ -2,6 +2,7 @@ import type { AssetSide } from './assets'
 import type { FeeSource } from './dashboard'
 import type { ExchangeKind } from './exchanges'
 import type { ApiInvoice } from '../lib/billing'
+import type { TradeSide } from '../lib/tradeSide'
 
 // Single source of truth — admin tables render the same roles the session
 // carries, so these must never drift apart. Imported as well as re-exported:
@@ -183,6 +184,11 @@ export interface AdminPastTrade {
   /** Commission + funding already deducted; null on a gross row. */
   exchange_fee: number | null
   fee_source: FeeSource
+  /** The trade's direction: LONG / SHORT (BOTH on an old one-way row).
+   *  Optional: an API from before 2026-10-14 does not send it. */
+  position_side?: string
+  /** The order that CLOSED the trade — BUY closes a short. Not the direction;
+   *  `lib/tradeSide.ts` reads it only as a fallback. */
   side: string
   strategy: string | null
   closed_at: string
@@ -208,10 +214,11 @@ export interface AdminPositionUpdate {
   unrealized_profit: number
 }
 
-/** PUT /admin/past-positions/{id} — same, for a closed trade. */
+/** PUT /admin/past-positions/{id} — same, for a closed trade. The direction
+ *  is written; the API derives the closing order (`side`) from it. */
 export interface AdminPastTradeUpdate {
   symbol: string
-  side: string
+  position_side: TradeSide
   position_amt: number
   exit_price: number
   realized_pnl: number

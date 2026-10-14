@@ -524,10 +524,10 @@ export default function AdminPositions() {
 
       <ConfirmModal
         open={closeTarget !== null}
-        title={`Close ${closeTarget ? displaySymbol(closeTarget.symbol) : ''} ${closeTarget?.side?.toUpperCase() ?? ''}?`}
+        title={`Close ${closeTarget ? displaySymbol(closeTarget.symbol) : ''} ${closeTarget?.direction ?? ''}?`}
         message={
           closeTarget
-            ? `This closes ${displaySymbol(closeTarget.symbol)} ${closeTarget.side?.toUpperCase() ?? ''} on ${
+            ? `This closes ${displaySymbol(closeTarget.symbol)} ${closeTarget.direction ?? ''} on ${
                 closeTarget.accountName ?? 'this account'
               } at market price on the exchange — the whole side of that coin on that account. The master's close is posted to the public channel like any exit; customers' closes are not.`
             : ''

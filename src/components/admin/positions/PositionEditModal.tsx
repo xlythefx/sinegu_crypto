@@ -4,6 +4,7 @@ import { AlertTriangle, Lock } from 'lucide-react'
 import { displaySymbol } from '../../../lib/chart'
 import { fmtMoney } from '../../../lib/format'
 import type { PositionRow, RowFeeSource } from '../../../lib/adminPositionRows'
+import type { TradeSide } from '../../../lib/tradeSide'
 import type { AdminPastTradeUpdate, AdminPositionUpdate } from '../../../types/admin'
 
 /* ---- shared class strings (same vocabulary as ApiKeyEditModal) ---- */
@@ -100,7 +101,9 @@ export default function PositionEditModal({
   useEffect(() => {
     if (!row) return
     setSymbol(row.symbol)
-    setSide(row.side ?? (kind === 'trade' ? 'BUY' : 'BOTH'))
+    // A trade's `side` is its direction (LONG / SHORT) — the API derives the
+    // closing order from it. An open row keeps its stored value, BOTH included.
+    setSide(row.side ?? (kind === 'trade' ? 'LONG' : 'BOTH'))
     setQty(String(row.qty ?? 0))
     setPrice(String(row.price))
     setPnl(String(row.pnl))
@@ -160,7 +163,7 @@ export default function PositionEditModal({
             changes,
             input: {
               symbol: nextSymbol,
-              side,
+              position_side: side as TradeSide,
               position_amt: nextQty,
               exit_price: nextPrice,
               realized_pnl: nextPnl,
@@ -243,7 +246,7 @@ export default function PositionEditModal({
               value={side}
               onChange={(e) => setSide(e.target.value)}
             >
-              {(trade ? ['BUY', 'SELL'] : ['BOTH', 'LONG', 'SHORT']).map((s) => (
+              {(trade ? ['LONG', 'SHORT'] : ['BOTH', 'LONG', 'SHORT']).map((s) => (
                 <option key={s} className="bg-surface text-text" value={s}>
                   {s}
                 </option>

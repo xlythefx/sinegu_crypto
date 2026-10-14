@@ -1,8 +1,10 @@
 import { Pencil, Trash2, XOctagon } from 'lucide-react'
 import { displaySymbol } from '../../../lib/chart'
-import { fmtDateTime, fmtMoney, fmtQty, fmtSignedMoney } from '../../../lib/format'
+import { fmtDateTime, fmtMoney, fmtSignedMoney } from '../../../lib/format'
 import type { PositionRow, PositionView, RowFeeSource } from '../../../lib/adminPositionRows'
 import { Pill } from '../../ui/Pill'
+import EntryExitCell from '../../positions/EntryExitCell'
+import SideTag from '../../positions/SideTag'
 import CloseSourceChip from './CloseSourceChip'
 
 // shared table primitives (mirrors the user Positions tables)
@@ -23,13 +25,10 @@ const ICON_BTN_DANGER = `${ICON_BTN} enabled:hover:!border-[color-mix(in_srgb,va
 const CLOSE_BTN =
   'inline-flex items-center gap-1 h-8 px-2.5 border border-[color-mix(in_srgb,var(--red)_40%,transparent)] rounded-[9px] bg-[color-mix(in_srgb,var(--red)_10%,transparent)] text-red text-[12px] font-bold cursor-pointer transition-colors disabled:opacity-45 disabled:cursor-not-allowed enabled:hover:bg-[color-mix(in_srgb,var(--red)_20%,transparent)]'
 
-const LONG_SIDES = ['long', 'buy']
-
-/** Coin-initials avatar + display symbol, with the side/size of a single row. */
+/** Coin-initials avatar + display symbol, with the direction/size of a single row. */
 function TickerCell({ row, view }: { row: PositionRow; view: PositionView }) {
   const display = displaySymbol(row.symbol)
   const initials = display.split('/')[0].slice(0, 3)
-  const long = row.side ? LONG_SIDES.includes(row.side.toLowerCase()) : null
   return (
     <div className="flex items-center gap-[9px] whitespace-nowrap">
       <span className="inline-flex items-center justify-center w-[30px] h-[30px] rounded-[9px] bg-accent-soft border border-accent-line text-accent text-[9.5px] font-semibold flex-none font-mono">
@@ -37,15 +36,8 @@ function TickerCell({ row, view }: { row: PositionRow; view: PositionView }) {
       </span>
       <span className="flex flex-col gap-px">
         <span className="font-bold">{display}</span>
-        {view === 'rows' && row.side && (
-          <span className="flex items-center gap-1.5 text-[10.5px] font-mono">
-            <span className={long ? 'text-green' : 'text-red'}>
-              {row.side.toUpperCase()}
-            </span>
-            {row.qty != null && row.qty !== 0 && (
-              <span className="text-faint">{fmtQty(Math.abs(row.qty))}</span>
-            )}
-          </span>
+        {view === 'rows' && (
+          <SideTag side={row.direction} qty={row.qty} />
         )}
       </span>
     </div>
@@ -98,31 +90,6 @@ function FeeCell({ fee, source }: { fee: number | null; source: RowFeeSource }) 
       {(source === 'actual' || source === 'mixed') && (
         <span className="text-[10px] text-faint uppercase tracking-[0.05em]">{source}</span>
       )}
-    </div>
-  )
-}
-
-/** Entry first, then where it went: the exit of a closed trade ("Out") or
- *  the current mark of an open position ("Now"). */
-function EntryExitCell({
-  entry,
-  exit,
-  exitLabel = 'Out',
-}: {
-  entry: number | null
-  exit: number
-  exitLabel?: string
-}) {
-  return (
-    <div className="inline-flex flex-col items-end gap-px font-mono whitespace-nowrap">
-      <span className="text-[12.5px]">
-        <span className="text-faint text-[10px] uppercase tracking-[0.05em] mr-1.5">In</span>
-        {entry === null ? <span className="text-faint">—</span> : fmtMoney(entry)}
-      </span>
-      <span className="text-[12.5px]">
-        <span className="text-faint text-[10px] uppercase tracking-[0.05em] mr-1.5">{exitLabel}</span>
-        {fmtMoney(exit)}
-      </span>
     </div>
   )
 }

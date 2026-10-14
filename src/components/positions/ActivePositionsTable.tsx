@@ -1,3 +1,5 @@
+import EntryExitCell from './EntryExitCell'
+import SideTag from './SideTag'
 import type { ActivePosition } from './types'
 
 const TH = 'text-left text-[11px] font-bold tracking-[0.04em] uppercase text-faint py-2.5 px-3 border-b border-hair whitespace-nowrap'
@@ -7,7 +9,8 @@ function tickerInitials(ticker: string) {
   return ticker.split('/')[0].slice(0, 3)
 }
 
-/** Active positions table: Ticker · Price · Exchange · Unrealized P&L · Increments. */
+/** Active positions table:
+ *  Ticker (+ LONG/SHORT and size) · Entry / Now · Exchange · Unrealized P&L · Increments. */
 export default function ActivePositionsTable({ rows }: { rows: ActivePosition[] }) {
   return (
     <div className="overflow-x-auto">
@@ -15,7 +18,7 @@ export default function ActivePositionsTable({ rows }: { rows: ActivePosition[] 
         <thead>
           <tr>
             <th className={TH}>Ticker</th>
-            <th className={TH}>Price</th>
+            <th className={TH}>Entry / Now</th>
             <th className={TH}>Exchange</th>
             <th className={TH}>Unrealized P&L</th>
             <th className={TH}>Increments</th>
@@ -34,18 +37,28 @@ export default function ActivePositionsTable({ rows }: { rows: ActivePosition[] 
             const tone = positive ? 'text-green' : 'text-red'
             return (
               <tr
-                key={`${row.ticker}-${row.exchange}`}
+                key={`${row.ticker}-${row.exchange}-${row.side ?? ''}`}
                 className="transition-colors hover:bg-surface2"
               >
                 <td className={TD}>
-                  <div className="flex items-center gap-[9px] font-bold whitespace-nowrap">
+                  <div className="flex items-center gap-[9px] whitespace-nowrap">
                     <span className="inline-flex items-center justify-center w-[30px] h-[30px] rounded-[9px] bg-accent-soft border border-accent-line text-accent text-[9.5px] font-semibold flex-none font-mono">
                       {tickerInitials(row.ticker)}
                     </span>
-                    {row.ticker}
+                    <span className="flex flex-col gap-px">
+                      <span className="font-bold">{row.ticker}</span>
+                      <SideTag side={row.side} qty={row.qty} />
+                    </span>
                   </div>
                 </td>
-                <td className={`${TD} font-mono`}>${row.avgPrice}</td>
+                <td className={TD}>
+                  <EntryExitCell
+                    entry={row.entryPrice}
+                    exit={row.markPrice}
+                    exitLabel="Now"
+                    align="start"
+                  />
+                </td>
                 <td className={TD}>
                   <span className="inline-flex items-center py-[3px] px-[9px] rounded-pill border border-border text-[11.5px] font-semibold text-muted whitespace-nowrap">
                     {row.exchange}

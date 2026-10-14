@@ -1,5 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import EntryExitCell from './EntryExitCell'
 import FeeLine from './FeeLine'
+import SideTag from './SideTag'
 import CloseSourceChip from '../admin/positions/CloseSourceChip'
 import type { ClosedTrade } from './types'
 
@@ -21,7 +23,7 @@ function tickerInitials(ticker: string) {
 }
 
 /** Closed positions table with pagination:
- *  Ticker · Price · Strategy · P&L · Closed · Closed At. */
+ *  Ticker (+ LONG/SHORT and size) · Entry / Exit · Strategy · P&L · Closed · Closed At. */
 export default function ClosedPositionsTable({
   trades,
   page,
@@ -38,7 +40,7 @@ export default function ClosedPositionsTable({
           <thead>
             <tr>
               <th className={TH}>Ticker</th>
-              <th className={TH}>Price</th>
+              <th className={TH}>Entry / Exit</th>
               <th className={TH}>Strategy</th>
               <th className={TH}>P&L</th>
               <th className={TH}>Closed</th>
@@ -62,11 +64,14 @@ export default function ClosedPositionsTable({
                   className="transition-colors hover:bg-surface2"
                 >
                   <td className={TD}>
-                    <div className="flex items-center gap-[9px] font-bold whitespace-nowrap">
+                    <div className="flex items-center gap-[9px] whitespace-nowrap">
                       <span className="inline-flex items-center justify-center w-[30px] h-[30px] rounded-[9px] bg-accent-soft border border-accent-line text-accent text-[9.5px] font-semibold flex-none font-mono">
                         {tickerInitials(t.ticker)}
                       </span>
-                      {t.ticker}
+                      <span className="flex flex-col gap-px">
+                        <span className="font-bold">{t.ticker}</span>
+                        <SideTag side={t.side} qty={t.qty} />
+                      </span>
                     </div>
                     {/* Admin user detail only (the trader adapters never set it);
                         under the ticker because Closed At hides on phones. */}
@@ -76,7 +81,9 @@ export default function ClosedPositionsTable({
                       </div>
                     )}
                   </td>
-                  <td className={`${TD} font-mono`}>${t.price}</td>
+                  <td className={TD}>
+                    <EntryExitCell entry={t.entryPrice} exit={t.exitPrice} align="start" />
+                  </td>
                   <td className={`${TD} text-muted text-[12.5px]`}>{t.strategy}</td>
                   <td className={TD}>
                     <div className="flex flex-col gap-0.5">

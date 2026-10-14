@@ -1,11 +1,14 @@
 import { displaySymbol } from '../../lib/chart'
-import { fmtDateTime, fmtNum } from '../../lib/format'
+import { fmtDateTime } from '../../lib/format'
+import { closedTradeSide, openPositionSide } from '../../lib/tradeSide'
 import type { OpenPosition, PastPosition } from '../../types/dashboard'
 import type { ExchangeKind } from '../../types/exchanges'
 import { EXCHANGE_META } from '../exchanges/meta'
 import type { ActivePosition, ClosedTrade, Exchange } from './types'
 
 const num = (v: string | null): number => (v === null ? 0 : Number(v))
+/** A price that may not be recorded — null stays null, never $0. */
+const price = (v: string | null): number | null => (v === null ? null : Number(v))
 
 /** The venue label for a row; rows from an API that predates the `exchange`
  *  column are Binance rows. */
@@ -17,9 +20,13 @@ function exchangeLabel(exchange: ExchangeKind | undefined): Exchange {
 export function toActivePosition(p: OpenPosition): ActivePosition {
   const upnl = num(p.unrealized_profit)
   const notional = Math.abs(num(p.notional))
+  const amt = num(p.position_amt)
   return {
     ticker: displaySymbol(p.symbol),
-    avgPrice: fmtNum(num(p.entry_price)),
+    side: openPositionSide(p.position_side, amt),
+    qty: amt,
+    entryPrice: price(p.entry_price),
+    markPrice: price(p.mark_price),
     exchange: exchangeLabel(p.exchange),
     unrealizedPnl: upnl,
     pnlPct: notional > 0 ? (upnl / notional) * 100 : 0,
@@ -36,7 +43,10 @@ export function toClosedTrade(p: PastPosition, pctBase: number): ClosedTrade {
   const pnl = num(p.realized_pnl)
   return {
     ticker: displaySymbol(p.symbol),
-    price: fmtNum(num(p.exit_price)),
+    side: closedTradeSide(p.position_side, p.side),
+    qty: num(p.position_amt),
+    entryPrice: price(p.entry_price),
+    exitPrice: price(p.exit_price),
     strategy: p.strategy ?? 'Manual',
     exchange: exchangeLabel(p.exchange),
     pnl,
