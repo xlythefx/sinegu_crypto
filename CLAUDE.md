@@ -636,9 +636,9 @@ login (email, password, confirm) → Telegram / Discord → where you heard
 about us + Terms (`components/auth/wizard/`, `hooks/useSignupWizard`,
 `lib/registerWizard`). Answers survive Back; a server refusal jumps to the
 step that owns the field (`stepForField`). The Discord sign-up runs the same
-screens minus the login. The brand panel's copy follows the step, and its
-facts row is TRUE facts only (it used to print placeholder "48.2K traders ·
-$128M profit" from the design handoff).
+screens minus the login. The brand panel's copy follows the step, and it has
+NO stats row (owner — it used to print the design handoff's placeholder
+"48.2K traders · $128M profit"; never put invented numbers back).
 
 Owner's request, for statistics later: the register wizard (and the Discord
 sign-up) asks "Where did you hear about us?" — nine checkable tiles,

@@ -27,7 +27,7 @@ export const ADMIN_CHANGES: AdminChange[] = [
       'Back keeps everything already typed. The finished steps in the progress bar can be clicked to jump back to them.',
       'If the server refuses something at the end — for example an email that already has an account — the form jumps back to the step with that field and shows the message there.',
       'The panel beside the form changes with each step: what Pixel Alpha is, why your money stays on your exchange, who answers your questions, and what happens after you sign up.',
-      'The numbers under that panel used to read “48.2K traders · $128M profit”. Those were placeholder numbers from the original design, never real ones, so they now show facts: 3 exchanges, $0 to start, 20% of profit only.',
+      'The numbers under that panel (“48.2K traders · $128M profit”) were placeholder numbers from the original design, never real ones, and have been removed.',
       'Password fields now have a show / hide eye, on sign-in too.',
     ],
     technical: [
