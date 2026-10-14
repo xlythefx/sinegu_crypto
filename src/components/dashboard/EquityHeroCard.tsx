@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type PointerEvent } from 'react'
+import { useId, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Link2, Plus } from 'lucide-react'
 import { linePath, linePoints } from '../../lib/chart'
@@ -16,6 +16,23 @@ const VB_W = 1200
 const VB_H = 190
 
 type RangeKey = '1W' | '1M' | '3M' | 'YTD' | 'All'
+
+/** What money the card shows: real (gold), demo / testnet only (silver), or
+ *  real pooled with a demo balance under "All" (gold, and flagged). */
+export type EquityMode = 'live' | 'demo' | 'mixed'
+
+/** The card's metal — its tint, border, shine and chart line all read it. */
+const TONE: Record<EquityMode, string> = {
+  live: 'var(--accent)',
+  demo: 'var(--silver)',
+  mixed: 'var(--accent)',
+}
+
+const TINTED =
+  'border-[color-mix(in_srgb,var(--tone)_30%,var(--border))] bg-[linear-gradient(160deg,color-mix(in_srgb,var(--tone)_8%,var(--surface)),var(--surface2)_75%)] shadow-[inset_0_1px_0_color-mix(in_srgb,var(--tone)_16%,transparent)]'
+const PLAIN = 'border-border bg-[linear-gradient(160deg,var(--surface),var(--surface2))]'
+const SILVER_PILL =
+  'inline-flex items-center gap-[5px] font-mono text-[10px] text-silver border border-[color-mix(in_srgb,var(--silver)_40%,transparent)] bg-[color-mix(in_srgb,var(--silver)_10%,transparent)] py-[2px] px-2 rounded-pill'
 
 const RANGES: RangeKey[] = ['1W', '1M', '3M', 'YTD', 'All']
 
@@ -116,10 +133,16 @@ interface EquityHeroCardProps {
   /** Under a venue filter, the venue the empty state should name ("No MEXC
    *  account connected") instead of the generic "connect a broker". */
   emptyExchangeLabel?: string
+  /** Real money (gold), demo only (silver) or both pooled. Defaults to live. */
+  mode?: EquityMode
 }
 
 /** Equity hero: ACCOUNT EQUITY label + LIVE pill, big mono balance, the
  *  realized/unrealized/total split, range tabs and the area chart.
+ *
+ *  A connected card is tinted by the money it shows — gold for real funds,
+ *  silver (with a DEMO ACCOUNT pill) when every account in view trades test
+ *  funds — and a band of light sweeps across it every 5 seconds.
  *
  *  The split and the line are BEFORE exchange fees — the strategy's result;
  *  hovering a figure or a point shows what landed after fees. The big balance
@@ -136,7 +159,12 @@ export default function EquityHeroCard({
   curve,
   connected = true,
   emptyExchangeLabel,
+  mode = 'live',
 }: EquityHeroCardProps) {
+  const tone = connected ? TONE[mode] : null
+  // Per-instance: two cards on one page (a preview, a future comparison)
+  // sharing an id would both paint the FIRST card's metal.
+  const fillId = `dheroFill${useId().replace(/:/g, '')}`
   const feesSince = fees.trades_without_fee > 0 ? fees.since : null
   const [range, setRange] = useState<RangeKey>('All')
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
@@ -241,20 +269,36 @@ export default function EquityHeroCard({
 
   return (
     <section
-      className="rounded-card border border-border bg-[linear-gradient(160deg,var(--surface),var(--surface2))] py-[22px] px-6 mb-stack"
+      className={`relative rounded-card border py-[22px] px-6 mb-stack ${tone ? TINTED : PLAIN}`}
+      style={tone ? ({ '--tone': tone } as CSSProperties) : undefined}
       data-aos="fade-up"
     >
       <div className="flex items-start justify-between mb-stack gap-stack flex-wrap">
         <div>
-          <div className="flex items-center gap-[9px] mb-[7px]">
+          <div className="flex items-center gap-[9px] gap-y-1.5 mb-[7px] flex-wrap">
             <span className="font-mono text-[11.5px] font-semibold tracking-[1.2px] text-faint">
               ACCOUNT EQUITY
             </span>
-            {connected ? (
-              <span className="inline-flex items-center gap-[5px] font-mono text-[10px] text-green border border-[rgba(47,214,122,0.35)] bg-[rgba(47,214,122,0.08)] py-[2px] px-2 rounded-pill">
-                <span className="w-[5px] h-[5px] rounded-full bg-green animate-[pulse_1.6s_infinite]" />
-                LIVE
+            {connected && mode === 'demo' ? (
+              <span className={SILVER_PILL}>
+                <span className="w-[5px] h-[5px] rounded-full bg-silver animate-[pulse_1.6s_infinite]" />
+                DEMO ACCOUNT
               </span>
+            ) : connected ? (
+              <>
+                <span className="inline-flex items-center gap-[5px] font-mono text-[10px] text-green border border-[rgba(47,214,122,0.35)] bg-[rgba(47,214,122,0.08)] py-[2px] px-2 rounded-pill">
+                  <span className="w-[5px] h-[5px] rounded-full bg-green animate-[pulse_1.6s_infinite]" />
+                  LIVE
+                </span>
+                {mode === 'mixed' && (
+                  <span
+                    className={SILVER_PILL}
+                    title="A demo account's test funds are included in these figures."
+                  >
+                    INCLUDES DEMO
+                  </span>
+                )}
+              </>
             ) : (
               <span className="inline-flex items-center gap-[5px] font-mono text-[10px] text-faint border border-border bg-surface2 py-[2px] px-2 rounded-pill">
                 <span className="w-[5px] h-[5px] rounded-full bg-faint" />
@@ -265,6 +309,11 @@ export default function EquityHeroCard({
           <div className="font-mono text-[44px] font-extrabold tracking-[-1.2px] leading-none max-[900px]:text-[34px]">
             ${fmtNum(equity)}
           </div>
+          {connected && mode === 'demo' && (
+            <p className="mt-2 text-[12px] text-muted">
+              Test funds on the exchange&apos;s demo network — not real money.
+            </p>
+          )}
           {connected && (
             <div className="flex gap-[26px] mt-stack flex-wrap">
               <PnlStat
@@ -350,9 +399,9 @@ export default function EquityHeroCard({
             className="w-full h-[300px] block max-[900px]:h-[200px]"
           >
             <defs>
-              <linearGradient id="dheroFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--accent)" stopOpacity=".32" />
-                <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+              <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--tone)" stopOpacity=".32" />
+                <stop offset="100%" stopColor="var(--tone)" stopOpacity="0" />
               </linearGradient>
             </defs>
             <g stroke="var(--hair)" strokeWidth="1">
@@ -364,12 +413,12 @@ export default function EquityHeroCard({
               <>
                 <path
                   d={`${path} L${VB_W},${VB_H} L0,${VB_H} Z`}
-                  fill="url(#dheroFill)"
+                  fill={`url(#${fillId})`}
                 />
                 <path
                   d={path}
                   fill="none"
-                  stroke="var(--accent)"
+                  stroke="var(--tone)"
                   strokeWidth="2.5"
                   strokeLinejoin="round"
                   strokeLinecap="round"
@@ -385,11 +434,11 @@ export default function EquityHeroCard({
           {hovered && (
             <>
               <span
-                className="pointer-events-none absolute inset-y-0 w-px bg-[var(--accent)] opacity-40"
+                className="pointer-events-none absolute inset-y-0 w-px bg-[var(--tone)] opacity-40"
                 style={{ left: `${hovered.xFrac * 100}%` }}
               />
               <span
-                className="pointer-events-none absolute h-[11px] w-[11px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-accent shadow-[0_0_0_4px_var(--glow)]"
+                className="pointer-events-none absolute h-[11px] w-[11px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-[var(--tone)] shadow-[0_0_0_4px_color-mix(in_srgb,var(--tone)_18%,transparent)]"
                 style={{
                   left: `${hovered.xFrac * 100}%`,
                   top: `${hovered.yFrac * 100}%`,
@@ -443,6 +492,17 @@ export default function EquityHeroCard({
             </span>
           ))}
         </div>
+      )}
+      {/* The shine: a band of the card's own metal swept across every 5 s.
+          Last child so it passes over the figures too; its clip lives here
+          rather than on the section, which must not crop the chart readout. */}
+      {tone && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 overflow-hidden rounded-card"
+        >
+          <span className="motion-sheen absolute inset-y-0 left-0 w-[38%] bg-[linear-gradient(100deg,transparent,color-mix(in_srgb,var(--tone)_15%,transparent)_50%,transparent)] animate-[cardshine_5s_ease-in-out_infinite]" />
+        </span>
       )}
     </section>
   )

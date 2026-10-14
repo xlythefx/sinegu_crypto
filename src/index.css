@@ -27,6 +27,7 @@
   --color-green: var(--green);
   --color-red: var(--red);
   --color-teal: var(--teal);
+  --color-silver: var(--silver);
   --color-on-accent: var(--onAccent);
 
   --font-display: 'Bricolage Grotesque', sans-serif;
@@ -134,6 +135,8 @@
   --red: #ff5a5a;
   /* Collaborator role badge — distinct from accent/green/red. */
   --teal: #2cc5c9;
+  /* Demo / testnet money — the silver twin of the gold accent. */
+  --silver: #c4ccd8;
   --glow: rgba(217, 173, 85, 0.16);
   --glowAuth: rgba(217, 173, 85, 0.22);
   --onAccent: #0a0c11;
@@ -157,6 +160,7 @@
   --green: #0fae76;
   --red: #e0492b;
   --teal: #0e8f99;
+  --silver: #7f8a9a;
   --glow: rgba(184, 134, 42, 0.12);
   --glowAuth: rgba(184, 134, 42, 0.18);
   --onAccent: #ffffff;
@@ -354,6 +358,18 @@ body {
   }
   to {
     transform: translateX(260%) skewX(-18deg);
+  }
+}
+/* The equity card's shine: one diagonal sweep, then a rest, every 5 s.
+   The sweep is the first ~25% of the cycle so the card is still most of
+   the time (paired with .motion-sheen, which reduced motion switches off). */
+@keyframes cardshine {
+  0% {
+    transform: translateX(-120%) skewX(-18deg);
+  }
+  26%,
+  100% {
+    transform: translateX(340%) skewX(-18deg);
   }
 }
 /* Loading shimmer — a soft highlight travelling across a placeholder while

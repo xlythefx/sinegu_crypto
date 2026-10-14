@@ -15,6 +15,25 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-10-14 ───────────────────────────────────────────────────────────
   {
+    id: 'equity-card-gold-silver',
+    date: '2026-10-14',
+    kind: 'improved',
+    area: 'Trading dashboard',
+    title: 'The Account Equity card is gold for real money and silver for a demo account',
+    summary:
+      'The big Account Equity card on the trading dashboard now has a light gold shade and a soft shine that passes over it every 5 seconds. When the account in view trades test funds (a demo / testnet account), the card is silver instead and says DEMO ACCOUNT, so nobody mistakes play money for real money.',
+    howItWorks: [
+      'Real money: gold shade, gold chart line, and the green LIVE badge as before.',
+      'Demo only: silver shade and chart line, a silver DEMO ACCOUNT badge in place of LIVE, and the line “Test funds on the exchange’s demo network — not real money.” under the balance.',
+      'Both at once: a customer with a real Binance account and a demo account sees them pooled under “All”. The card stays gold and adds a silver INCLUDES DEMO badge. Picking the demo exchange at the top shows that one alone, in silver.',
+      'The shine is one gentle sweep every 5 seconds. It is switched off for people whose device asks for reduced motion.',
+    ],
+    technical: [
+      'GET /dashboard/summary carries demo_accounts (accounts in scope with demo = 1). EquityHeroCard mode: live | demo | mixed; --silver token (both themes); @keyframes cardshine.',
+    ],
+    links: [{ label: 'Open the dashboard', href: '/dashboard' }],
+  },
+  {
     id: 'closed-trades-show-streak-size',
     date: '2026-10-14',
     kind: 'new',

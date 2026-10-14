@@ -86,6 +86,9 @@ export interface DashboardSummary {
   /** Connected accounts inside that scope; 0 under a venue filter means
    *  "nothing connected on that exchange", not an emptied account. */
   accounts: number
+  /** How many of `accounts` trade test funds (testnet / demo). Equal to
+   *  `accounts` = the card is demo money. Optional: older APIs omit it. */
+  demo_accounts?: number
   equity: number
   balance: number
   /** After fees — the figure beside a list of trades (Positions page). */

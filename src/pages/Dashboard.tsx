@@ -1,7 +1,7 @@
 import { Navigate } from 'react-router-dom'
 import DashboardLayout from '../components/dashboard/DashboardLayout'
 import DataState from '../components/dashboard/DataState'
-import EquityHeroCard from '../components/dashboard/EquityHeroCard'
+import EquityHeroCard, { type EquityMode } from '../components/dashboard/EquityHeroCard'
 import MetricsRail from '../components/dashboard/MetricsRail'
 import EquityByGroupCard from '../components/dashboard/EquityByGroupCard'
 import HighWaterMarkCard from '../components/dashboard/HighWaterMarkCard'
@@ -46,6 +46,11 @@ export default function Dashboard() {
       ? sessionUser?.has_exchange_account !== false
       : data.accounts > 0
     : true
+  // Gold for real money; silver when every account in view trades test
+  // funds; real pooled with demo (the "All" view) stays gold and says so.
+  const demoAccounts = data?.demo_accounts ?? 0
+  const equityMode: EquityMode =
+    !data || demoAccounts === 0 ? 'live' : demoAccounts >= data.accounts ? 'demo' : 'mixed'
 
   return (
     <DashboardLayout title="Trading Dashboard">
@@ -73,6 +78,7 @@ export default function Dashboard() {
             curve={data.equity_curve}
             connected={connected}
             emptyExchangeLabel={venueLabel}
+            mode={equityMode}
           />
           <MetricsRail metrics={data.metrics} fees={data.fees} />
 
