@@ -1,4 +1,4 @@
-import type { FeeSource } from '../../types/dashboard'
+import type { FeeSource, TradeStreak } from '../../types/dashboard'
 import type { CloseSource } from '../../types/admin'
 import type { TradeSide } from '../../lib/tradeSide'
 
@@ -46,6 +46,8 @@ export interface ClosedTrade {
   feeSource: FeeSource
   positions: number
   closedAt: string
+  /** Set when streak sizing sized this trade; staff rows also carry the sizes. */
+  streak?: TradeStreak | null
   /**
    * Admin only: who closed it. The trader pages never set it, so the
    * "Closed outside the bot" chip never shows to a customer.

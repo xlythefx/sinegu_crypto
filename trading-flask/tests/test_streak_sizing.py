@@ -30,15 +30,20 @@ def _entry_ok(api, symbol, side, quantity, price):
     return {"result": {"orderId": 1}, "symbol": symbol, "quantity": quantity, "price": price}
 
 
-def _run(accounts, asset, *, runs=None, positions=(), action="BUY", exit_=None):
+def _run(accounts, asset, *, runs=None, positions=(), action="BUY", exit_=None, tags=(), strategy=None, record=None):
     """Run one LTC job. `runs` is the streaks payload's map, or None for a
-    failed read. Returns (summary, entry mock, exit mock, GET calls made)."""
+    failed read; `tags` the open-strategies rows the API holds. Returns
+    (summary, entry mock, exit mock, GET calls made); `record`, when given,
+    receives the POST and bookkeeping mocks."""
     asked: list[tuple[str, dict]] = []
 
     def fake_get(path, *args, **kwargs):
         asked.append((path, kwargs.get("params") or {}))
         if path == "streaks":
             return None if runs is None else {"success": True, "streaks": runs}
+        if path == "open-strategies":
+            key = (kwargs.get("params") or {}).get("api_key")
+            return {"success": True, "open_strategies": [t for t in tags if t["api_key"] == key]}
         return {"success": True, "positions": list(positions)}
 
     with (
@@ -51,11 +56,14 @@ def _run(accounts, asset, *, runs=None, positions=(), action="BUY", exit_=None):
             side_effect=exit_ or (lambda api, t, ps, p: {"result": {"orderId": 2}, "closed_quantity": 75.0, "entry_price": 60.0}),
         ) as exit_mock,
         patch.object(webhook.engine_client, "get_json", side_effect=fake_get),
-        patch.object(webhook.engine_client, "post_json", return_value={"success": True}),
+        patch.object(webhook.engine_client, "post_json", return_value={"success": True}) as post_mock,
         patch.object(webhook.engine_client, "delete_json", return_value={"success": True}),
-        patch.object(webhook, "_BOOKKEEPING_EXECUTOR", MagicMock()),
+        patch.object(webhook, "_BOOKKEEPING_EXECUTOR", MagicMock()) as bookkeeping,
     ):
-        summary = webhook._process_trade_job(action, "LTCUSDT", 60.0, None, None)
+        summary = webhook._process_trade_job(action, "LTCUSDT", 60.0, None, strategy)
+    if record is not None:
+        record["post"] = post_mock
+        record["bookkeeping"] = bookkeeping
     return summary, entry_mock, exit_mock, asked
 
 
@@ -240,3 +248,79 @@ def test_the_loader_reads_the_ladder_only_when_switched_on():
     assert list(assets_api._streak_ladder(on)["loss"]) == [1, 3]
     assert assets_api._streak_ladder({**on, "streak_sizing_enabled": False}) == {}
     assert assets_api._streak_ladder({}) == {}   # an API older than the feature
+
+
+# --- the step travels from the entry to its closed trade (2026-10-14) ----------------
+
+def _tags_posted(record) -> dict:
+    """api_key -> the open-strategies payload each entry posted."""
+    return {c.args[1]["api_key"]: c.args[1] for c in record["post"].call_args_list if c.args[0] == "open-strategies"}
+
+
+def test_an_entry_remembers_the_step_that_sized_it(fake_accounts, ltc):
+    """Live One is 3 losses down (step 3 → 25 instead of 50); Live Three is one
+    win up, below the first win step, so it trades normal size and its tag
+    carries no streak — but is still written, which clears a stale one."""
+    record: dict = {}
+    _run(fake_accounts, ltc, runs={"live-key-1": -3, "live-key-3": 1}, record=record)
+
+    tags = _tags_posted(record)
+    assert {k: tags["live-key-1"][k] for k in webhook.STREAK_TAG_FIELDS} == {
+        "streak_kind": "loss", "streak_run": 3, "streak_step": 3, "streak_size": 25.0, "streak_base_size": 50.0,
+    }
+    assert "streak_kind" not in tags["live-key-3"]
+    assert "strategy" not in tags["live-key-3"]   # no label on this signal: the API keeps the old one
+
+
+def test_a_coin_without_a_ladder_writes_no_label_less_tag(fake_accounts, ltc):
+    ltc["streak_sizes"] = {}
+    record: dict = {}
+    _run(fake_accounts, ltc, runs={}, record=record)
+    assert _tags_posted(record) == {}
+
+    _run(fake_accounts, ltc, runs={}, strategy="ABCD-v1", record=record)
+    assert all(set(t) == {"api_key", "symbol", "position_side", "strategy"} for t in _tags_posted(record).values())
+
+
+def test_the_close_carries_the_entrys_step(fake_accounts, ltc):
+    tag = {"api_key": "live-key-1", "symbol": "LTCUSDT", "position_side": "LONG", "strategy": "ABCD-v1",
+           "streak_kind": "loss", "streak_run": 3, "streak_step": 3, "streak_size": "25.000000",
+           "streak_base_size": "50.000000"}
+    record: dict = {}
+    _run(fake_accounts[:1], ltc, runs={"live-key-1": -3}, action="EXIT_LONG", tags=[tag],
+         strategy="ABCD-v1", record=record)
+
+    (submit,) = record["bookkeeping"].submit.call_args_list
+    assert submit.args[7] == "ABCD-v1"                      # the signal's own label still wins
+    assert submit.args[-1] == {k: tag[k] for k in webhook.STREAK_TAG_FIELDS}
+
+
+def test_an_exit_on_a_coin_without_a_ladder_makes_no_extra_read(fake_accounts, ltc):
+    ltc["streak_sizes"] = {}
+    record: dict = {}
+    _, _, _, asked = _run(fake_accounts[:1], ltc, runs={}, action="EXIT_LONG", strategy="ABCD-v1", record=record)
+    assert not [p for p, _ in asked if p == "open-strategies"]
+    (submit,) = record["bookkeeping"].submit.call_args_list
+    assert submit.args[-1] is None
+
+
+def test_the_close_row_posts_the_streak_fields():
+    account = {"api_key": "k", "uni_id": "u1", "name": "A", "balance": 1000.0, "exchange": "binance"}
+    streak = {"streak_kind": "win", "streak_run": 2, "streak_step": 2, "streak_size": 60.0, "streak_base_size": 50.0}
+    with (
+        patch.object(webhook, "get_order_fill_summary", return_value=(12.5, 101.0)),
+        patch.object(webhook, "_consume_strategy"),
+        patch.object(webhook.notify, "report_exit_fill"),
+        patch.object(webhook.engine_client, "post_json", return_value={"success": True}) as post,
+    ):
+        webhook._deferred_close_bookkeeping(
+            account, MagicMock(), "LTCUSDT", "LONG", 120.0, 60.0, "s", {"orderId": 9}, streak=streak,
+        )
+    (sync,) = [c for c in post.call_args_list if c.args[0] == "past-positions/sync"]
+    row = sync.args[1]["rows"][0]
+    assert {k: row[k] for k in webhook.STREAK_TAG_FIELDS} == streak
+
+
+def test_an_unreadable_run_tags_no_streak():
+    """An unknown run trades base size — the tag must not claim a step."""
+    assert webhook._entry_streak({"streak_step": 0, "run": 0}) is None

@@ -365,15 +365,42 @@ def _upsert_position_api(account: dict, symbol: str, position_side: str, amount:
     engine_client.post_json("positions/upsert", payload, exchange=exchange_of(account))
 
 
-def _store_open_strategy(account: dict, symbol: str, position_side: str, strategy: str) -> None:
-    engine_client.post_json(
-        "open-strategies",
-        {"api_key": account["api_key"], "symbol": symbol, "position_side": position_side, "strategy": strategy},
-        exchange=exchange_of(account),
-    )
+# The five fields an entry's tag carries to its closed trade when a streak
+# step set the size (the API's EntryStreak). Absent = normal size.
+STREAK_TAG_FIELDS = ("streak_kind", "streak_run", "streak_step", "streak_size", "streak_base_size")
 
 
-def _recover_strategy(account: dict, symbol: str, position_side: str) -> Optional[str]:
+def _entry_streak(q: dict) -> Optional[dict]:
+    """The streak step that sized this entry, as its tag stores it — None at
+    normal size, including an unreadable run (which trades base size). The
+    run is sent unsigned; the kind says which way it ran."""
+    if not q.get("streak_step"):
+        return None
+    return {
+        "streak_kind": q["streak_kind"],
+        "streak_run": abs(int(q["run"])),
+        "streak_step": int(q["streak_step"]),
+        "streak_size": q["entry_size"],
+        "streak_base_size": q["base_size"],
+    }
+
+
+def _store_open_strategy(
+    account: dict, symbol: str, position_side: str, strategy: Optional[str], streak: Optional[dict] = None
+) -> None:
+    """Remember an entry's tag: its strategy label and, on a coin with a
+    streak ladder, the step that sized it. A label-less entry keeps the label
+    an earlier entry of the stack left (the API's rule)."""
+    payload: dict = {"api_key": account["api_key"], "symbol": symbol, "position_side": position_side}
+    if strategy:
+        payload["strategy"] = strategy
+    if streak:
+        payload |= streak
+    engine_client.post_json("open-strategies", payload, exchange=exchange_of(account))
+
+
+def _recover_entry_tag(account: dict, symbol: str, position_side: str) -> Optional[dict]:
+    """The open position's tag (strategy + streak fields), or None."""
     data = engine_client.get_json(
         "open-strategies", params={"api_key": account["api_key"], "symbol": symbol}, exchange=exchange_of(account)
     )
@@ -381,8 +408,15 @@ def _recover_strategy(account: dict, symbol: str, position_side: str) -> Optiona
         return None
     for row in data.get("open_strategies", []):
         if row.get("position_side") == position_side:
-            return row.get("strategy")
+            return row
     return None
+
+
+def _streak_of_tag(tag: Optional[dict]) -> Optional[dict]:
+    """The streak fields of a recovered tag, or None when it holds no streak."""
+    if not tag or not tag.get("streak_kind"):
+        return None
+    return {k: tag.get(k) for k in STREAK_TAG_FIELDS}
 
 
 def _consume_strategy(account: dict, symbol: str, position_side: str) -> None:
@@ -458,6 +492,7 @@ def _deferred_close_bookkeeping(
     exit_batch_id: Optional[str] = None,
     increments_closed: Optional[int] = None,
     max_increments: Optional[int] = None,
+    streak: Optional[dict] = None,
 ) -> None:
     """After a close: fill summary from the venue -> past-position row + strategy consume.
     Runs on the bookkeeping pool, off the close path; the poller safety-net catches misses.
@@ -496,6 +531,10 @@ def _deferred_close_bookkeeping(
                         "order_id": order_id if order_id is not None else 0,
                         "closed_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
                         "strategy": strategy,
+                        # Whether a streak step sized the entries this close
+                        # took off, read back from the entry's tag. Omitted
+                        # at normal size; the API's null-fill keeps it either way.
+                        **(streak or {}),
                     }
                 ]
             },
@@ -913,8 +952,11 @@ def _run_account(
             fill_price = _avg_fill_price(result.get("result"))
             new_amount = (open_amounts or {}).get(account["api_key"], 0.0) + quantity
             _upsert_position_api(account, symbol, position_side, new_amount, fill_price or price)
-            if strategy:
-                _store_open_strategy(account, symbol, position_side, strategy)
+            # A coin with a streak ladder always writes the tag, so the close can
+            # say whether a step sized it (and a normal-size entry clears a
+            # stale one left by a position closed outside the bot).
+            if strategy or _has_streak_ladder(asset):
+                _store_open_strategy(account, symbol, position_side, strategy, _entry_streak(q))
             _bump("accounts_traded")
             return base | {
                 "status": "filled",
@@ -958,14 +1000,22 @@ def _run_account(
 
         closed_qty = float(result.get("closed_quantity") or 0)
         entry_price = result.get("entry_price")
-        tag = strategy or _recover_strategy(account, symbol, position_side)
+        # Read the entry's tag NOW, before a later entry can overwrite it —
+        # only when it can tell us something: a missing label, or a coin with
+        # a streak ladder (every other exit keeps making no extra call).
+        entry_tag = (
+            _recover_entry_tag(account, symbol, position_side)
+            if not strategy or _has_streak_ladder(asset)
+            else None
+        )
+        tag = strategy or (entry_tag or {}).get("strategy")
         increments_closed, max_increments = _closed_increments(account, asset, symbol, closed_qty, streak_runs)
         _upsert_position_api(account, symbol, position_side, 0.0, None)
         _BOOKKEEPING_EXECUTOR.submit(
             _deferred_close_bookkeeping,
             account, api, symbol, position_side, closed_qty, entry_price, tag,
             result.get("result"), exit_batch_id,
-            increments_closed, max_increments,
+            increments_closed, max_increments, _streak_of_tag(entry_tag),
         )
         _bump("accounts_traded")
         return base | {

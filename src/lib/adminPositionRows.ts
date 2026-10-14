@@ -11,7 +11,7 @@
  *  renders one body and the view only decides how many ids each line owns. */
 
 import type { AdminOpenPosition, AdminPastTrade, CloseSource } from '../types/admin'
-import type { FeeSource } from '../types/dashboard'
+import type { FeeSource, TradeStreak } from '../types/dashboard'
 import { displaySymbol } from './chart'
 import { closedTradeSide, openPositionSide, type TradeSide } from './tradeSide'
 
@@ -107,6 +107,9 @@ export interface PositionRow {
    *  whose rows disagree). Optional so callers building a row by hand
    *  (the P&L calendar's editor) need not invent one. */
   closeSource?: CloseSource
+  /** Closed trades, per-row only: the streak step that sized it (null =
+   *  normal size). A merged line spans trades, so it never carries one. */
+  streak?: TradeStreak | null
 }
 
 type AnyRow = AdminOpenPosition | AdminPastTrade
@@ -292,6 +295,7 @@ export function buildTradeRows(
         closedAt: t.closed_at,
         broker: t.broker,
         closeSource: t.close_source ?? null,
+        streak: t.streak ?? null,
       }))
       .sort((a, b) => ((a.closedAt ?? '') < (b.closedAt ?? '') ? 1 : -1))
   }

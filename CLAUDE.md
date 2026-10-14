@@ -1555,6 +1555,16 @@ for the overlay's `position: fixed` and trap it inside.
      - Signal Log shows the step per account (`streak_run`, `streak_kind`,
        `streak_step`, `streak_size`, `streak_known`, `normal_quantity` in the
        sizing block — only written for an asset with a ladder).
+     - **The closed trade keeps the step too** (2026-10-14,
+       `App\Services\Positions\EntryStreak`): an entry on a laddered coin
+       writes `streak_kind/run/step/size/base_size` onto its `open_strategies`
+       tag (whose `strategy` is now nullable); the exit reads the tag back
+       and posts the five fields with the close, null-filled as ONE unit on
+       `{x}_pastpositions`. Recorded at entry only, never reconstructed from
+       history (the ladder may have changed). **A customer's payload carries
+       `streak {kind, run, effect}` only** (smaller / larger / same) — the
+       sizes stay staff-only like base_size; staff payloads add step + both
+       sizes. Shown by `StreakTag` under the size on every closed-trade table.
      - **Step helpers calculate ONCE** (owner chose option A, 2026-10-09):
        the per-step calculator and "Build steps for me" turn "decrease by
        0.25 / 25% of base or of the previous step" into plain numbers. A later

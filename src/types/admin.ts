@@ -1,5 +1,5 @@
 import type { AssetSide } from './assets'
-import type { FeeSource } from './dashboard'
+import type { FeeSource, TradeStreak } from './dashboard'
 import type { ExchangeKind } from './exchanges'
 import type { ApiInvoice } from '../lib/billing'
 import type { TradeSide } from '../lib/tradeSide'
@@ -196,6 +196,8 @@ export interface AdminPastTrade {
   broker: string
   /** Optional: an API from before 2026-10-14 does not send it. */
   close_source?: CloseSource
+  /** Streak sizing at entry, every figure; null = normal size. */
+  streak?: TradeStreak | null
 }
 
 /** GET /admin/positions — open positions + closed trades across all accounts. */

@@ -220,6 +220,23 @@ export interface OpenPosition {
   update_time: number | null
 }
 
+/** Whether streak sizing set a closed trade's size, recorded at entry (from
+ *  2026-10-14 on — older trades carry none). A customer's payload has the
+ *  kind, the run and which way the size went; staff payloads add the ladder
+ *  step and both sizes, which never reach a trader. */
+export interface TradeStreak {
+  kind: 'loss' | 'win'
+  /** How many in a row when the entry was placed (3 = three losses). */
+  run: number | null
+  effect: 'smaller' | 'larger' | 'same'
+  /** Staff only: the ladder step that applied. */
+  step?: number | null
+  /** Staff only: the size that step set, before balance scaling. */
+  size?: number | null
+  /** Staff only: the coin's base size it replaced. */
+  base_size?: number | null
+}
+
 /** Row from /binance/past-positions (decimals arrive as strings from MySQL). */
 export interface PastPosition {
   id: number
@@ -241,4 +258,7 @@ export interface PastPosition {
   order_id: number | null
   closed_at: string
   strategy: string | null
+  /** Set when a streak step sized this trade's entries; null = normal size.
+   *  Optional: an API from before 2026-10-14 does not send it. */
+  streak?: TradeStreak | null
 }

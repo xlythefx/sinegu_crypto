@@ -5,6 +5,7 @@ import type { PositionRow, PositionView, RowFeeSource } from '../../../lib/admin
 import { Pill } from '../../ui/Pill'
 import EntryExitCell from '../../positions/EntryExitCell'
 import SideTag from '../../positions/SideTag'
+import StreakTag from '../../positions/StreakTag'
 import CloseSourceChip from './CloseSourceChip'
 
 // shared table primitives (mirrors the user Positions tables)
@@ -37,7 +38,10 @@ function TickerCell({ row, view }: { row: PositionRow; view: PositionView }) {
       <span className="flex flex-col gap-px">
         <span className="font-bold">{display}</span>
         {view === 'rows' && (
-          <SideTag side={row.direction} qty={row.qty} />
+          <>
+            <SideTag side={row.direction} qty={row.qty} />
+            <StreakTag streak={row.streak} />
+          </>
         )}
       </span>
     </div>

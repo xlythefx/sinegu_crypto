@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import EntryExitCell from './EntryExitCell'
 import FeeLine from './FeeLine'
 import SideTag from './SideTag'
+import StreakTag from './StreakTag'
 import CloseSourceChip from '../admin/positions/CloseSourceChip'
 import type { ClosedTrade } from './types'
 
@@ -71,6 +72,7 @@ export default function ClosedPositionsTable({
                       <span className="flex flex-col gap-px">
                         <span className="font-bold">{t.ticker}</span>
                         <SideTag side={t.side} qty={t.qty} />
+                        <StreakTag streak={t.streak} />
                       </span>
                     </div>
                     {/* Admin user detail only (the trader adapters never set it);

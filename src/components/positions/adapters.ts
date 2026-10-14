@@ -55,5 +55,6 @@ export function toClosedTrade(p: PastPosition, pctBase: number): ClosedTrade {
     feeSource: p.fee_source,
     positions: 1,
     closedAt: fmtDateTime(p.closed_at),
+    streak: p.streak ?? null,
   }
 }

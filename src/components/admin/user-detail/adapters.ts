@@ -49,5 +49,6 @@ export function toClosedRow(t: AdminPastTrade, pctBase: number): ClosedTrade {
     positions: 1,
     closedAt: fmtDateTime(t.closed_at),
     closeSource: t.close_source ?? null,
+    streak: t.streak ?? null,
   }
 }

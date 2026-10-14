@@ -15,6 +15,29 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-10-14 ───────────────────────────────────────────────────────────
   {
+    id: 'closed-trades-show-streak-size',
+    date: '2026-10-14',
+    kind: 'new',
+    area: 'Trading positions',
+    title: 'Past positions say when streak sizing set the size',
+    summary:
+      'When streak sizing changed a trade’s size, its Past Positions row now says so: for example “Smaller size · after 3 losses” under the coin. Customers see only that sentence. Admins also see the sizes, for example “size 25 instead of 50 · loss step 3”.',
+    howItWorks: [
+      'Example: LTC’s normal size is 50, and after 3 losses in a row the Streak Sizing Settings use 25. A customer’s next LTC trade after 3 losses opens at 25 (scaled to their balance as usual). When it closes, their Past Positions shows a gold “Smaller size · after 3 losses” tag. A size raised after wins reads “Larger size · after 2 wins”.',
+      'The bot records this when the trade OPENS, the only moment it is known, and carries it to the closed trade. All entries of one position share one step, so each closed trade has one answer.',
+      'Customers never see the sizes themselves (normal size and the step sizes stay admin-only, like before). Admins see them on Trading Positions and on a user’s Positions tab.',
+      'It starts with trades opened from today. Older trades show nothing: the step sizes may have changed since, so working it out afterwards could show the wrong answer.',
+    ],
+    technical: [
+      'Engine: entries on a coin with a ladder POST open-strategies with streak_kind / streak_run / streak_step / streak_size / streak_base_size; the exit recovers the tag (only when the signal has no label or the coin has a ladder) and posts the five fields on past-positions/sync.',
+      'API: migration 2026_10_14_000003 adds the five columns to open_strategies and every {x}_pastpositions (open_strategies.strategy now nullable); App\\Services\\Positions\\EntryStreak; ingest null-fills them as one unit. Customer payload: streak {kind, run, effect}; staff: + step, size, base_size.',
+    ],
+    links: [
+      { label: 'Open Trading Positions', href: '/admin/positions' },
+      { label: 'Open My Positions', href: '/dashboard/positions' },
+    ],
+  },
+  {
     id: 'signal-log-timeline',
     date: '2026-10-14',
     kind: 'improved',
