@@ -9,6 +9,9 @@ import { normaliseReferralCode, recallReferralCode, rememberReferralCode } from 
 import { useApiData } from '../hooks/useApiData'
 import AuthFrame, { AuthBrand } from '../components/auth/AuthFrame'
 import DiscordButton from '../components/auth/DiscordButton'
+import HeardAboutGrid from '../components/auth/HeardAboutGrid'
+import ContactHandleFields from '../components/auth/ContactHandleFields'
+import { handleError, type SignupSource } from '../lib/signupSources'
 import {
   BUTTON,
   CHECKBOX,
@@ -84,6 +87,12 @@ function AuthForm() {
   const [password, setPassword] = useState(import.meta.env.DEV ? 'password123' : '')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [termsAccepted, setTermsAccepted] = useState(false)
+  // Optional answers. An invite link already says "a friend sent me", so
+  // that tile starts ticked — the visitor can untick it.
+  const [heardFrom, setHeardFrom] = useState<SignupSource[]>(() => (refCode ? ['friend'] : []))
+  const [heardOther, setHeardOther] = useState('')
+  const [telegram, setTelegram] = useState('')
+  const [discordName, setDiscordName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   // Read once on mount; shown until the form produces its own message.
@@ -142,11 +151,21 @@ function AuthForm() {
       setError('Please accept the Terms to create an account.')
       return
     }
+    const handleProblem = isRegister ? handleError(telegram, discordName) : null
+    if (handleProblem) {
+      setError(handleProblem)
+      return
+    }
 
     setLoading(true)
     try {
       if (isRegister) {
-        await register(name, email, password, confirmPassword, refCode ?? undefined)
+        await register(name, email, password, confirmPassword, refCode ?? undefined, {
+          heardFrom,
+          heardFromOther: heardOther,
+          telegram,
+          discord: discordName,
+        })
         // Registration mails a six-digit code; the account is unusable until
         // it is redeemed. (A verified answer there bounces on to /dashboard.)
         navigate(VERIFY_EMAIL_PATH)
@@ -245,6 +264,28 @@ function AuthForm() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
               />
+            )}
+            {isRegister && (
+              <div className="mt-1.5 flex flex-col gap-3.5 border-t border-border pt-4">
+                <HeardAboutGrid
+                  value={heardFrom}
+                  onChange={setHeardFrom}
+                  other={heardOther}
+                  onOtherChange={setHeardOther}
+                />
+                <div>
+                  <p className="mb-2.5 text-[13px] font-semibold text-text">
+                    Telegram &amp; Discord <span className="font-normal text-faint">Optional</span>
+                  </p>
+                  <ContactHandleFields
+                    telegram={telegram}
+                    onTelegramChange={setTelegram}
+                    discord={discordName}
+                    onDiscordChange={setDiscordName}
+                  />
+                  <p className="mt-1.5 text-[11.5px] text-faint">You can add or change them later in Settings.</p>
+                </div>
+              </div>
             )}
             {isRegister && (
               <label className={CHECKBOX_LABEL}>

@@ -1,10 +1,15 @@
 import { Link } from 'react-router-dom'
 import SocialLinks from '../ui/SocialLinks'
 import { COMPANY } from '../../lib/company'
+import { openConsentBanner } from '../../lib/consent'
 
-// `to` marks the entries that are real pages; anything without one would stay
-// a plain (non-navigating) label rather than a dead link.
-const COLUMNS: { title: string; links: { label: string; to?: string }[] }[] = [
+// `to` marks the entries that are real pages and `action` the ones that open
+// something in place; anything with neither stays a plain label rather than
+// a dead link.
+const COLUMNS: {
+  title: string
+  links: { label: string; to?: string; action?: () => void }[]
+}[] = [
   {
     title: 'PRODUCT',
     links: [
@@ -25,6 +30,8 @@ const COLUMNS: { title: string; links: { label: string; to?: string }[] }[] = [
       { label: 'Terms & Conditions', to: '/terms' },
       { label: 'Privacy Policy', to: '/privacy' },
       { label: 'Risk Disclosure', to: '/risk' },
+      // Reopens the consent banner — changing your mind must be as easy as choosing.
+      { label: 'Privacy choices', action: openConsentBanner },
     ],
   },
 ]
@@ -66,6 +73,15 @@ export default function Footer() {
                   >
                     {link.label}
                   </Link>
+                ) : link.action ? (
+                  <button
+                    type="button"
+                    className="w-fit cursor-pointer border-0 bg-transparent p-0 text-left text-inherit hover:text-text transition-colors"
+                    key={link.label}
+                    onClick={link.action}
+                  >
+                    {link.label}
+                  </button>
                 ) : (
                   <span className="cursor-pointer" key={link.label}>
                     {link.label}

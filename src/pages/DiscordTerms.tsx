@@ -16,6 +16,9 @@ import {
   TITLE,
 } from '../components/auth/authClasses'
 import { DiscordMark } from '../components/ui/BrandIcons'
+import HeardAboutGrid from '../components/auth/HeardAboutGrid'
+import ContactHandleFields from '../components/auth/ContactHandleFields'
+import { handleError, type SignupSource } from '../lib/signupSources'
 import { forgetReferralCode, recallReferralCode } from '../lib/referral'
 import { isLoggedIn } from '../lib/session'
 import { postAuthPath } from '../lib/emailVerification'
@@ -61,6 +64,10 @@ export default function DiscordTerms() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const refCode = recallReferralCode()
+  // Optional, as on the register form ("Friend" pre-ticked for an invite).
+  const [heardFrom, setHeardFrom] = useState<SignupSource[]>(() => (refCode ? ['friend'] : []))
+  const [heardOther, setHeardOther] = useState('')
+  const [telegram, setTelegram] = useState('')
 
   // Already signed in (this or another tab finished) — nothing left to accept.
   if (isLoggedIn()) return <Navigate to="/dashboard" replace />
@@ -93,9 +100,18 @@ export default function DiscordTerms() {
       setError('Please accept the Terms to create your account.')
       return
     }
+    const handleProblem = handleError(telegram, null)
+    if (handleProblem) {
+      setError(handleProblem)
+      return
+    }
     setLoading(true)
     try {
-      const { user } = await completeDiscordSignup(signupToken, name.trim() || null, refCode)
+      const { user } = await completeDiscordSignup(signupToken, name.trim() || null, refCode, {
+        heardFrom,
+        heardFromOther: heardOther,
+        telegram,
+      })
       try {
         sessionStorage.removeItem(DISCORD_SIGNUP_KEY)
       } catch {
@@ -159,6 +175,21 @@ export default function DiscordTerms() {
           maxLength={255}
           required
         />
+        <div className="mt-1.5 flex flex-col gap-3.5 border-t border-border pt-4">
+          <HeardAboutGrid
+            value={heardFrom}
+            onChange={setHeardFrom}
+            other={heardOther}
+            onOtherChange={setHeardOther}
+          />
+          <div>
+            <p className="mb-2.5 text-[13px] font-semibold text-text">
+              Telegram <span className="font-normal text-faint">Optional</span>
+            </p>
+            <ContactHandleFields telegram={telegram} onTelegramChange={setTelegram} />
+            <p className="mt-1.5 text-[11.5px] text-faint">You can add or change it later in Settings.</p>
+          </div>
+        </div>
         <label className={CHECKBOX_LABEL}>
           <input
             type="checkbox"

@@ -14,7 +14,7 @@ import type { LegalDocumentContent } from '../types/legal'
  */
 export const PRIVACY: LegalDocumentContent = {
   title: 'Privacy Policy',
-  updatedAt: 'September 17, 2026',
+  updatedAt: 'October 14, 2026',
   lede: `This Privacy Policy explains what personal data ${COMPANY.name} collects when you use pixel-alpha.com and the Pixel Alpha platform, why we collect it, who we share it with, and the choices you have. Please read it together with our Terms and Conditions.`,
 
   sections: [
@@ -47,6 +47,8 @@ export const PRIVACY: LegalDocumentContent = {
             'Exchange API credentials: the API key and secret you generate at Binance, Bybit or MEXC and paste into the platform, the display name you give the connection, and whether it is a live or a demo (testnet) account.',
             'Payout details you add for the referral programme: a cryptocurrency wallet address or bank wire details.',
             'The Terms version you accepted and when you accepted it.',
+            'Optional answers at sign-up: where you heard about Pixel Alpha, and your Telegram and Discord usernames if you choose to give them. You can change or remove the usernames in Settings at any time.',
+            'If you sign in with Discord: your Discord user ID and username, the email address on your Discord account and your Discord avatar.',
             'Anything you send us when you contact support by email or Telegram.',
           ],
         },
@@ -63,6 +65,8 @@ export const PRIVACY: LegalDocumentContent = {
             'Invoices for the success-based usage fee, the high-water mark they are computed from, and the payment records that settle them.',
             'Referral records: which referral code (if any) you registered with and the commissions that result.',
             'Login times ("last activity") and the API session tokens that keep you signed in.',
+            'A record of your sign-up and of each sign-in: the date and time, your IP address, the country that IP address belongs to (supplied by Cloudflare), and your device type, browser and operating system as your browser reports them.',
+            'Only if you choose "Accept all" in our privacy banner: your device\'s time zone, language setting and screen size, recorded with your sign-up and sign-ins.',
           ],
         },
         { kind: 'h3', text: '2.4 Technical information' },
@@ -87,7 +91,9 @@ export const PRIVACY: LegalDocumentContent = {
             'To provide the service you signed up for: placing and closing trades on your exchange account, showing you your positions and performance, and computing your fees (performance of a contract).',
             'To bill you and to collect the success-based usage fee, and to keep the accounting records the law requires us to keep (performance of a contract; legal obligation).',
             'To operate the referral programme and pay referrers (performance of a contract).',
-            'To keep the platform secure: detecting blocked or misconfigured API keys, rate-limiting abusive traffic, and investigating incidents (legitimate interests).',
+            'To keep the platform secure: detecting blocked or misconfigured API keys, rate-limiting abusive traffic, spotting sign-ins from unusual places or devices, and investigating incidents (legitimate interests).',
+            'To understand how people find us and who uses the service, reported as statistics: your optional "where did you hear about us" answers (legitimate interests) and, if you chose "Accept all", your time zone, language and screen size (consent).',
+            'To reach you on Telegram or Discord about your account, if you gave us a username (consent — remove it in Settings at any time).',
             'To answer your support requests (legitimate interests; performance of a contract).',
             'To send you service emails such as password reset codes, invoice notices and important changes to the service. These are not marketing emails and you cannot opt out of them while you hold an account (performance of a contract).',
             'To publish an aggregated, anonymous track record of the strategy — percentages and trade counts only, never balances, amounts, names or account identifiers (legitimate interests).',
@@ -166,6 +172,7 @@ export const PRIVACY: LegalDocumentContent = {
           kind: 'list',
           items: [
             'Account data: for as long as your account exists. When you ask us to close it, we delete your profile and API credentials within 30 days.',
+            'Sign-up and sign-in records (IP address, country, device), your optional sign-up answers and your Telegram / Discord usernames: for as long as your account exists, and deleted with your profile.',
             'Trade history, invoices and payment records: for 7 years after the transaction, because tax and accounting law requires us to keep the records behind every fee we charged.',
             'Signal and engine logs: up to 12 months, then deleted or reduced to anonymous statistics.',
             'Server and security logs: up to 90 days.',
@@ -200,7 +207,11 @@ export const PRIVACY: LegalDocumentContent = {
       blocks: [
         {
           kind: 'p',
-          text: 'The platform does not use advertising or analytics cookies. It stores two things in your browser\'s local storage: your theme preference (dark or light) and, once you sign in, the session token that keeps you signed in. Both are strictly necessary for the service to work and are removed when you sign out or clear your browser data. Cloudflare may set a technical cookie used purely to protect the site from bots.',
+          text: 'The platform does not use advertising or analytics cookies. It keeps only what it needs to work, or a preference you set, in your browser\'s local storage: the session token that keeps you signed in, your theme (dark or light), your privacy choice, an invite code you arrived with, your exchange filter and guide progress, and short-lived values that complete a Discord sign-in. Signing out removes the session; clearing your browser data removes the rest. Cloudflare may set a technical cookie used purely to protect the site from bots.',
+        },
+        {
+          kind: 'p',
+          text: 'On your first visit a banner asks for your privacy choice. "Essentials only" keeps just the above. "Accept all" also lets the platform send your device\'s time zone, language setting and screen size with your sign-up and sign-ins, so we can understand who uses Pixel Alpha. Either way, your IP address, country, browser and operating system are recorded with every sign-up and sign-in: they are part of the request every browser sends, and we use them to keep accounts secure. You can change your choice at any time through "Privacy choices" at the bottom of our home page.',
         },
         {
           kind: 'p',

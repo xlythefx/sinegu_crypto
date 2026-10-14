@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { ThemeProvider } from './theme'
 import { PortalSwitchProvider } from './components/ui/PortalSwitchOverlay'
 import ProdApiBadge from './components/ui/ProdApiBadge'
+import CookieConsent from './components/ui/CookieConsent'
 import Landing from './pages/Landing'
 import LandingV2 from './pages/LandingV2'
 import Auth from './pages/Auth'
@@ -109,6 +110,7 @@ function App() {
             <Route path="*" element={<NotFound />} />
           </Routes>
           <ProdApiBadge />
+          <CookieConsent />
         </PortalSwitchProvider>
       </BrowserRouter>
     </ThemeProvider>

@@ -5,6 +5,7 @@ import CryptoWalletCard from '../components/settings/CryptoWalletCard'
 import BankWireCard from '../components/settings/BankWireCard'
 import PasswordChangeCard from '../components/settings/PasswordChangeCard'
 import DiscordCard from '../components/settings/DiscordCard'
+import ContactHandlesCard from '../components/settings/ContactHandlesCard'
 import DangerZoneCard from '../components/settings/DangerZoneCard'
 import { getUser } from '../lib/session'
 import { useMe } from '../hooks/useMe'
@@ -55,6 +56,7 @@ export default function Settings() {
         loadError={payoutError}
         onChanged={payout.reload}
       />
+      <ContactHandlesCard user={user} />
       <DiscordCard user={user} onUserChange={setUser} />
       {/*
         A Discord-only account has no password to change; it gets "Set a

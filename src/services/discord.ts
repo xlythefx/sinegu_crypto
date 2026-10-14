@@ -1,6 +1,8 @@
 import { apiFetch } from './api'
 import { saveSession } from '../lib/session'
 import { TERMS } from '../lib/terms'
+import { deviceContext } from '../lib/consent'
+import { signupExtrasPayload, type SignupExtras } from '../lib/signupSources'
 import type { AuthUser } from '../types/auth'
 import type {
   DiscordCallbackResult,
@@ -37,7 +39,8 @@ export function discordRedirectUri(): string {
 export async function exchangeDiscordCode(code: string): Promise<DiscordCallbackResult> {
   const res = await apiFetch<DiscordCallbackResult>('/auth/discord/callback', {
     method: 'POST',
-    body: { code, redirect_uri: discordRedirectUri() },
+    // Recorded as a sign-in only when this call logs someone in.
+    body: { code, redirect_uri: discordRedirectUri(), ...deviceContext() },
   })
   if (res.status === 'logged_in') saveSession(res.token, res.user)
   return res
@@ -50,7 +53,7 @@ export async function linkDiscordWithPassword(
 ): Promise<DiscordLoggedIn> {
   const res = await apiFetch<DiscordLoggedIn>('/auth/discord/link-with-password', {
     method: 'POST',
-    body: { link_token: linkToken, password },
+    body: { link_token: linkToken, password, ...deviceContext() },
   })
   saveSession(res.token, res.user)
   return res
@@ -61,6 +64,7 @@ export async function completeDiscordSignup(
   signupToken: string,
   name: string | null,
   referralCode?: string | null,
+  extras?: SignupExtras,
 ): Promise<DiscordLoggedIn> {
   const res = await apiFetch<DiscordLoggedIn>('/auth/discord/complete', {
     method: 'POST',
@@ -70,6 +74,8 @@ export async function completeDiscordSignup(
       terms_version: TERMS.updatedAt,
       ...(name ? { name } : {}),
       ...(referralCode ? { referral_code: referralCode } : {}),
+      ...(extras ? signupExtrasPayload(extras) : {}),
+      ...deviceContext(),
     },
   })
   saveSession(res.token, res.user)

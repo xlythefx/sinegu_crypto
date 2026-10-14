@@ -1,6 +1,8 @@
 import { apiFetch } from './api'
 import { clearSession, saveSession, saveUser } from '../lib/session'
 import { TERMS } from '../lib/terms'
+import { deviceContext } from '../lib/consent'
+import { signupExtrasPayload, type SignupExtras } from '../lib/signupSources'
 import type { AuthResponse, AuthUser } from '../types/auth'
 
 export async function login(
@@ -9,7 +11,8 @@ export async function login(
 ): Promise<AuthResponse> {
   const res = await apiFetch<AuthResponse>('/auth/login', {
     method: 'POST',
-    body: { email, password },
+    // The consent level always; time zone / language / screen only with "Accept all".
+    body: { email, password, ...deviceContext() },
   })
   saveSession(res.token, res.user)
   return res
@@ -21,6 +24,7 @@ export async function register(
   password: string,
   passwordConfirmation: string,
   referralCode?: string,
+  extras?: SignupExtras,
 ): Promise<AuthResponse> {
   const res = await apiFetch<AuthResponse>('/auth/register', {
     method: 'POST',
@@ -37,6 +41,9 @@ export async function register(
       terms_version: TERMS.updatedAt,
       // Invalid codes are silently ignored server-side; registration proceeds.
       ...(referralCode ? { referral_code: referralCode } : {}),
+      // Optional: where they heard about us, Telegram / Discord usernames.
+      ...(extras ? signupExtrasPayload(extras) : {}),
+      ...deviceContext(),
     },
   })
   saveSession(res.token, res.user)

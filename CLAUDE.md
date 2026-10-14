@@ -629,6 +629,34 @@ takes it. API: `App\Services\Auth\EmailVerification` (15-min TTL, 5 attempts,
 - **It depends on prod actually sending mail** (`MAIL_MAILER=smtp`): with `log`,
   no sign-up could ever finish.
 
+## Sign-up details + privacy banner (2026-10-14)
+
+Owner's request, for statistics later: the register form (and the Discord
+sign-up step) asks "Where did you hear about us?" — nine checkable tiles,
+ALWAYS 3 × 3 (owner's layout, phone included; `HeardAboutGrid`), any number,
+all optional, "Other" opens a text box — plus optional Telegram / Discord
+usernames, editable in Settings (`ContactHandlesCard`, `GET|PUT /user/contacts`;
+absent key = unchanged, null = cleared). Every register and successful login
+writes a `user_access_events` row: IP, country (`CF-IPCountry`), device parsed
+from the User-Agent (`App\Services\Auth\AccessLog` + `DeviceInfo`,
+best-effort — never fails a login). Shown on admin user detail → **Sign-up
+info** tab (`GET /admin/users/{uniId}/signup-info`, STAFF group — the owner
+wants every admin role to see it, IP included). Rules:
+- **Source slugs are stable** (`SignupSources::SLUGS` ↔ `lib/signupSources.ts`),
+  one row per ticked tile in `user_signup_sources` so stats are a GROUP BY.
+  Relabel, never rename.
+- **Typed handles are unverified and never unique.** A Discord linked through
+  "Sign in with Discord" (`user_credentials.discord_username`) is the
+  confirmed one and wins on screen; the Discord sign-up step asks Telegram only.
+- **The privacy banner (`CookieConsent`, `lib/consent.ts`) gates only the
+  browser's own time zone / language / screen** — sent with `consent: 'all'`,
+  and the API drops them otherwise. IP / country / device are recorded either
+  way (security; the Privacy Policy says so). The banner text, `lib/consent.ts`
+  and `lib/privacy.ts` must keep describing the same thing.
+- Accounts older than 2026-10-14 have no sign-up row; their logins are recorded
+  from then on. The owner still decides how existing customers hear about the
+  policy update (to-do `privacy-policy-oct-2026-notice`).
+
 ## Collaborator role — read-only staff (2026-09-28)
 
 `user_credentials.type = 'collaborator'` opens the admin portal READ-ONLY:

@@ -65,6 +65,7 @@ import type {
   TestUserInput,
   UserReferralRow,
 } from '../types/admin'
+import type { AdminSignupInfo } from '../types/signupInfo'
 
 export async function getMasterStats(): Promise<MasterStats> {
   const res = await apiFetch<{ success: boolean } & MasterStats>(
@@ -507,6 +508,15 @@ export async function getAdminUserDetail(
     { auth: true },
   )
   return res.user
+}
+
+/**
+ * How a user signed up and every sign-in since: where they heard about us,
+ * their Telegram / Discord, and the IP / country / device of each visit.
+ * Readable by every staff role, collaborators included.
+ */
+export function getAdminUserSignupInfo(uniId: string): Promise<AdminSignupInfo> {
+  return apiFetch<AdminSignupInfo>(`/admin/users/${uniId}/signup-info`, { auth: true })
 }
 
 export async function getAdminUserSummary(

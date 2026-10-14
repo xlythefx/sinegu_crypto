@@ -18,6 +18,21 @@ import type { AdminTodo } from '../types/adminTodos'
  *    the note and the date it was settled stay readable.
  */
 export const ADMIN_TODOS: AdminTodo[] = [
+  // ── Sign-up details (2026-10-14) ────────────────────────────────────────
+  {
+    id: 'privacy-policy-oct-2026-notice',
+    feature: 'Sign-up details',
+    kind: 'decision',
+    title: 'Decide how to tell existing customers about the 14 Oct Privacy Policy update',
+    added: '2026-10-14',
+    why: 'The Privacy Policy now says we record IP address, country and device at every sign-in, and asks new visitors through a privacy banner. Our own policy (section 12) promises that for a new category of data we tell existing users by email or by a notice in the platform before it takes effect. New sign-ups agree to the new text; customers who signed up before 14 Oct have not been told yet.',
+    steps: [
+      'Read the updated policy at /privacy (sections 2, 3, 7 and 9 changed).',
+      'Choose how existing customers are told: a short email, a one-time notice on the dashboard, or both — and write the wording you want (or ask for a draft).',
+      'Write the choice in the note below so it can be built.',
+    ],
+    links: [{ label: 'Privacy Policy', href: '/privacy' }],
+  },
   // ── Binance offer (2026-10-13) ──────────────────────────────────────────
   {
     id: 'binance-offer-confirm-by-hand',

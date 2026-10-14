@@ -1,6 +1,14 @@
 import { useCallback, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, BarChart3, ImageDown, LayoutDashboard, Wallet, type LucideIcon } from 'lucide-react'
+import {
+  ArrowLeft,
+  BarChart3,
+  Fingerprint,
+  ImageDown,
+  LayoutDashboard,
+  Wallet,
+  type LucideIcon,
+} from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
 import AdminPnlCalendar from '../../components/admin/AdminPnlCalendar'
@@ -18,6 +26,7 @@ import UserReferralsTable from '../../components/admin/user-detail/UserReferrals
 import UserSettingsCard from '../../components/admin/user-detail/UserSettingsCard'
 import UserHeaderActions from '../../components/admin/user-detail/UserHeaderActions'
 import UserPositionsTab from '../../components/admin/user-detail/UserPositionsTab'
+import UserSignupTab from '../../components/admin/user-detail/UserSignupTab'
 import AnalyticsView from '../../components/analytics/AnalyticsView'
 import PnlCardModal from '../../components/admin/pnl-card/PnlCardModal'
 import { EXCHANGE_META } from '../../components/exchanges/meta'
@@ -39,16 +48,23 @@ const CARD_BTN =
 const TAB_BTN =
   'inline-flex items-center gap-1.5 text-[12.5px] font-semibold py-[7px] px-4 rounded-btn cursor-pointer transition-colors duration-150'
 
-type Tab = 'overview' | 'positions' | 'analytics'
+type Tab = 'overview' | 'positions' | 'analytics' | 'signup'
 
 const TABS: { key: Tab; label: string; Icon: LucideIcon }[] = [
   { key: 'overview', label: 'Overview', Icon: LayoutDashboard },
   { key: 'positions', label: 'Positions', Icon: Wallet },
   { key: 'analytics', label: 'Performance Analytics', Icon: BarChart3 },
+  { key: 'signup', label: 'Sign-up info', Icon: Fingerprint },
 ]
 
-/** A read-only collaborator never sees Positions (the API 403s it). */
-const COLLABORATOR_TABS: readonly Tab[] = ['overview', 'analytics']
+/**
+ * A read-only collaborator never sees Positions (the API 403s it). Sign-up
+ * info is every staff role's (owner, 2026-10-14 — IP included).
+ */
+const COLLABORATOR_TABS: readonly Tab[] = ['overview', 'analytics', 'signup']
+
+/** Tabs whose content the exchange pill scopes; the others ignore it. */
+const EXCHANGE_SCOPED: readonly Tab[] = ['overview', 'positions']
 
 /**
  * Admin drill-down into one user: Overview stats, Positions, and the user's
@@ -187,8 +203,8 @@ export default function AdminUserDetail() {
             <ImageDown size={15} />
             P&L card
           </button>
-          {/* Analytics carries its own exchange filter inside the view. */}
-          {tab !== 'analytics' && (
+          {/* Analytics carries its own exchange filter; sign-up info has none. */}
+          {EXCHANGE_SCOPED.includes(tab) && (
             <ExchangeFilterPill value={exchange} onChange={setExchange} />
           )}
         </div>
@@ -204,7 +220,7 @@ export default function AdminUserDetail() {
       <div data-aos="fade-up" data-aos-delay="150">
         {/* keyed re-mount replays the reveal on every tab / filter switch */}
         <div
-          key={tab === 'analytics' ? tab : `${tab}-${exchange}`}
+          key={EXCHANGE_SCOPED.includes(tab) ? `${tab}-${exchange}` : tab}
           className="animate-[fadeup_0.35s_ease-out]"
         >
           {tab === 'overview' ? (
@@ -262,6 +278,8 @@ export default function AdminUserDetail() {
                 </>
               )}
             </>
+          ) : tab === 'signup' ? (
+            <UserSignupTab uniId={uniId} />
           ) : tab === 'analytics' ? (
             <AnalyticsView
               fetchAnalytics={fetchAnalytics}

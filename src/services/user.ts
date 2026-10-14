@@ -1,6 +1,7 @@
 import { apiFetch, API_URL, ApiError } from './api'
 import { getToken } from '../lib/session'
 import type { AuthUser } from '../types/auth'
+import type { ContactHandles } from '../types/signupInfo'
 
 export interface MeResponse {
   success: boolean
@@ -140,4 +141,28 @@ export function updatePassword(
       new_password_confirmation: newPasswordConfirmation,
     },
   })
+}
+
+/** The optional Telegram / Discord usernames (GET /user/contacts). */
+export async function getContactHandles(): Promise<ContactHandles> {
+  const res = await apiFetch<{ success: boolean; contacts: ContactHandles }>('/user/contacts', {
+    auth: true,
+  })
+  return res.contacts
+}
+
+/**
+ * Save them (PUT /user/contacts). A key left out is unchanged; null clears it.
+ * 422 with a field error under `telegram` / `discord` for a shape no
+ * username can have.
+ */
+export async function updateContactHandles(
+  changes: Partial<ContactHandles>,
+): Promise<ContactHandles> {
+  const res = await apiFetch<{ success: boolean; contacts: ContactHandles }>('/user/contacts', {
+    method: 'PUT',
+    auth: true,
+    body: changes,
+  })
+  return res.contacts
 }

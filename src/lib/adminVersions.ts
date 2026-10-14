@@ -15,6 +15,29 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-10-14 ───────────────────────────────────────────────────────────
   {
+    id: 'signup-details',
+    date: '2026-10-14',
+    kind: 'new',
+    area: 'Sign-up & user details',
+    title: 'Sign-up asks where people heard about us, and records where they signed up from',
+    summary:
+      'The sign-up form now has an optional “Where did you hear about us?” question — nine tick boxes in a 3 × 3 grid, the last one “Other” with a text box — and optional Telegram and Discord username fields. Every sign-up and sign-in also records the visitor’s IP address, country and device. All of it shows on a new “Sign-up info” tab on each user’s page in User Management.',
+    howItWorks: [
+      'The nine choices: Discord server, Telegram, AI chatbot (ChatGPT, Claude…), Friend / referral, YouTube, X (Twitter), Google search, TikTok / Instagram, Other. People can tick as many as apply, or none. Someone who arrives through an invite link starts with “Friend / referral” already ticked.',
+      'Telegram and Discord usernames are optional at sign-up and can be added or changed later in Settings → Telegram & Discord. If someone signs in with Discord, the Discord username Discord itself confirmed is shown instead (marked “Linked”).',
+      'Recorded automatically on every sign-up and sign-in: date and time, IP address, country (for example “TH · Thailand”), and the device — phone, tablet or computer, with the browser and system, for example “Phone · Safari 18 · iOS 18”.',
+      'A privacy banner now greets every first-time visitor with two buttons: “Essentials only” and “Accept all”. With Accept all we also record the device’s time zone, language and screen size. Anyone can change their answer from “Privacy choices” at the bottom of the home page.',
+      'User Management → open a user → Sign-up info: how they found us, their Telegram / Discord, the sign-up itself, and their last 25 sign-ins. Every admin role sees it, read-only staff included. Accounts created before today show “not recorded” for the sign-up, and their sign-ins appear from today on.',
+      'The Privacy Policy was updated (14 Oct 2026) to say exactly what is collected and why.',
+    ],
+    technical: [
+      'API tables: user_access_events (register/login fingerprint; client timezone/language/screen stored only with consent = all), user_signup_sources (one row per ticked option, slugs in SignupSources::SLUGS), user_contact_handles (typed telegram/discord). App\\Services\\Auth\\AccessLog + DeviceInfo (hand-written user-agent parser); country from the CF-IPCountry header.',
+      'Endpoints: register / login / discord callback, link-with-password and complete accept heard_from, heard_from_other, telegram, discord, client, consent; GET|PUT /user/contacts; GET /admin/users/{uniId}/signup-info (staff group).',
+      'Frontend: lib/consent.ts + components/ui/CookieConsent.tsx, lib/signupSources.ts, components/auth/HeardAboutGrid.tsx, settings/ContactHandlesCard.tsx, admin/user-detail/UserSignupTab.tsx.',
+    ],
+    links: [{ label: 'Open User Management', href: '/admin/users' }],
+  },
+  {
     id: 'equity-card-gold-silver',
     date: '2026-10-14',
     kind: 'improved',
