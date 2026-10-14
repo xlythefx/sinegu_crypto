@@ -71,7 +71,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { label: 'Strategies', url: '/admin/strategies', icon: Target, collaborator: true },
   { label: 'Trading Assets', url: '/admin/assets', icon: Coins },
   { label: 'Sandbox', url: '/admin/sandbox', icon: FlaskConical },
-  { label: 'Trading Positions', url: '/admin/positions', icon: Bell },
+  { label: 'Positions', url: '/admin/positions', icon: Bell },
   { label: 'Bot Engine', url: '/admin/engine', icon: ServerCog },
   { label: 'Signal Log', url: '/admin/trade-logs', icon: ScrollText },
   { label: 'Invoice History', url: '/admin/invoices', icon: FileText },

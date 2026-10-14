@@ -282,7 +282,7 @@ export default function AdminPositions() {
   if (!data) {
     return (
       <AdminLayout
-        title="Trading Positions"
+        title="Positions"
         subtitle="Monitor active and historical positions across every account."
       >
         <DataState loading={loading} error={error} onRetry={reload} label="positions" />
@@ -292,7 +292,7 @@ export default function AdminPositions() {
 
   return (
     <AdminLayout
-      title="Trading Positions"
+      title="Positions"
       subtitle="Monitor active and historical positions across every account."
     >
       {/* stat cards */}
