@@ -3,9 +3,13 @@ export type UserStatus = 'pending' | 'active' | 'suspended'
 /**
  * `user_credentials.type`. `developer` is staff too, plus the Database console
  * and test-mode payments; `collaborator` is READ-ONLY staff limited to the
- * dashboard overview, users and strategies — see `lib/roles.ts`.
+ * dashboard overview, users and strategies; `tester` is an internal test
+ * account with NO admin access — it signs in like a trader, but its exchange
+ * accounts receive only the engine's separate test feed (never the main
+ * TradingView webhooks), and it is never billed or counted as a customer.
+ * See `lib/roles.ts`.
  */
-export type UserRole = 'user' | 'admin' | 'master' | 'developer' | 'collaborator'
+export type UserRole = 'user' | 'admin' | 'master' | 'developer' | 'collaborator' | 'tester'
 
 export interface AuthUser {
   uni_id: string

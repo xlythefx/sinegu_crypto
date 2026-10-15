@@ -8,6 +8,10 @@ pool (the global in-flight ceiling). Per-(exchange, api_key, symbol) locks
 serialize overlapping signals for the same account; retryable failures go to
 the retry queue keyed by exchange + uni_id. One alert is sent to TradingView's
 one webhook; every exchange sees every signal.
+
+Each venue also has a TEST path (hooks.TEST_WEBHOOK_PATHS, its own secret):
+same trade path, but only tester-owned accounts receive it, nothing is posted
+publicly and the main-account rule is skipped — see hooks.FEEDS.
 """
 
 from __future__ import annotations
@@ -25,7 +29,7 @@ from typing import Any, Optional, Sequence
 
 from flask import Blueprint, jsonify, request
 
-from binance_abcd import engine_client, notify, symbol_locks
+from binance_abcd import engine_client, hooks, notify, symbol_locks
 from binance_abcd.accounts_api import fetch_accounts
 from binance_abcd.assets_api import get_asset
 from binance_abcd.exchange_api import ExchangeClient
@@ -37,12 +41,16 @@ from binance_abcd.hooks import (
     DISPATCH_WORKERS,
     FANOUT_WORKERS,
     LEVERAGE_CACHE_TTL,
+    MAIN_FEED,
     MIN_DEPOSIT,
     OUT_DIR,
     REFERENCE_BALANCE,
     RETRY_ENABLED,
+    TEST_FEED,
+    TEST_WEBHOOK_PATHS,
     WEBHOOK_PATHS,
     WEBHOOK_SECRET,
+    account_feed,
 )
 from binance_abcd.trading_handler import (
     NOT_LISTED,
@@ -1034,6 +1042,7 @@ def _plan_exchange(
     symbol: str,
     uni_filter: Optional[set[str]],
     main_gate: bool = False,
+    feed: Optional[str] = MAIN_FEED,
 ) -> dict:
     """What one exchange will do with the signal.
 
@@ -1044,6 +1053,10 @@ def _plan_exchange(
 
     `main_gate` turns on the main-account rule (_main_account_full) — a live
     signal to everyone only, never a targeted manual trade or a retry.
+
+    `feed` keeps only the accounts on that signal feed (hooks.account_feed);
+    None keeps every feed — the admin's manual close, which names its
+    accounts and must be able to close a tester's position too.
     """
     is_entry = action in ENTRY_ACTIONS
     asset = get_asset(symbol, exchange)
@@ -1060,6 +1073,8 @@ def _plan_exchange(
             return {"reject": f"side_{allowed}_blocks_{action}"}
 
     accounts = fetch_accounts(exchange=exchange)
+    if feed is not None:
+        accounts = [a for a in accounts if account_feed(a) == feed]
     if uni_filter is not None:
         accounts = [a for a in accounts if a.get("uni_id") in uni_filter]
     if not accounts:
@@ -1103,6 +1118,7 @@ def _process_trade_job(
     announce: bool = True,
     exchanges: Optional[Sequence[str]] = None,
     targets: Optional[dict[str, set[str]]] = None,
+    feed: Optional[str] = MAIN_FEED,
 ) -> dict:
     """Runs on the dispatch pool. Fans the signal out to every account on every
     exchange it applies to, and returns the MERGED summary.
@@ -1118,11 +1134,19 @@ def _process_trade_job(
     account failed), which is the case where the close would otherwise never
     reach the channel at all. The retry queue clears the flag as soon as any run
     fills, so one signal is never announced twice.
+
+    `feed` is the signal feed the job came in on (hooks.FEEDS): only accounts
+    on that feed trade it. A TEST-feed job is never announced anywhere public,
+    skips the main-account rule (testers follow other signals than the
+    master) and reports to the admin chat under a test banner only. None =
+    every feed, for the admin's manual close.
     """
     started = time.time()
     symbol = ticker.upper()
     is_entry = action in ENTRY_ACTIONS
     position_side = "LONG" if action in ("BUY", "EXIT_LONG") else "SHORT"
+    if feed == TEST_FEED:
+        announce = False
 
     live = enabled_exchanges()
     if targets:
@@ -1136,12 +1160,20 @@ def _process_trade_job(
     # retry re-places what one account missed of THIS signal (the main account
     # may have filled it meanwhile), and a targeted manual trade is an admin's
     # deliberate choice — neither is held back.
-    main_gate = is_entry and not is_retry and not targets and target_uni_ids is None
+    # The test feed never meets the main-account rule: its accounts follow
+    # other signals than the master, so the master's stack says nothing
+    # about theirs (and the master is never on the test feed anyway).
+    main_gate = (is_entry and not is_retry and not targets and target_uni_ids is None
+                 and feed != TEST_FEED)
     plans = {
-        ex: _plan_exchange(ex, action, symbol, targets.get(ex) if targets else target_uni_ids, main_gate)
+        ex: _plan_exchange(ex, action, symbol, targets.get(ex) if targets else target_uni_ids, main_gate, feed)
         for ex in run
     }
     runnable = {ex: plan for ex, plan in plans.items() if "accounts" in plan}
+    # What this job counts as for the Signal Log and the alerts. A manual close
+    # (feed None) of tester accounts only is test traffic too.
+    job_feed = feed or _feed_of_accounts([a for plan in runnable.values() for a in plan["accounts"]])
+    is_test = job_feed == TEST_FEED
 
     if not runnable:
         # Nothing ran anywhere: every venue rejected the entry or had no
@@ -1151,10 +1183,13 @@ def _process_trade_job(
         reason_text = distinct[0] if len(distinct) == 1 else "; ".join(
             f"{label(ex)}: {reason}" for ex, reason in reasons.items()
         )
-        log.warning("signal rejected: %s %s (%s)", action, symbol, reason_text)
-        notify.notify_rejected(action, symbol, reason_text, label=labels(run))
+        log.warning("signal rejected: %s %s (%s) [%s feed]", action, symbol, reason_text, job_feed)
+        if is_test:
+            notify.notify_test_feed_rejected(action, symbol, reason_text, label=labels(run))
+        else:
+            notify.notify_rejected(action, symbol, reason_text, label=labels(run))
         per_exchange = [
-            _reject_summary(action, symbol, price, strategy, leverage, reasons[ex], ex) for ex in run
+            _reject_summary(action, symbol, price, strategy, leverage, reasons[ex], ex, feed=job_feed) for ex in run
         ]
         merged = _merge_summaries(action, symbol, price, strategy, leverage, per_exchange, is_retry=is_retry)
         _finish_job(merged, per_exchange, started)
@@ -1215,6 +1250,9 @@ def _process_trade_job(
                 # silent run (the admin's manual close) must not grow a public
                 # post just because its first attempt timed out.
                 announce=announce and filled == 0,
+                # A test-feed retry stays on the test feed; a manual close's
+                # (None) keeps reaching whichever feed its accounts are on.
+                feed=feed,
             )
 
     # What the channel prints beside an entry, best source first: a real
@@ -1227,12 +1265,22 @@ def _process_trade_job(
         fill_price = _position_entry_price(all_accounts, results, symbol, position_side)
 
     filled_on = [ex for ex in runnable if any(r.get("exchange") == ex and r["status"] == "filled" for r in results)]
-    _notify_job(action, symbol, price, results,
-                filled=filled, failed=failed, skipped=skipped,
-                exit_batch_id=exit_batch_id, is_retry=is_retry,
-                retrying=retrying, fill_price=fill_price,
-                venue_label=labels(filled_on or list(runnable)),
-                name_venues=len(live) > 1)
+    if is_test:
+        # One private summary per test signal — never the public builders, and
+        # never _send_admin, whose fallback is the public channel.
+        notify.notify_test_feed(
+            action, symbol,
+            [(_account_label(r, len(live) > 1), r) for r in results],
+            filled=filled, failed=failed, skipped=skipped, is_retry=is_retry,
+            retrying=bool(retrying), label=labels(filled_on or list(runnable)),
+        )
+    else:
+        _notify_job(action, symbol, price, results,
+                    filled=filled, failed=failed, skipped=skipped,
+                    exit_batch_id=exit_batch_id, is_retry=is_retry,
+                    retrying=retrying, fill_price=fill_price,
+                    venue_label=labels(filled_on or list(runnable)),
+                    name_venues=len(live) > 1)
 
     per_exchange = []
     for ex in run:
@@ -1241,12 +1289,15 @@ def _process_trade_job(
                 action, symbol, price, strategy, leverage, ex, is_retry,
                 [r for r in results if r.get("exchange") == ex],
                 target_count=len(runnable[ex]["accounts"]),
+                feed=job_feed,
             ))
         elif "reject" in plans[ex]:
             # This venue refused the entry while another traded it: its Signal
             # Log still records why, but nobody is paged for it.
             log.warning("[%s] signal rejected: %s %s (%s)", ex, action, symbol, plans[ex]["reject"])
-            per_exchange.append(_reject_summary(action, symbol, price, strategy, leverage, plans[ex]["reject"], ex))
+            per_exchange.append(_reject_summary(
+                action, symbol, price, strategy, leverage, plans[ex]["reject"], ex, feed=job_feed,
+            ))
         # A venue with no eligible accounts while another ran is skipped
         # silently — enabling MEXC before its first account exists must not
         # write a rejected row per signal.
@@ -1256,11 +1307,20 @@ def _process_trade_job(
     return merged
 
 
+def _feed_of_accounts(accounts: list[dict]) -> str:
+    """TEST only when every account is on the test feed — a manual close that
+    names testers alone. Anything else (none, mixed, main) is main traffic."""
+    if accounts and all(account_feed(a) == TEST_FEED for a in accounts):
+        return TEST_FEED
+    return MAIN_FEED
+
+
 def _exchange_summary(
     action: str, symbol: str, price, strategy, leverage, exchange: str, is_retry: bool,
-    results: list, *, target_count: int,
+    results: list, *, target_count: int, feed: str = MAIN_FEED,
 ) -> dict:
-    """One venue's trade-logs row — today's exact shape plus `exchange`."""
+    """One venue's trade-logs row — today's exact shape plus `exchange` and
+    the `feed` it came in on (the Signal Log tags and filters by it)."""
     filled = sum(1 for r in results if r["status"] == "filled")
     failed = sum(1 for r in results if r["status"] == "failed")
     skipped = sum(1 for r in results if r["status"] == "skipped")
@@ -1279,6 +1339,7 @@ def _exchange_summary(
         "details": results,
         "ts": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
         "exchange": exchange,
+        "feed": feed,
     }
 
 
@@ -1304,6 +1365,7 @@ def _merge_summaries(action: str, symbol: str, price, strategy, leverage, per_ex
         "details": [row for s in per_exchange for row in s["details"]],
         "ts": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
         "exchanges": [s["exchange"] for s in per_exchange],
+        "feed": per_exchange[0].get("feed", MAIN_FEED) if per_exchange else MAIN_FEED,
     }
 
 
@@ -1426,7 +1488,10 @@ def _notify_job(
         log.exception("telegram notification failed for %s %s", action, symbol)
 
 
-def _reject_summary(action: str, symbol: str, price, strategy, leverage, reason: str, exchange: str) -> dict:
+def _reject_summary(
+    action: str, symbol: str, price, strategy, leverage, reason: str, exchange: str,
+    *, feed: str = MAIN_FEED,
+) -> dict:
     """One venue's rejected trade-logs row. Pure — the caller decides whether
     the rejection is worth an alert (only when NO venue ran the signal)."""
     return {
@@ -1444,6 +1509,7 @@ def _reject_summary(action: str, symbol: str, price, strategy, leverage, reason:
         "details": [{"reason": reason, "exchange": exchange}],
         "ts": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
         "exchange": exchange,
+        "feed": feed,
     }
 
 
@@ -1488,11 +1554,21 @@ def is_valid_ticker(ticker: str) -> bool:
     return bool(_TICKER_RE.fullmatch(ticker or ""))
 
 
-def _handle_webhook(exchange: str):
-    """The trade path for ONE venue. The path a TradingView alert posts to is
-    what decides which exchange's accounts the signal trades — so each venue
-    gets its own alert(s), nothing in the payload names it, and an alert can
-    never fan out to a venue its author did not point it at."""
+def _feed_secret(feed: str) -> str:
+    """The token a request on this feed must carry. Read at call time so a
+    test can monkeypatch hooks.TEST_WEBHOOK_SECRET; empty = feed is off."""
+    return hooks.TEST_WEBHOOK_SECRET if feed == TEST_FEED else WEBHOOK_SECRET
+
+
+def _handle_webhook(exchange: str, feed: str = MAIN_FEED):
+    """The trade path for ONE venue on ONE feed. The path a TradingView alert
+    posts to is what decides which exchange's accounts the signal trades — so
+    each venue gets its own alert(s), nothing in the payload names it, and an
+    alert can never fan out to a venue its author did not point it at.
+
+    The path also decides the FEED (hooks.FEEDS): a test path trades tester
+    accounts only and takes only the test secret, so neither feed's token can
+    fire the other's trades."""
     _bump("received")
 
     data = request.get_json(silent=True)
@@ -1505,7 +1581,8 @@ def _handle_webhook(exchange: str):
         data = {}
 
     secret = str(data.get("secret") or request.args.get("secret") or request.form.get("secret") or "")
-    if not WEBHOOK_SECRET or not hmac_mod.compare_digest(secret, WEBHOOK_SECRET):
+    expected = _feed_secret(feed)
+    if not expected or not hmac_mod.compare_digest(secret, expected):
         _bump("rejected")
         return jsonify({"error": "Unauthorized"}), 403
 
@@ -1547,7 +1624,7 @@ def _handle_webhook(exchange: str):
 
     _DISPATCH_EXECUTOR.submit(
         _process_trade_job, action, ticker, price, leverage, strategy, target_uni_ids,
-        exchanges=[exchange],
+        exchanges=[exchange], feed=feed,
     )
     _bump("jobs_dispatched")
 
@@ -1558,6 +1635,7 @@ def _handle_webhook(exchange: str):
         "ticker": ticker,
         "exchange": exchange,
         "exchanges": [exchange],
+        "feed": feed,
     }
     if price is not None:
         response["price"] = price
@@ -1569,16 +1647,36 @@ def _handle_webhook(exchange: str):
 
 
 def _register_webhooks() -> None:
-    """One Flask endpoint per venue, at that venue's path. Every known path is
-    registered even when the venue is off, so a disabled venue answers a clear
-    400 rather than nginx's 404 — the two look identical from TradingView."""
-    for venue, path in WEBHOOK_PATHS.items():
-        webhook_bp.add_url_rule(
-            path,
-            endpoint=f"{venue}_abcd_webhook",
-            view_func=(lambda v: (lambda: _handle_webhook(v)))(venue),
-            methods=["POST"],
-        )
+    """One Flask endpoint per venue per feed, at that pair's path. Every known
+    path is registered even when the venue is off, so a disabled venue answers
+    a clear 400 rather than nginx's 404 — the two look identical from
+    TradingView. A test path is registered with the test feed off too; it
+    answers 403 until BINANCE_ABCD_TEST_WEBHOOK_SECRET is set."""
+    for feed, paths in ((MAIN_FEED, WEBHOOK_PATHS), (TEST_FEED, TEST_WEBHOOK_PATHS)):
+        for venue, path in paths.items():
+            webhook_bp.add_url_rule(
+                path,
+                endpoint=f"{venue}_abcd_webhook" if feed == MAIN_FEED else f"{venue}_test_webhook",
+                view_func=(lambda v, f: (lambda: _handle_webhook(v, f)))(venue, feed),
+                methods=["POST"],
+            )
+
+
+def webhook_catalogue() -> list[dict]:
+    """Every webhook this engine answers, for /health (and through it the
+    admin Webhooks page): exchange, feed, path, and whether a signal posted
+    there right now would trade (venue on AND the feed has a secret)."""
+    live = set(enabled_exchanges())
+    return [
+        {
+            "exchange": venue,
+            "feed": feed,
+            "path": path,
+            "enabled": venue in live and bool(_feed_secret(feed)),
+        }
+        for feed, paths in ((MAIN_FEED, WEBHOOK_PATHS), (TEST_FEED, TEST_WEBHOOK_PATHS))
+        for venue, path in paths.items()
+    ]
 
 
 _register_webhooks()

@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Eye, EyeOff, RefreshCw, ShieldAlert } from 'lucide-react'
+import { Eye, EyeOff, RefreshCw, ShieldAlert, TestTubeDiagonal } from 'lucide-react'
+import { isTester } from '../../lib/roles'
+import { TESTER_TINT } from './badges'
 import type { AdminUserCreateInput, UserRole, UserStatus } from '../../types/admin'
 
 /* ---- shared class strings (same vocabulary as AssetFormModal) ---- */
@@ -33,6 +35,11 @@ const ROLES: { value: UserRole; label: string; hint: string }[] = [
     value: 'collaborator',
     label: 'Collaborator',
     hint: 'Read-only staff: dashboard overview, users and strategies. Cannot change anything.',
+  },
+  {
+    value: 'tester',
+    label: 'Tester',
+    hint: 'Internal test account: trader dashboard only, no admin portal. Trades the test feed, never billed.',
   },
 ]
 
@@ -113,7 +120,8 @@ export default function CreateUserModal({
 
   const roleHint = ROLES.find((r) => r.value === role)?.hint
   const statusHint = STATUSES.find((s) => s.value === status)?.hint
-  const elevated = role !== 'user'
+  // A tester is not elevated: it gets no admin access, only its own note below.
+  const elevated = role !== 'user' && !isTester(role)
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -262,6 +270,18 @@ export default function CreateUserModal({
               {role === 'collaborator'
                 ? 'This account gets read-only admin-portal access (overview, users, strategies) as soon as it is created.'
                 : 'This account gets admin-portal access as soon as it is created.'}
+            </span>
+          </p>
+        )}
+
+        {isTester(role) && (
+          <p
+            className={`flex items-start gap-2 rounded-field border px-3 py-2.5 text-[12.5px] ${TESTER_TINT}`}
+          >
+            <TestTubeDiagonal size={15} className="mt-px flex-none" />
+            <span className="text-text">
+              Its exchange accounts only receive the test feed — never the main
+              TradingView signals — and it is never billed.
             </span>
           </p>
         )}

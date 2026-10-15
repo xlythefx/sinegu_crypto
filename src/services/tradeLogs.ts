@@ -3,6 +3,7 @@ import type {
   MasterOutcome,
   ReasonCount,
   ReasonSeverity,
+  SignalFeed,
   SignalHealth,
   SignalHealthStatus,
   SignalIssue,
@@ -96,6 +97,7 @@ interface ApiOutsideClose {
 
 interface ApiLog {
   kind?: 'signal'
+  feed?: SignalFeed
   side?: TradeLogRow['side']
   type?: TradeLogRow['type']
   retries?: ApiRetry[]
@@ -225,6 +227,8 @@ function mapLog(l: ApiLog): TradeLogRow {
     kind: 'signal',
     id: l.id,
     exchange: l.exchange,
+    // An API older than the test feed: every signal it logged was main.
+    feed: l.feed === 'test' ? 'test' : 'main',
     action: l.action,
     // An API older than the side/type words: derive them from the action.
     side: l.side ?? (l.action === 'SELL' || l.action === 'EXIT_SHORT' ? 'SHORT' : 'LONG'),
@@ -287,6 +291,7 @@ function signalParams(filters: TradeLogFilters): URLSearchParams {
     }
   }
   put('exchange', filters.exchange)
+  put('feed', filters.feed)
   put('side', filters.side)
   put('type', filters.type)
   put('action', filters.action)

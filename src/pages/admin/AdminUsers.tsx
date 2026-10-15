@@ -73,6 +73,7 @@ const ROLE_FILTERS: { key: RoleFilter; label: string }[] = [
   { key: 'admin', label: 'Admin' },
   { key: 'developer', label: 'Developer' },
   { key: 'collaborator', label: 'Collaborator' },
+  { key: 'tester', label: 'Tester' },
 ]
 
 const USERS_PER_PAGE = 10
@@ -111,6 +112,23 @@ const ROLE_EFFECT: Record<UserRole, string> = {
     'They get the admin portal plus the database console, and their invoice payments run against the providers’ sandbox instead of real money.',
   collaborator:
     'They get a read-only view of the admin portal — the dashboard overview, users and strategies — and can change nothing.',
+  tester:
+    'An internal test account: they keep only the trader dashboard, their exchange accounts receive only the test feed (never the main TradingView signals), and they are never billed. Refused while they hold an open position.',
+}
+
+/**
+ * The confirm dialog's sentence. Leaving `tester` is its own case: the
+ * accounts switch feeds, so the API refuses it while a position is open
+ * (409 OPEN_POSITIONS) — said up front rather than only on refusal.
+ */
+function roleEffect({ user, role }: PendingRole): string {
+  if (user.type !== 'tester' || role === 'tester') return ROLE_EFFECT[role]
+  const feeds =
+    'Their exchange accounts move from the test feed to the main TradingView signals. Refused while they hold an open position.'
+  if (role === 'user') {
+    return `They become a customer: billed like everyone else and counted as one. ${feeds}`
+  }
+  return `${ROLE_EFFECT[role]} ${feeds}`
 }
 
 export default function AdminUsers() {
@@ -287,8 +305,14 @@ export default function AdminUsers() {
       setPendingRole(null)
       reload()
     } catch (err) {
-      // The API owns the rules (no self-change, one master) — show what it said.
-      setActionError(getApiErrorMessage(err, 'Unable to change the role.'))
+      // The API owns the rules (no self-change, one master, no switching a
+      // tester's feed under an open position — 409 OPEN_POSITIONS) — show
+      // what it said.
+      const fallback =
+        err instanceof ApiError && err.errorCode === 'OPEN_POSITIONS'
+          ? 'This user holds an open position — close it first, then change the role.'
+          : 'Unable to change the role.'
+      setActionError(getApiErrorMessage(err, fallback))
       setPendingRole(null)
     } finally {
       setActionLoading(false)
@@ -628,7 +652,7 @@ export default function AdminUsers() {
             ? `Make ${pendingRole.user.name || 'this user'} a ${pendingRole.role}?`
             : 'Change role?'
         }
-        message={pendingRole ? ROLE_EFFECT[pendingRole.role] : undefined}
+        message={pendingRole ? roleEffect(pendingRole) : undefined}
         confirmLabel={actionLoading ? 'Working…' : 'Yes, change role'}
         cancelLabel="No"
         danger={pendingRole?.role === 'master' || pendingRole?.role === 'developer'}

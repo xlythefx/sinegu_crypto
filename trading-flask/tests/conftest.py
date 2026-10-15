@@ -18,6 +18,9 @@ os.environ.setdefault("BINANCE_ABCD_WEBHOOK_SECRET", "test-webhook-secret")
 # .env setting BINANCE_ABCD_ADMIN_SECRET must not flip that. test_admin_auth.py
 # monkeypatches hooks.ADMIN_SECRET to exercise the separated token.
 os.environ.setdefault("BINANCE_ABCD_ADMIN_SECRET", "")
+# Test feed OFF by default, whatever a developer's .env says;
+# test_test_feed.py monkeypatches hooks.TEST_WEBHOOK_SECRET to turn it on.
+os.environ.setdefault("BINANCE_ABCD_TEST_WEBHOOK_SECRET", "")
 os.environ.setdefault("BINANCE_ABCD_ENGINE_SECRET", "test-engine-secret")
 os.environ.setdefault("BINANCE_ABCD_ENGINE_API_BASE", "http://engine.test/api")
 os.environ.setdefault("BINANCE_ABCD_RUN_POLLERS", "false")

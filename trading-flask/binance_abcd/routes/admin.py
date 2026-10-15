@@ -204,11 +204,14 @@ def close_positions():
         for exchange in {ex for ex, _, _ in groups}
     }
 
+    # feed=None: a manual close names its accounts, so it reaches them on
+    # whichever signal feed they follow — a tester's position must be
+    # closable from here exactly like a customer's.
     futures = {
         _CLOSE_EXECUTOR.submit(
             webhook._process_trade_job,
             f"EXIT_{side}", symbol, None, None, None,
-            targets={exchange: uni_ids}, announce=bool(uni_ids & masters[exchange]),
+            targets={exchange: uni_ids}, announce=bool(uni_ids & masters[exchange]), feed=None,
         ): (exchange, symbol, side, uni_ids)
         for (exchange, symbol, side), uni_ids in groups.items()
     }

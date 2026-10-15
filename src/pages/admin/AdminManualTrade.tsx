@@ -7,8 +7,10 @@ import {
   Radio,
   Send,
   Sliders,
+  TestTubeDiagonal,
 } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
+import { TESTER_TINT } from '../../components/admin/badges'
 import DataState from '../../components/dashboard/DataState'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import RecipientPicker from '../../components/admin/manual-trade/RecipientPicker'
@@ -40,8 +42,10 @@ import {
   getEngineStatus,
   getManualTradeTargets,
   sendManualTrade,
+  TEST_SECRET_MISSING,
 } from '../../services/manualTrade'
 import type { ExchangeKind } from '../../types/exchanges'
+import type { SignalFeed } from '../../types/feeds'
 import type {
   EngineStatus,
   EngineTarget,
@@ -63,6 +67,11 @@ const TARGETS: { value: EngineTarget; label: string; hint: string }[] = [
   { value: 'prod', label: 'Production', hint: 'The deployed engine — real orders' },
 ]
 
+const FEEDS: { value: SignalFeed; label: string; hint: string }[] = [
+  { value: 'main', label: 'Main feed', hint: 'Customers, the master and staff' },
+  { value: 'test', label: 'Test feed', hint: 'Tester accounts only' },
+]
+
 const isEntry = (action: TradeAction) => action === 'BUY' || action === 'SELL'
 
 /** Assets belonging to one exchange, tolerating broker casing/blanks. */
@@ -77,12 +86,17 @@ const DEFAULT_LEVERAGE = '25'
  * tester. Builds a TradingView-shaped signal and hands it to the API, which
  * signs it with the webhook secret and forwards it to the engine. The preview
  * shows the real secret (admin-only page) but sends never carry it from here.
+ * The feed picks which webhook: main (everyone the TradingView alerts reach)
+ * or test (tester accounts only, signed with the test secret, never public).
  */
 export default function AdminManualTrade() {
   const { data: assets, loading, error, reload } = useApiData(getAdminAssets)
 
   /* ---- form ---- */
   const [exchange, setExchange] = useState<ExchangeKind>('binance')
+  // Which webhook fires: `test` reaches tester accounts only (and nobody
+  // else's accounts follow it), so it reloads the recipients too.
+  const [feed, setFeed] = useState<SignalFeed>('main')
   const [ticker, setTicker] = useState('')
   const [action, setAction] = useState<TradeAction>('BUY')
   const [increments, setIncrements] = useState(1)
@@ -109,25 +123,27 @@ export default function AdminManualTrade() {
     let alive = true
     setTargetsLoading(true)
     setSelected([])
-    getManualTradeTargets(exchange)
+    getManualTradeTargets(exchange, feed)
       .then((rows) => alive && setTargets(rows))
       .catch(() => alive && setTargets([]))
       .finally(() => alive && setTargetsLoading(false))
     return () => {
       alive = false
     }
-  }, [exchange])
+  }, [exchange, feed])
 
   useEffect(() => {
     let alive = true
     setEngine(null)
-    getEngineStatus(target, exchange)
+    getEngineStatus(target, exchange, feed)
       .then((status) => alive && setEngine(status))
       .catch(() => alive && setEngine(null))
     return () => {
       alive = false
     }
-  }, [target, exchange])
+  }, [target, exchange, feed])
+
+  const testFeed = feed === 'test'
 
   const exchangeAssets = useMemo(
     () => (assets ?? []).filter((a) => a.enabled && brokerMatches(a.broker, exchange)),
@@ -144,10 +160,11 @@ export default function AdminManualTrade() {
     selectedAsset.side !== (action === 'BUY' ? 'LONG' : 'SHORT')
 
   const recipientCount = mode === 'selected' ? selected.length : targets.length
+  const noun = testFeed ? 'tester' : 'user'
   const recipientLabel =
     mode === 'selected'
-      ? `${selected.length} selected user${selected.length === 1 ? '' : 's'}`
-      : `all ${targets.length} eligible user${targets.length === 1 ? '' : 's'}`
+      ? `${selected.length} selected ${noun}${selected.length === 1 ? '' : 's'}`
+      : `all ${targets.length} eligible ${noun}${targets.length === 1 ? '' : 's'}`
 
   const ready = !!ticker && recipientCount > 0 && !sideBlocked && !sending
 
@@ -159,7 +176,9 @@ export default function AdminManualTrade() {
             engine?.webhook_secret_masked ??
             (engine === null
               ? 'loading…'
-              : `${exchange.toUpperCase()}_ENGINE_WEBHOOK_SECRET not set`),
+              : testFeed
+                ? 'ENGINE_TEST_WEBHOOK_SECRET not set'
+                : `${exchange.toUpperCase()}_ENGINE_WEBHOOK_SECRET not set`),
           action,
           symbol: ticker || '—',
           ...(leverage ? { leverage } : {}),
@@ -171,7 +190,7 @@ export default function AdminManualTrade() {
         null,
         2,
       ),
-    [engine, exchange, action, ticker, leverage, strategy, mode, selected],
+    [engine, exchange, testFeed, action, ticker, leverage, strategy, mode, selected],
   )
 
   if (error instanceof ApiError && error.status === 401) {
@@ -186,6 +205,7 @@ export default function AdminManualTrade() {
       const res = await sendManualTrade({
         exchange,
         target,
+        feed,
         action,
         symbol: ticker,
         leverage: leverage ? Number(leverage) : null,
@@ -195,7 +215,12 @@ export default function AdminManualTrade() {
       })
       setResult(res)
     } catch (err) {
-      setSendError(getApiErrorMessage(err, 'Could not reach the engine.'))
+      // 503 from the API itself: it has no test secret to sign the signal with.
+      const fallback =
+        err instanceof ApiError && err.errorCode === TEST_SECRET_MISSING
+          ? 'The API has no test webhook secret (ENGINE_TEST_WEBHOOK_SECRET), so it cannot sign a test-feed signal. Set it in the API’s .env — the same value as the engine’s BINANCE_ABCD_TEST_WEBHOOK_SECRET — and re-cache the config.'
+          : 'Could not reach the engine.'
+      setSendError(getApiErrorMessage(err, fallback))
     } finally {
       setSending(false)
     }
@@ -238,8 +263,10 @@ export default function AdminManualTrade() {
             <div className={CARD_HEAD}>
               <span className={STEP}>1</span>
               <div className="min-w-0">
-                <div className={CARD_TITLE}>Exchange</div>
-                <div className={CARD_SUB}>Binance is the only engine running today.</div>
+                <div className={CARD_TITLE}>Exchange &amp; feed</div>
+                <div className={CARD_SUB}>
+                  Which exchange&apos;s accounts trade it, and which webhook it goes through.
+                </div>
               </div>
             </div>
             <div className="grid grid-cols-3 max-[560px]:grid-cols-1 gap-2.5">
@@ -276,6 +303,56 @@ export default function AdminManualTrade() {
                   </button>
                 )
               })}
+            </div>
+
+            {/* Which webhook — the test feed has its own audience (testers). */}
+            <div className="mt-4 border-t border-hair pt-4">
+              <p className={LABEL}>Feed</p>
+              <div
+                className="grid grid-cols-2 max-[560px]:grid-cols-1 gap-2.5"
+                role="group"
+                aria-label="Signal feed"
+              >
+                {FEEDS.map((f) => (
+                  <button
+                    key={f.value}
+                    type="button"
+                    aria-pressed={feed === f.value}
+                    className={`${SEG} flex flex-col items-start gap-0.5 text-left ${
+                      feed === f.value ? SEG_ON : SEG_OFF
+                    }`}
+                    onClick={() => setFeed(f.value)}
+                  >
+                    <span>{f.label}</span>
+                    <span
+                      className={`text-[11px] font-normal ${
+                        feed === f.value ? 'opacity-80' : 'text-muted'
+                      }`}
+                    >
+                      {f.hint}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {testFeed && (
+                <div className={`${MSG} ${TESTER_TINT} mt-3.5`} role="note">
+                  <TestTubeDiagonal size={15} className="flex-none mt-px" />
+                  <span>Goes to tester accounts only. Never posted to Telegram or Discord.</span>
+                </div>
+              )}
+              {testFeed && engine?.test_feed_enabled === false && (
+                <div className={`${MSG} ${MSG_WARN} mt-2.5`} role="alert">
+                  <AlertTriangle size={15} className="flex-none mt-px" />
+                  <span>
+                    The {target === 'prod' ? 'production' : 'local'} engine has no test
+                    webhook secret set (
+                    <code className="font-mono break-all">BINANCE_ABCD_TEST_WEBHOOK_SECRET</code>),
+                    so it will refuse this signal with a 403. You can still send it — the
+                    engine&apos;s answer shows under Review &amp; send.
+                  </span>
+                </div>
+              )}
             </div>
           </section>
 
@@ -458,6 +535,7 @@ export default function AdminManualTrade() {
             onModeChange={setMode}
             selected={selected}
             onSelectedChange={setSelected}
+            feed={feed}
           />
 
           <section className={CARD} data-aos="fade-up" data-aos-delay="120">
@@ -474,6 +552,7 @@ export default function AdminManualTrade() {
             <dl className="flex flex-col gap-1.5 rounded-[12px] border border-hair bg-surface2 p-3.5 text-[12.5px] mb-3.5">
               {[
                 ['Exchange', exchangeMeta.label],
+                ['Feed', testFeed ? 'Test feed' : 'Main feed'],
                 ['Ticker', ticker || '—'],
                 ['Action', action],
                 ...(isEntry(action) ? [['Increments', String(increments)]] : []),
@@ -501,8 +580,12 @@ export default function AdminManualTrade() {
               {payloadPreview}
             </pre>
             <p className="mt-1.5 mb-3.5 text-[11px] text-muted leading-[1.4]">
-              The secret is masked — the API adds the real one. The full token for
-              TradingView alerts lives in <code className="font-mono">CLAUDE.md</code>.
+              The secret is masked — the API adds the real one. Webhook addresses and
+              the alert template for TradingView are on{' '}
+              <Link className="font-bold text-accent hover:underline" to="/admin/webhooks">
+                Webhooks
+              </Link>
+              .
             </p>
 
             {sendError && (
@@ -576,9 +659,10 @@ export default function AdminManualTrade() {
             : `Send ${action} ${ticker}?`
         }
         message={
-          target === 'prod'
+          (target === 'prod'
             ? `This places real orders on every live account of ${recipientLabel}. Demo accounts stay on the testnet. This cannot be undone.`
-            : `${isEntry(action) ? `${increments} signal${increments === 1 ? '' : 's'}` : 'One signal'} will be sent to the local engine for ${recipientLabel}.`
+            : `${isEntry(action) ? `${increments} signal${increments === 1 ? '' : 's'}` : 'One signal'} will be sent to the local engine for ${recipientLabel}.`) +
+          (testFeed ? ' It goes through the test feed: nothing is posted to Telegram or Discord.' : '')
         }
         confirmLabel={sending ? 'Sending…' : 'Yes, send'}
         cancelLabel="Cancel"

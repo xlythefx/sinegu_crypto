@@ -1,4 +1,5 @@
 import type { ExchangeKind } from './exchanges'
+import type { SignalFeed } from './feeds'
 
 /** The four signals the trading engine understands. */
 export type TradeAction = 'BUY' | 'SELL' | 'EXIT_LONG' | 'EXIT_SHORT'
@@ -14,6 +15,8 @@ export interface ManualTradeTarget {
   display_name: string
   email: string | null
   exchange: ExchangeKind
+  /** The feed this user's accounts follow — `test` for a tester. Absent on an older API = main. */
+  feed?: SignalFeed
   account_count: number
   demo_count: number
   live_count: number
@@ -24,6 +27,8 @@ export interface ManualTradeTarget {
 export interface ManualTradeInput {
   exchange: ExchangeKind
   target: EngineTarget
+  /** Which webhook to fire: `test` reaches tester accounts only. Default main. */
+  feed?: SignalFeed
   action: TradeAction
   symbol: string
   leverage?: number | null
@@ -52,6 +57,12 @@ export interface EngineStatus {
    * never leaves the API; copy it from CLAUDE.md for TradingView alerts.
    */
   webhook_secret_masked?: string | null
+  /**
+   * Whether the engine has its test-feed secret set (so a test signal will be
+   * accepted). null = the engine did not say — unknown, never "off". Absent
+   * on an API older than the test feed.
+   */
+  test_feed_enabled?: boolean | null
   health?: {
     status?: string
     service?: string

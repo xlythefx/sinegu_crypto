@@ -64,8 +64,38 @@ WEBHOOK_PATHS = {
 WEBHOOK_PATH = WEBHOOK_PATHS["binance"]  # the original path; launcher/tester default
 FLASK_PORT = _env_int("FLASK_PORT", 5010)
 
+# Signal feeds (2026-10-15). Every account follows exactly ONE feed, decided by
+# the API from its owner's role (`feed` on GET /engine/{x}/accounts):
+#   main — the paths above: TradingView, every customer, the master, staff.
+#   test — the paths below: accounts owned by a `tester` user ONLY. Internal
+#          test accounts (demo or real money) used to throw test signals at
+#          prod and to try other signal providers. Nothing it does is posted
+#          publicly, the master-account rules do not apply to it, and testers
+#          are never billed.
+# One feed per account because a venue merges positions by coin + side: an
+# account on both feeds would have one feed's exit close the other's entry.
+MAIN_FEED = "main"
+TEST_FEED = "test"
+FEEDS = (MAIN_FEED, TEST_FEED)
+# Same one-path-per-venue rule as WEBHOOK_PATHS, and the same nginx rule: the
+# deploy script's ENGINE_WEBHOOK_PATHS proxies these too.
+TEST_WEBHOOK_PATHS = {
+    "binance": "/binance_test_webhook",
+    "mexc": "/mexc_test_webhook",
+    "bybit": "/bybit_test_webhook",
+}
+
 # TradingView -> webhook shared secret. Required; compared with hmac.compare_digest.
 WEBHOOK_SECRET = _env_str("WEBHOOK_SECRET")
+# The TEST feed's own secret. A separate token so whatever holds it — a test
+# server, another signal provider — can never fire a real customer's trade.
+# Empty = the test feed is OFF (every test path answers 403). A value equal to
+# the main secret is refused the same way: it would make the two feeds one.
+_TEST_WEBHOOK_SECRET_RAW = _env_str("TEST_WEBHOOK_SECRET", "")
+TEST_WEBHOOK_SECRET = (
+    _TEST_WEBHOOK_SECRET_RAW if _TEST_WEBHOOK_SECRET_RAW != WEBHOOK_SECRET else ""
+)
+TEST_WEBHOOK_SECRET_IS_MAIN = bool(_TEST_WEBHOOK_SECRET_RAW) and not TEST_WEBHOOK_SECRET
 # /admin/* (cache flushes, manual closes, ledger reads, recap previews) has its
 # OWN secret, held only by this box and the API beside it. Until 2026-10-07 it
 # was the webhook secret above — which also sits at TradingView, in every
@@ -359,6 +389,17 @@ def estimate_round_trip_fee(
 # --- Local output -------------------------------------------------------------
 OUT_DIR = PROJECT_ROOT / "out"
 OUT_DIR.mkdir(exist_ok=True)
+
+
+def account_feed(account: dict) -> str:
+    """The feed an account follows. An API that predates feeds sends no key:
+    every account is then on the main feed, exactly as before."""
+    return TEST_FEED if account.get("feed") == TEST_FEED else MAIN_FEED
+
+
+def test_feed_enabled() -> bool:
+    # Read through the module so a test can monkeypatch TEST_WEBHOOK_SECRET.
+    return bool(TEST_WEBHOOK_SECRET)
 
 
 def engine_headers() -> dict[str, str]:

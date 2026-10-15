@@ -8,6 +8,7 @@ export type OutcomeFilter = TradeLogOutcome | 'all'
 /** Every Signal Log filter and its "off" value — what an unfiltered URL means. */
 const DEFAULTS = {
   exchange: 'all',
+  feed: 'all',
   side: 'all',
   type: 'all',
   source: 'all',
@@ -21,6 +22,7 @@ const DEFAULTS = {
 }
 
 const ALLOWED = {
+  feed: ['all', 'main', 'test'],
   side: ['all', 'long', 'short'],
   type: ['all', 'entry', 'exit'],
   source: ['all', 'signals', 'outside'],
@@ -33,7 +35,7 @@ const ALLOWED = {
  * reload or a shared link lands on the same view. Shared by its two views.
  *
  * Two kinds of filter, kept apart because the endpoints treat them apart:
- * - SIGNAL filters (exchange, side, type, coin, dates) narrow which signals
+ * - SIGNAL filters (exchange, feed, side, type, coin, dates) narrow which signals
  *   are read — both the list and the Issues view honour them;
  * - LIST-ONLY filters (source, account outcome, reason, account search) — the
  *   Issues view has its own grouping.
@@ -50,13 +52,14 @@ export function useTradeLogFilters() {
   const signalFilters = useMemo<TradeLogFilters>(
     () => ({
       exchange: f.exchange,
+      feed: f.feed,
       side: f.side,
       type: f.type,
       ticker: f.ticker,
       from: range.from,
       to: range.to,
     }),
-    [f.exchange, f.side, f.type, f.ticker, range.from, range.to],
+    [f.exchange, f.feed, f.side, f.type, f.ticker, range.from, range.to],
   )
   const listFilters = useMemo<TradeLogFilters>(
     () => ({
@@ -68,7 +71,7 @@ export function useTradeLogFilters() {
     }),
     [signalFilters, f.source, f.outcome, f.reason, f.account],
   )
-  const signalKey = `${f.exchange}|${f.side}|${f.type}|${f.ticker}|${range.from}|${range.to}`
+  const signalKey = `${f.exchange}|${f.feed}|${f.side}|${f.type}|${f.ticker}|${range.from}|${range.to}`
   const listKey = `${signalKey}|${f.source}|${f.outcome}|${f.reason}|${f.account}`
 
   const [paging, setPaging] = useState({ key: listKey, page: 1 })

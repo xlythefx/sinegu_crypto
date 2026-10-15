@@ -833,7 +833,9 @@ def _credential_fixes(failures: list[tuple]) -> list[str]:
     ]
 
 
-def notify_retry_abandoned(action: str, ticker: str, uni_ids: list, attempts: int) -> None:
+def notify_retry_abandoned(
+    action: str, ticker: str, uni_ids: list, attempts: int, *, test_feed: bool = False,
+) -> None:
     """The engine has STOPPED retrying — the one moment a human is actually
     needed, and until now it was a log line nobody reads.
 
@@ -841,6 +843,9 @@ def notify_retry_abandoned(action: str, ticker: str, uni_ids: list, attempts: in
     that is no longer worth repeating. Identifies users by uni_id rather than
     account name because this far from the fan-out the queue carries ids, not
     accounts.
+
+    `test_feed` marks a tester account's retry: same alert under the test
+    banner, admin chat ONLY (no public fallback, like every test-feed message).
     """
     if not uni_ids:
         return
@@ -851,13 +856,96 @@ def notify_retry_abandoned(action: str, ticker: str, uni_ids: list, attempts: in
     else:
         head = "⚠️ <b>ENTRY ABANDONED</b>"
         sub = f"gave up after {attempts} attempt(s) — no order was placed for:"
+    if test_feed:
+        head = f"{_TEST_BANNER}\n{head}"
     lines = [head, f"{_esc(ticker)} ({_esc(action)}) — {sub}"]
     for uni_id in list(uni_ids)[:20]:
         lines.append(f"  • user <code>{_esc(uni_id)}</code>")
     if len(uni_ids) > 20:
         lines.append(f"  … +{len(uni_ids) - 20} more")
     lines.append(f"({len(uni_ids)} account(s) affected)")
-    _send_admin("\n".join(lines))
+    (_send_private if test_feed else _send_admin)("\n".join(lines))
+
+
+# --- Admin: the test feed -----------------------------------------------------
+#
+# Signals on the TEST feed (hooks.TEST_WEBHOOK_PATHS) trade tester accounts
+# only. They never reach the public builders, and they go out through
+# _send_private — never _send_admin, whose fallback is the PUBLIC channel when
+# no admin chat is configured. No admin chat = no test message; the Signal Log
+# still has every row.
+
+_TEST_BANNER = "🧪 <b>TEST FEED</b> — tester accounts only, nothing posted publicly"
+
+
+def _test_result_line(name: Any, result: dict) -> str:
+    """'Tester A — filled 0.5 · 2/3 · streak -2 step 2' — what a tester needs
+    to read a test signal without opening the Signal Log."""
+    status = result.get("status")
+    if status == "filled":
+        qty = result.get("quantity", result.get("closed_quantity"))
+        text = f"filled {_fmt_num(qty)}" if qty is not None else "filled"
+        inc, cap = result.get("increment"), result.get("max_increments")
+        if inc:
+            text += f" · {inc}/{cap}" if cap else f" · #{inc}"
+        sizing = result.get("sizing") or {}
+        if sizing.get("streak_step"):
+            text += f" · streak {int(sizing.get('streak_run') or 0):+d} step {sizing['streak_step']}"
+    elif status == "skipped":
+        text = f"skipped: {result.get('reason') or 'no reason given'}"
+    else:
+        text = f"failed: {result.get('error') or 'unknown'}"
+    return f"  • {_esc(name)} — {_esc(text)}"
+
+
+def _fmt_num(value: Any) -> str:
+    try:
+        return f"{float(value):g}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def notify_test_feed(
+    action: str,
+    ticker: str,
+    rows: list[tuple],
+    *,
+    filled: int,
+    failed: int,
+    skipped: int,
+    is_retry: bool = False,
+    retrying: bool = False,
+    label: Optional[str] = None,
+) -> None:
+    """One private summary per test-feed signal: every tester account's
+    outcome on one message. `rows` = (account_label, result dict). Retry runs
+    stay silent, as on the main feed — the queue reports the ending."""
+    if is_retry:
+        return
+    emoji, action_label = _ACTION_LABEL.get(action.upper(), ("📈", action))
+    lines = [
+        _TEST_BANNER,
+        f"{emoji} <b>{action_label} — {_esc(ticker)} · {_esc(label or BROKER_LABEL)}</b>",
+        f"Filled {filled} · skipped {skipped} · failed {failed}",
+    ]
+    for name, result in rows[:20]:
+        lines.append(_test_result_line(name, result))
+    if len(rows) > 20:
+        lines.append(f"  … +{len(rows) - 20} more")
+    if retrying:
+        lines.append(f"Retrying the failed account(s) every {int(hooks.RETRY_INTERVAL_SECONDS)}s.")
+    _send_private("\n".join(lines))
+
+
+def notify_test_feed_rejected(action: str, ticker: str, reason: str, label: Optional[str] = None) -> None:
+    """A test signal that reached no account (coin not configured, side gate,
+    no tester account on the venue). Private, like the rest of the feed."""
+    venue = f" · {_esc(label)}" if label else ""
+    _send_private(
+        f"{_TEST_BANNER}\n"
+        f"⚠️ <b>Signal rejected</b> — {_esc(action)} {_esc(ticker)}{venue}\n"
+        f"Reason: <code>{_esc(reason)}</code> — no order placed."
+    )
 
 
 def notify_max_increments(

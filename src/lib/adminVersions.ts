@@ -13,6 +13,35 @@ import type { AdminChange } from '../types/adminVersions'
  *    later change to the same feature gets its own entry.
  */
 export const ADMIN_CHANGES: AdminChange[] = [
+  // ── 2026-10-15 ───────────────────────────────────────────────────────────
+  {
+    id: 'tester-role-test-feed',
+    date: '2026-10-15',
+    kind: 'new',
+    area: 'Signals',
+    title: 'Test accounts with their own signal feed, and a Webhooks page with every signal address',
+    summary:
+      'There is a new account role, Tester, for our own test accounts. A tester account does not receive the normal TradingView signals. It only receives signals sent to a separate test address, so we can send test signals to the live system, or plug in a different signal provider, without touching any customer. Nothing a test signal does is posted in the Telegram or Discord channels, and tester accounts are never billed. A new Webhooks page lists every signal address with copy buttons.',
+    howItWorks: [
+      'Each exchange now has two addresses. The main one (for example …/binance_abcd_webhook) is the TradingView one: it trades every customer, the master account and staff. The test one (for example …/binance_test_webhook) trades tester accounts ONLY.',
+      'The test address has its own password (secret). A test server or another signal provider holding it can only ever move tester accounts — never a customer’s money. The TradingView password does not work on the test address, and the test password does not work on the main one.',
+      'Any signal provider works, not only TradingView: it just has to send the same short message (action, coin, price) to the test address. Admin → Sandbox → Manual trade also has a “Test feed” switch to send one by hand.',
+      'Tester accounts can be demo or real money. Everything else works exactly like for customers — position sizes, the minimum deposit, the 3-entry limit, streak sizing, and a coin switched off (including by the kill switch) — so a test shows what a customer would get. The one rule skipped is “when the master is full, nobody adds”, because testers follow different signals than the master.',
+      'Example: send BUY LTC to the Binance test address. Two tester accounts open an LTC long; customers and the master do nothing; the channel stays silent; the admin chat gets one “🧪 TEST FEED” message listing what each tester account did, and the Signal Log shows the signal with a “Test feed” tag (there is a Feed filter).',
+      'To make an account a tester: User Management → change the role to Tester (or create a new user with role Tester). The change is refused while that person still has an open position, because a position opened by one feed would never get its exit from the other.',
+      'Testers sign in like a normal trader and see the trader dashboard only. They are not counted as customers on the Admin Dashboard, are not invoiced, and do not get the Discord “Trader” role. They may connect MEXC and Bybit, which customers cannot yet.',
+      'Admin → Webhooks shows, per exchange and per feed: the production and local address with a copy button, whether that exchange is on, whether the test feed is ready, how many real-money and demo accounts would receive a signal there, and a ready-to-paste alert message (with a placeholder where the password goes — passwords are never shown on the page).',
+    ],
+    technical: [
+      'user_credentials.type gains `tester`. GET /engine/{x}/accounts carries feed: main|test (test = tester owner). Engine: hooks.TEST_WEBHOOK_PATHS (/{venue}_test_webhook), BINANCE_ABCD_TEST_WEBHOOK_SECRET (empty or equal to the main secret = test feed off, 403); _process_trade_job(feed=…) filters accounts, sets announce=False, skips _main_account_full, reports via notify.notify_test_feed (_send_private only); retries carry the feed; the admin manual close uses feed=None (every feed). /health adds test_feed + webhooks.',
+      'trade_logs.feed (main default); Signal Log ?feed= filter; SignalHealth counts main only. Role change to/from tester → 409 OPEN_POSITIONS while any position is open; it pings the engine to drop its account cache. GET /admin/webhooks (full admins): paths, prod/local bases, venue_live/enabled from the engine’s /health, receivers per feed + demo, secrets as presence booleans only. Manual trade console takes feed (API key ENGINE_TEST_WEBHOOK_SECRET = the engine’s test secret). nginx proxies the three test paths (deploy-nginx).',
+    ],
+    links: [
+      { label: 'Open Webhooks', href: '/admin/webhooks' },
+      { label: 'Open the Signal Log', href: '/admin/trade-logs' },
+      { label: 'Open User Management', href: '/admin/users' },
+    ],
+  },
   // ── 2026-10-14 ───────────────────────────────────────────────────────────
   {
     id: 'signup-wizard',

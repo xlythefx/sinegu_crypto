@@ -75,6 +75,33 @@ the venue the account came from (`/engine/{exchange}/positions/upsert`,
 `trade_logs` row and its own Telegram header label. nginx proxies exactly the
 paths in the deploy script's `ENGINE_WEBHOOK_PATHS`.
 
+### Signal feeds — main and test (2026-10-15)
+
+Every venue has a second path, the **test feed** (`hooks.TEST_WEBHOOK_PATHS`):
+`/binance_test_webhook`, `/mexc_test_webhook`, `/bybit_test_webhook`. Same
+trade path, same payload, three differences:
+
+- **Only accounts owned by a `tester` user receive it**, and the main paths
+  never reach them. The API decides the feed from the owner's role (`feed`
+  on `GET /engine/{x}/accounts`); the engine only filters. One feed per
+  account, because a venue merges positions by coin + side — one feed's exit
+  would close the other's entry.
+- **Its own secret**, `BINANCE_ABCD_TEST_WEBHOOK_SECRET`. Empty = every test
+  path answers 403; a value equal to the main secret is refused the same way.
+  A test server or another signal provider holding it can never fire a real
+  customer's trade.
+- **Nothing public, no master rules.** No entry/exit message, no exit batch,
+  no Discord; one private summary per signal to the admin chat
+  (`notify.notify_test_feed`, `_send_private` — dropped, never made public,
+  when no admin chat is set). The main-account hold-back is skipped. Retries
+  stay on the feed. `trade_logs.feed = 'test'` tags every row.
+
+Sizing, the deposit minimum, the stack cap, streak sizing and the asset on/off
+switch (including the kill switch) apply exactly as on the main feed — that is
+what a test signal is for. `/health` lists every path (`webhooks`) and
+`test_feed.enabled`; the admin **Webhooks** page reads them through the API.
+The admin's manual close reaches any feed (it names its accounts).
+
 The core (`trading_handler`, the webhook fan-out, the pollers) never sees a
 venue's field names. It talks to an `ExchangeClient` (`exchange_api.py`) in one
 vocabulary — tickers, **coins**, LONG/SHORT, SHORT negative, `None` for a failed
@@ -417,8 +444,8 @@ python engine_launcher.py            # or: Tkinter start/stop GUI with live log 
 ## Test trades
 
 ```bash
-python -m pytest tests/ -q     # 525 tests, no network
-python webhook_tester.py       # Tkinter GUI — local or prod target
+python -m pytest tests/ -q     # 620 tests, no network
+python webhook_tester.py       # Tkinter GUI — local or prod target, main or test feed
 ```
 
 The GUI builds the exact TradingView payload (`secret, action, symbol, price,

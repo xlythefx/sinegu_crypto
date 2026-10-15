@@ -18,6 +18,29 @@ import type { AdminTodo } from '../types/adminTodos'
  *    the note and the date it was settled stay readable.
  */
 export const ADMIN_TODOS: AdminTodo[] = [
+  // ── Test feed (2026-10-15) ──────────────────────────────────────────────
+  {
+    id: 'test-feed-first-provider',
+    feature: 'Test feed',
+    kind: 'action',
+    title: 'Point a test signal source at the test feed',
+    added: '2026-10-15',
+    why: 'The test feed is built but nothing receives it until at least one account has the Tester role, and nothing sends to it until a signal source is pointed at its address. Until then the Webhooks page shows the test addresses with "No accounts receive this yet".',
+    steps: [
+      'Create the test account: Admin → User Management → New user, role Tester (or change an existing internal account to Tester — it must have no open positions).',
+      'Sign in as that account and connect an exchange key. Start with a DEMO key (Binance testnet / MEXC demo) so the first test moves no real money.',
+      'Admin → Webhooks → Test feed: check the card says "Ready" and "Sends to 1 demo account".',
+      'Send a first signal by hand: Admin → Sandbox → Manual trade → switch to "Test feed" → BUY on a coin that is switched on. Check the Signal Log (Feed: Test) and the admin Telegram chat.',
+      'To try another signal provider: give it the test address from the Webhooks page and the test secret (ask the developer — it lives in BINANCE_ABCD_TEST_WEBHOOK_SECRET on the engine). Never give a provider the main TradingView secret.',
+      'Write in the note below which providers were tried and how they did.',
+    ],
+    envKeys: ['BINANCE_ABCD_TEST_WEBHOOK_SECRET', 'ENGINE_TEST_WEBHOOK_SECRET'],
+    links: [
+      { label: 'Admin → Webhooks', href: '/admin/webhooks' },
+      { label: 'Admin → User Management', href: '/admin/users' },
+      { label: 'Manual trade', href: '/admin/sandbox/manual-trade' },
+    ],
+  },
   // ── Sign-up details (2026-10-14) ────────────────────────────────────────
   {
     id: 'privacy-policy-oct-2026-notice',

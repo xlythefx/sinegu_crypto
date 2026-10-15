@@ -34,8 +34,15 @@ URL_PRESETS = [
     # The origin by address still answers (nginx does not redirect the bare IP),
     # kept as the fallback for when DNS or Cloudflare is the thing being debugged.
     "http://2.24.139.176/binance_abcd_webhook",
+    # The TEST feed: tester-owned accounts only, never posted publicly, its
+    # own secret (the field swaps to it when a test URL is picked).
+    f"http://127.0.0.1:{DEFAULT_PORT}/binance_test_webhook",
+    f"http://127.0.0.1:{DEFAULT_PORT}/mexc_test_webhook",
+    "https://pixel-alpha.com/binance_test_webhook",
+    "https://pixel-alpha.com/mexc_test_webhook",
 ]
 DEFAULT_SECRET = os.environ.get("BINANCE_ABCD_WEBHOOK_SECRET", "")
+DEFAULT_TEST_SECRET = os.environ.get("BINANCE_ABCD_TEST_WEBHOOK_SECRET", "")
 
 ACTIONS = ["BUY", "SELL", "EXIT_LONG", "EXIT_SHORT"]
 SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "DOGEUSDT", "SOLUSDT"]
@@ -148,9 +155,21 @@ class TesterApp:
         url = self.url_var.get().lower()
         return "127.0.0.1" in url or "localhost" in url
 
+    def _is_test_feed(self) -> bool:
+        return "_test_webhook" in self.url_var.get().lower()
+
     def _update_prod_banner(self) -> None:
+        # Each feed takes only its own token: swap the field when the URL
+        # crosses feeds, unless someone typed a secret of their own.
+        if hasattr(self, "secret_var"):
+            want, other = ((DEFAULT_TEST_SECRET, DEFAULT_SECRET) if self._is_test_feed()
+                           else (DEFAULT_SECRET, DEFAULT_TEST_SECRET))
+            if self.secret_var.get() in ("", other):
+                self.secret_var.set(want)
         if self._is_local():
             self.prod_banner.configure(text="")
+        elif self._is_test_feed():
+            self.prod_banner.configure(text="⚠ PROD TEST FEED — real orders on TESTER accounts (live ones included)")
         else:
             self.prod_banner.configure(text="⚠ PROD TARGET — this fires REAL trades on every live account")
 

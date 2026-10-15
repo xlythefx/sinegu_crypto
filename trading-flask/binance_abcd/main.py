@@ -29,7 +29,7 @@ from binance_abcd.monthly_invoices import monthly_invoices_status, start_monthly
 from binance_abcd.reports import reports_status, start_reporter
 from binance_abcd.retry_queue import queue_depth, start_retry_queue
 from binance_abcd.routes.admin import admin_bp
-from binance_abcd.routes.webhook import metrics_snapshot, webhook_bp
+from binance_abcd.routes.webhook import metrics_snapshot, webhook_bp, webhook_catalogue
 
 log = logging.getLogger(__name__)
 
@@ -63,6 +63,11 @@ def create_app() -> Flask:
             "pollers": list(_pollers_running),
             "reports": reports_status(),
             "monthly_invoices": monthly_invoices_status(),
+            # The test feed (hooks.FEEDS) and every path this engine answers,
+            # for the admin Webhooks page. Paths and an on/off flag only —
+            # never a secret.
+            "test_feed": {"enabled": hooks.test_feed_enabled()},
+            "webhooks": webhook_catalogue(),
         })
 
     return app
@@ -193,6 +198,17 @@ def main() -> None:
         hooks.SERVICE_NAME, hooks.BIND_HOST, hooks.FLASK_PORT, ",".join(enabled_exchanges()),
         ", ".join(f"{ex}={hooks.WEBHOOK_PATHS[ex]}" for ex in enabled_exchanges()),
     )
+    if hooks.test_feed_enabled():
+        log.info("test feed ON: %s",
+                 ", ".join(f"{ex}={hooks.TEST_WEBHOOK_PATHS[ex]}" for ex in enabled_exchanges()))
+    elif hooks.TEST_WEBHOOK_SECRET_IS_MAIN:
+        # Refused, not merely discouraged: one token for both feeds would let
+        # a TradingView alert reach tester accounts and a test server reach
+        # every customer.
+        log.warning("BINANCE_ABCD_TEST_WEBHOOK_SECRET equals the main webhook secret — "
+                    "test feed OFF; give it its own value")
+    else:
+        log.info("test feed off (BINANCE_ABCD_TEST_WEBHOOK_SECRET not set)")
     if hooks.ADMIN_SECRET_IS_FALLBACK:
         # Once, at startup: the box works, but the token that fires a signal
         # is also the token that closes every position.

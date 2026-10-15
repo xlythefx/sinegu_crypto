@@ -46,7 +46,7 @@ def test_due_job_redispatches_only_failing_ids():
 
     process.assert_called_once_with(
         "BUY", "BTCUSDT", 100.0, 10, "strat", targets={"binance": {"u1", "u2"}},
-        is_retry=True, announce=False,
+        is_retry=True, announce=False, feed="main",
     )
     # u2 still failing -> requeued with only u2.
     assert retry_queue.queue_depth() == 1

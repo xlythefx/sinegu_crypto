@@ -18,6 +18,7 @@ import {
   Share2,
   ArrowDownToLine,
   ListTodo,
+  Webhook,
 } from 'lucide-react'
 import { usePortalSwitch } from '../ui/PortalSwitchOverlay'
 import { getUser } from '../../lib/session'
@@ -74,6 +75,8 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { label: 'Positions', url: '/admin/positions', icon: Bell },
   { label: 'Bot Engine', url: '/admin/engine', icon: ServerCog },
   { label: 'Signal Log', url: '/admin/trade-logs', icon: ScrollText },
+  // Every engine address (main + test feed) with copyable links — full admins only.
+  { label: 'Webhooks', url: '/admin/webhooks', icon: Webhook },
   { label: 'Invoice History', url: '/admin/invoices', icon: FileText },
   // Every admin since the rail went public (TRON_PUBLIC=true on prod
   // 2026-10-02): held payments and disputed claims are worked from here.

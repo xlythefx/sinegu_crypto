@@ -9,6 +9,7 @@ import JsonPanel from '../open-positions/JsonPanel'
 import ExitAllButton from '../open-positions/ExitAllButton'
 import ClosePanel from '../open-positions/ClosePanel'
 import CloseResult, { type CloseOutcome } from '../open-positions/CloseResult'
+import { TestFeedBadge } from '../badges'
 import { useApiData } from '../../../hooks/useApiData'
 import { ApiError, getApiErrorMessage } from '../../../services/api'
 import {
@@ -86,7 +87,8 @@ function useCountdown(until: number): number {
  * Admin Dashboard → Open positions. Leads with the MASTER — the strategy's own
  * book — and keeps users one click away, each compared with the master on the
  * same venue by coin + side (sizes scale with balance, so size is not a
- * difference). A forced fetch from the exchanges has a 30 s cooldown enforced
+ * difference). Testers' accounts follow the separate test feed, so they sit in
+ * their own group under the users and are never compared. A forced fetch from the exchanges has a 30 s cooldown enforced
  * by the API for the whole platform; ticked rows close at market through the
  * engine's exit path without a public announcement. The request / response
  * JSON stays one click away for testing and opens itself after a close.
@@ -120,8 +122,8 @@ export default function OpenPositionsTab() {
   useEffect(() => applyRefresh(data?.refresh), [data])
 
   const positions = useMemo(() => data?.positions ?? [], [data])
-  const { master, users } = useMemo(
-    () => (data ? splitByMaster(data) : { master: [], users: [] }),
+  const { master, users, testFeed } = useMemo(
+    () => (data ? splitByMaster(data) : { master: [], users: [], testFeed: [] }),
     [data],
   )
   const differing = users.filter((u) => u.state === 'differs').length
@@ -346,14 +348,41 @@ export default function OpenPositionsTab() {
               <EmptyNote>The master has no open positions.</EmptyNote>
             )
           ) : (
-            <UserSyncList
-              users={users}
-              selected={selected}
-              onToggle={toggle}
-              onToggleAll={toggleAll}
-              onExitAll={(u) => exitAll(u.positions, u.owner_name)}
-              busy={closing}
-            />
+            <div className="flex flex-col gap-5">
+              <UserSyncList
+                users={users}
+                selected={selected}
+                onToggle={toggle}
+                onToggleAll={toggleAll}
+                onExitAll={(u) => exitAll(u.positions, u.owner_name)}
+                busy={closing}
+                emptyText={
+                  testFeed.length > 0
+                    ? 'Nobody besides the testers below is trading right now.'
+                    : undefined
+                }
+              />
+              {/* Testers trade the test feed, not the master's signals —
+                  comparing them would flag every one as "different". */}
+              {testFeed.length > 0 && (
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+                    <TestFeedBadge />
+                    <span className="text-[12.5px] text-muted">
+                      Tester accounts follow the test feed — not compared with the master.
+                    </span>
+                  </div>
+                  <UserSyncList
+                    users={testFeed}
+                    selected={selected}
+                    onToggle={toggle}
+                    onToggleAll={toggleAll}
+                    onExitAll={(u) => exitAll(u.positions, u.owner_name)}
+                    busy={closing}
+                  />
+                </div>
+              )}
+            </div>
           )}
         </div>
 

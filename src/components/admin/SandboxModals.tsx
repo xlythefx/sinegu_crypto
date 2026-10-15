@@ -18,7 +18,7 @@ import type {
 
 /* ---- static option sets used by the forms + randomizer ---- */
 const STATUS_OPTS: UserStatus[] = ['pending', 'active', 'suspended']
-const ROLE_OPTS: UserRole[] = ['user', 'admin', 'master', 'developer', 'collaborator']
+const ROLE_OPTS: UserRole[] = ['user', 'admin', 'master', 'developer', 'collaborator', 'tester']
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT']
 const STRATEGIES = ['Momentum', 'Mean Reversion', 'Breakout', 'Scalp', 'Trend Follow']
 

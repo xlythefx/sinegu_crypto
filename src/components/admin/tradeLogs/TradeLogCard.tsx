@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Check, ChevronDown, ChevronRight, RotateCw } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, RotateCw, TestTubeDiagonal } from 'lucide-react'
 import ExchangeBadge from '../../billing/ExchangeBadge'
+import { TESTER_TINT } from '../badges'
 import SideTypePill from './SideTypePill'
 import SizingBreakdown from './SizingBreakdown'
 import {
@@ -72,7 +73,9 @@ export default function TradeLogCard({
   const lastRetry = log.retries[log.retries.length - 1] ?? null
   const rejected = log.category === 'rejected'
   const rejectReason = log.details[0]?.reason ?? log.details[0]?.error ?? null
-  const master = rejected ? null : masterBadge(log.master, masterDetailOf(log))
+  // The test feed reaches testers only — the master is never in it, so a
+  // "No master" chip there would be noise.
+  const master = rejected || log.feed === 'test' ? null : masterBadge(log.master, masterDetailOf(log))
 
   const sorted = sortDetails(log.details)
   const matching = accountFiltersActive ? sorted.filter((d) => d.match) : sorted
@@ -102,6 +105,15 @@ export default function TradeLogCard({
             <SideTypePill side={log.side} type={log.type} />
             <span className="font-mono text-[13.5px] font-semibold text-text">{log.ticker}</span>
             <ExchangeBadge exchange={log.exchange} />
+            {log.feed === 'test' && (
+              <span
+                className={`${LABEL_CHIP} ${TESTER_TINT} whitespace-nowrap`}
+                title="Came in on the engine's test webhook: tester accounts only, never posted to Telegram or Discord"
+              >
+                <TestTubeDiagonal size={11} aria-hidden="true" />
+                Test feed
+              </span>
+            )}
             {log.category && log.category !== 'signal' && !rejected && (
               <span className="text-[10px] uppercase tracking-[0.05em] text-faint font-semibold px-2 py-[2px] rounded-pill border border-hair">
                 {log.category}

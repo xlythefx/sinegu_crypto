@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Check, Crown, Globe, Search, User, XOctagon } from 'lucide-react'
 import { EXCHANGE_META } from '../../exchanges/meta'
+import { TESTER_TINT } from '../badges'
 import type { AdminOpenPosition } from '../../../types/openPositions'
 import type { ExchangeKind } from '../../../types/exchanges'
 
@@ -17,6 +18,8 @@ interface Owner {
   uni_id: string
   name: string
   isMaster: boolean
+  /** A tester: their accounts follow the test feed. */
+  testFeed: boolean
   positions: AdminOpenPosition[]
   exchanges: ExchangeKind[]
   accounts: string[]
@@ -41,9 +44,18 @@ function owners(positions: AdminOpenPosition[]): Owner[] {
   for (const p of positions) {
     let o = map.get(p.uni_id)
     if (!o) {
-      o = { uni_id: p.uni_id, name: p.owner_name, isMaster: p.owner_type === 'master', positions: [], exchanges: [], accounts: [] }
+      o = {
+        uni_id: p.uni_id,
+        name: p.owner_name,
+        isMaster: p.owner_type === 'master',
+        testFeed: false,
+        positions: [],
+        exchanges: [],
+        accounts: [],
+      }
       map.set(p.uni_id, o)
     }
+    if (p.feed === 'test') o.testFeed = true
     o.positions.push(p)
     if (!o.exchanges.includes(p.exchange)) o.exchanges.push(p.exchange)
     if (p.account_name && !o.accounts.includes(p.account_name)) o.accounts.push(p.account_name)
@@ -136,6 +148,9 @@ export default function ClosePanel({ positions, busy, onClose }: ClosePanelProps
                         <span className="truncate text-[13px] font-semibold text-text">{o.name}</span>
                         {o.isMaster && (
                           <span className="flex-none rounded-pill bg-accent-soft px-1.5 font-mono text-[10px] font-bold text-accent">MASTER</span>
+                        )}
+                        {o.testFeed && (
+                          <span className={`flex-none rounded-pill px-1.5 font-mono text-[10px] font-bold ${TESTER_TINT}`}>TEST FEED</span>
                         )}
                       </span>
                       <span className="block truncate text-[11.5px] text-muted">

@@ -1,4 +1,7 @@
 import type { ExchangeKind } from './exchanges'
+import type { SignalFeed } from './feeds'
+
+export type { SignalFeed }
 
 export type TradeAction = 'BUY' | 'SELL' | 'EXIT_LONG' | 'EXIT_SHORT'
 export type FanoutStatus = 'filled' | 'skipped' | 'failed'
@@ -119,6 +122,8 @@ export interface TradeLogRow {
   kind: 'signal'
   id: number
   exchange: ExchangeKind
+  /** Main or test feed; an API older than the test feed sends none = main. */
+  feed: SignalFeed
   action: TradeAction
   side: TradeSideWord
   type: TradeKindWord
@@ -197,6 +202,8 @@ export interface ReasonCount {
 
 export interface TradeLogFilters {
   exchange?: string
+  /** 'main' | 'test' — which webhook the signal came in on (both endpoints). */
+  feed?: string
   /** 'long' | 'short' */
   side?: string
   /** 'entry' | 'exit' */

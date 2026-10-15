@@ -13,12 +13,14 @@ import {
 } from './classes'
 import { fmtMoney } from '../../../lib/format'
 import type { ManualTradeTarget, RecipientMode } from '../../../types/manualTrade'
+import type { SignalFeed } from '../../../types/feeds'
 
 const PER_PAGE = 8
 
 /**
  * Who receives the signal: everyone the engine would trade, or a hand-picked
  * subset (which becomes `target_uni_ids` — the same field the retry queue uses).
+ * On the test feed the list is tester accounts only; the wording says so.
  */
 export default function RecipientPicker({
   targets,
@@ -27,6 +29,7 @@ export default function RecipientPicker({
   onModeChange,
   selected,
   onSelectedChange,
+  feed = 'main',
 }: {
   targets: ManualTradeTarget[]
   loading: boolean
@@ -34,7 +37,10 @@ export default function RecipientPicker({
   onModeChange: (mode: RecipientMode) => void
   selected: string[]
   onSelectedChange: (ids: string[]) => void
+  feed?: SignalFeed
 }) {
+  const test = feed === 'test'
+  const noun = test ? 'tester' : 'user'
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
 
@@ -69,7 +75,9 @@ export default function RecipientPicker({
         <div className="min-w-0">
           <div className={CARD_TITLE}>Recipients</div>
           <div className={CARD_SUB}>
-            Suspended users and disabled accounts never appear here.
+            {test
+              ? 'Tester accounts only. Suspended users and disabled accounts never appear here.'
+              : 'Suspended users and disabled accounts never appear here.'}
           </div>
         </div>
       </div>
@@ -89,7 +97,7 @@ export default function RecipientPicker({
               }
             }}
           >
-            {m === 'all' ? 'All users' : 'Pick users'}
+            {m === 'all' ? `All ${noun}s` : `Pick ${noun}s`}
           </button>
         ))}
       </div>
@@ -97,10 +105,10 @@ export default function RecipientPicker({
       {mode === 'all' ? (
         <div className="rounded-[12px] border border-hair bg-surface2 p-3.5 text-[13px] text-muted">
           {loading ? (
-            'Loading users…'
+            `Loading ${noun}s…`
           ) : targets.length > 0 ? (
             <>
-              <span className="font-bold text-text">{targets.length}</span> user
+              <span className="font-bold text-text">{targets.length}</span> {noun}
               {targets.length === 1 ? '' : 's'} (
               {targets.reduce((sum, t) => sum + t.account_count, 0)} account
               {targets.reduce((sum, t) => sum + t.account_count, 0) === 1 ? '' : 's'}) will
@@ -108,7 +116,9 @@ export default function RecipientPicker({
             </>
           ) : (
             <span className="text-red">
-              No eligible users — nothing would be traded.
+              {test
+                ? 'No tester accounts on this exchange — nothing would be traded.'
+                : 'No eligible users — nothing would be traded.'}
             </span>
           )}
         </div>
@@ -150,7 +160,7 @@ export default function RecipientPicker({
             <input
               className={`${INPUT} pl-9`}
               value={search}
-              placeholder={loading ? 'Loading users…' : 'Search name or email…'}
+              placeholder={loading ? `Loading ${noun}s…` : 'Search name or email…'}
               onChange={(e) => {
                 setSearch(e.target.value)
                 setPage(1)
@@ -161,10 +171,10 @@ export default function RecipientPicker({
           {/* list */}
           <div className="rounded-[12px] border border-hair overflow-hidden">
             {loading ? (
-              <p className="py-6 text-center text-[13px] text-muted">Loading users…</p>
+              <p className="py-6 text-center text-[13px] text-muted">Loading {noun}s…</p>
             ) : paged.length === 0 ? (
               <p className="py-6 text-center text-[13px] text-muted">
-                {targets.length === 0 ? 'No eligible users.' : 'No matches.'}
+                {targets.length === 0 ? `No eligible ${noun}s.` : 'No matches.'}
               </p>
             ) : (
               paged.map((t) => (

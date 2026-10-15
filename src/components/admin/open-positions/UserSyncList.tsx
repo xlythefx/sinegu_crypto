@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { CheckCircle2, ChevronRight, CircleSlash, AlertTriangle } from 'lucide-react'
+import { CheckCircle2, ChevronRight, CircleSlash, AlertTriangle, TestTubeDiagonal } from 'lucide-react'
 import { EXCHANGE_META } from '../../exchanges/meta'
+import { TESTER_TINT } from '../badges'
 import PositionsList from './PositionsList'
 import ExitAllButton from './ExitAllButton'
 import { EmptyNote } from '../insights/parts'
@@ -17,18 +18,24 @@ interface UserSyncListProps {
   onExitAll: (user: UserSync) => void
   /** A close is running — Exit all waits for it. */
   busy?: boolean
+  /** Shown when the list is empty. */
+  emptyText?: string
 }
 
 const BADGE: Record<SyncState, { label: string; cls: string; Icon: typeof CheckCircle2 }> = {
   same: { label: 'Same as master', cls: 'bg-green/15 text-green', Icon: CheckCircle2 },
   differs: { label: 'Different', cls: 'bg-red/15 text-red', Icon: AlertTriangle },
   'no-master': { label: 'No master here', cls: 'bg-surface2 text-muted', Icon: CircleSlash },
+  'test-feed': { label: 'Test feed', cls: TESTER_TINT, Icon: TestTubeDiagonal },
 }
 
 const refs = (list: SideRef[]) => list.map((r) => `${r.symbol} ${r.side}`).join(', ')
 
 /** One plain sentence: what this user has that the master does not, and vice versa. */
 function summary(u: UserSync): string {
+  if (u.state === 'test-feed') {
+    return `${u.positions.length ? `Holds ${refs(u.positions)}` : 'Flat'} · follows the test feed`
+  }
   if (u.state === 'no-master') return `${u.positions.length} open · the master does not trade ${EXCHANGE_META[u.exchange]?.label ?? u.exchange}`
   if (u.state === 'same') return u.positions.length ? `Holds ${refs(u.positions)}` : 'Flat, like the master'
   const parts = []
@@ -42,10 +49,18 @@ function summary(u: UserSync): string {
  * that user's positions with the same select-to-close checkboxes as the
  * master view; the comparison itself never needs more than the one line.
  */
-export default function UserSyncList({ users, selected, onToggle, onToggleAll, onExitAll, busy }: UserSyncListProps) {
+export default function UserSyncList({
+  users,
+  selected,
+  onToggle,
+  onToggleAll,
+  onExitAll,
+  busy,
+  emptyText = 'No user accounts are trading right now.',
+}: UserSyncListProps) {
   const [open, setOpen] = useState<string | null>(null)
 
-  if (users.length === 0) return <EmptyNote>No user accounts are trading right now.</EmptyNote>
+  if (users.length === 0) return <EmptyNote>{emptyText}</EmptyNote>
 
   return (
     <div className="flex flex-col overflow-hidden rounded-row border border-border">

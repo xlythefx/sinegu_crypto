@@ -31,7 +31,7 @@ from typing import Iterable, Optional
 from binance_abcd import notify
 from binance_abcd.exchanges import enabled as enabled_exchanges
 from binance_abcd.exchanges import label
-from binance_abcd.hooks import RETRY_ENABLED, RETRY_INTERVAL_SECONDS, RETRY_MAX_ATTEMPTS
+from binance_abcd.hooks import MAIN_FEED, RETRY_ENABLED, RETRY_INTERVAL_SECONDS, RETRY_MAX_ATTEMPTS, TEST_FEED
 
 log = logging.getLogger(__name__)
 
@@ -67,6 +67,10 @@ class RetryJob:
     # retry that closes the position still owes the channel its exit message.
     # Cleared the moment any run fills, so one signal is never announced twice.
     announce: bool = False
+    # The signal feed the live run came in on (hooks.FEEDS), so a test-feed
+    # retry stays private and stays on tester accounts. None = every feed
+    # (a manual close, which names its accounts).
+    feed: Optional[str] = MAIN_FEED
     due_at: float = field(default_factory=lambda: time.time() + RETRY_INTERVAL_SECONDS)
 
     @property
@@ -75,6 +79,7 @@ class RetryJob:
             self.action,
             self.ticker,
             tuple(sorted((exchange, tuple(ids)) for exchange, ids in self.targets.items())),
+            self.feed,
         )
 
     @property
@@ -97,13 +102,14 @@ def enqueue_retry(
     strategy: Optional[str],
     targets: dict[str, Iterable[str]],
     announce: bool = False,
+    feed: Optional[str] = MAIN_FEED,
 ) -> bool:
     """Queue a retry for the given {exchange: uni_ids}. False when disabled,
     empty, or a duplicate of an active job."""
     clean = _normalize_targets(targets)
     if not RETRY_ENABLED or not clean:
         return False
-    job = RetryJob(action, ticker, price, leverage, strategy, clean, announce=announce)
+    job = RetryJob(action, ticker, price, leverage, strategy, clean, announce=announce, feed=feed)
     with _LOCK:
         if job.key in _ACTIVE_KEYS:
             return False
@@ -128,7 +134,8 @@ def _requeue(job: RetryJob) -> None:
         )
         # The engine is done trying: NOW it is manual action, and the alert has
         # to say so out loud rather than in the journal.
-        notify.notify_retry_abandoned(job.action, job.ticker, _describe(job.targets), job.attempts)
+        notify.notify_retry_abandoned(job.action, job.ticker, _describe(job.targets), job.attempts,
+                                      test_feed=job.feed == TEST_FEED)
         with _LOCK:
             _ACTIVE_KEYS.discard(job.key)
         return
@@ -144,7 +151,7 @@ def _run_due_job(job: RetryJob) -> None:
         summary = _process_trade_job(
             job.action, job.ticker, job.price, job.leverage, job.strategy,
             targets={exchange: set(ids) for exchange, ids in job.targets.items()},
-            is_retry=True, announce=job.announce,
+            is_retry=True, announce=job.announce, feed=job.feed,
         )
     except Exception:  # noqa: BLE001
         log.exception("retry job crashed: %s %s", job.action, job.ticker)
@@ -166,6 +173,7 @@ def _run_due_job(job: RetryJob) -> None:
     if rejected:
         notify.notify_retry_abandoned(
             job.action, job.ticker, _describe(_normalize_targets(rejected)), job.attempts + 1,
+            test_feed=job.feed == TEST_FEED,
         )
 
     # Something filled: this run published the signal, so a later attempt must

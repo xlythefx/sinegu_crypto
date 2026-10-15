@@ -710,6 +710,48 @@ nothing else, and no write control anywhere.
   only, no name, no dollar figure** — the `/api/public/*` rule. Fixed
   colours, never theme tokens (it is an image, like the invoice document).
 
+## Tester role + the test signal feed (2026-10-15)
+
+`user_credentials.type = 'tester'` is an INTERNAL test account (owner: "like a
+developer account"): no admin portal, the trader dashboard only, never billed,
+never counted as a customer — all of that for free, because invoicing,
+insights and the customer lists key on `type = 'user'`. Its exchange accounts
+(demo OR real money) follow the **test feed** and nothing else:
+- **Two feeds, one per account.** Main = `/{venue}_abcd_webhook` (TradingView,
+  everyone else). Test = `/{venue}_test_webhook` (`hooks.TEST_WEBHOOK_PATHS`),
+  tester-owned accounts ONLY. The API decides the feed (`feed` on
+  `GET /engine/{x}/accounts`, from the owner's role); the engine only filters.
+  Never both: a venue merges positions by coin + side, so one feed's exit
+  would close the other's entry — which is also why a role change to/from
+  tester is refused (409 `OPEN_POSITIONS`) while the user holds any position.
+- **Its own secret**, engine `BINANCE_ABCD_TEST_WEBHOOK_SECRET` = API
+  `ENGINE_TEST_WEBHOOK_SECRET` (mirrored to prod; the deploy copies it into the
+  API). Empty, or equal to the main secret, = test feed OFF (403). Neither
+  feed's token opens the other's path — a provider holding the test token can
+  never move a customer's money.
+- **Nothing public, no master rules**: no channel message, no exit batch, no
+  Discord; one private summary per signal (`notify.notify_test_feed`,
+  `_send_private` — dropped rather than made public with no admin chat). The
+  main-account hold-back is skipped. Everything else is prod behaviour on
+  purpose (sizing, deposit gate, stack cap, streak sizing, coin on/off incl.
+  the kill switch) — that is what a test signal is for. Retries keep the feed;
+  the admin's manual close is `feed=None` (reaches any feed).
+- `trade_logs.feed` tags every row (Signal Log chip + `?feed=` filter);
+  `SignalHealth::health()` counts MAIN only, so test noise never moves the
+  banner. A tester gets no Discord Trader role and MAY connect the staff-only
+  venues. Admin → Open positions tags test-feed rows and leaves them out of
+  the master comparison.
+- **Admin → Webhooks** (`/admin/webhooks`, `GET /admin/webhooks`, full admins):
+  every path × feed with prod/local URLs to copy, venue on/off and test-feed
+  readiness from the engine's `/health` (`webhooks`, `test_feed`), how many
+  live/demo accounts receive each, and an alert template with a secret
+  PLACEHOLDER — secrets are presence booleans only, never values. The manual
+  trade console has a Main / Test feed switch.
+- **Paths live in four places**: `hooks.WEBHOOK_PATHS` + `TEST_WEBHOOK_PATHS`,
+  the deploy script's `ENGINE_WEBHOOK_PATHS` (nginx — pinned by
+  `tests/test_test_feed.py`), and the API's `App\Services\Engine\WebhookPaths`.
+  A new path needs `deploy-nginx` or nginx 404s it.
+
 ## Security hardening (2026-10-07 audit)
 
 A read-only audit of the three codebases (Christian's "most sensitive parts"
@@ -1844,7 +1886,7 @@ for the overlay's `position: fixed` and trap it inside.
   `SYNC_POSITION_MODE_ON_STARTUP`. Config-only fix, no code, no test gate:
   `python .claude/deploy_sinegualcrypto.py sync-engine-env` (upserts + restarts).
 - **Commands:** `python -m binance_abcd.main` (waitress), `python -m pytest
-  tests/ -q` (557 tests, no network), `python webhook_tester.py` (Tkinter GUI
+  tests/ -q` (620 tests, no network), `python webhook_tester.py` (Tkinter GUI
   trade sender — local or prod target, red banner on prod).
 - **Naming trap:** root `src/` is the React app; the engine package is
   `binance_abcd/`, deliberately not named `src`. Python and TypeScript
@@ -1864,7 +1906,10 @@ should run on both needs one alert per URL with the same message:
 | MEXC | **`https://pixel-alpha.com/mexc_abcd_webhook`** | `http://127.0.0.1:5010/mexc_abcd_webhook` |
 | Bybit | **`https://pixel-alpha.com/bybit_abcd_webhook`** | `http://127.0.0.1:5010/bybit_abcd_webhook` |
 
-Same secret on all three (one engine). nginx proxies exactly these paths to
+Same secret on all three (one engine). Each venue also has a **test-feed**
+path (`/binance_test_webhook`, `/mexc_test_webhook`, `/bybit_test_webhook`)
+with its OWN secret, trading tester accounts only — see "Tester role + the
+test signal feed"; Admin → Webhooks lists them all. nginx proxies exactly these paths to
 waitress on 127.0.0.1:5010; `/health` and `/admin/*` stay local-only. The older
 `http://2.24.139.176/binance_abcd_webhook` still works — the bare IP is not
 redirected — so existing alerts keep firing; move them to https when convenient.

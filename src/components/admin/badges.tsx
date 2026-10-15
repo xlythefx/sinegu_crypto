@@ -1,9 +1,28 @@
-import { Code2, Crown, Handshake, Shield } from 'lucide-react'
+import { Code2, Crown, Handshake, Shield, TestTubeDiagonal } from 'lucide-react'
 import type { UserRole, UserStatus } from '../../types/admin'
 
 /** Base pill badge shared across admin tables and cards. */
 export const BADGE =
   'inline-flex items-center rounded-pill border py-[3px] px-2.5 text-[11px] font-bold whitespace-nowrap'
+
+/**
+ * The tester / test-feed tint — orange, apart from the master's gold. One
+ * definition, because the same colour marks a tester everywhere it shows up:
+ * the role badge, Signal Log rows from the test feed, test-feed accounts on
+ * Open positions and the test half of the Webhooks page.
+ */
+export const TESTER_TINT =
+  'bg-[color-mix(in_srgb,#f97316_12%,transparent)] border-[color-mix(in_srgb,#f97316_38%,transparent)] text-[#f97316]'
+
+/** Compact "Test feed" tag for a row that belongs to the test feed. */
+export function TestFeedBadge({ className = '' }: { className?: string }) {
+  return (
+    <span className={`${BADGE} gap-[5px] ${TESTER_TINT} ${className}`}>
+      <TestTubeDiagonal size={11} aria-hidden="true" />
+      Test feed
+    </span>
+  )
+}
 
 /** rgba/color-mix tints preserved exactly from the original CSS. */
 export const STATUS_BADGE: Record<UserStatus, string> = {
@@ -16,7 +35,8 @@ export const STATUS_BADGE: Record<UserStatus, string> = {
 
 /**
  * Crown for master, shield for admin, angle-brackets for developer,
- * handshake for the read-only collaborator — plain users get no badge.
+ * handshake for the read-only collaborator, a test tube for the tester —
+ * plain users get no badge.
  */
 export function RoleBadge({ role }: { role: UserRole }) {
   if (role === 'master') {
@@ -56,6 +76,14 @@ export function RoleBadge({ role }: { role: UserRole }) {
       >
         <Handshake size={11} />
         Collaborator
+      </span>
+    )
+  }
+  if (role === 'tester') {
+    return (
+      <span className={`${BADGE} gap-[5px] ${TESTER_TINT}`}>
+        <TestTubeDiagonal size={11} />
+        Tester
       </span>
     )
   }

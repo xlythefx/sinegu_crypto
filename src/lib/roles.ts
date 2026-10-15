@@ -14,11 +14,15 @@ import type { UserRole } from '../types/auth'
 /**
  * FULL admins — the twin of the API's `EnsureAdmin::ROLES`. Besides the portal
  * this gates staff-only exchanges (`components/exchanges/meta.ts`) and the
- * calendar's edit gesture, so a collaborator is deliberately NOT in it.
+ * calendar's edit gesture, so a collaborator is deliberately NOT in it — and
+ * neither is a tester, who has no admin access at all.
  */
 export const ADMIN_ROLES: readonly UserRole[] = ['admin', 'master', 'developer']
 
-/** Everyone who may open the admin portal at all: full admins + collaborators. */
+/**
+ * Everyone who may open the admin portal at all: full admins + collaborators.
+ * A `tester` is not staff in this sense — it signs in to the trader dashboard.
+ */
 export const STAFF_ROLES: readonly UserRole[] = [...ADMIN_ROLES, 'collaborator']
 
 /** Full admin (write access). See ADMIN_ROLES for what else this gates. */
@@ -57,4 +61,15 @@ export function collaboratorMayOpen(pathname: string): boolean {
  */
 export function isDeveloper(role: UserRole | undefined): boolean {
   return role === 'developer'
+}
+
+/**
+ * Internal test account: the trader dashboard only (no admin portal), its
+ * exchange accounts trade the engine's separate TEST feed and never the main
+ * TradingView webhooks, nothing from that feed is posted publicly, and it is
+ * never billed or counted as a customer. It may connect the staff-only venues
+ * — the API's `exchanges.staff_only` gate admits it too.
+ */
+export function isTester(role: UserRole | undefined): boolean {
+  return role === 'tester'
 }

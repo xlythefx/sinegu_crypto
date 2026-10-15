@@ -702,10 +702,16 @@ gzip_types text/css application/javascript application/json image/svg+xml;
 gzip_min_length 1024;
 """
 
-# One public webhook path per venue (must match trading-flask/binance_abcd/hooks.py
-# WEBHOOK_PATHS). nginx proxies exactly these to waitress; a venue added to the
-# engine without a line here answers 404 from nginx, never reaching the engine.
-ENGINE_WEBHOOK_PATHS = ("/binance_abcd_webhook", "/mexc_abcd_webhook", "/bybit_abcd_webhook")
+# One public webhook path per venue per signal feed (must match
+# trading-flask/binance_abcd/hooks.py WEBHOOK_PATHS + TEST_WEBHOOK_PATHS —
+# tests/test_test_feed.py pins it). nginx proxies exactly these to waitress; a
+# path added to the engine without a line here answers 404 from nginx, never
+# reaching the engine. The test paths answer 403 until the engine has
+# BINANCE_ABCD_TEST_WEBHOOK_SECRET, exactly like a wrong secret.
+ENGINE_WEBHOOK_PATHS = (
+    "/binance_abcd_webhook", "/mexc_abcd_webhook", "/bybit_abcd_webhook",
+    "/binance_test_webhook", "/mexc_test_webhook", "/bybit_test_webhook",
+)
 
 
 def _engine_webhook_locations(indent: int = 0) -> str:
@@ -1683,6 +1689,9 @@ def _remote_env_value(ssh, path: str, key: str) -> str:
 # Telegram while local did.
 MIRRORED_ENGINE_ENV_KEYS = (
     "BINANCE_ABCD_WEBHOOK_SECRET",
+    # The TEST feed's token. Same category as the main one: which token a test
+    # server / signal provider holds is the product, not the box.
+    "BINANCE_ABCD_TEST_WEBHOOK_SECRET",
     "BINANCE_ABCD_TELEGRAM_ENABLED",
     "BINANCE_ABCD_TELEGRAM_BOT_TOKEN",
     "BINANCE_ABCD_TELEGRAM_CHAT_ID",
@@ -2005,6 +2014,17 @@ def _ensure_engine_secrets(ssh) -> None:
     if api_hook != webhook_secret:
         log("  api/.env: syncing BINANCE_ENGINE_WEBHOOK_SECRET with the engine ...")
         _upsert_env_line(ssh, f"{REMOTE_API}/.env", "BINANCE_ENGINE_WEBHOOK_SECRET", webhook_secret)
+
+    # Same for the TEST feed's token: the console signs test-feed signals with
+    # it. Taken from the LOCAL engine .env, which MIRRORED_ENGINE_ENV_KEYS also
+    # copies to engine/.env below — so the two halves always carry one value.
+    # Unset locally = the test feed stays off; nothing is blanked.
+    test_hook = _local_env_value(os.path.join(LOCAL_ENGINE, ".env"), "BINANCE_ABCD_TEST_WEBHOOK_SECRET")
+    if test_hook:
+        _register_secret(test_hook)
+        if _remote_env_value(ssh, f"{REMOTE_API}/.env", "ENGINE_TEST_WEBHOOK_SECRET") != test_hook:
+            log("  api/.env: syncing ENGINE_TEST_WEBHOOK_SECRET with the engine ...")
+            _upsert_env_line(ssh, f"{REMOTE_API}/.env", "ENGINE_TEST_WEBHOOK_SECRET", test_hook)
 
     log("  api/.env: config:cache ...")
     sh(ssh, f"cd {REMOTE_API} && php artisan config:cache && "

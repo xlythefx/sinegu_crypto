@@ -20,6 +20,7 @@ const ROLE_OPTIONS: RoleOption[] = [
     label: 'Collaborator',
     hint: 'Dashboard overview, users & strategies — view only',
   },
+  { key: 'tester', label: 'Tester', hint: 'Test signals only — no billing, no admin' },
 ]
 
 interface RolePickerProps {
@@ -51,7 +52,7 @@ export default function RolePicker({ role, isSelf, onSelect }: RolePickerProps) 
     const box = triggerRef.current.getBoundingClientRect()
     const MENU_WIDTH = 232
     // Header + ~52px per option (the collaborator hint wraps to two lines).
-    const MENU_HEIGHT = 310
+    const MENU_HEIGHT = 362
     // Flip above / pull left when the trigger sits near an edge.
     const below = box.bottom + 6
     const top =
