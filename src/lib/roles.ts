@@ -14,15 +14,13 @@ import type { UserRole } from '../types/auth'
 /**
  * FULL admins — the twin of the API's `EnsureAdmin::ROLES`. Besides the portal
  * this gates staff-only exchanges (`components/exchanges/meta.ts`) and the
- * calendar's edit gesture, so a collaborator is deliberately NOT in it — and
- * neither is a tester, who has no admin access at all.
+ * calendar's edit gesture, so a collaborator is deliberately NOT in it. A
+ * `tester` IS (owner, 2026-10-16): internal test accounts are run by staff,
+ * who drive the test feed from the portal.
  */
-export const ADMIN_ROLES: readonly UserRole[] = ['admin', 'master', 'developer']
+export const ADMIN_ROLES: readonly UserRole[] = ['admin', 'master', 'developer', 'tester']
 
-/**
- * Everyone who may open the admin portal at all: full admins + collaborators.
- * A `tester` is not staff in this sense — it signs in to the trader dashboard.
- */
+/** Everyone who may open the admin portal at all: full admins + collaborators. */
 export const STAFF_ROLES: readonly UserRole[] = [...ADMIN_ROLES, 'collaborator']
 
 /** Full admin (write access). See ADMIN_ROLES for what else this gates. */
@@ -64,11 +62,12 @@ export function isDeveloper(role: UserRole | undefined): boolean {
 }
 
 /**
- * Internal test account: the trader dashboard only (no admin portal), its
+ * Internal test account: the full admin portal (it is in ADMIN_ROLES), but its
  * exchange accounts trade the engine's separate TEST feed and never the main
  * TradingView webhooks, nothing from that feed is posted publicly, and it is
- * never billed or counted as a customer. It may connect the staff-only venues
- * — the API's `exchanges.staff_only` gate admits it too.
+ * never billed or counted as a customer. Its Positions page has a "Fetch"
+ * button (POST /user/positions/refresh, testers only). No developer-only
+ * surface — those check `isDeveloper`.
  */
 export function isTester(role: UserRole | undefined): boolean {
   return role === 'tester'

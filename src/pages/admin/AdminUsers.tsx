@@ -113,7 +113,7 @@ const ROLE_EFFECT: Record<UserRole, string> = {
   collaborator:
     'They get a read-only view of the admin portal — the dashboard overview, users and strategies — and can change nothing.',
   tester:
-    'An internal test account: they keep only the trader dashboard, their exchange accounts receive only the test feed (never the main TradingView signals), and they are never billed. Refused while they hold an open position.',
+    'An internal test account: they get the admin portal (not the database console), their exchange accounts receive only the test feed (never the main TradingView signals), and they are never billed. Refused while they hold an open position.',
 }
 
 /**

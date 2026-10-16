@@ -713,10 +713,14 @@ nothing else, and no write control anywhere.
 ## Tester role + the test signal feed (2026-10-15)
 
 `user_credentials.type = 'tester'` is an INTERNAL test account (owner: "like a
-developer account"): no admin portal, the trader dashboard only, never billed,
-never counted as a customer — all of that for free, because invoicing,
-insights and the customer lists key on `type = 'user'`. Its exchange accounts
-(demo OR real money) follow the **test feed** and nothing else:
+developer account"): **the full admin portal** (in `EnsureAdmin::ROLES` /
+`ADMIN_ROLES` since 2026-10-16 — it was trader-only for a day; NOT the
+developer-only Database console or test-mode payments), never billed, never
+counted as a customer — the last two for free, because invoicing, insights and
+the customer lists key on `type = 'user'`. Its Positions page has a **Fetch**
+button (`POST /user/positions/refresh`, testers only, 15 s cooldown —
+`AccountRefresh`, the same sync as the admin's user-page Refresh). Its
+exchange accounts (demo OR real money) follow the **test feed** and nothing else:
 - **Two feeds, one per account.** Main = `/{venue}_abcd_webhook` (TradingView,
   everyone else). Test = `/{venue}_test_webhook` (`hooks.TEST_WEBHOOK_PATHS`),
   tester-owned accounts ONLY. The API decides the feed (`feed` on

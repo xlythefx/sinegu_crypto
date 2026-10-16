@@ -13,6 +13,26 @@ import type { AdminChange } from '../types/adminVersions'
  *    later change to the same feature gets its own entry.
  */
 export const ADMIN_CHANGES: AdminChange[] = [
+  // ── 2026-10-16 ───────────────────────────────────────────────────────────
+  {
+    id: 'tester-admin-access-fetch',
+    date: '2026-10-16',
+    kind: 'improved',
+    area: 'Signals',
+    title: 'Testers now have the admin portal, and a Fetch button on their Positions page',
+    summary:
+      'A Tester account now opens the admin portal like an Admin does, so the person running the tests can send test signals, read the Signal Log and copy webhook addresses from the same account. On their own Positions page, testers also get a Fetch button that reads their positions and balance from the exchange right away.',
+    howItWorks: [
+      'Tester = the Admin role’s access + the test feed. The two developer-only tools (the Database console and test-mode payments) stay with the Developer role.',
+      'A developer or admin can now switch their own role to Tester — before, that was refused as “demoting yourself out of the admin roles”. It is still refused while that person holds an open position, because the position would never get its exit from the other feed.',
+      'Fetch: after a test signal opens a position, press Fetch on Dashboard → Positions and the position appears within seconds, instead of up to 5 minutes later when the next automatic check runs. It also refreshes the balance. One press every 15 seconds; the button counts down.',
+      'Only tester accounts see the button. Everything else about a tester stays the same: test signals only, never billed, not counted as a customer.',
+    ],
+    technical: [
+      'EnsureAdmin::ROLES (and lib/roles.ts ADMIN_ROLES) gain `tester`, so the staff-only exchange gate, the calendar edit gesture and every admin route admit it; developer-only checks are unchanged. POST /user/positions/refresh (PositionRefreshController, testers only, 15 s per-user cooldown → 429 REFRESH_COOLDOWN, 503 when the engine does not answer) runs App\\Services\\Exchanges\\AccountRefresh — the same balances + positions sync the admin’s user-page Refresh uses, scoped to the caller’s keys.',
+    ],
+    links: [{ label: 'Open Positions', href: '/dashboard/positions' }],
+  },
   // ── 2026-10-15 ───────────────────────────────────────────────────────────
   {
     id: 'tester-role-test-feed',

@@ -39,7 +39,7 @@ const ROLES: { value: UserRole; label: string; hint: string }[] = [
   {
     value: 'tester',
     label: 'Tester',
-    hint: 'Internal test account: trader dashboard only, no admin portal. Trades the test feed, never billed.',
+    hint: 'Internal test account: admin portal (not the database console). Trades the test feed only, never billed.',
   },
 ]
 
@@ -120,8 +120,8 @@ export default function CreateUserModal({
 
   const roleHint = ROLES.find((r) => r.value === role)?.hint
   const statusHint = STATUSES.find((s) => s.value === status)?.hint
-  // A tester is not elevated: it gets no admin access, only its own note below.
-  const elevated = role !== 'user' && !isTester(role)
+  // Every role but `user` opens the portal; a tester also gets its own note below.
+  const elevated = role !== 'user'
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -281,7 +281,8 @@ export default function CreateUserModal({
             <TestTubeDiagonal size={15} className="mt-px flex-none" />
             <span className="text-text">
               Its exchange accounts only receive the test feed — never the main
-              TradingView signals — and it is never billed.
+              TradingView signals — and it is never billed. It can fetch its own
+              positions from the exchange on demand.
             </span>
           </p>
         )}

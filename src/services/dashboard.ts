@@ -66,3 +66,18 @@ export async function getPastPositions(
   )
   return res.positions
 }
+
+/**
+ * POST /user/positions/refresh — a TESTER's "Fetch": the engine reads the
+ * caller's own connected accounts (balance + open positions) from the
+ * exchange now instead of at the next poller tick. 403 for any other role,
+ * 429 REFRESH_COOLDOWN inside 15 s (`retry_after` in the payload), 503 when
+ * the engine did not answer.
+ */
+export async function refreshMyPositions(): Promise<{ accounts: number; message: string }> {
+  const { accounts, message } = await apiFetch<{ success: boolean; accounts: number; message: string }>(
+    '/user/positions/refresh',
+    { method: 'POST', auth: true },
+  )
+  return { accounts, message }
+}

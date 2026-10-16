@@ -1,4 +1,4 @@
-import { canSeeAdmin, isTester } from '../../lib/roles'
+import { canSeeAdmin } from '../../lib/roles'
 import type { UserRole } from '../../types/auth'
 import type { ExchangeKind } from '../../types/exchanges'
 
@@ -25,7 +25,7 @@ export interface ExchangeMeta {
   hasTestnet: boolean
   /**
    * Live in the engine, but not yet offered to customers: only staff
-   * (`canSeeAdmin`) and testers may CONNECT one. MEXC and Bybit are both that today —
+   * (`canSeeAdmin`, testers included) may CONNECT one. MEXC and Bybit are both that today —
    * they trade, they just have not run long enough on a real customer
    * account to sell.
    *
@@ -80,15 +80,14 @@ export const AVAILABLE_EXCHANGES: ExchangeKind[] = EXCHANGE_ORDER.filter(
 
 /**
  * Whether THIS user may connect a new account on this venue. A staff-only
- * venue admits full admins and testers (internal test accounts, which the API
- * lets through the same gate) — `ADMIN_ROLES` itself stays admins only.
+ * venue admits the full admins — testers included, as the API does.
  */
 export function canConnectExchange(
   kind: ExchangeKind,
   role: UserRole | undefined,
 ): boolean {
   const meta = EXCHANGE_META[kind]
-  return meta.available && (!meta.staffOnly || canSeeAdmin(role) || isTester(role))
+  return meta.available && (!meta.staffOnly || canSeeAdmin(role))
 }
 
 /** The venues the connect wizard may offer this user, in display order. */

@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { BarChart3, ChevronDown } from 'lucide-react'
+import { AlertTriangle, BarChart3, ChevronDown } from 'lucide-react'
 import DashboardLayout from '../components/dashboard/DashboardLayout'
 import DataState from '../components/dashboard/DataState'
+import NoticeStrip from '../components/ui/NoticeStrip'
+import FetchPositionsButton from '../components/positions/FetchPositionsButton'
 import PnlOverview from '../components/positions/PnlOverview'
 import PortfolioMetrics from '../components/positions/PortfolioMetrics'
 import PositionFilters from '../components/positions/PositionFilters'
@@ -11,6 +13,8 @@ import ClosedPositionsTable from '../components/positions/ClosedPositionsTable'
 import { toActivePosition, toClosedTrade } from '../components/positions/adapters'
 import type { ExchangeFilter } from '../components/positions/types'
 import { useApiData } from '../hooks/useApiData'
+import { useSessionUser } from '../hooks/useSessionUser'
+import { isTester } from '../lib/roles'
 import {
   useExchangeFilter,
   type ExchangeFilter as ExchangeScope,
@@ -50,6 +54,10 @@ export default function Positions() {
   const [strategy, setStrategy] = useState('all')
   const [showAnalytics, setShowAnalytics] = useState(false)
   const [page, setPage] = useState(1)
+  // Testers drive the test feed and need a position on screen the moment a
+  // signal lands — the poller takes up to 5 minutes. The API is the gate.
+  const canFetch = isTester(useSessionUser()?.type)
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
   const active = useMemo(
     () => (data ? data.open.map(toActivePosition) : []),
@@ -153,6 +161,7 @@ export default function Positions() {
             tickers={tickers}
             strategies={strategies}
           />
+          {canFetch && <FetchPositionsButton onFetched={reload} onError={setFetchError} />}
           <button
             type="button"
             className="flex items-center gap-1.5 h-9 px-3 border border-border rounded-field bg-surface text-text text-[12.5px] font-semibold cursor-pointer font-body hover:border-accent-line hover:bg-accent-soft"
@@ -167,6 +176,10 @@ export default function Positions() {
           </button>
         </div>
       </div>
+
+      {fetchError && (
+        <NoticeStrip icon={<AlertTriangle size={16} />} message={fetchError} tone="danger" />
+      )}
 
       <PnlOverview
         realized={data.summary.realized_pnl}

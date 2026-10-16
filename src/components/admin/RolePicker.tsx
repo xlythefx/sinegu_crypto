@@ -20,7 +20,7 @@ const ROLE_OPTIONS: RoleOption[] = [
     label: 'Collaborator',
     hint: 'Dashboard overview, users & strategies — view only',
   },
-  { key: 'tester', label: 'Tester', hint: 'Test signals only — no billing, no admin' },
+  { key: 'tester', label: 'Tester', hint: 'Admin portal, test signals only — never billed' },
 ]
 
 interface RolePickerProps {
