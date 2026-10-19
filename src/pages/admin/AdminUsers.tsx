@@ -22,6 +22,7 @@ import ConfirmModal from '../../components/ui/ConfirmModal'
 import CreateUserModal from '../../components/admin/CreateUserModal'
 import { BADGE, RoleBadge, StatusBadge } from '../../components/admin/badges'
 import RolePicker from '../../components/admin/RolePicker'
+import UserBalanceCell from '../../components/admin/UserBalanceCell'
 import { EXCHANGE_META } from '../../components/exchanges/meta'
 import { useApiData } from '../../hooks/useApiData'
 import { useSessionUser } from '../../hooks/useSessionUser'
@@ -537,18 +538,22 @@ export default function AdminUsers() {
           <table className="w-full border-collapse text-[13px]">
             <thead>
               <tr>
-                {['', 'Name', 'Email', 'Role', 'Status', 'Joined'].map((h, i) => (
-                  <th key={i} className={TH}>
-                    {h}
-                  </th>
-                ))}
+                {/* Balance is for full admins only — a collaborator's table has
+                    no such column (owner, 2026-10-19). */}
+                {['', 'Name', 'Email', 'Role', 'Status', ...(readOnly ? [] : ['Balance']), 'Joined'].map(
+                  (h, i) => (
+                    <th key={i} className={h === 'Balance' ? `${TH} text-right` : TH}>
+                      {h}
+                    </th>
+                  ),
+                )}
                 <th className={`${TH} text-right`}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {paginated.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center text-muted">
+                  <td colSpan={readOnly ? 7 : 8} className="py-10 text-center text-muted">
                     {inGroup.length === 0
                       ? group === 'staff' ? 'No staff accounts yet.' : 'No users yet.'
                       : 'No accounts match your filters.'}
@@ -739,6 +744,11 @@ function UserRows({
             )}
           </div>
         </td>
+        {!readOnly && (
+          <td className={`${TD} text-right`}>
+            <UserBalanceCell accounts={accounts} />
+          </td>
+        )}
         <td className={`${TD} font-mono text-[12px] text-muted whitespace-nowrap`}>
           {user.created_at ? fmtMediumDate(user.created_at) : '—'}
         </td>
@@ -776,7 +786,7 @@ function UserRows({
       {expanded && (
         <tr>
           <td className="bg-surface2" />
-          <td className="bg-surface2 py-3 px-3.5" colSpan={6}>
+          <td className="bg-surface2 py-3 px-3.5" colSpan={readOnly ? 6 : 7}>
             {accounts.length === 0 ? (
               <p className="py-1 text-[12.5px] text-muted">
                 No exchange accounts yet.

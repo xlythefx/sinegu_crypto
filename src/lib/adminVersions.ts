@@ -13,6 +13,30 @@ import type { AdminChange } from '../types/adminVersions'
  *    later change to the same feature gets its own entry.
  */
 export const ADMIN_CHANGES: AdminChange[] = [
+  // ── 2026-10-19 ───────────────────────────────────────────────────────────
+  {
+    id: 'admin-size-and-balance-columns',
+    date: '2026-10-19',
+    kind: 'improved',
+    area: 'Admin',
+    title: 'Position size on Trading Positions, and each user’s balance on User Management',
+    summary:
+      'Trading Positions now has a Size column showing how big each position or closed trade is, in coins and in dollars. User Management now has a Balance column, so you can see how much money each user has with us without opening their row.',
+    howItWorks: [
+      'Size is the amount of the coin, the same figure the Signal Log shows as “Quantity”, with its dollar value under it. Example: “14.2 LTC ≈ $1,186.40”. For an open position the dollar value uses today’s price; for a closed trade it uses the price it closed at.',
+      'In the Combined view, a line adds up the size of every position it merges. A long and a short on the same coin are both counted, because both are held.',
+      'Balance adds up the user’s connected exchange accounts across Binance, MEXC and Bybit. Demo (test-money) balances are shown on their own line marked “Demo” and never added to the real total. Example: “$12,400.00” with “Demo $5,000.00” under it.',
+      'A disconnected account is not counted, because that money is no longer traded. It is still listed when you expand the user’s row. A user with no connected account shows “—”.',
+      'Collaborators do not see the Balance column.',
+    ],
+    technical: [
+      'Frontend only. lib/adminPositionRows.ts adds `sizeValue` (|qty| × price, summed on a merged line) and makes a merged line’s qty the sum of absolute sizes; the per-row qty keeps its stored sign for the editor. The quantity moved out of the SideTag under the ticker into the Size column. User Management: components/admin/UserBalanceCell.tsx sums the `accounts` the list already returns (deleted_at excluded, demo kept apart), hidden when isCollaborator.',
+    ],
+    links: [
+      { label: 'Open Trading Positions', href: '/admin/positions' },
+      { label: 'Open User Management', href: '/admin/users' },
+    ],
+  },
   // ── 2026-10-16 ───────────────────────────────────────────────────────────
   {
     id: 'tester-admin-access-fetch',

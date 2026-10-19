@@ -1,6 +1,6 @@
 import { Pencil, Trash2, XOctagon } from 'lucide-react'
 import { displaySymbol } from '../../../lib/chart'
-import { fmtDateTime, fmtMoney, fmtSignedMoney } from '../../../lib/format'
+import { fmtDateTime, fmtMoney, fmtQty, fmtSignedMoney } from '../../../lib/format'
 import type { PositionRow, PositionView, RowFeeSource } from '../../../lib/adminPositionRows'
 import { Pill } from '../../ui/Pill'
 import EntryExitCell from '../../positions/EntryExitCell'
@@ -26,7 +26,7 @@ const ICON_BTN_DANGER = `${ICON_BTN} enabled:hover:!border-[color-mix(in_srgb,va
 const CLOSE_BTN =
   'inline-flex items-center gap-1 h-8 px-2.5 border border-[color-mix(in_srgb,var(--red)_40%,transparent)] rounded-[9px] bg-[color-mix(in_srgb,var(--red)_10%,transparent)] text-red text-[12px] font-bold cursor-pointer transition-colors disabled:opacity-45 disabled:cursor-not-allowed enabled:hover:bg-[color-mix(in_srgb,var(--red)_20%,transparent)]'
 
-/** Coin-initials avatar + display symbol, with the direction/size of a single row. */
+/** Coin-initials avatar + display symbol, with the direction of a single row. */
 function TickerCell({ row, view }: { row: PositionRow; view: PositionView }) {
   const display = displaySymbol(row.symbol)
   const initials = display.split('/')[0].slice(0, 3)
@@ -39,11 +39,31 @@ function TickerCell({ row, view }: { row: PositionRow; view: PositionView }) {
         <span className="font-bold">{display}</span>
         {view === 'rows' && (
           <>
-            <SideTag side={row.direction} qty={row.qty} />
+            <SideTag side={row.direction} />
             <StreakTag streak={row.streak} />
           </>
         )}
       </span>
+    </div>
+  )
+}
+
+/** Position size in coins — the Signal Log's "Quantity" — with its USDT value
+ *  under it. A merged line shows the total size of every row it holds. */
+function SizeCell({ row }: { row: PositionRow }) {
+  if (row.qty == null || row.qty === 0) {
+    return <span className="text-faint">—</span>
+  }
+  const coin = displaySymbol(row.symbol).split('/')[0].replace(/[^A-Z0-9]/gi, '')
+  return (
+    <div className="inline-flex flex-col items-end gap-px whitespace-nowrap">
+      <span className="font-mono font-bold text-text">
+        {fmtQty(Math.abs(row.qty), 0, 8)}{' '}
+        <span className="text-[11px] font-semibold text-muted">{coin}</span>
+      </span>
+      {row.sizeValue != null && (
+        <span className="text-[11px] font-mono text-faint">≈ {fmtMoney(row.sizeValue)}</span>
+      )}
     </div>
   )
 }
@@ -135,7 +155,7 @@ export default function PositionsTable({
 }: Props) {
   const closed = tab === 'closed'
   const grouped = view === 'grouped'
-  const cols = (closed ? 9 : 6) + (grouped ? 1 : 0)
+  const cols = (closed ? 10 : 7) + (grouped ? 1 : 0)
   // Editing writes to ONE database row, so a merged line has no single target.
   const canEdit = view === 'rows'
 
@@ -148,6 +168,7 @@ export default function PositionsTable({
             <th className={TH}>Ticker</th>
             <th className={TH}>Broker</th>
             {closed && <th className={TH}>Strategy</th>}
+            <th className={TH_R}>Size</th>
             <th className={TH_R}>{closed ? 'Entry / Exit' : 'Entry / Now'}</th>
             <th className={TH_R}>{closed ? 'P&L' : 'Unrealized P&L'}</th>
             {closed && <th className={`${TH_R} max-[900px]:hidden`}>Fee</th>}
@@ -187,6 +208,9 @@ export default function PositionsTable({
                 {closed && (
                   <td className={`${TD} text-muted`}>{r.strategy ?? '—'}</td>
                 )}
+                <td className={TD_R}>
+                  <SizeCell row={r} />
+                </td>
                 <td className={`${TD_R} font-mono`}>
                   <EntryExitCell
                     entry={r.entryPrice}

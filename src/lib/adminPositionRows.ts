@@ -97,8 +97,16 @@ export interface PositionRow {
    *  closed trade's `position_side`, else its closing order (BUY closes a
    *  short); an open BOTH row by the sign of its size. Per-row only. */
   direction: TradeSide | null
-  /** Position size — per-row only, for the same reason. */
+  /** Position size in coins. A single row keeps the stored sign (an open
+   *  SHORT is negative — the editor writes it back as-is); a merged line
+   *  carries the sum of SIZES, unsigned, since a long and a short on the same
+   *  coin are both held, not cancelled out. */
   qty: number | null
+  /** USDT value of that size: |qty| × price (the mark now for an open
+   *  position, the exit for a closed trade), summed on a merged line; null
+   *  when no row has a price. Optional so a row built by hand (the P&L
+   *  calendar's editor) need not invent one. */
+  sizeValue?: number | null
   strategy: string | null
   /** Closed trades only. */
   closedAt: string | null
@@ -163,6 +171,11 @@ export function accountOptions(
   )
 }
 
+/** USDT value of one row's size; null when the row has no price to value it at. */
+function sizeValueOf(qty: number, price: number): number | null {
+  return price > 0 ? Math.abs(qty) * price : null
+}
+
 function byAccountThenSymbol(a: PositionRow, b: PositionRow): number {
   return (
     (a.accountName ?? '').localeCompare(b.accountName ?? '') ||
@@ -195,6 +208,7 @@ export function buildPositionRows(
         side: p.position_side || null,
         direction: openPositionSide(p.position_side, p.position_amt),
         qty: p.position_amt,
+        sizeValue: sizeValueOf(p.position_amt, p.price),
         strategy: null,
         closedAt: null,
         broker: p.broker,
@@ -219,7 +233,8 @@ export function buildPositionRows(
         g.entrySum += entry
         g.entryCount += 1
       }
-      g.qty = (g.qty ?? 0) + p.position_amt
+      g.qty = (g.qty ?? 0) + Math.abs(p.position_amt)
+      g.sizeValue = sumKnown(g.sizeValue ?? null, sizeValueOf(p.position_amt, p.price))
     } else {
       map.set(key, {
         key,
@@ -240,7 +255,8 @@ export function buildPositionRows(
         feeSource: null,
         side: null,
         direction: null,
-        qty: p.position_amt,
+        qty: Math.abs(p.position_amt),
+        sizeValue: sizeValueOf(p.position_amt, p.price),
         strategy: null,
         closedAt: null,
         broker: p.broker,
@@ -256,8 +272,9 @@ export function buildPositionRows(
     .sort(byAccountThenSymbol)
 }
 
-/** Sum of the fees a merged line's rows carry; null when none does. */
-function sumFees(a: number | null, b: number | null): number | null {
+/** Sum of two figures a merged line's rows may or may not carry (fees, size
+ *  values); null only when neither does. */
+function sumKnown(a: number | null, b: number | null): number | null {
   if (a === null) return b
   if (b === null) return a
   return a + b
@@ -291,6 +308,7 @@ export function buildTradeRows(
         side: closedTradeSide(t.position_side, t.side),
         direction: closedTradeSide(t.position_side, t.side),
         qty: t.position_amt,
+        sizeValue: sizeValueOf(t.position_amt, t.price),
         strategy: t.strategy,
         closedAt: t.closed_at,
         broker: t.broker,
@@ -321,10 +339,11 @@ export function buildTradeRows(
         g.entrySum += entry
         g.entryCount += 1
       }
-      g.fee = sumFees(g.fee, t.exchange_fee)
+      g.fee = sumKnown(g.fee, t.exchange_fee)
       g.feeSource = mergeFeeSource(g.feeSource, t.fee_source)
       g.priceSum += t.price
-      g.qty = (g.qty ?? 0) + t.position_amt
+      g.qty = (g.qty ?? 0) + Math.abs(t.position_amt)
+      g.sizeValue = sumKnown(g.sizeValue ?? null, sizeValueOf(t.position_amt, t.price))
       // A merged line names a closer only when every row agrees.
       if ((g.closeSource ?? null) !== (t.close_source ?? null)) g.closeSource = null
       if (t.strategy) g.strategies.add(t.strategy)
@@ -349,7 +368,8 @@ export function buildTradeRows(
         feeSource: t.fee_source,
         side: null,
         direction: null,
-        qty: t.position_amt,
+        qty: Math.abs(t.position_amt),
+        sizeValue: sizeValueOf(t.position_amt, t.price),
         strategy: null,
         closedAt: t.closed_at,
         broker: t.broker,
