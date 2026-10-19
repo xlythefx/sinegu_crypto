@@ -154,6 +154,9 @@ export interface AdminOpenPosition {
   /** The exchange's average entry over everything still open in the position. */
   entry_price: number | null
   unrealized_pnl: number
+  /** Streak sizing at entry, every figure, read off the position's entry tag;
+   *  null = normal size. Optional: an API from before 2026-10-19 omits it. */
+  streak?: TradeStreak | null
   broker: string
 }
 

@@ -19,18 +19,21 @@ export const ADMIN_CHANGES: AdminChange[] = [
     date: '2026-10-19',
     kind: 'improved',
     area: 'Admin',
-    title: 'Position size on Trading Positions, and each user’s balance on User Management',
+    title: 'Position size with a downsize marker on Trading Positions, and each user’s balance on User Management',
     summary:
-      'Trading Positions now has a Size column showing how big each position or closed trade is, in coins and in dollars. User Management now has a Balance column, so you can see how much money each user has with us without opening their row.',
+      'Trading Positions now has a compact Size column showing how big each position or closed trade is. When a losing streak made the bot open it smaller than normal, a small yellow ↓ sits beside the size, and clicking it shows why. User Management now has a Balance column, so you can see how much money each user has with us without opening their row.',
     howItWorks: [
-      'Size is the amount of the coin, the same figure the Signal Log shows as “Quantity”, with its dollar value under it. Example: “14.2 LTC ≈ $1,186.40”. For an open position the dollar value uses today’s price; for a closed trade it uses the price it closed at.',
+      'Size is the amount of the coin, the same figure the Signal Log shows as “Quantity”, on one line. Example: “14.2 LTC”. Hover it for the dollar value (today’s price for an open position, the closing price for a closed trade).',
+      'The yellow ↓ appears only on a downsized position. Click it and a small box explains it. Example: “After 3 losing trades in a row on this coin, the bot opened this trade at a smaller size. Normal size 60, size used 40 (−33%), ladder step after 2 losses.” Those are the sizes set on Trading Assets → Streak Sizing Settings, before each account’s balance scales them.',
+      'This now works for open positions too, not only closed trades, so you can see a downsized position while it is still running.',
       'In the Combined view, a line adds up the size of every position it merges. A long and a short on the same coin are both counted, because both are held.',
       'Balance adds up the user’s connected exchange accounts across Binance, MEXC and Bybit. Demo (test-money) balances are shown on their own line marked “Demo” and never added to the real total. Example: “$12,400.00” with “Demo $5,000.00” under it.',
       'A disconnected account is not counted, because that money is no longer traded. It is still listed when you expand the user’s row. A user with no connected account shows “—”.',
       'Collaborators do not see the Balance column.',
     ],
     technical: [
-      'Frontend only. lib/adminPositionRows.ts adds `sizeValue` (|qty| × price, summed on a merged line) and makes a merged line’s qty the sum of absolute sizes; the per-row qty keeps its stored sign for the editor. The quantity moved out of the SideTag under the ticker into the Size column. User Management: components/admin/UserBalanceCell.tsx sums the `accounts` the list already returns (deleted_at excluded, demo kept apart), hidden when isCollaborator.',
+      'GET /admin/positions now left-joins each open position to its entry tag (open_strategies on exchange + api_key + symbol + position_side) and returns `streak` (EntryStreak::forStaff) like the closed trades already did. lib/adminPositionRows.ts adds `sizeValue` (|qty| × price, summed on a merged line), makes a merged line’s qty the sum of absolute sizes (the per-row qty keeps its stored sign for the editor), and keeps a merged open line’s streak only when every row agrees. The quantity and the StreakTag moved out from under the ticker into the Size column; DownsizeButton (positions/) shows for effect = smaller only.',
+      'User Management: components/admin/UserBalanceCell.tsx sums the `accounts` the list already returns (deleted_at excluded, demo kept apart), hidden when isCollaborator.',
     ],
     links: [
       { label: 'Open Trading Positions', href: '/admin/positions' },

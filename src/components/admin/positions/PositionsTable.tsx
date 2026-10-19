@@ -5,8 +5,8 @@ import type { PositionRow, PositionView, RowFeeSource } from '../../../lib/admin
 import { Pill } from '../../ui/Pill'
 import EntryExitCell from '../../positions/EntryExitCell'
 import SideTag from '../../positions/SideTag'
-import StreakTag from '../../positions/StreakTag'
 import CloseSourceChip from './CloseSourceChip'
+import DownsizeButton from './DownsizeButton'
 
 // shared table primitives (mirrors the user Positions tables)
 const TH_BASE =
@@ -37,34 +37,32 @@ function TickerCell({ row, view }: { row: PositionRow; view: PositionView }) {
       </span>
       <span className="flex flex-col gap-px">
         <span className="font-bold">{display}</span>
-        {view === 'rows' && (
-          <>
-            <SideTag side={row.direction} />
-            <StreakTag streak={row.streak} />
-          </>
-        )}
+        {view === 'rows' && <SideTag side={row.direction} />}
       </span>
     </div>
   )
 }
 
-/** Position size in coins — the Signal Log's "Quantity" — with its USDT value
- *  under it. A merged line shows the total size of every row it holds. */
+/** Position size in coins — the Signal Log's "Quantity" — on one line, with a
+ *  yellow ↓ when a losing streak opened it smaller (click it for the details).
+ *  A merged line shows the total size of every row it holds; its USDT value
+ *  is on hover. */
 function SizeCell({ row }: { row: PositionRow }) {
   if (row.qty == null || row.qty === 0) {
     return <span className="text-faint">—</span>
   }
   const coin = displaySymbol(row.symbol).split('/')[0].replace(/[^A-Z0-9]/gi, '')
   return (
-    <div className="inline-flex flex-col items-end gap-px whitespace-nowrap">
-      <span className="font-mono font-bold text-text">
+    <span className="inline-flex items-center justify-end gap-1.5 whitespace-nowrap">
+      <span
+        className="font-mono font-bold text-text"
+        title={row.sizeValue != null ? `≈ ${fmtMoney(row.sizeValue)}` : undefined}
+      >
         {fmtQty(Math.abs(row.qty), 0, 8)}{' '}
         <span className="text-[11px] font-semibold text-muted">{coin}</span>
       </span>
-      {row.sizeValue != null && (
-        <span className="text-[11px] font-mono text-faint">≈ {fmtMoney(row.sizeValue)}</span>
-      )}
-    </div>
+      {row.streak?.effect === 'smaller' && <DownsizeButton streak={row.streak} />}
+    </span>
   )
 }
 

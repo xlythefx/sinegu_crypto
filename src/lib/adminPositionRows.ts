@@ -115,8 +115,10 @@ export interface PositionRow {
    *  whose rows disagree). Optional so callers building a row by hand
    *  (the P&L calendar's editor) need not invent one. */
   closeSource?: CloseSource
-  /** Closed trades, per-row only: the streak step that sized it (null =
-   *  normal size). A merged line spans trades, so it never carries one. */
+  /** The streak step that sized it (null = normal size) — a closed trade's
+   *  from its close row, an open position's from its entry tag. A merged
+   *  open line carries one only when every position it merges agrees; a
+   *  merged closed line spans trades, so it never does. */
   streak?: TradeStreak | null
 }
 
@@ -171,6 +173,19 @@ export function accountOptions(
   )
 }
 
+/** Whether two rows were sized by the same streak step (both normal = same). */
+function sameStreak(a: TradeStreak | null, b: TradeStreak | null): boolean {
+  if (a === null || b === null) return a === b
+  return (
+    a.kind === b.kind &&
+    a.run === b.run &&
+    a.effect === b.effect &&
+    (a.step ?? null) === (b.step ?? null) &&
+    (a.size ?? null) === (b.size ?? null) &&
+    (a.base_size ?? null) === (b.base_size ?? null)
+  )
+}
+
 /** USDT value of one row's size; null when the row has no price to value it at. */
 function sizeValueOf(qty: number, price: number): number | null {
   return price > 0 ? Math.abs(qty) * price : null
@@ -212,6 +227,7 @@ export function buildPositionRows(
         strategy: null,
         closedAt: null,
         broker: p.broker,
+        streak: p.streak ?? null,
       }))
       .sort(byAccountThenSymbol)
   }
@@ -235,6 +251,7 @@ export function buildPositionRows(
       }
       g.qty = (g.qty ?? 0) + Math.abs(p.position_amt)
       g.sizeValue = sumKnown(g.sizeValue ?? null, sizeValueOf(p.position_amt, p.price))
+      if (!sameStreak(g.streak ?? null, p.streak ?? null)) g.streak = null
     } else {
       map.set(key, {
         key,
@@ -260,6 +277,7 @@ export function buildPositionRows(
         strategy: null,
         closedAt: null,
         broker: p.broker,
+        streak: p.streak ?? null,
       })
     }
   }
