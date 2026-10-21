@@ -13,6 +13,27 @@ import type { AdminChange } from '../types/adminVersions'
  *    later change to the same feature gets its own entry.
  */
 export const ADMIN_CHANGES: AdminChange[] = [
+  // ── 2026-10-21 ───────────────────────────────────────────────────────────
+  {
+    id: 'strategies-show-test-feed',
+    date: '2026-10-21',
+    kind: 'improved',
+    area: 'Strategies',
+    title: 'Strategies page shows test-feed strategies such as QuantLab, and two old test strategies are gone',
+    summary:
+      'Strategies run on the test feed, like QuantLab’s “VWMA Reversion - QuantLab”, now get their own card on the Strategies page, the same as any other strategy. They used to be left out because they trade on test accounts. The old “vwma-reversion” card (one LTC trade on Sep 4) and the “VWAP-Deviation” card (six BTC trades, Jul 24 – Aug 1) were test runs and have been removed.',
+    howItWorks: [
+      'A test account’s trades count from the day the test feed started (Oct 15, 2026). Example: QuantLab’s seven LTC trades since Oct 16 show as one card with their own win rate and P&L.',
+      'Trades a test account made before Oct 15 are not shown, because it was still following the main signals then. They would otherwise be mixed into the real VWMA-Reversion card.',
+      'Test accounts usually trade test money. A test-feed card therefore shows how the strategy behaves, not money anyone made or lost. The real VWMA-Reversion card is unchanged.',
+      'The removed trades no longer appear anywhere, including the master account’s P&L history and calendar.',
+    ],
+    technical: [
+      'AdminInsights::strategyTrades: scope `all` adds testerAccounts() (type = tester, demo included) with pastRows since AdminInsights::TEST_FEED_SINCE (2026-10-15 12:00 UTC). `master` / `customers` are unchanged. Pinned by AdminInsightsTest.',
+      'Deleted from binance_pastpositions on prod: ids 489, 494, 497, 499, 505, 516 (VWAP-Deviation, master) and 552 (master) + 553 (tester) (vwma-reversion). Rows backed up on the box before the delete.',
+    ],
+    links: [{ label: 'Open Strategies', href: '/admin/strategies' }],
+  },
   // ── 2026-10-19 ───────────────────────────────────────────────────────────
   {
     id: 'admin-size-and-balance-columns',

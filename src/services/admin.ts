@@ -395,9 +395,10 @@ export async function deleteAsset(assetId: number): Promise<void> {
 }
 
 /**
- * Tagged closed trades from every exchange, real money only. `scope`:
+ * Tagged closed trades from every exchange. `scope`:
  * `master` = the master account alone (the strategy's true result),
- * `customers` = every customer pooled, `all` (default) = both.
+ * `customers` = every customer pooled (both real money only), `all`
+ * (default) = both plus tester accounts' test-feed trades (demo included).
  */
 export async function getStrategies(
   scope: StrategyScope = 'all',
