@@ -136,16 +136,35 @@ export function prevMonth(): string {
  * onto it would break the ones that are right.
  */
 export function fmtDateTime(dt: string): string {
-  const iso = dt.replace(' ', 'T')
-  const zoned = /(?:Z|[+-]\d{2}:?\d{2})$/.test(iso) ? iso : `${iso}Z`
-  const date = new Date(zoned)
-  if (Number.isNaN(date.getTime())) return dt
+  const date = parseUtc(dt)
+  if (!date) return dt
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+/** fmtDateTime with the year: "Sep 9, 2026, 11:30 AM" in the reader's zone. */
+export function fmtDateTimeYear(dt: string): string {
+  const date = parseUtc(dt)
+  if (!date) return dt
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+/** A DB datetime with no zone designator is UTC (see fmtDateTime). */
+function parseUtc(dt: string): Date | null {
+  const iso = dt.replace(' ', 'T')
+  const zoned = /(?:Z|[+-]\d{2}:?\d{2})$/.test(iso) ? iso : `${iso}Z`
+  const date = new Date(zoned)
+  return Number.isNaN(date.getTime()) ? null : date
 }
 
 /** "just now" / "4 min ago" / "3 h ago" / "2 d ago" for a timestamp (null → "never"). */

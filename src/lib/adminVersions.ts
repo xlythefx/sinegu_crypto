@@ -13,6 +13,25 @@ import type { AdminChange } from '../types/adminVersions'
  *    later change to the same feature gets its own entry.
  */
 export const ADMIN_CHANGES: AdminChange[] = [
+  // ── 2026-10-23 ───────────────────────────────────────────────────────────
+  {
+    id: 'user-capital-flow-transfers',
+    date: '2026-10-23',
+    kind: 'improved',
+    area: 'User Management',
+    title: 'Capital Flow on a user’s page lists every deposit and withdrawal with its date',
+    summary:
+      'The Capital Flow card on a user’s page used to show only totals — for example “$16,109.51 deposited in 4 transactions”. It now also lists each deposit and withdrawal underneath: when it happened, which way the money went and how much.',
+    howItWorks: [
+      'Newest first. A deposit reads green with a “+”, a withdrawal red with a “−”. Example: “Withdrawal · Oct 2, 2026, 3:15 PM · −$15,622.00”.',
+      'The date is when the money moved on the exchange, shown in your own time zone. Transfers recorded before Sep 25, 2026 may show the day our system first saw them instead, which can be a day or two later.',
+      'The exchange pill at the top of the page narrows the list like every other figure. When the list mixes exchanges, each row names its exchange.',
+      'Long lists scroll inside the card.',
+    ],
+    technical: [
+      'UserStatsService::capitalFlow adds `transfers[]` (id, exchange, type deposit|withdrawal, amount, currency, at) to GET /admin/users/{uniId}/summary → capital_flow. `at` = transaction_time (ms) when set, else created_at, as UTC ISO with Z. No api_key in the payload. Pinned by AdminUserExchangeFilterTest.',
+    ],
+  },
   // ── 2026-10-21 ───────────────────────────────────────────────────────────
   {
     id: 'strategies-show-test-feed',

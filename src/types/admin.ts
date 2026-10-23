@@ -666,6 +666,8 @@ export interface AdminUserSummary {
     initial_deposit: number
     /** Initial deposit + net flow. */
     capital: number
+    /** Every deposit and withdrawal, newest first. */
+    transfers: CapitalTransfer[]
   }
   /** Sums of `invoices.total_fee` for this user. Absent for a collaborator. */
   commissions?: {
@@ -673,6 +675,19 @@ export interface AdminUserSummary {
     all_time: number
     all_time_paid: number
   }
+}
+
+/** One deposit / withdrawal in AdminUserSummary.capital_flow.transfers. */
+export interface CapitalTransfer {
+  /** Unique per exchange only — key rows by exchange + id. */
+  id: number
+  exchange: ExchangeKind
+  type: 'deposit' | 'withdrawal'
+  /** Absolute amount; `type` carries the direction. */
+  amount: number
+  currency: string
+  /** UTC ISO, when the money moved on the exchange. */
+  at: string
 }
 
 /** One row of GET /admin/affiliate/users/{uniId}/referrals. */
