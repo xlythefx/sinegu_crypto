@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { fmtQty } from '../../lib/format'
 import EntryExitCell from './EntryExitCell'
 import FeeLine from './FeeLine'
 import SideTag from './SideTag'
@@ -24,7 +25,7 @@ function tickerInitials(ticker: string) {
 }
 
 /** Closed positions table with pagination:
- *  Ticker (+ LONG/SHORT and size) · Entry / Exit · Strategy · P&L · Sizing · Closed At. */
+ *  Ticker (+ LONG/SHORT) · Entry / Exit · Strategy · P&L · Sizing (size + streak pill) · Closed At. */
 export default function ClosedPositionsTable({
   trades,
   page,
@@ -71,7 +72,7 @@ export default function ClosedPositionsTable({
                       </span>
                       <span className="flex flex-col gap-px">
                         <span className="font-bold">{t.ticker}</span>
-                        <SideTag side={t.side} qty={t.qty} />
+                        <SideTag side={t.side} />
                       </span>
                     </div>
                     {/* Admin user detail only (the trader adapters never set it);
@@ -99,6 +100,14 @@ export default function ClosedPositionsTable({
                     </div>
                   </td>
                   <td className={`${TD} whitespace-nowrap`}>
+                    {t.qty ? (
+                      <span className="font-mono text-[13px] font-semibold">
+                        {fmtQty(Math.abs(t.qty))}{' '}
+                        <span className="text-faint text-[11px] font-normal">{t.ticker.split('/')[0]}</span>
+                      </span>
+                    ) : (
+                      <span className="text-faint">—</span>
+                    )}
                     <StreakTag streak={t.streak} />
                   </td>
                   <td className={`${TD} text-muted text-[12.5px] font-mono max-[900px]:hidden`}>
