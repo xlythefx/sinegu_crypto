@@ -24,7 +24,7 @@ function tickerInitials(ticker: string) {
 }
 
 /** Closed positions table with pagination:
- *  Ticker (+ LONG/SHORT and size) · Entry / Exit · Strategy · P&L · Closed · Closed At. */
+ *  Ticker (+ LONG/SHORT and size) · Entry / Exit · Strategy · P&L · Sizing · Closed At. */
 export default function ClosedPositionsTable({
   trades,
   page,
@@ -44,7 +44,7 @@ export default function ClosedPositionsTable({
               <th className={TH}>Entry / Exit</th>
               <th className={TH}>Strategy</th>
               <th className={TH}>P&L</th>
-              <th className={TH}>Closed</th>
+              <th className={TH}>Sizing</th>
               <th className={`${TH} max-[900px]:hidden`}>Closed At</th>
             </tr>
           </thead>
@@ -72,7 +72,6 @@ export default function ClosedPositionsTable({
                       <span className="flex flex-col gap-px">
                         <span className="font-bold">{t.ticker}</span>
                         <SideTag side={t.side} qty={t.qty} />
-                        <StreakTag streak={t.streak} />
                       </span>
                     </div>
                     {/* Admin user detail only (the trader adapters never set it);
@@ -99,13 +98,8 @@ export default function ClosedPositionsTable({
                       <FeeLine fee={t.fee} source={t.feeSource} />
                     </div>
                   </td>
-                  {/* fixed-width numeral so the "Position(s)" label starts at the
-                      same x on every row instead of shifting with the digit count */}
                   <td className={`${TD} whitespace-nowrap`}>
-                    <span className="font-mono inline-block min-w-[2ch] text-right">
-                      {t.positions}
-                    </span>{' '}
-                    {t.positions === 1 ? 'Position' : 'Positions'}
+                    <StreakTag streak={t.streak} />
                   </td>
                   <td className={`${TD} text-muted text-[12.5px] font-mono max-[900px]:hidden`}>
                     {t.closedAt}

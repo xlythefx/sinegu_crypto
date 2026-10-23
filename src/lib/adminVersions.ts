@@ -15,6 +15,26 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-10-23 ───────────────────────────────────────────────────────────
   {
+    id: 'closed-trades-sizing-column',
+    date: '2026-10-23',
+    kind: 'improved',
+    area: 'Positions',
+    title: 'Closed trades show a Sizing column instead of “Closed”',
+    summary:
+      'The closed trades list used to end with a “Closed” column that almost always read “1 Position”. That column is now “Sizing”: it says whether the bot opened the trade at its normal size or at a streak size. Example: after a losing RENDER trade, the next RENDER trade reads “Smaller size · after a loss”.',
+    howItWorks: [
+      'A trade opened at the normal size reads “Normal size”.',
+      'A trade sized by Streak Sizing shows the gold pill that used to sit under the ticker, such as “Smaller size · after 2 losses”.',
+      'Admins also see the exact numbers underneath, for example “size 40 instead of 60 · loss step 1”. Customers see only the pill, never the sizes.',
+      'The same change applies to the customer’s Positions page and to the Positions tab on a user’s admin page.',
+      'Trades closed before Oct 14, 2026 read “Normal size”, because the sizing used for a trade was only recorded from that day on.',
+    ],
+    technical: [
+      'ClosedPositionsTable: the Closed (positions count) column is replaced by Sizing, rendered by StreakTag, which now prints “Normal size” for a null streak. No API change.',
+    ],
+    links: [{ label: 'Open Positions', href: '/dashboard/positions' }],
+  },
+  {
     id: 'user-capital-flow-transfers',
     date: '2026-10-23',
     kind: 'improved',
