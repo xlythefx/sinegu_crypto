@@ -18,6 +18,25 @@ import type { AdminTodo } from '../types/adminTodos'
  *    the note and the date it was settled stay readable.
  */
 export const ADMIN_TODOS: AdminTodo[] = [
+  // ── Signal delivery proof (2026-10-25) ──────────────────────────────────
+  {
+    id: 'tradingview-alerts-sent-at',
+    feature: 'Signal Log',
+    kind: 'action',
+    title: 'Add "sent_at" to every TradingView alert message',
+    added: '2026-10-25',
+    why: 'The Signal Log now shows when each signal reached us and how fast we answered, but it can only show how long the signal took to arrive (and flag the ones TradingView may mark "failed — timed out") when the alert says when it fired. Alerts without the field keep trading exactly as before; they just show no travel time.',
+    steps: [
+      'In TradingView, open each alert that posts to a Pixel Alpha webhook (Binance, MEXC, Bybit and the test feed) and click Edit.',
+      'In the Message box, add one line inside the braces, after the "strategy" line: "sent_at": "{{timenow}}" — with a comma at the end of the line before it. Type {{timenow}} exactly; TradingView replaces it with the time the alert fires.',
+      'Save the alert. Leave the secret and every other field as they are.',
+      'After the next signal, open Admin → Signal Log and expand that signal: the Delivery box should show a "TradingView fired" time that matches the time in TradingView\'s alert log.',
+    ],
+    links: [
+      { label: 'Signal Log', href: '/admin/trade-logs' },
+      { label: 'Webhooks (message template)', href: '/admin/webhooks' },
+    ],
+  },
   // ── Test feed (2026-10-15) ──────────────────────────────────────────────
   {
     id: 'test-feed-first-provider',

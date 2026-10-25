@@ -25,6 +25,9 @@ export function alertTemplate(feed: SignalFeed): string {
       price: '{{close}}',
       leverage: 25,
       strategy: 'ABCD-v1',
+      // When TradingView fired the alert — what the Signal Log's delivery
+      // proof compares our arrival time against.
+      sent_at: '{{timenow}}',
     },
     null,
     2,

@@ -117,6 +117,24 @@ export interface TradeLogRetry {
   ts: string | null
 }
 
+/**
+ * How the signal got from TradingView to the engine. TradingView gives up
+ * after ~3 s and marks the alert "timed out" even when the request still
+ * arrives and trades — this is the proof of what really happened.
+ */
+export interface TradeLogDelivery {
+  /** When TradingView fired the alert (`{{timenow}}`); null when the alert does not send it. */
+  sentAt: string | null
+  /** When the engine received the webhook. */
+  receivedAt: string
+  /** receivedAt − sentAt; null without sentAt. */
+  transitMs: number | null
+  /** How long the engine took to answer. */
+  ackMs: number | null
+  /** Longer than TradingView waits — TradingView may show this alert as failed. */
+  slow: boolean
+}
+
 /** One append-only row per signal the engine processed. */
 export interface TradeLogRow {
   kind: 'signal'
@@ -147,6 +165,8 @@ export interface TradeLogRow {
   normalSkips: number
   /** Re-runs of this signal, oldest first. */
   retries: TradeLogRetry[]
+  /** null = no timing recorded (signals before 25 Oct 2026, an older engine). */
+  delivery: TradeLogDelivery | null
 }
 
 /**
@@ -216,6 +236,8 @@ export interface TradeLogFilters {
   strategy?: string
   /** 'success' = clean signals only, 'problem' = anything that did not fill cleanly. */
   result?: string
+  /** 'slow' = took longer to arrive and be answered than TradingView waits. */
+  delivery?: string
   from?: string
   to?: string
   /** Account-level filters — the list endpoint only. */

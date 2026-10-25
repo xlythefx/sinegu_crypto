@@ -756,6 +756,34 @@ exchange accounts (demo OR real money) follow the **test feed** and nothing else
   `tests/test_test_feed.py`), and the API's `App\Services\Engine\WebhookPaths`.
   A new path needs `deploy-nginx` or nginx 404s it.
 
+## Signal delivery proof (2026-10-25)
+
+TradingView gives up on a webhook after ~3 s and marks the alert "failed —
+timed out" even when it still arrives: on 24 Oct the 14:15 UTC LTC buy fired
+at :01, reached nginx at :09 and filled five accounts. Our box was idle
+(engine answered in ms), so the time was lost BEFORE us — TradingView's
+sender or the Cloudflare hop. The Signal Log now proves each case:
+- **Engine** stamps `received_at` first thing in `_handle_webhook`, `ack_ms`
+  up to the dispatch hand-off, and reads the alert's optional `sent_at`
+  (`{{timenow}}`, or epoch s/ms; unreadable = null, never a 400). Every
+  trade-logs POST of the job carries them; retries carry none.
+- **API** (`App\Services\Admin\SignalDelivery`) parses them OUTSIDE
+  `validate()` — a bad timing value is dropped, never a 422 that loses the
+  row — and derives `trade_logs.transit_ms` at ms precision. Rows carry
+  `delivery {sent_at, received_at, transit_ms, ack_ms, slow}`;
+  `?delivery=slow` = transit + ack > `SLOW_MS` (3000).
+- **"Slow" is a hint, not a verdict**: TradingView's alert time is when it
+  FIRED, and it sometimes queues an alert for seconds and still says
+  delivered (the 14:30 one that day: 10 s, "delivered"). The UI says "may
+  show as failed", never "failed".
+- `sent_at` only exists once the owner adds `"sent_at": "{{timenow}}"` to
+  each alert (to-do `tradingview-alerts-sent-at`; the Webhooks template has it).
+- **nginx** writes `/var/log/nginx/webhooks.log` (`webhook_timing`, conf.d
+  `webhook-timing.conf`) for the webhook paths: `rt` (from nginx's first
+  byte), `urt` (engine), `cf_ray` and `via` (`$realip_remote_addr` — a
+  Cloudflare edge, or TradingView direct). Large `rt` with tiny `urt` = slow
+  upload into nginx; small `rt` on a late arrival = lost before the box.
+
 ## Security hardening (2026-10-07 audit)
 
 A read-only audit of the three codebases (Christian's "most sensitive parts"
@@ -1926,7 +1954,8 @@ The engine authenticates on the `secret` field alone — there is no signature h
   "symbol": "{{ticker}}",
   "price": "{{close}}",
   "leverage": 25,
-  "strategy": "ABCD-v1"
+  "strategy": "ABCD-v1",
+  "sent_at": "{{timenow}}"
 }
 ```
 
@@ -1945,6 +1974,7 @@ Field contract (`trading-flask/binance_abcd/routes/webhook.py`):
 | `price` | no | Or `close`. Informational — sizing uses the live mark price. |
 | `leverage` | no | 1–125; defaults to 25 in the admin console. Omit to let the engine decide. |
 | `strategy` | no | Free label stored on the position so the closing trade keeps it. |
+| `sent_at` | no | Put `{{timenow}}` here: when TradingView fired the alert. The Signal Log compares it with when the signal reached us (the delivery proof — see "Signal delivery proof"). Unreadable = ignored, never a refusal. |
 | `target_uni_ids` | no | Admin manual-trade only — restricts the fan-out to specific users. Never put it in a TradingView alert. |
 
 Only enabled, non-sandbox accounts of non-suspended, non-overdue users receive

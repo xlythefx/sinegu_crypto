@@ -714,6 +714,29 @@ ENGINE_WEBHOOK_PATHS = (
 )
 
 
+# Per-request timing for the webhook paths only (2026-10-25). TradingView marks
+# an alert "timed out" after ~3 s; the combined log records neither how long a
+# request took nor which hop it came through, so on 24 Oct it could not say
+# whether the 8 s were lost before Cloudflare, between Cloudflare and us, or in
+# nginx. Each line: when nginx finished ($msec), the total time from its first
+# byte ($request_time — start = msec − rt), the engine's share
+# ($upstream_response_time), the Cloudflare ray (match it in Cloudflare's
+# logs; "-" = posted straight to the bare IP) and the hop that connected
+# ($realip_remote_addr — a Cloudflare edge, or TradingView itself).
+# log_format is http-context, hence conf.d; the location blocks keep writing
+# the main access.log too, since an access_log in a location replaces the
+# inherited one rather than adding to it.
+NGINX_WEBHOOK_LOG_FORMAT_PATH = "/etc/nginx/conf.d/webhook-timing.conf"
+NGINX_WEBHOOK_LOG = "/var/log/nginx/webhooks.log"
+NGINX_WEBHOOK_LOG_FORMAT = (
+    "# Managed by .claude/deploy_sinegualcrypto.py — edits here are overwritten.\n"
+    "log_format webhook_timing '$time_iso8601 msec=$msec $remote_addr via=$realip_remote_addr '\n"
+    "    '\"$request\" $status rt=$request_time urt=$upstream_response_time '\n"
+    "    'uct=$upstream_connect_time len=$request_length cf_ray=$http_cf_ray '\n"
+    "    'host=$host ua=\"$http_user_agent\"';\n"
+)
+
+
 def _engine_webhook_locations(indent: int = 0) -> str:
     """The `location = <path>` blocks proxying the engine webhooks, one per
     venue. Plain text either way it is used — interpolated into the vhost
@@ -722,6 +745,8 @@ def _engine_webhook_locations(indent: int = 0) -> str:
     lb, rb = "{", "}"
     lines = [
         "location = {path} {lb}",
+        "    access_log /var/log/nginx/access.log;",
+        "    access_log " + NGINX_WEBHOOK_LOG + " webhook_timing;",
         "    proxy_pass http://127.0.0.1:5010;",
         "    proxy_set_header Host $host;",
         "    proxy_set_header X-Real-IP $remote_addr;",
@@ -966,6 +991,9 @@ def do_deploy_nginx(ssh) -> None:
     with _current(ssh).open_sftp() as sftp:
         with sftp.open(NGINX_HEADERS_PATH, "w") as f:
             f.write(NGINX_SECURITY_HEADERS)
+        # Before the vhost: its webhook locations name this format.
+        with sftp.open(NGINX_WEBHOOK_LOG_FORMAT_PATH, "w") as f:
+            f.write(NGINX_WEBHOOK_LOG_FORMAT)
         with sftp.open(NGINX_SNIPPET_PATH, "w") as f:
             f.write(NGINX_APP_SNIPPET
                     .replace("__ENGINE_WEBHOOK_LOCATIONS__", _engine_webhook_locations())

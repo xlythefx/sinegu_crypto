@@ -13,6 +13,34 @@ import type { AdminChange } from '../types/adminVersions'
  *    later change to the same feature gets its own entry.
  */
 export const ADMIN_CHANGES: AdminChange[] = [
+  // ── 2026-10-25 ───────────────────────────────────────────────────────────
+  {
+    id: 'signal-delivery-proof',
+    date: '2026-10-25',
+    kind: 'new',
+    area: 'Signal Log',
+    title: 'Proof that a signal TradingView marked “timed out” still traded',
+    summary:
+      'TradingView sometimes marks an alert as “Webhook delivery failed — request took too long and timed out” even though the signal reached us and traded. On Oct 24 the 10:15 PM LTC buy (Manila time) read “failed” in TradingView, but it arrived 8 seconds after it fired and five accounts bought. Each signal in the Signal Log now shows when TradingView fired it, when it reached us, how fast we answered and what traded, so a red line in TradingView can be checked in one click.',
+    howItWorks: [
+      'Open a signal in Admin → Signal Log. The Delivery box reads, for example: “TradingView fired Oct 24, 10:15:01 PM → Reached us 10:15:09 PM · 8.1 s later → We answered in 3 ms → 5 of 6 accounts filled”.',
+      'TradingView only waits about 3 seconds for an answer. A signal that took longer to reach us and be answered gets a gold “Slow delivery · traded” tag on its row. TradingView may show that alert as failed; the row shows what really happened.',
+      'The tag means “may show as failed”, not “did”: TradingView sometimes holds an alert for a few seconds before sending it and still reports it as delivered.',
+      'The new Delivery filter, “Slow only”, lists every such signal, so the whole history can be checked at once.',
+      'The times are shown in your own time zone with seconds, so they line up with the times in TradingView’s alert log.',
+      'The “TradingView fired” time needs one line added to each TradingView alert (see Admin → To be Done). Until then a signal shows when it reached us and how fast we answered, but not how long it was on the way.',
+      'If a signal never reaches us at all, there is nothing to show. Only TradingView’s own log knows about it.',
+    ],
+    technical: [
+      'Engine: _handle_webhook stamps received_at first thing and ack_ms up to the dispatch hand-off; the payload’s optional `sent_at` ({{timenow}} ISO, or epoch s/ms) is parsed leniently (unreadable = null, never a 400). _finish_job adds sent_at / received_at / ack_ms to every trade-logs POST and the local JSONL; retries carry none.',
+      'API: migration 2026_10_25_000001 adds trade_logs.sent_at / received_at / transit_ms / ack_ms. SignalDelivery::fromPayload parses outside validate() (bad timing is dropped, never a 422 that loses the row) and derives transit_ms at millisecond precision. GET /admin/trade-logs rows carry `delivery` {sent_at, received_at, transit_ms, ack_ms, slow}; `?delivery=slow` = transit + ack > 3000 ms (SignalDelivery::SLOW_MS) and hides outside-close rows.',
+      'Frontend: DeliveryProof strip + “Slow delivery” chip in TradeLogCard, Delivery segment in TradeLogToolbar (?delivery=slow in the URL). The Webhooks page template and field list now include "sent_at": "{{timenow}}".',
+    ],
+    links: [
+      { label: 'Open Signal Log', href: '/admin/trade-logs' },
+      { label: 'Slow deliveries', href: '/admin/trade-logs?delivery=slow' },
+    ],
+  },
   // ── 2026-10-23 ───────────────────────────────────────────────────────────
   {
     id: 'closed-trades-sizing-column',

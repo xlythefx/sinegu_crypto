@@ -159,6 +159,22 @@ export function fmtDateTimeYear(dt: string): string {
   })
 }
 
+/**
+ * "Oct 24, 10:15:01 PM" in the reader's zone — fmtDateTime with seconds, for
+ * timings that are compared second by second (TradingView's alert log).
+ */
+export function fmtDateTimeSeconds(dt: string): string {
+  const date = parseUtc(dt)
+  if (!date) return dt
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
 /** A DB datetime with no zone designator is UTC (see fmtDateTime). */
 function parseUtc(dt: string): Date | null {
   const iso = dt.replace(' ', 'T')

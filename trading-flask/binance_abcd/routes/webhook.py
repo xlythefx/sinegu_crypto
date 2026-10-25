@@ -1119,6 +1119,7 @@ def _process_trade_job(
     exchanges: Optional[Sequence[str]] = None,
     targets: Optional[dict[str, set[str]]] = None,
     feed: Optional[str] = MAIN_FEED,
+    delivery: Optional[dict] = None,
 ) -> dict:
     """Runs on the dispatch pool. Fans the signal out to every account on every
     exchange it applies to, and returns the MERGED summary.
@@ -1140,6 +1141,10 @@ def _process_trade_job(
     skips the main-account rule (testers follow other signals than the
     master) and reports to the admin chat under a test banner only. None =
     every feed, for the admin's manual close.
+
+    `delivery` is the webhook's timing (`_delivery`): when TradingView fired
+    the alert, when we received it, how fast we answered. Stamped on every
+    trade-logs row this job writes; None for a retry or an internal call.
     """
     started = time.time()
     symbol = ticker.upper()
@@ -1192,7 +1197,7 @@ def _process_trade_job(
             _reject_summary(action, symbol, price, strategy, leverage, reasons[ex], ex, feed=job_feed) for ex in run
         ]
         merged = _merge_summaries(action, symbol, price, strategy, leverage, per_exchange, is_retry=is_retry)
-        _finish_job(merged, per_exchange, started)
+        _finish_job(merged, per_exchange, started, delivery)
         return merged
 
     # Exits announce once, with realized PnL — opened BEFORE the fan-out so no
@@ -1303,7 +1308,7 @@ def _process_trade_job(
         # write a rejected row per signal.
 
     merged = _merge_summaries(action, symbol, price, strategy, leverage, per_exchange, is_retry=is_retry)
-    _finish_job(merged, per_exchange, started)
+    _finish_job(merged, per_exchange, started, delivery)
     return merged
 
 
@@ -1513,13 +1518,15 @@ def _reject_summary(
     }
 
 
-def _finish_job(merged: dict, per_exchange: list, started: float) -> None:
-    """One JSONL line for the whole signal; one trade-logs POST per venue."""
+def _finish_job(merged: dict, per_exchange: list, started: float, delivery: Optional[dict] = None) -> None:
+    """One JSONL line for the whole signal; one trade-logs POST per venue.
+    The webhook's timing, when there is one, rides on all of them."""
     _bump("jobs_done")
-    summary_local = merged | {"elapsed_s": round(time.time() - started, 3)}
+    timing = delivery or {}
+    summary_local = merged | timing | {"elapsed_s": round(time.time() - started, 3)}
     _append_trade_log(summary_local)
     for summary in per_exchange:
-        _post_trade_log(summary, summary["exchange"])
+        _post_trade_log(summary | timing, summary["exchange"])
     log.info(
         "job done: %s %s [%s] -> filled=%s failed=%s skipped=%s in %.2fs",
         merged["action"], merged["ticker"], ",".join(merged.get("exchanges") or []),
@@ -1554,6 +1561,47 @@ def is_valid_ticker(ticker: str) -> bool:
     return bool(_TICKER_RE.fullmatch(ticker or ""))
 
 
+def _iso_ms(moment: datetime) -> str:
+    """UTC, millisecond precision, `Z` — what the API's timing parser reads."""
+    return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+
+def _parse_sent_at(raw: Any) -> Optional[datetime]:
+    """The payload's `sent_at`: TradingView's `{{timenow}}` (ISO 8601 UTC,
+    e.g. 2026-10-24T14:15:01Z), or epoch seconds / milliseconds from another
+    provider. Anything unreadable is None — a timing field never refuses a
+    signal, and an alert whose author forgot to swap in the placeholder sends
+    the literal text."""
+    if raw is None or isinstance(raw, bool):
+        return None
+    try:
+        if isinstance(raw, (int, float)) or (isinstance(raw, str) and re.fullmatch(r"\d+(\.\d+)?", raw.strip())):
+            value = float(raw)
+            if not math.isfinite(value) or value <= 0:
+                return None
+            return datetime.fromtimestamp(value / 1000 if value > 1e11 else value, tz=timezone.utc)
+        text = str(raw).strip()
+        if not text:
+            return None
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00").replace("z", "+00:00"))
+        return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
+    except (ValueError, OverflowError, OSError):
+        return None
+
+
+def _delivery(raw_sent_at: Any, received_at: datetime, started: float) -> dict:
+    """The webhook's timing for the Signal Log's delivery proof. TradingView
+    gives up after ~3 s and marks the alert "timed out" even when the request
+    still arrives (24 Oct 2026, 14:15 UTC: it fired at :01, reached us at :09,
+    five accounts filled) — this is what lets the log say so."""
+    sent_at = _parse_sent_at(raw_sent_at)
+    return {
+        "sent_at": _iso_ms(sent_at) if sent_at else None,
+        "received_at": _iso_ms(received_at),
+        "ack_ms": round((time.perf_counter() - started) * 1000, 2),
+    }
+
+
 def _feed_secret(feed: str) -> str:
     """The token a request on this feed must carry. Read at call time so a
     test can monkeypatch hooks.TEST_WEBHOOK_SECRET; empty = feed is off."""
@@ -1569,6 +1617,9 @@ def _handle_webhook(exchange: str, feed: str = MAIN_FEED):
     The path also decides the FEED (hooks.FEEDS): a test path trades tester
     accounts only and takes only the test secret, so neither feed's token can
     fire the other's trades."""
+    # Before anything else: the arrival is what the delivery proof measures.
+    received_at = datetime.now(timezone.utc)
+    started = time.perf_counter()
     _bump("received")
 
     data = request.get_json(silent=True)
@@ -1621,10 +1672,13 @@ def _handle_webhook(exchange: str, feed: str = MAIN_FEED):
     leverage = _parse_leverage(data.get("leverage"))
     strategy = (str(data.get("strategy")).strip() or None) if data.get("strategy") else None
     target_uni_ids = _normalize_target_uni_ids(data.get("target_uni_ids"))
+    # Measured up to the hand-off: what is left (submit + the JSON reply) is
+    # microseconds, and the job must not read a value written after it starts.
+    delivery = _delivery(data.get("sent_at"), received_at, started)
 
     _DISPATCH_EXECUTOR.submit(
         _process_trade_job, action, ticker, price, leverage, strategy, target_uni_ids,
-        exchanges=[exchange], feed=feed,
+        exchanges=[exchange], feed=feed, delivery=delivery,
     )
     _bump("jobs_dispatched")
 

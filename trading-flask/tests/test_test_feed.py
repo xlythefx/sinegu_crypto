@@ -108,7 +108,7 @@ def test_the_test_path_takes_the_test_secret_and_dispatches_on_the_test_feed(cli
     assert response.status_code == 200
     assert response.get_json()["feed"] == "test"
     assert submit.call_args.args[0] is webhook._process_trade_job
-    assert submit.call_args.kwargs == {"exchanges": ["binance"], "feed": "test"}
+    assert {k: v for k, v in submit.call_args.kwargs.items() if k != "delivery"} == {"exchanges": ["binance"], "feed": "test"}
 
 
 def test_neither_feeds_secret_opens_the_other(client, test_feed_on):

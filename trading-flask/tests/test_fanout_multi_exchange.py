@@ -307,12 +307,12 @@ def test_each_venue_has_its_own_webhook_path(client):
     assert response.status_code == 200
     body = response.get_json()
     assert body["ticker"] == "BTCUSDT" and body["exchange"] == "mexc" and body["exchanges"] == ["mexc"]
-    assert submit.call_args.kwargs == {"exchanges": ["mexc"], "feed": "main"}
+    assert {k: v for k, v in submit.call_args.kwargs.items() if k != "delivery"} == {"exchanges": ["mexc"], "feed": "main"}
 
     with patch.object(webhook._DISPATCH_EXECUTOR, "submit") as submit:
         response = client.post("/binance_abcd_webhook", json=payload)
     assert response.get_json()["exchanges"] == ["binance"]
-    assert submit.call_args.kwargs == {"exchanges": ["binance"], "feed": "main"}
+    assert {k: v for k, v in submit.call_args.kwargs.items() if k != "delivery"} == {"exchanges": ["binance"], "feed": "main"}
 
 
 def test_a_payload_naming_another_venue_than_its_path_is_refused(client):
@@ -350,7 +350,7 @@ def test_a_payload_naming_an_enabled_third_venue_must_still_match_the_path(clien
     with patch.object(webhook._DISPATCH_EXECUTOR, "submit") as submit:
         response = client.post("/bybit_abcd_webhook", json=payload)
     assert response.status_code == 200
-    assert submit.call_args.kwargs == {"exchanges": ["bybit"], "feed": "main"}
+    assert {k: v for k, v in submit.call_args.kwargs.items() if k != "delivery"} == {"exchanges": ["bybit"], "feed": "main"}
 
 
 def test_the_bybit_path_trades_bybit_accounts(client, monkeypatch):
@@ -361,7 +361,7 @@ def test_the_bybit_path_trades_bybit_accounts(client, monkeypatch):
     assert response.status_code == 200
     body = response.get_json()
     assert body["ticker"] == "BTCUSDT" and body["exchange"] == "bybit" and body["exchanges"] == ["bybit"]
-    assert submit.call_args.kwargs == {"exchanges": ["bybit"], "feed": "main"}
+    assert {k: v for k, v in submit.call_args.kwargs.items() if k != "delivery"} == {"exchanges": ["bybit"], "feed": "main"}
 
 
 def test_a_disabled_venues_webhook_answers_400_after_the_secret_gate(client, monkeypatch):

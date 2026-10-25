@@ -119,6 +119,13 @@ interface ApiLog {
   master?: MasterOutcome | null
   problems?: number
   normal_skips?: number
+  delivery?: {
+    sent_at: string | null
+    received_at: string
+    transit_ms: number | null
+    ack_ms: number | null
+    slow: boolean
+  } | null
 }
 
 interface ApiIssue {
@@ -259,6 +266,16 @@ function mapLog(l: ApiLog): TradeLogRow {
     // failures are still problems, and its skips read as skips, not alarms.
     problems: l.problems ?? l.failed,
     normalSkips: l.normal_skips ?? l.skipped,
+    // An API older than delivery timing sends no block: nothing to prove.
+    delivery: l.delivery
+      ? {
+          sentAt: l.delivery.sent_at,
+          receivedAt: l.delivery.received_at,
+          transitMs: l.delivery.transit_ms,
+          ackMs: l.delivery.ack_ms,
+          slow: Boolean(l.delivery.slow),
+        }
+      : null,
   }
 }
 
@@ -299,6 +316,7 @@ function signalParams(filters: TradeLogFilters): URLSearchParams {
   put('category', filters.category)
   put('strategy', filters.strategy)
   put('result', filters.result)
+  put('delivery', filters.delivery)
   put('from', filters.from)
   put('to', filters.to)
   return qs

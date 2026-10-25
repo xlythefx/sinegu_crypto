@@ -42,6 +42,11 @@ const FIELDS: Field[] = [
     required: false,
     text: 'A free label stored on the position, so the closing trade keeps it.',
   },
+  {
+    name: 'sent_at',
+    required: false,
+    text: 'Put {{timenow}} here. TradingView fills in when the alert fired, and the Signal Log shows how long the signal took to reach us — the proof a signal TradingView marked “timed out” still traded.',
+  },
 ]
 
 /** The field reference under both feeds — the same contract on every address. */

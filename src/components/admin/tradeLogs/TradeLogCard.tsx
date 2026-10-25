@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Check, ChevronDown, ChevronRight, RotateCw, TestTubeDiagonal } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, RotateCw, TestTubeDiagonal, Timer } from 'lucide-react'
 import ExchangeBadge from '../../billing/ExchangeBadge'
 import { TESTER_TINT } from '../badges'
+import DeliveryProof from './DeliveryProof'
 import SideTypePill from './SideTypePill'
 import SizingBreakdown from './SizingBreakdown'
 import {
@@ -13,6 +14,7 @@ import {
   TONE,
 } from './tradeLogClasses'
 import { fmtDateTime, fmtMoney, fmtQty, fmtSignedMoney } from '../../../lib/format'
+import { filledInAll } from '../../../lib/signalDelivery'
 import {
   masterBadge,
   masterDetailOf,
@@ -176,6 +178,15 @@ export default function TradeLogCard({
               )}
             </>
           )}
+          {log.delivery?.slow && (
+            <span
+              className={`${LABEL_CHIP} border-accent-line bg-accent-soft text-accent whitespace-nowrap`}
+              title="Took longer to reach us than TradingView waits, so TradingView may show this alert as failed. Open the row for the timing."
+            >
+              <Timer size={11} aria-hidden="true" />
+              {filledInAll(log) > 0 ? 'Slow delivery · traded' : 'Slow delivery'}
+            </span>
+          )}
           {master && (
             <span
               className={`${LABEL_CHIP} ${TONE[master.tone]} whitespace-nowrap`}
@@ -191,6 +202,7 @@ export default function TradeLogCard({
       {expanded && (
         <div className="px-card pb-card pt-0 animate-[fadeup_0.25s_ease-out] max-[480px]:px-3.5 max-[480px]:pb-3.5">
           <div className="border-t border-hair pt-3.5 flex flex-col gap-2.5">
+            {log.delivery && <DeliveryProof log={log} delivery={log.delivery} />}
             {rejected ? (
               <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
                 <span className={`${REASON_BADGE} ${SEVERITY_TONE.problem}`}>

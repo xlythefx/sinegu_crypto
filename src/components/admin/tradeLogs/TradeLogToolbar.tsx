@@ -1,4 +1,4 @@
-import { AlertTriangle, Hand, LogIn, LogOut, Radio, TestTubeDiagonal } from 'lucide-react'
+import { AlertTriangle, Hand, LogIn, LogOut, Radio, TestTubeDiagonal, Timer } from 'lucide-react'
 import {
   ActiveFilters,
   DateRangeFilter,
@@ -44,6 +44,12 @@ const SOURCES: SegmentedOption[] = [
   { value: 'all', label: 'All' },
   { value: 'signals', label: 'Bot signals', icon: Radio },
   { value: 'outside', label: 'Closed outside the bot', icon: Hand, tone: 'accent' },
+]
+
+/** Slow = took longer than TradingView waits (~3 s) — the alerts it may show as failed. */
+const DELIVERIES: SegmentedOption[] = [
+  { value: 'all', label: 'All' },
+  { value: 'slow', label: 'Slow only', icon: Timer, tone: 'accent' },
 ]
 
 const OUTCOMES: SegmentedOption[] = [
@@ -133,6 +139,9 @@ export default function TradeLogToolbar({
     chips.push({ key: 'source', label: label(SOURCES, f.source), onRemove: () => f.reset('source') })
   }
   if (f.ticker !== 'all') chips.push({ key: 'ticker', label: f.ticker, onRemove: () => f.reset('ticker') })
+  if (f.delivery !== 'all') {
+    chips.push({ key: 'delivery', label: 'Slow deliveries', onRemove: () => f.reset('delivery') })
+  }
   if (accountFacets && f.outcome !== 'all') {
     chips.push({ key: 'outcome', label: `Accounts: ${label(OUTCOMES, f.outcome)}`, onRemove: () => f.reset('outcome') })
   }
@@ -234,6 +243,15 @@ export default function TradeLogToolbar({
               />
             </FilterGroup>
           )}
+          <FilterGroup label="Delivery">
+            <Segmented
+              value={f.delivery}
+              onChange={(v) => f.set('delivery', v)}
+              options={DELIVERIES}
+              ariaLabel="Delivery speed"
+              size="sm"
+            />
+          </FilterGroup>
           <FilterGroup label="Dates">
             <DateRangeFilter
               preset={f.datePreset}
