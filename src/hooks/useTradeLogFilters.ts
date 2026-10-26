@@ -34,11 +34,12 @@ const ALLOWED = {
 
 /**
  * Filter state for Admin → Signal Log, kept in the URL (useUrlFilters) so a
- * reload or a shared link lands on the same view. Shared by its two views.
+ * reload or a shared link lands on the same view. Shared by its three views.
  *
  * Two kinds of filter, kept apart because the endpoints treat them apart:
  * - SIGNAL filters (exchange, feed, side, type, coin, delivery, dates) narrow which signals
- *   are read — both the list and the Issues view honour them;
+ *   are read — both the list and the Issues view honour them; the
+ *   TradingView vs QuantLab view takes them minus feed and delivery;
  * - LIST-ONLY filters (source, account outcome, reason, account search) — the
  *   Issues view has its own grouping.
  *
@@ -74,7 +75,14 @@ export function useTradeLogFilters() {
     }),
     [signalFilters, f.source, f.outcome, f.reason, f.account],
   )
+  // The comparison reads BOTH feeds by definition, and every signal's
+  // delivery — so neither of those two filters applies to it.
+  const compareFilters = useMemo<TradeLogFilters>(
+    () => ({ exchange: f.exchange, side: f.side, type: f.type, ticker: f.ticker, from: range.from, to: range.to }),
+    [f.exchange, f.side, f.type, f.ticker, range.from, range.to],
+  )
   const signalKey = `${f.exchange}|${f.feed}|${f.side}|${f.type}|${f.ticker}|${f.delivery}|${range.from}|${range.to}`
+  const compareKey = `${f.exchange}|${f.side}|${f.type}|${f.ticker}|${range.from}|${range.to}`
   const listKey = `${signalKey}|${f.source}|${f.outcome}|${f.reason}|${f.account}`
 
   const [paging, setPaging] = useState({ key: listKey, page: 1 })
@@ -104,6 +112,8 @@ export function useTradeLogFilters() {
     listFilters,
     signalKey,
     listKey,
+    compareFilters,
+    compareKey,
     accountFiltersActive,
     focusIssue,
   }

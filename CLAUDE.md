@@ -783,6 +783,18 @@ sender or the Cloudflare hop. The Signal Log now proves each case:
   byte), `urt` (engine), `cf_ray` and `via` (`$realip_remote_addr` — a
   Cloudflare edge, or TradingView direct). Large `rt` with tiny `urt` = slow
   upload into nginx; small `rt` on a late arrival = lost before the box.
+- **TradingView vs QuantLab** (2026-10-26, Signal Log `?view=compare`,
+  `App\Services\Admin\FeedComparison`): TradingView is the MAIN feed,
+  QuantLab the TEST feed (its own webhook + secret, tester accounts only), so
+  the feed IS the source. Pairs = same exchange + action + coin, arrivals
+  ≤ 120 s apart, closest first, each row once; only coins BOTH feeds sent in
+  the window are compared (the rest counted, never listed as "missed").
+  Arrival is `received_at` — the engine's clock for both, so no clock
+  agreement is needed; `sent_at` (QuantLab now sends it too) splits
+  "decided" from "on the way". Prices compare the master's fill with the
+  tester's, real money only. `sent_at` / `received_at` are DATETIME(3) since
+  that day (`MillisecondDateTime` cast — the built-in `datetime` cast drops
+  the fraction); older rows have whole seconds.
 
 ## Security hardening (2026-10-07 audit)
 

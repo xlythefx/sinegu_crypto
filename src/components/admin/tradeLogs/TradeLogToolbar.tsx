@@ -78,7 +78,9 @@ function humanizeKey(key: string): string {
  * shows as removable chips under the panel.
  *
  * The Issues view gets only the SIGNAL filters — issues are grouped across
- * every account, so the account filters would have nothing to narrow.
+ * every account, so the account filters would have nothing to narrow. The
+ * TradingView vs QuantLab view drops Feed and Delivery as well: it reads both
+ * feeds by definition and compares every signal's delivery.
  *
  * Lives OUTSIDE the re-keyed list region, so typing never remounts an input.
  */
@@ -90,7 +92,7 @@ export default function TradeLogToolbar({
   reasons,
   summary,
 }: {
-  view: 'signals' | 'issues'
+  view: 'signals' | 'issues' | 'compare'
   filters: TradeLogFilterState
   tickers: string[]
   exchanges: string[]
@@ -99,6 +101,7 @@ export default function TradeLogToolbar({
   summary?: string
 }) {
   const signals = view === 'signals'
+  const compare = view === 'compare'
   // Closes made outside the bot carry no account outcome or reason, so those
   // two facets only apply when bot signals are in view.
   const accountFacets = signals && f.source !== 'outside'
@@ -130,7 +133,7 @@ export default function TradeLogToolbar({
   if (f.exchange !== 'all') {
     chips.push({ key: 'exchange', label: exchangeLabel(f.exchange), onRemove: () => f.reset('exchange') })
   }
-  if (f.feed !== 'all') {
+  if (!compare && f.feed !== 'all') {
     chips.push({ key: 'feed', label: `${label(FEEDS, f.feed)} feed`, onRemove: () => f.reset('feed') })
   }
   if (f.side !== 'all') chips.push({ key: 'side', label: label(SIDES, f.side), onRemove: () => f.reset('side') })
@@ -139,7 +142,7 @@ export default function TradeLogToolbar({
     chips.push({ key: 'source', label: label(SOURCES, f.source), onRemove: () => f.reset('source') })
   }
   if (f.ticker !== 'all') chips.push({ key: 'ticker', label: f.ticker, onRemove: () => f.reset('ticker') })
-  if (f.delivery !== 'all') {
+  if (!compare && f.delivery !== 'all') {
     chips.push({ key: 'delivery', label: 'Slow deliveries', onRemove: () => f.reset('delivery') })
   }
   if (accountFacets && f.outcome !== 'all') {
@@ -175,9 +178,11 @@ export default function TradeLogToolbar({
               size="sm"
             />
           </FilterGroup>
-          <FilterGroup label="Feed">
-            <Segmented value={f.feed} onChange={(v) => f.set('feed', v)} options={FEEDS} ariaLabel="Signal feed" size="sm" />
-          </FilterGroup>
+          {!compare && (
+            <FilterGroup label="Feed">
+              <Segmented value={f.feed} onChange={(v) => f.set('feed', v)} options={FEEDS} ariaLabel="Signal feed" size="sm" />
+            </FilterGroup>
+          )}
           <FilterGroup label="Side">
             <Segmented value={f.side} onChange={(v) => f.set('side', v)} options={SIDES} ariaLabel="Side" size="sm" />
           </FilterGroup>
@@ -243,15 +248,17 @@ export default function TradeLogToolbar({
               />
             </FilterGroup>
           )}
-          <FilterGroup label="Delivery">
-            <Segmented
-              value={f.delivery}
-              onChange={(v) => f.set('delivery', v)}
-              options={DELIVERIES}
-              ariaLabel="Delivery speed"
-              size="sm"
-            />
-          </FilterGroup>
+          {!compare && (
+            <FilterGroup label="Delivery">
+              <Segmented
+                value={f.delivery}
+                onChange={(v) => f.set('delivery', v)}
+                options={DELIVERIES}
+                ariaLabel="Delivery speed"
+                size="sm"
+              />
+            </FilterGroup>
+          )}
           <FilterGroup label="Dates">
             <DateRangeFilter
               preset={f.datePreset}

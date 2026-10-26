@@ -13,6 +13,34 @@ import type { AdminChange } from '../types/adminVersions'
  *    later change to the same feature gets its own entry.
  */
 export const ADMIN_CHANGES: AdminChange[] = [
+  // ── 2026-10-26 ───────────────────────────────────────────────────────────
+  {
+    id: 'signal-log-tradingview-vs-quantlab',
+    date: '2026-10-26',
+    kind: 'new',
+    area: 'Signal Log',
+    title: 'TradingView vs QuantLab: which signal reaches us first',
+    summary:
+      'TradingView and QuantLab both send signals for the same coins (LTC, RENDER and a few more). The Signal Log has a new tab that puts the same signal from both side by side: which one reached our server first, by how many seconds, and the price the master account and the test account each got. Example: an LTC buy reached us from QuantLab at 9:37:32.640 and from TradingView at 9:37:39.032, so QuantLab was first by 6.4 seconds.',
+    howItWorks: [
+      'Open Admin → Signal Log and pick the “TradingView vs QuantLab” tab. It shows the last 7 days unless you choose other dates.',
+      'Two signals count as the same one when they are for the same coin and the same action (buy, sell, close long, close short) and reach us at most 2 minutes apart.',
+      'The cards at the top count how often each one was first, and the average lead. Below them: which side got better prices, how long each signal was on the way, and the biggest gap in the period.',
+      'Each signal shows both sides: when it reached us, to the thousandth of a second; when the provider fired it, if the provider sends that time; and what the master (TradingView side) or the tester (QuantLab side) did with it, with the fill price.',
+      'A signal only one side sent within 2 minutes is listed too, as “Only TradingView sent it” or “Only QuantLab sent it”, so missed signals are visible.',
+      'Coins only one side trades (for example TradingView’s BTC, which QuantLab does not send) are left out and only counted. Otherwise every one of them would read as a signal QuantLab missed.',
+      'Prices are only compared when both accounts trade with real money. A demo account fills on Binance’s test market, where prices differ, so those fills are shown but not compared.',
+      'Arrival times are exact to the thousandth of a second from Oct 26, 2026. Earlier signals were stored to the whole second.',
+    ],
+    technical: [
+      'API: GET /admin/trade-logs/compare (AdminTradeLogController::compare → App\\Services\\Admin\\FeedComparison). Takes exchange / side / type / ticker / from / to (feed, delivery and result are ignored); no dates = last 7 days. First runs only (category ≠ retry) with a received_at, each feed reading its own newest SignalHealth::SCAN_LIMIT.',
+      'Pairing: same exchange + action + ticker, |received_at gap| ≤ FeedComparison::MATCH_SECONDS (120); candidate pairs sorted by gap and taken greedily, each row used once. Only (exchange, ticker) pairs present in BOTH feeds in the window are compared; the rest are counted in summary.not_compared. Tie = under 100 ms.',
+      'Sides: main = the is_master detail; test = the first filled detail (else the first). Demo flag from {x}_accounts by account name (unique per table). Better price: lower for BUY / EXIT_SHORT, higher for SELL / EXIT_LONG; summary.prices counts real-money pairs only.',
+      'Milliseconds: migration 2026_10_26_000001 makes trade_logs.sent_at / received_at DATETIME(3); TradeLog casts them with App\\Casts\\MillisecondDateTime (the built-in datetime cast writes Y-m-d H:i:s and drops the fraction). SignalDelivery::iso() now serialises with milliseconds, so the Signal Log delivery block carries them too.',
+      'Frontend: ?view=compare on /admin/trade-logs (fetched only while open), components/admin/tradeLogs/compare/*, wording in lib/feedCompare.ts (FEED_SOURCE names the two feeds in one place).',
+    ],
+    links: [{ label: 'Open the comparison', href: '/admin/trade-logs?view=compare' }],
+  },
   // ── 2026-10-25 ───────────────────────────────────────────────────────────
   {
     id: 'signal-delivery-proof',

@@ -17,6 +17,7 @@ import type {
   TradeLogRow,
   TradeLogsData,
 } from '../types/tradeLogs'
+import type { FeedCompareData, FeedCompareRow, FeedSide } from '../types/feedCompare'
 
 /* ---- wire shapes (snake_case straight from AdminTradeLogController) ---- */
 
@@ -417,6 +418,131 @@ export async function getTradeLogHealth(hours = 24): Promise<SignalHealth> {
     lastSignalAt: h.last_signal_at,
     issues: (h.issues ?? []).map(mapIssue),
     issuesTotal: h.issues_total,
+  }
+}
+
+interface ApiFeedSide {
+  id: number
+  received_at: string
+  sent_at: string | null
+  transit_ms: number | null
+  strategy: string | null
+  account: string | null
+  outcome: FeedSide['outcome']
+  reason: string | null
+  fill_price: number | null
+  demo: boolean | null
+}
+
+interface ApiFeedRow {
+  kind: FeedCompareRow['kind']
+  exchange: FeedCompareRow['exchange']
+  ticker: string
+  action: FeedCompareRow['action']
+  side: FeedCompareRow['side']
+  type: FeedCompareRow['type']
+  at: string
+  gap_ms: number | null
+  first: FeedCompareRow['first']
+  price_diff_pct: number | null
+  better_price: FeedCompareRow['betterPrice']
+  prices_comparable: boolean
+  main: ApiFeedSide | null
+  test: ApiFeedSide | null
+}
+
+function mapFeedSide(s: ApiFeedSide | null): FeedSide | null {
+  if (!s) return null
+  return {
+    id: s.id,
+    receivedAt: s.received_at,
+    sentAt: s.sent_at,
+    transitMs: s.transit_ms,
+    strategy: s.strategy,
+    account: s.account,
+    outcome: s.outcome,
+    reason: s.reason,
+    fillPrice: s.fill_price,
+    demo: s.demo,
+  }
+}
+
+/**
+ * GET /admin/trade-logs/compare — TradingView (main feed) vs QuantLab (test
+ * feed): the same signal from both, paired, with who arrived first and the
+ * master's vs the tester's fill. Takes exchange, side, type, coin and dates
+ * only; with no dates the API reads the last 7 days.
+ */
+export async function getFeedComparison(filters: TradeLogFilters = {}): Promise<FeedCompareData> {
+  const qs = signalParams({
+    exchange: filters.exchange,
+    side: filters.side,
+    type: filters.type,
+    ticker: filters.ticker,
+    from: filters.from,
+    to: filters.to,
+  })
+  const res = await apiFetch<{
+    success: boolean
+    match_seconds: number
+    window: { from: string; to: string | null }
+    summary: {
+      pairs: number
+      main_first: number
+      test_first: number
+      ties: number
+      avg_gap_ms: number | null
+      median_gap_ms: number | null
+      worst: { gap_ms: number; ticker: string; action: FeedCompareRow['action']; at: string } | null
+      main_only: number
+      test_only: number
+      not_compared: { main: number; test: number }
+      avg_transit_ms: { main: number | null; test: number | null }
+      prices: { compared: number; main_better: number; test_better: number; same: number; demo: number }
+    }
+    rows: ApiFeedRow[]
+  }>(withQuery('/admin/trade-logs/compare', qs), { auth: true })
+
+  const s = res.summary
+  return {
+    matchSeconds: res.match_seconds,
+    window: res.window,
+    summary: {
+      pairs: s.pairs,
+      mainFirst: s.main_first,
+      testFirst: s.test_first,
+      ties: s.ties,
+      avgGapMs: s.avg_gap_ms,
+      medianGapMs: s.median_gap_ms,
+      worst: s.worst ? { gapMs: s.worst.gap_ms, ticker: s.worst.ticker, action: s.worst.action, at: s.worst.at } : null,
+      mainOnly: s.main_only,
+      testOnly: s.test_only,
+      notCompared: s.not_compared,
+      avgTransitMs: s.avg_transit_ms,
+      prices: {
+        compared: s.prices.compared,
+        mainBetter: s.prices.main_better,
+        testBetter: s.prices.test_better,
+        same: s.prices.same,
+        demo: s.prices.demo,
+      },
+    },
+    rows: res.rows.map((r) => ({
+      kind: r.kind,
+      exchange: r.exchange,
+      ticker: r.ticker,
+      action: r.action,
+      side: r.side,
+      type: r.type,
+      at: r.at,
+      gapMs: r.gap_ms,
+      first: r.first,
+      priceDiffPct: r.price_diff_pct,
+      betterPrice: r.better_price,
+      pricesComparable: Boolean(r.prices_comparable),
+      main: mapFeedSide(r.main),
+      test: mapFeedSide(r.test),
+    })),
   }
 }
 

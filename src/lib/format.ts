@@ -175,6 +175,21 @@ export function fmtDateTimeSeconds(dt: string): string {
   })
 }
 
+/**
+ * "02:15:09.204 PM" in the reader's zone — for arrival times compared to the
+ * millisecond (two feeds sending the same signal within one second).
+ */
+export function fmtTimeMillis(dt: string): string {
+  const date = parseUtc(dt)
+  if (!date) return dt
+  return date.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    fractionalSecondDigits: 3,
+  })
+}
+
 /** A DB datetime with no zone designator is UTC (see fmtDateTime). */
 function parseUtc(dt: string): Date | null {
   const iso = dt.replace(' ', 'T')

@@ -1,5 +1,5 @@
 import { Navigate, useSearchParams } from 'react-router-dom'
-import { AlertTriangle, Radio, RefreshCw } from 'lucide-react'
+import { AlertTriangle, GitCompareArrows, Radio, RefreshCw } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
 import Tabs, { type TabItem } from '../../components/ui/Tabs'
@@ -8,10 +8,13 @@ import SignalStats from '../../components/admin/tradeLogs/SignalStats'
 import TradeLogToolbar from '../../components/admin/tradeLogs/TradeLogToolbar'
 import SignalList from '../../components/admin/tradeLogs/SignalList'
 import IssuesList from '../../components/admin/tradeLogs/IssuesList'
+import CompareStats from '../../components/admin/tradeLogs/compare/CompareStats'
+import CompareList from '../../components/admin/tradeLogs/compare/CompareList'
 import { SECTION } from '../../components/admin/tradeLogs/tradeLogClasses'
 import { useApiData } from '../../hooks/useApiData'
 import { useTradeLogFilters } from '../../hooks/useTradeLogFilters'
-import { getTradeLogHealth, getTradeLogIssues, getTradeLogs } from '../../services/tradeLogs'
+import { FEED_SOURCE } from '../../lib/feedCompare'
+import { getFeedComparison, getTradeLogHealth, getTradeLogIssues, getTradeLogs } from '../../services/tradeLogs'
 import { ApiError } from '../../services/api'
 import type { SignalIssue } from '../../types/tradeLogs'
 
@@ -22,20 +25,25 @@ const PER_PAGE = 10
 /** The banner's window — "is anything wrong right now". */
 const HEALTH_HOURS = 24
 
-type LogView = 'signals' | 'issues'
+type LogView = 'signals' | 'issues' | 'compare'
 
 /**
  * Admin → Signal Log: a health banner (last 24 h, whatever is filtered
- * below), then two views over the same filters — every signal with its
- * per-account fan-out, or the problems grouped by cause with where to fix
- * them. `?view=issues` holds the second; the default omits the param.
+ * below), then three views over the same filters — every signal with its
+ * per-account fan-out, the problems grouped by cause with where to fix
+ * them, and TradingView vs QuantLab (the same signal from the main and the
+ * test feed, side by side). `?view=issues|compare` holds the second and
+ * third; the default omits the param.
  *
- * Both views are fetched as their filters change, not when shown, so
- * switching tabs is instant and the Issues tab can carry its count.
+ * Signals and Issues are fetched as their filters change, not when shown,
+ * so switching between them is instant and the Issues tab can carry its
+ * count. The comparison reads both feeds' whole window, so it is fetched
+ * only while its tab is open.
  */
 export default function AdminTradeLogs() {
   const [params, setParams] = useSearchParams()
-  const view: LogView = params.get('view') === 'issues' ? 'issues' : 'signals'
+  const raw = params.get('view')
+  const view: LogView = raw === 'issues' || raw === 'compare' ? raw : 'signals'
   const f = useTradeLogFilters()
   const offset = (f.page - 1) * PER_PAGE
 
@@ -45,6 +53,13 @@ export default function AdminTradeLogs() {
     [f.listKey, offset],
   )
   const issues = useApiData(() => getTradeLogIssues(f.signalFilters), [f.signalKey])
+  const comparing = view === 'compare'
+  const comparison = useApiData(
+    () => (comparing ? getFeedComparison(f.compareFilters) : Promise.resolve(null)),
+    [comparing ? f.compareKey : 'off'],
+  )
+  const compareFiltered =
+    f.exchange !== 'all' || f.side !== 'all' || f.type !== 'all' || f.ticker !== 'all' || f.datePreset !== 'all'
 
   const select = (next: LogView) =>
     setParams(
@@ -61,8 +76,9 @@ export default function AdminTradeLogs() {
     health.reload()
     list.reload()
     issues.reload()
+    if (comparing) comparison.reload()
   }
-  const refreshing = health.loading || list.loading || issues.loading
+  const refreshing = health.loading || list.loading || issues.loading || (comparing && comparison.loading)
 
   const showSignalsFor = (issue: SignalIssue) => {
     f.focusIssue(issue.reasonKey, issue.account)
@@ -76,6 +92,7 @@ export default function AdminTradeLogs() {
   const tabs: TabItem<LogView>[] = [
     { key: 'signals', label: 'Signals', Icon: Radio },
     { key: 'issues', label: 'Issues', Icon: AlertTriangle, badge: issues.data?.issues.length },
+    { key: 'compare', label: `${FEED_SOURCE.main} vs ${FEED_SOURCE.test}`, Icon: GitCompareArrows },
   ]
   const tickers = list.data?.options.tickers ?? []
   const exchanges = list.data?.options.exchanges ?? []
@@ -146,6 +163,28 @@ export default function AdminTradeLogs() {
                   error={list.error}
                   onRetry={list.reload}
                   label="signal log"
+                />
+              )}
+            </section>
+          </>
+        ) : view === 'compare' ? (
+          <>
+            <CompareStats summary={comparison.data?.summary ?? null} matchSeconds={comparison.data?.matchSeconds ?? 120} />
+            <TradeLogToolbar view="compare" filters={f} tickers={tickers} exchanges={exchanges} reasons={reasons} />
+            <section className={SECTION} data-aos="fade-up" data-aos-delay="100">
+              {comparison.data ? (
+                <div
+                  key={f.compareKey}
+                  className={`animate-[fadeup_0.35s_ease-out] transition-opacity duration-150 ${comparison.loading ? 'opacity-60' : ''}`}
+                >
+                  <CompareList data={comparison.data} anyFilterActive={compareFiltered} onClear={f.clear} />
+                </div>
+              ) : (
+                <DataState
+                  loading={comparison.loading}
+                  error={comparison.error}
+                  onRetry={comparison.reload}
+                  label="comparison"
                 />
               )}
             </section>
