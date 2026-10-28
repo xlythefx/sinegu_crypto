@@ -1758,8 +1758,13 @@ for the overlay's `position: fixed` and trap it inside.
   no report carries the flag → pooled, because an engine deployed ahead of the
   API must not silently drop the figure from every message in the channel. The
   consequence to know: **a venue the master has no account on announces its
-  closes without a PnL line** — true of MEXC today, the same condition that
-  keeps MEXC out of the recaps; connecting the master there turns both on. The
+  closes without a PnL line** — true of MEXC until 2026-10-28, when the master
+  connected a real MEXC account (`mexc_accounts` #2 "master", connected with
+  an EMPTY futures wallet, so `initial_deposit` was set to 0 by hand: every
+  dollar arrives as a dated transfer, and the pooled track record — which adds
+  each master account's `initial_deposit` to its OPENING capital in May — is
+  not restated). On Bybit the master's account is DEMO, so its figure there is
+  play money. The
   exit PRICE stays pooled (a market fact, not a performance claim).
   How many customers filled is
   business information and the channel is readable by anyone (same rule as
@@ -1884,9 +1889,10 @@ for the overlay's `position: fixed` and trap it inside.
     with `available: false` (no real master account there) posts NOTHING —
     not "No trades closed" — and is marked done. State is per (kind, exchange)
     so one venue's failed fetch retries alone; a legacy one-date-per-kind
-    state file counts for every venue. MEXC recaps start the day
-    `BINANCE_ABCD_EXCHANGES` includes `mexc` on prod AND the master has a
-    `mexc_accounts` row.
+    state file counts for every venue. MEXC recaps start the day the master's
+    REAL `mexc_accounts` row (#2, connected 2026-10-28) closes its first trade
+    — the slice answers `available: false` while it has no closed trade, so an
+    unfunded account posts nothing rather than "No trades closed".
   - **"Trades closed" counts INCREMENTS, not close orders** — settled
     2026-09-23, and **this rule has now been flipped twice; read the whole
     bullet before touching it a third time.** Binance merges a stacked
