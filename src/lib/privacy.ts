@@ -14,7 +14,7 @@ import type { LegalDocumentContent } from '../types/legal'
  */
 export const PRIVACY: LegalDocumentContent = {
   title: 'Privacy Policy',
-  updatedAt: 'October 14, 2026',
+  updatedAt: 'October 28, 2026',
   lede: `This Privacy Policy explains what personal data ${COMPANY.name} collects when you use pixel-alpha.com and the Pixel Alpha platform, why we collect it, who we share it with, and the choices you have. Please read it together with our Terms and Conditions.`,
 
   sections: [
@@ -67,6 +67,7 @@ export const PRIVACY: LegalDocumentContent = {
             'Login times ("last activity") and the API session tokens that keep you signed in.',
             'A record of your sign-up and of each sign-in: the date and time, your IP address, the country that IP address belongs to (supplied by Cloudflare), and your device type, browser and operating system as your browser reports them.',
             'Only if you choose "Accept all" in our privacy banner: your device\'s time zone, language setting and screen size, recorded with your sign-up and sign-ins.',
+            'A record of each visit to our public website (the home page, guides, sign-in and legal pages — not the pages inside your account): which page, the date and time, your IP address, the country that IP address belongs to, your device type, browser and operating system, the website that sent you to us, and any invite or campaign code in the link you followed. It is counted by our own servers; no cookie is set and nothing is stored on your device for it. Visits from programs that identify themselves as automated, and from our own staff, are not recorded.',
           ],
         },
         { kind: 'h3', text: '2.4 Technical information' },
@@ -91,8 +92,8 @@ export const PRIVACY: LegalDocumentContent = {
             'To provide the service you signed up for: placing and closing trades on your exchange account, showing you your positions and performance, and computing your fees (performance of a contract).',
             'To bill you and to collect the success-based usage fee, and to keep the accounting records the law requires us to keep (performance of a contract; legal obligation).',
             'To operate the referral programme and pay referrers (performance of a contract).',
-            'To keep the platform secure: detecting blocked or misconfigured API keys, rate-limiting abusive traffic, spotting sign-ins from unusual places or devices, and investigating incidents (legitimate interests).',
-            'To understand how people find us and who uses the service, reported as statistics: your optional "where did you hear about us" answers (legitimate interests) and, if you chose "Accept all", your time zone, language and screen size (consent).',
+            'To keep the platform secure: detecting blocked or misconfigured API keys, rate-limiting abusive traffic, spotting automated visits and sign-ins from unusual places or devices, and investigating incidents (legitimate interests).',
+            'To understand how people find us and who uses the service, reported as statistics: visits to our public website, your optional "where did you hear about us" answers (legitimate interests) and, if you chose "Accept all", your time zone, language and screen size (consent).',
             'To reach you on Telegram or Discord about your account, if you gave us a username (consent — remove it in Settings at any time).',
             'To answer your support requests (legitimate interests; performance of a contract).',
             'To send you service emails such as password reset codes, invoice notices and important changes to the service. These are not marketing emails and you cannot opt out of them while you hold an account (performance of a contract).',
@@ -173,6 +174,7 @@ export const PRIVACY: LegalDocumentContent = {
           items: [
             'Account data: for as long as your account exists. When you ask us to close it, we delete your profile and API credentials within 30 days.',
             'Sign-up and sign-in records (IP address, country, device), your optional sign-up answers and your Telegram / Discord usernames: for as long as your account exists, and deleted with your profile.',
+            'Website visit records: the IP address and the full browser details are deleted after 90 days. The rest of the record (page, date, country, device type and the website that sent you) is kept for statistics.',
             'Trade history, invoices and payment records: for 7 years after the transaction, because tax and accounting law requires us to keep the records behind every fee we charged.',
             'Signal and engine logs: up to 12 months, then deleted or reduced to anonymous statistics.',
             'Server and security logs: up to 90 days.',
@@ -211,7 +213,7 @@ export const PRIVACY: LegalDocumentContent = {
         },
         {
           kind: 'p',
-          text: 'On your first visit a banner asks for your privacy choice. "Essentials only" keeps just the above. "Accept all" also lets the platform send your device\'s time zone, language setting and screen size with your sign-up and sign-ins, so we can understand who uses Pixel Alpha. Either way, your IP address, country, browser and operating system are recorded with every sign-up and sign-in: they are part of the request every browser sends, and we use them to keep accounts secure. You can change your choice at any time through "Privacy choices" at the bottom of our home page.',
+          text: 'On your first visit a banner asks for your privacy choice. "Essentials only" keeps just the above. "Accept all" also lets the platform send your device\'s time zone, language setting and screen size with your sign-up and sign-ins, so we can understand who uses Pixel Alpha. Either way, your IP address, country, browser and operating system are recorded with every sign-up and sign-in, and with each visit to our public website (see 2.3): they are part of the request every browser sends, and we use them to keep accounts secure and to count visitors. No cookie is used for either. You can change your choice at any time through "Privacy choices" at the bottom of our home page.',
         },
         {
           kind: 'p',

@@ -15,6 +15,37 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-10-28 ───────────────────────────────────────────────────────────
   {
+    id: 'visitor-counter',
+    date: '2026-10-28',
+    kind: 'new',
+    area: 'Visitors',
+    title: 'Visitors: who opens the website, where from, and how many sign up',
+    summary:
+      'A new Visitors page in the admin portal counts the people who open the public website (home page, guides, sign-in, legal pages), where they came from, their country and device, and how many of them go on to create an account. Bots, spam, refreshes and our own team are filtered out before anything is counted. Example: 120 visitors in a week, 40 of them from Google and 25 from Telegram, and 6 sign-ups, a 5% sign-up rate.',
+    howItWorks: [
+      'Open Admin → Visitors. It shows the last 30 days; pick another period at the top. Every admin role can open it, collaborators included.',
+      'The top cards show visitors, page views, sign-ups, the sign-up rate and how many people are on the site right now. A visitor is one person per day: someone who comes back on another day counts again.',
+      'The chart shows visitors per day, with each day’s sign-ups in green above the bar. Below it: the path from visit to trading (visited → opened sign-in → created an account → confirmed email → approved → connected an exchange), the sites that sent people, invite and campaign links, what new sign-ups ticked under “Where did you hear about us?”, the top pages, countries and devices.',
+      'A page only counts once it has been on screen for 2 seconds. Search engines, scanners, link previews and automated browsers are thrown away. The same person refreshing a page counts once per 30 minutes. Anyone signed in with a staff account is not counted.',
+      'An IP address that sends more than 30 visits a minute (or 300 a day), or opens 6 pages within 15 seconds, is marked suspicious for the rest of the day. Its visits are kept so you can look at them (Visitor log → Suspicious) but are left out of every number.',
+      'The “Not counted” line shows how many visits each rule kept out in the period, so you can see the filter working.',
+      'The visitor log lists every page view with its IP address. Click an address to see all its visits and any account that signed up or signed in from it.',
+      'Full IP addresses are kept for 90 days, then deleted automatically. The counts stay. The privacy banner and the Privacy Policy now say that website visits are recorded, and the banner asks every visitor once more.',
+      'Counting starts on Oct 28, 2026. There are no numbers for earlier days.',
+    ],
+    technical: [
+      'Ping: components/visits/VisitTracker (2 s visible dwell) → POST /api/public/visits (always 204, throttle:visits 120/min backstop).',
+      'Rules: App\\Services\\Visits\\VisitRecorder — bot / foreign origin / unknown page (VisitPages, twin of lib/visitPages.ts) / staff token / flood 30 per min or 300 per day / repeat 30 min; burst = 6 rows in 15 s. Refused pings are only tallied (site_visit_filtered); suspicious rows are kept with suspicious = 1.',
+      'Visitor = HMAC(UTC day + IP + User-Agent, app key) — daily unique, no cookie. Tables site_visits + site_visit_filtered; visits:purge-ips daily 01:10 nulls ip and user_agent after 90 days.',
+      'Reads: GET /admin/visitors/summary and /admin/visitors/log (staff group, App\\Services\\Visits\\VisitorStats). Accounts per IP come from user_access_events.',
+      'Consent banner CONSENT_VERSION 1 → 2; Privacy Policy sections 2.3, 3, 7 and 9 updated.',
+    ],
+    links: [
+      { label: 'Open Visitors', href: '/admin/visitors' },
+      { label: 'Privacy Policy', href: '/privacy' },
+    ],
+  },
+  {
     id: 'exchange-accounts-card-redesign',
     date: '2026-10-28',
     kind: 'improved',

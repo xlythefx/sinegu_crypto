@@ -18,6 +18,24 @@ import type { AdminTodo } from '../types/adminTodos'
  *    the note and the date it was settled stay readable.
  */
 export const ADMIN_TODOS: AdminTodo[] = [
+  // ── Visitor counter (2026-10-28) ────────────────────────────────────────
+  {
+    id: 'privacy-policy-visits-notice',
+    feature: 'Visitors',
+    kind: 'decision',
+    title: 'Decide whether to email customers about the 28 Oct Privacy Policy update',
+    added: '2026-10-28',
+    why: 'The Privacy Policy now says every visit to the public website is recorded, with the IP address (deleted after 90 days), country and device. The privacy banner shows the new wording to every visitor once, which is a notice in the platform. Section 12 of the policy also mentions email for a new kind of data; customers who never open the public website again would only see the banner if they do.',
+    steps: [
+      'Read the updated policy at /privacy (sections 2.3, 3, 7 and 9 changed).',
+      'Decide whether the banner is enough, or whether customers also get a short email. If an email, write the wording you want (or ask for a draft). It can go together with the 14 Oct update if that one has not been sent yet.',
+      'Write the choice in the note below.',
+    ],
+    links: [
+      { label: 'Privacy Policy', href: '/privacy' },
+      { label: 'Admin → Visitors', href: '/admin/visitors' },
+    ],
+  },
   // ── Signal delivery proof (2026-10-25) ──────────────────────────────────
   {
     id: 'tradingview-alerts-sent-at',

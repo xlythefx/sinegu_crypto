@@ -6,7 +6,10 @@
  *   token, theme, this choice). At sign-up and sign-in the API still records
  *   the IP address, country and browser/OS it reads from the request itself:
  *   that is security logging (every server sees those headers anyway) and
- *   the Privacy Policy says so.
+ *   the Privacy Policy says so. The same goes for the visitor counter
+ *   (components/visits/VisitTracker, since 2026-10-28): each public page
+ *   view is recorded whatever the choice, stores nothing in the browser,
+ *   and its IPs are deleted after 90 days.
  * - `all` — additionally, sign-up and sign-in send this device's time zone,
  *   language and screen size, for statistics. The API drops them unless the
  *   request also says `consent: 'all'`, so this file is not the only gate.
@@ -19,8 +22,11 @@
 export type ConsentChoice = 'all' | 'essential'
 
 const STORAGE_KEY = 'pixel-alpha-consent'
-/** Bump when the banner's wording changes materially, so everyone is asked again. */
-const CONSENT_VERSION = 1
+/**
+ * Bump when the banner's wording changes materially, so everyone is asked again.
+ * 2 (2026-10-28): website visits are recorded too.
+ */
+const CONSENT_VERSION = 2
 
 /** Fired on `window` when the choice changes or the banner should reopen. */
 export const CONSENT_CHANGED_EVENT = 'pixel-alpha-consent-changed'

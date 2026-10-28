@@ -48,7 +48,7 @@ export function isCollaborator(role: UserRole | undefined): boolean {
 export function collaboratorMayOpen(pathname: string): boolean {
   const path = pathname.replace(/\/+$/, '') || '/'
   if (path === '/admin') return true
-  return ['/admin/users', '/admin/strategies'].some(
+  return ['/admin/users', '/admin/strategies', '/admin/visitors'].some(
     (base) => path === base || path.startsWith(`${base}/`),
   )
 }

@@ -52,10 +52,11 @@ export default function CookieConsent() {
       </div>
       <p className="m-0 text-[13px] leading-[1.6] text-muted">
         We keep a few essentials in your browser to sign you in and remember your theme. When
-        you sign up or sign in, we record your IP address, country and device to keep accounts
-        secure. With <span className="font-semibold text-text">Accept all</span> we also note
-        your time zone, language and screen size, to understand who uses Pixel Alpha. No ads, no
-        tracking scripts.{' '}
+        you visit our website, sign up or sign in, we record your IP address, country and device,
+        to keep accounts secure and count visitors. With{' '}
+        <span className="font-semibold text-text">Accept all</span> we also note your time zone,
+        language and screen size at sign-up and sign-in, to understand who uses Pixel Alpha. No
+        ads, no third-party trackers.{' '}
         <Link to="/privacy#cookies" className="font-semibold text-text hover:underline">
           Privacy Policy
         </Link>

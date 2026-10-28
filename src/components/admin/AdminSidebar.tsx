@@ -19,6 +19,7 @@ import {
   ArrowDownToLine,
   ListTodo,
   Webhook,
+  Eye,
 } from 'lucide-react'
 import { usePortalSwitch } from '../ui/PortalSwitchOverlay'
 import { getUser } from '../../lib/session'
@@ -68,6 +69,8 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   // The owner's list of things only they can do or decide (lib/adminTodos.ts).
   { label: 'To be Done', url: '/admin/todo', icon: ListTodo },
   { label: 'User Management', url: '/admin/users', icon: UserCog, collaborator: true },
+  // The public website's traffic — every staff role, IP included (owner, 2026-10-28).
+  { label: 'Visitors', url: '/admin/visitors', icon: Eye, collaborator: true },
   { label: 'API Keys', url: '/admin/api-keys', icon: KeyRound },
   { label: 'Strategies', url: '/admin/strategies', icon: Target, collaborator: true },
   { label: 'Trading Assets', url: '/admin/assets', icon: Coins },

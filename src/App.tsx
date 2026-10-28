@@ -3,6 +3,7 @@ import { ThemeProvider } from './theme'
 import { PortalSwitchProvider } from './components/ui/PortalSwitchOverlay'
 import ProdApiBadge from './components/ui/ProdApiBadge'
 import CookieConsent from './components/ui/CookieConsent'
+import VisitTracker from './components/visits/VisitTracker'
 import Landing from './pages/Landing'
 import LandingV2 from './pages/LandingV2'
 import Auth from './pages/Auth'
@@ -53,6 +54,7 @@ import AdminTronTransfers from './pages/admin/AdminTronTransfers'
 import AdminReferrals from './pages/admin/AdminReferrals'
 import AdminReleasePayment from './pages/admin/AdminReleasePayment'
 import AdminTodo from './pages/admin/AdminTodo'
+import AdminVisitors from './pages/admin/AdminVisitors'
 
 function App() {
   return (
@@ -108,11 +110,13 @@ function App() {
             <Route path="/admin/database" element={<AdminDatabase />} />
             <Route path="/admin/tron-transfers" element={<AdminTronTransfers />} />
             <Route path="/admin/todo" element={<AdminTodo />} />
+            <Route path="/admin/visitors" element={<AdminVisitors />} />
             <Route path="/admin/*" element={<AdminDashboard />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           <ProdApiBadge />
           <CookieConsent />
+          <VisitTracker />
         </PortalSwitchProvider>
       </BrowserRouter>
     </ThemeProvider>

@@ -672,6 +672,34 @@ wants every admin role to see it, IP included). Rules:
   from then on. The owner still decides how existing customers hear about the
   policy update (to-do `privacy-policy-oct-2026-notice`).
 
+## Visitor counter — Admin → Visitors (2026-10-28)
+
+Owner's request: who opens the PUBLIC website, from where, and how many sign
+up — IPs included, for every staff role (collaborators too, same call as
+Sign-up info). `components/visits/VisitTracker` (mounted in App) pings
+`POST /api/public/visits` once a counted page (`lib/visitPages.ts` ↔
+`App\Services\Visits\VisitPages::PATHS` — a new public page goes in BOTH)
+has been visible 2 s. `VisitRecorder` decides, always answering 204:
+- **Refused, never stored** (only tallied per day in `site_visit_filtered`):
+  bot UA / unrecognised UA / `navigator.webdriver`; Origin (or Referer) not in
+  `cors.allowed_origins`, or localhost on the live box; unknown page; a
+  signed-in STAFF token (the ping carries the session; the role is read
+  server-side, never sent); flood (> 30/min or > 300/day per IP — the IP
+  is then suspicious for the UTC day and what it already sent is flagged);
+  repeat (same visitor + page within 30 min).
+- **Stored but suspicious** (kept for the log's Suspicious view, out of every
+  count): an IP already suspicious today, or a burst (6 rows in 15 s).
+- **A visitor is a DAILY HMAC of IP + User-Agent** (no cookie, nothing on the
+  device), so range totals are sums of daily uniques and survive the purge.
+- `visits:purge-ips` (daily 01:10) nulls `ip` + `user_agent` after
+  `VisitRecorder::IP_DAYS` (90) — the Privacy Policy states it. `?ref=` is
+  kept only for a real `referral_codes.code`; the referrer only as a host,
+  only on the entry page, never our own.
+- Reads: `GET /admin/visitors/{summary,log}` (staff group, `VisitorStats`),
+  UTC days; the log's accounts-per-IP come from `user_access_events`.
+- Banner `CONSENT_VERSION` went 1 → 2 for this; the banner, `lib/consent.ts`
+  and `lib/privacy.ts` must keep describing the same thing.
+
 ## Collaborator role — read-only staff (2026-09-28)
 
 `user_credentials.type = 'collaborator'` opens the admin portal READ-ONLY:
@@ -689,7 +717,7 @@ nothing else, and no write control anywhere.
   a collaborator must not get those). `STAFF_ROLES` / `canSeeAdminPortal` admit
   the portal (trader sidebar button, `AdminLayout`); `isCollaborator` hides
   writes; `collaboratorMayOpen(pathname)` is the path allowlist (`/admin`
-  exactly, `/admin/users[/*]`, `/admin/strategies[/*]`) — `AdminLayout`
+  exactly, `/admin/users[/*]`, `/admin/strategies[/*]`, `/admin/visitors`) — `AdminLayout`
   redirects anything else to `/admin`, and `AdminSidebar` items opt in with
   `collaborator: true`. Keep the two in step.
 - What a collaborator does not see: dashboard tabs other than Overview; links
