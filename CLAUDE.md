@@ -123,7 +123,8 @@ it goes back through `company.ts`, not retyped.
   The frontend needed no rebuild — `src/services/api.ts` resolves the API base from
   the host at runtime, so https came for free.
   **The box also hosts Pixel Pay** at https://pay.pixel-alpha.com (2026-10-28,
-  `.claude/deploy_pixelpay.py`): its own Linux user, php-fpm pool, vhost, cert,
+  `.claude/deploy_pixelpay.py`; frontend `C:\Users\Xlythe\tomyam - Copy`, API
+  `C:\Users\Xlythe\tomyam - Copy\pixel-pay-api`, see "Related projects"): its own Linux user, php-fpm pool, vhost, cert,
   cron and MySQL database (`pixel_pay`, user granted on it alone). It never touches
   `sinegu_crypto` and this product's deploy commands never touch it — see "Guest on
   this box" in the deploy skill.
@@ -1137,6 +1138,8 @@ read-only reference material, consulted only when explicitly prompted.
 | `C:\wamp64\www\sinegutrade-api` | **This project's API** (Laravel + Sanctum, DB `sinegu_crypto`). Live: auth, profile/password, dashboard summary, binance positions/past-positions, invoices, referrals, the public `/api/public/track-record` feed, and the engine's `/api/engine/*` surface. All three venues' tables exist (`binance_*`, `mexc_*`, `bybit_*`). |
 | `C:\Users\Xlythe\trading-flask` | **Original multi-exchange bot — READ-ONLY.** Reference for env-driven config, tests, and the per-exchange service split. Never edit it, not even its `.env`. |
 | `C:\Users\Xlythe\binance-flask` | **Mature bot reference — READ-ONLY.** The runtime pattern the in-repo engine was modeled on (fast-ACK dispatch + account pools, retry queue, billing gate via `enabled=0`). Consult only; never edit. |
+| `C:\Users\Xlythe\tomyam - Copy` | **Pixel Pay frontend** — the sister payments product (React 18 + Vite + shadcn, its own `CLAUDE.md`). Live at **https://pay.pixel-alpha.com**, deployed FROM THIS REPO by `.claude/deploy_pixelpay.py` (`deploy-web` builds it with `VITE_API_BASE_URL=https://pay.pixel-alpha.com/api`). Edit it when asked to work on Pixel Pay. Never copy its code into Pixel Alpha, or ours into it. |
+| `C:\Users\Xlythe\tomyam - Copy\pixel-pay-api` | **Pixel Pay API** (Laravel 8 + Sanctum). Served at **https://pay.pixel-alpha.com/api** from `/var/www/pixelpay/api` on the same box, DB `pixel_pay` (never `sinegu_crypto`); `deploy-api` ships it. Sandbox payments only. Locally it runs on `pixelpay_db`. |
 
 ## `trading-flask/` — the BINANCE_ABCD engine (in this repo)
 
