@@ -13,6 +13,31 @@ import type { AdminChange } from '../types/adminVersions'
  *    later change to the same feature gets its own entry.
  */
 export const ADMIN_CHANGES: AdminChange[] = [
+  // ── 2026-10-28 ───────────────────────────────────────────────────────────
+  {
+    id: 'exchange-accounts-card-redesign',
+    date: '2026-10-28',
+    kind: 'improved',
+    area: 'Exchange Accounts',
+    title: 'Exchange Accounts: real exchange logos and a clearer card',
+    summary:
+      'Each connected account now shows its exchange’s real logo (Binance, Bybit or MEXC) instead of a letter, and the card is easier to read: the balance is bigger, live or demo is spelled out under the name, and an account with nothing in it says where the money needs to go. Example: an empty MEXC account now reads “Nothing in your MEXC Futures account yet. The bot only trades the money in it.”',
+    howItWorks: [
+      'Open Exchange Accounts. Each card shows the exchange logo, the account name, and “Live trading” or “Demo trading” under it, then two tags: Active or Disabled, and Live or Demo.',
+      'The balance is shown large with its currency beside it. If the account holds an open trade, its current profit or loss is shown under the balance.',
+      'When the balance is 0, a short note names the wallet the bot trades from on that exchange: the USDⓈ-M Futures wallet on Binance, the Unified Trading account on Bybit, the Futures account on MEXC.',
+      'The API key and the secret sit together in one box. The key can be shown or copied. The secret is never shown again after connecting.',
+      'The exchange buttons in the top bar (All, Binance, Bybit, MEXC) are hidden on this page, since it already lists every exchange and has its own filter, which now carries the logos too. The top bar keeps only the light/dark switch and the profile picture.',
+      'On a wide screen the cards sit three to a row. On a phone they stack, and every button is large enough to tap.',
+    ],
+    technical: [
+      'ExchangeAccountCard renders ExchangeLogo (EXCHANGE_META.logo, public/*-logo.*) at 48px; ExchangeLogo uses rounded-row from 44px up.',
+      'New EXCHANGE_COPY[kind].walletName for the empty-wallet note. Open P&L reads ExchangeAccount.unrealized_pnl (hidden when 0 or null).',
+      'DashboardLayout takes exchangeFilter (default true) → TopBar showExchangeFilter; /dashboard/exchanges passes false.',
+      'Grid: repeat(auto-fill, minmax(min(100%,420px),1fr)). Icon buttons 36px, 44px under 640px.',
+    ],
+    links: [{ label: 'Open Exchange Accounts', href: '/dashboard/exchanges' }],
+  },
   // ── 2026-10-26 ───────────────────────────────────────────────────────────
   {
     id: 'signal-log-tradingview-vs-quantlab',

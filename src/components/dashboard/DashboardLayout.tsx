@@ -15,6 +15,8 @@ import { needsEmailVerification, VERIFY_EMAIL_PATH } from '../../lib/emailVerifi
 interface DashboardLayoutProps {
   title: string
   children: ReactNode
+  /** False hides the top bar's exchange pills (a page they do not scope). */
+  exchangeFilter?: boolean
 }
 
 /**
@@ -27,6 +29,7 @@ interface DashboardLayoutProps {
 export default function DashboardLayout({
   title,
   children,
+  exchangeFilter = true,
 }: DashboardLayoutProps) {
   const navigate = useNavigate()
   const [confirmLogout, setConfirmLogout] = useState(false)
@@ -51,7 +54,7 @@ export default function DashboardLayout({
       <DashboardShell
         sidebar={<TraderSidebar onLogout={() => setConfirmLogout(true)} />}
       >
-        <TopBar />
+        <TopBar showExchangeFilter={exchangeFilter} />
         <OnboardingGate />
         {children}
         <ConfirmModal

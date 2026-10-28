@@ -9,6 +9,11 @@ import type { ExchangeKind } from '../../types/exchanges'
 export interface ExchangeCopy {
   /** Sentence fragment: "Trades your real {marketName} balance." */
   marketName: string
+  /**
+   * The wallet the bot trades from, as the venue names it — the account card
+   * points there when the balance is empty ("Nothing in your {walletName} yet").
+   */
+  walletName: string
   /** The page where a live key is created. */
   liveKeysUrl: string
   liveKeysLabel: string
@@ -57,6 +62,7 @@ export interface BlockedCopy {
 export const EXCHANGE_COPY: Record<ExchangeKind, ExchangeCopy> = {
   binance: {
     marketName: 'Binance futures',
+    walletName: 'USDⓈ-M Futures wallet',
     liveKeysUrl: 'https://www.binance.com/en/my/settings/api-management',
     liveKeysLabel: 'Open Binance API Management',
     // Same order as the public guide (/docs/binance, lib/binanceGuide.ts):
@@ -112,6 +118,7 @@ export const EXCHANGE_COPY: Record<ExchangeKind, ExchangeCopy> = {
   },
   bybit: {
     marketName: 'Bybit USDT perpetuals',
+    walletName: 'Unified Trading account',
     liveKeysUrl: 'https://www.bybit.com/app/user/api-management',
     liveKeysLabel: 'Open Bybit API Management',
     liveSteps: [
@@ -172,6 +179,7 @@ export const EXCHANGE_COPY: Record<ExchangeKind, ExchangeCopy> = {
   },
   mexc: {
     marketName: 'MEXC futures',
+    walletName: 'Futures account',
     liveKeysUrl: 'https://www.mexc.com/user/openapi',
     liveKeysLabel: 'Open MEXC API Management',
     liveSteps: [

@@ -21,7 +21,8 @@ export default function ExchangeLogo({ kind, size = 32, className = '' }: Exchan
   // Remember WHICH file failed, so a different kind on the same instance
   // gets its own try instead of inheriting the fallback.
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
-  const box = `${size >= 28 ? 'rounded-btn' : 'rounded-[5px]'} flex-none border border-border ${className}`
+  const radius = size >= 44 ? 'rounded-row' : size >= 28 ? 'rounded-btn' : 'rounded-[5px]'
+  const box = `${radius} flex-none border border-border ${className}`
   const dims = { width: size, height: size }
 
   if (failedSrc === meta.logo) {

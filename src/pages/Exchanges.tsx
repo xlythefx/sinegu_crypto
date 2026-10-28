@@ -13,6 +13,7 @@ import DashboardLayout from '../components/dashboard/DashboardLayout'
 import DataState from '../components/dashboard/DataState'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import ExchangeAccountCard from '../components/exchanges/ExchangeAccountCard'
+import ExchangeLogo from '../components/exchanges/ExchangeLogo'
 import RenameAccountModal from '../components/exchanges/RenameAccountModal'
 import {
   EXCHANGE_META,
@@ -116,7 +117,7 @@ export default function Exchanges() {
 
   if (!data) {
     return (
-      <DashboardLayout title="Exchange Accounts">
+      <DashboardLayout title="Exchange Accounts" exchangeFilter={false}>
         <DataState
           loading={loading}
           error={error}
@@ -127,8 +128,11 @@ export default function Exchanges() {
     )
   }
 
+  // The top bar's exchange pills scope the dashboard's reads; this page lists
+  // every venue and has its own filter below, so the top bar shows only the
+  // theme toggle and the avatar here.
   return (
-    <DashboardLayout title="Exchange Accounts">
+    <DashboardLayout title="Exchange Accounts" exchangeFilter={false}>
       <div
         className="mb-[18px] flex flex-wrap items-end justify-between gap-3"
         data-aos="fade-up"
@@ -169,13 +173,17 @@ export default function Exchanges() {
                 <button
                   key={key}
                   type="button"
-                  className={`flex items-center gap-[7px] rounded-pill border px-3 py-1.5 text-[12px] transition-[border-color,background,color] duration-150 ${
+                  className={`flex h-9 items-center gap-[7px] rounded-pill border pr-2.5 text-[12px] transition-[border-color,background,color] duration-150 max-[640px]:h-10 ${
+                    key === 'all' ? 'pl-3' : 'pl-1.5'
+                  } ${
                     active
                       ? 'border-accent-line bg-accent-soft font-bold text-accent'
                       : 'border-border bg-surface font-semibold text-muted hover:border-accent-line hover:text-text'
                   }`}
                   onClick={() => setFilter(key)}
+                  aria-pressed={active}
                 >
+                  {key !== 'all' && <ExchangeLogo kind={key} size={20} />}
                   {label}
                   <span
                     className={`inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-pill px-[5px] font-mono text-[10px] font-bold ${
@@ -257,7 +265,8 @@ export default function Exchanges() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3.5 max-[1000px]:grid-cols-1">
+        // Fills as many ~420px columns as fit: three on a wide screen, one on a phone.
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,420px),1fr))] gap-3.5">
           {filtered.map((account) => (
             <ExchangeAccountCard
               key={`${exchangeOf(account)}:${account.id}`}

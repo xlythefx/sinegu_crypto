@@ -36,12 +36,20 @@ const EXCHANGES: { key: ExchangeFilter; label: string; dot: string; soon?: boole
   })),
 ]
 
+interface TopBarProps {
+  /**
+   * Off on pages the filter does not scope (Exchange Accounts lists every
+   * venue and filters its own grid), so it never looks like it does something.
+   */
+  showExchangeFilter?: boolean
+}
+
 /**
  * Page top bar: burger (mobile) left; exchange filter, theme toggle and
  * avatar right. The exchange pills are the page's data scope, not decoration:
  * they write the shared filter every dashboard read passes to the API.
  */
-export default function TopBar() {
+export default function TopBar({ showExchangeFilter = true }: TopBarProps) {
   const { theme, toggleTheme } = useTheme()
   const { openDrawer } = useContext(ShellContext)
   const { exchange, setExchange } = useExchangeFilter()
@@ -58,22 +66,24 @@ export default function TopBar() {
         <Menu size={20} strokeWidth={2.2} />
       </button>
       <div className={TOPBAR_RIGHT}>
-        <div className={FILTER}>
-          {EXCHANGES.map((e) => (
-            <button
-              key={e.key}
-              type="button"
-              className={`${FILTER_PILL_BASE} ${exchange === e.key ? FILTER_PILL_ON : FILTER_PILL_OFF}`}
-              onClick={() => setExchange(e.key)}
-              disabled={e.soon}
-              aria-pressed={exchange === e.key}
-              title={e.soon ? 'Coming soon' : `Show ${e.label === 'All' ? 'every exchange' : `${e.label} only`}`}
-            >
-              <span className={FILTER_DOT} style={{ background: e.dot }} />
-              {e.label}
-            </button>
-          ))}
-        </div>
+        {showExchangeFilter && (
+          <div className={FILTER}>
+            {EXCHANGES.map((e) => (
+              <button
+                key={e.key}
+                type="button"
+                className={`${FILTER_PILL_BASE} ${exchange === e.key ? FILTER_PILL_ON : FILTER_PILL_OFF}`}
+                onClick={() => setExchange(e.key)}
+                disabled={e.soon}
+                aria-pressed={exchange === e.key}
+                title={e.soon ? 'Coming soon' : `Show ${e.label === 'All' ? 'every exchange' : `${e.label} only`}`}
+              >
+                <span className={FILTER_DOT} style={{ background: e.dot }} />
+                {e.label}
+              </button>
+            ))}
+          </div>
+        )}
         <button
           className={THEME_TOGGLE}
           title="Toggle theme"
