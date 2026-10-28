@@ -122,6 +122,11 @@ it goes back through `company.ts`, not retyped.
   account API keys.
   The frontend needed no rebuild — `src/services/api.ts` resolves the API base from
   the host at runtime, so https came for free.
+  **The box also hosts Pixel Pay** at https://pay.pixel-alpha.com (2026-10-28,
+  `.claude/deploy_pixelpay.py`): its own Linux user, php-fpm pool, vhost, cert,
+  cron and MySQL database (`pixel_pay`, user granted on it alone). It never touches
+  `sinegu_crypto` and this product's deploy commands never touch it — see "Guest on
+  this box" in the deploy skill.
 
 **Supported exchanges (the only brokers) — Binance, Bybit, MEXC.** These three are the
 entire universe of exchanges the product supports; there are no others (no Capital.com, no

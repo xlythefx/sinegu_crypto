@@ -30,6 +30,7 @@ graphify-out
 
 # Deploy secrets — never commit
 .claude/deploy.creds.json
+.claude/pixelpay.creds.json
 .claude/settings.local.json
 .claude/tradingview.creds.md
 

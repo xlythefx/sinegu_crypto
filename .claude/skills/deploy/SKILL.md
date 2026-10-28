@@ -92,6 +92,36 @@ sinegualerts-engine` and reading its journal — which is all the admin "Bot
 Engine" page uses. The engine binds a high port (5010), so the unit needs no
 capabilities.
 
+## Guest on this box: Pixel Pay at https://pay.pixel-alpha.com (2026-10-28)
+
+The sister product (`C:\Users\Xlythe\tomyam - Copy`, Laravel 8 + React 18) runs on
+the same server, deployed by **`.claude/deploy_pixelpay.py`**, which imports this
+script's SSH/upload/scrub helpers. It owns its own pieces, and none of this
+script's commands touch them:
+
+| Piece | Pixel Pay | Pixel Alpha |
+|---|---|---|
+| Tree | `/var/www/pixelpay/{web,api,acme,_backups}` | `/var/www/sinegualerts/…` |
+| PHP | pool `[pixelpay]`, user `pixelpay`, `/run/php/php8.3-fpm-pixelpay.sock` | pool `www`, `www-data` |
+| nginx | `sites-available/pixelpay` + `snippets/pixelpay-headers.conf` | `sites-available/sinegualerts` |
+| TLS | cert `pay.pixel-alpha.com` (webroot `/var/www/pixelpay/acme`) | cert `pixel-alpha.com` |
+| MySQL | db `pixel_pay`, user `pixelpay` (granted on `pixel_pay` only) | db `sinegu_crypto`, user `sinegu` |
+| Cron | `/etc/cron.d/pixelpay` | `/etc/cron.d/sinegualerts` |
+
+Isolation runs both ways and `verify` asserts it: `pixelpay` cannot read
+`api/.env` (www-data 640) or `engine/.env` (root:pixelalpha 640), and www-data
+cannot read Pay's `.env` (root:pixelpay 640). Rules: `deploy-nginx` may only ever
+rewrite `sinegualerts` and remove `default` — never `rm` the `pixelpay` symlink;
+`php8.3-fpm` reloads (both products do them) are graceful for both pools; and no
+SQL from either script may name the other product's database. Pay runs on
+**SANDBOX** Coinsbuy/Sandbox5x keys by decision (its first `.env` refuses
+anything else); its DB + admin passwords are in gitignored
+`.claude/pixelpay.creds.json`.
+
+```bash
+python .claude/deploy_pixelpay.py inspect | full | deploy-web | deploy-api | verify
+```
+
 nginx vhost: `/etc/nginx/sites-available/sinegualerts` (written by `deploy-nginx`,
 `default` removed). Serves the SPA at `/`, Laravel at `/api`, immutable caching on
 `/assets/`, gzip on. Three generated files back it:
