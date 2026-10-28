@@ -1205,10 +1205,12 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   venue in `BINANCE_ABCD_EXCHANGES`** (CSV, default `binance`; add `mexc` or
   `bybit` to turn those on — deliberately NOT mirrored to prod by the deploy
   script, because enabling a venue for customers is a decision made on the box.
-  Prod has had MEXC on since 2026-09-17. **Bybit's CODE has been on prod since
-  2026-09-24 but the venue is OFF** — the adapter, the four tables and the
-  nginx route are all live, and adding `bybit` to this CSV on the box is the
-  only thing between that and trading).
+  Prod has had MEXC on since 2026-09-17 and **Bybit since 2026-10-28**
+  (`binance,mexc,bybit` on the box; the code had been there, dark, since
+  2026-09-24). Its first and only account is the master's Bybit DEMO TRADING
+  account "Demo" (`bybit_accounts` #1, `demo = 1`), so on Bybit the master's
+  figure in the channel is a play-money one until a real master account
+  exists there. Connecting stays staff-only (`EXCHANGES_STAFF_ONLY`)).
   `hooks.WEBHOOK_PATHS` maps `binance → /binance_abcd_webhook`,
   `mexc → /mexc_abcd_webhook`, `bybit → /bybit_abcd_webhook`; the path a
   TradingView alert posts to is what decides which exchange's accounts the
@@ -1261,11 +1263,13 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   stats card. **`bybit_*` is read through exactly the same paths** — it needed
   no reader changes at all, because every one of them goes through
   `ExchangeSchema::supported()`.
-- **Bybit is the third venue (2026-09-24), shipped DARK.** `bybit_api.py` +
+- **Bybit is the third venue (2026-09-24, shipped dark; switched ON on prod
+  2026-10-28).** `bybit_api.py` +
   `bybit_adapter.py` + `fetch_bybit_history.py`, `/bybit_abcd_webhook`, the
-  four `bybit_*` tables and one `ExchangeSchema` entry — but `bybit` is NOT in
-  `BINANCE_ABCD_EXCHANGES` and that key is not deploy-mirrored, so prod does
-  not trade it until someone types it on the box. It is closer to Binance than
+  four `bybit_*` tables and one `ExchangeSchema` entry. `BINANCE_ABCD_EXCHANGES`
+  is not deploy-mirrored, so the venue is on because the box's own `.env`
+  names it (backup of the file before: `_backups/engine.env.20261028_224610`).
+  It is closer to Binance than
   to MEXC (leverage POSTed, sizes already in base coins, a real
   `trade_permission()` from `/v5/user/query-api`), so roughly half of the MEXC
   client has no counterpart. The facts worth knowing before touching it:
