@@ -3,6 +3,7 @@ import { Check, TrendingUp, X } from 'lucide-react'
 import { displaySymbol, linePath, linePoints, seriesColor } from '../../lib/chart'
 import { fmtMediumDate, fmtSigned } from '../../lib/format'
 import type { GroupSeries } from '../../types/dashboard'
+import AutoCarousel from '../ui/AutoCarousel'
 
 type GroupKey = 'asset' | 'strategy'
 
@@ -545,7 +546,9 @@ export default function EquityByGroupCard({
             </button>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        {/* One sliding row rather than a wrapped block: arrows, swipe, and an
+            automatic step that pauses while the pointer or focus is on it. */}
+        <AutoCarousel label={group === 'asset' ? 'Assets' : 'Strategies'}>
           {series.map((s) => {
             const on = !hidden.has(s.id)
             const isActive = activeId === s.id
@@ -553,7 +556,7 @@ export default function EquityByGroupCard({
               <button
                 key={s.id}
                 type="button"
-                className={`flex items-center gap-[7px] py-[5px] px-2.5 rounded-[9px] border border-border bg-transparent cursor-pointer transition-[opacity,background,border-color,box-shadow] duration-150${on ? '' : ' opacity-50'}`}
+                className={`flex items-center gap-[7px] py-[5px] px-2.5 rounded-[9px] border border-border bg-transparent cursor-pointer whitespace-nowrap transition-[opacity,background,border-color,box-shadow] duration-150${on ? '' : ' opacity-50'}`}
                 style={
                   on
                     ? {
@@ -590,7 +593,7 @@ export default function EquityByGroupCard({
               </button>
             )
           })}
-        </div>
+        </AutoCarousel>
       </div>
     </section>
   )

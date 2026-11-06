@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { ThemeProvider } from './theme'
 import { PortalSwitchProvider } from './components/ui/PortalSwitchOverlay'
+import { ExchangeFilterProvider } from './context/ExchangeFilterContext'
 import ProdApiBadge from './components/ui/ProdApiBadge'
 import CookieConsent from './components/ui/CookieConsent'
 import VisitTracker from './components/visits/VisitTracker'
@@ -61,59 +62,66 @@ function App() {
     <ThemeProvider>
       <BrowserRouter>
         <PortalSwitchProvider>
-          <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route path="/v2" element={<LandingV2 />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/auth/forgot" element={<ForgotPassword />} />
-            <Route path="/auth/verify" element={<VerifyEmail />} />
-            <Route path="/auth/discord/start" element={<DiscordStart />} />
-            <Route path="/auth/discord/callback" element={<DiscordCallback />} />
-            <Route path="/auth/discord/terms" element={<DiscordTerms />} />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/privacy" element={<Privacy />} />
-            <Route path="/risk" element={<RiskDisclosure />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/faq" element={<Faq />} />
-            <Route path="/trading-bot" element={<TradingBot />} />
-            <Route path="/docs/binance" element={<BinanceGuide />} />
-            <Route path={BINANCE_OFFER_PATH} element={<BinanceOffer />} />
-            <Route path="/dashboard/analytics" element={<Analytics />} />
-            <Route path="/dashboard/strategies/:strategyKey" element={<StrategyDetail />} />
-            <Route path="/dashboard/positions" element={<Positions />} />
-            <Route path="/dashboard/exchanges/connect" element={<ConnectExchange />} />
-            <Route path="/dashboard/exchanges" element={<Exchanges />} />
-            <Route path="/dashboard/asset-performance" element={<AssetPerformance />} />
-            <Route path="/dashboard/invoices/:id" element={<InvoiceDetail />} />
-            <Route path="/dashboard/invoices" element={<Invoices />} />
-            <Route path="/dashboard/referrals" element={<Referrals />} />
-            <Route path="/dashboard/settings" element={<Settings />} />
-            <Route path="/dashboard/*" element={<Dashboard />} />
-            <Route path="/admin/users/:uniId" element={<AdminUserDetail />} />
-            <Route path="/admin/users" element={<AdminUsers />} />
-            <Route path="/admin/api-keys" element={<AdminApiKeys />} />
-            <Route path="/admin/strategies/:key" element={<AdminStrategyDetail />} />
-            <Route path="/admin/strategies" element={<AdminStrategies />} />
-            <Route path="/admin/assets" element={<AdminAssets />} />
-            <Route path="/admin/positions" element={<AdminPositions />} />
-            <Route path="/admin/engine" element={<AdminEngine />} />
-            <Route path="/admin/trade-logs" element={<AdminTradeLogs />} />
-            <Route path="/admin/webhooks" element={<AdminWebhooks />} />
-            <Route path="/admin/invoices" element={<AdminInvoiceHistory />} />
-            <Route path="/admin/referrals/release/:referrerUniId" element={<AdminReleasePayment />} />
-            <Route path="/admin/referrals" element={<AdminReferrals />} />
-            <Route path="/admin/sandbox/manual-trade" element={<AdminManualTrade />} />
-            <Route path="/admin/sandbox/emails" element={<AdminEmailTemplates />} />
-            <Route path="/admin/sandbox/emails/:slug" element={<AdminEmailTemplates />} />
-            <Route path="/admin/sandbox" element={<AdminSandbox />} />
-            <Route path="/admin/resources" element={<AdminResources />} />
-            <Route path="/admin/database" element={<AdminDatabase />} />
-            <Route path="/admin/tron-transfers" element={<AdminTronTransfers />} />
-            <Route path="/admin/todo" element={<AdminTodo />} />
-            <Route path="/admin/visitors" element={<AdminVisitors />} />
-            <Route path="/admin/*" element={<AdminDashboard />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          {/* Above the routes, not inside DashboardLayout: the PAGES read the
+              filter (Dashboard, Positions, Asset Performance pass it to the
+              API) and each page renders its own layout, so a provider inside
+              the layout sat BELOW its readers — they got the default 'all'
+              while the pills changed a value nobody read. */}
+          <ExchangeFilterProvider>
+            <Routes>
+              <Route path="/" element={<Landing />} />
+              <Route path="/v2" element={<LandingV2 />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/auth/forgot" element={<ForgotPassword />} />
+              <Route path="/auth/verify" element={<VerifyEmail />} />
+              <Route path="/auth/discord/start" element={<DiscordStart />} />
+              <Route path="/auth/discord/callback" element={<DiscordCallback />} />
+              <Route path="/auth/discord/terms" element={<DiscordTerms />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/risk" element={<RiskDisclosure />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route path="/faq" element={<Faq />} />
+              <Route path="/trading-bot" element={<TradingBot />} />
+              <Route path="/docs/binance" element={<BinanceGuide />} />
+              <Route path={BINANCE_OFFER_PATH} element={<BinanceOffer />} />
+              <Route path="/dashboard/analytics" element={<Analytics />} />
+              <Route path="/dashboard/strategies/:strategyKey" element={<StrategyDetail />} />
+              <Route path="/dashboard/positions" element={<Positions />} />
+              <Route path="/dashboard/exchanges/connect" element={<ConnectExchange />} />
+              <Route path="/dashboard/exchanges" element={<Exchanges />} />
+              <Route path="/dashboard/asset-performance" element={<AssetPerformance />} />
+              <Route path="/dashboard/invoices/:id" element={<InvoiceDetail />} />
+              <Route path="/dashboard/invoices" element={<Invoices />} />
+              <Route path="/dashboard/referrals" element={<Referrals />} />
+              <Route path="/dashboard/settings" element={<Settings />} />
+              <Route path="/dashboard/*" element={<Dashboard />} />
+              <Route path="/admin/users/:uniId" element={<AdminUserDetail />} />
+              <Route path="/admin/users" element={<AdminUsers />} />
+              <Route path="/admin/api-keys" element={<AdminApiKeys />} />
+              <Route path="/admin/strategies/:key" element={<AdminStrategyDetail />} />
+              <Route path="/admin/strategies" element={<AdminStrategies />} />
+              <Route path="/admin/assets" element={<AdminAssets />} />
+              <Route path="/admin/positions" element={<AdminPositions />} />
+              <Route path="/admin/engine" element={<AdminEngine />} />
+              <Route path="/admin/trade-logs" element={<AdminTradeLogs />} />
+              <Route path="/admin/webhooks" element={<AdminWebhooks />} />
+              <Route path="/admin/invoices" element={<AdminInvoiceHistory />} />
+              <Route path="/admin/referrals/release/:referrerUniId" element={<AdminReleasePayment />} />
+              <Route path="/admin/referrals" element={<AdminReferrals />} />
+              <Route path="/admin/sandbox/manual-trade" element={<AdminManualTrade />} />
+              <Route path="/admin/sandbox/emails" element={<AdminEmailTemplates />} />
+              <Route path="/admin/sandbox/emails/:slug" element={<AdminEmailTemplates />} />
+              <Route path="/admin/sandbox" element={<AdminSandbox />} />
+              <Route path="/admin/resources" element={<AdminResources />} />
+              <Route path="/admin/database" element={<AdminDatabase />} />
+              <Route path="/admin/tron-transfers" element={<AdminTronTransfers />} />
+              <Route path="/admin/todo" element={<AdminTodo />} />
+              <Route path="/admin/visitors" element={<AdminVisitors />} />
+              <Route path="/admin/*" element={<AdminDashboard />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </ExchangeFilterProvider>
           <ProdApiBadge />
           <CookieConsent />
           <VisitTracker />

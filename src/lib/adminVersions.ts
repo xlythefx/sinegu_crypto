@@ -13,6 +13,48 @@ import type { AdminChange } from '../types/adminVersions'
  *    later change to the same feature gets its own entry.
  */
 export const ADMIN_CHANGES: AdminChange[] = [
+  // ── 2026-11-06 ───────────────────────────────────────────────────────────
+  {
+    id: 'dashboard-exchange-filter-fix',
+    date: '2026-11-06',
+    kind: 'fixed',
+    area: 'Trading Dashboard',
+    title: 'Picking Binance, Bybit or MEXC now changes every figure on the dashboard',
+    summary:
+      'The exchange buttons at the top of the trader pages lit up when clicked, but the figures underneath stayed on all exchanges combined. Now every number follows the button. Example: a customer trading on Binance and MEXC who picks MEXC now sees only their MEXC balance, profit, trades, calendar and fees.',
+    howItWorks: [
+      'Open the Trading Dashboard and pick All, Binance, Bybit or MEXC at the top right.',
+      'Everything on the page changes to that exchange: the balance and equity chart, the statistics row (win rate, profit factor, drawdown and so on), profit by asset and by strategy, the high-water mark, this month’s fees, the daily P&L calendar, the today / 7 days / month figures and the asset cards at the bottom.',
+      'The choice is remembered, so Positions and Asset Performance open on the same exchange. They had the same problem and are fixed too.',
+      'If the customer has no account on the exchange they pick, the page says so instead of showing $0.00.',
+    ],
+    technical: [
+      'Cause: ExchangeFilterProvider was mounted inside DashboardLayout, but the PAGES (Dashboard, Positions, AssetPerformance) call useExchangeFilter() and render DashboardLayout themselves — so they read the context default (\'all\') while the TopBar pills wrote to a provider below them. Broken since the pills became the data scope (2026-09-17).',
+      'Fix: the provider moved to App.tsx, above the routes; DashboardLayout no longer mounts one. The API side (?exchange= on /dashboard/*, /binance/*) was already correct.',
+    ],
+    links: [{ label: 'Trading Dashboard', href: '/dashboard' }],
+  },
+  {
+    id: 'dashboard-asset-carousel',
+    date: '2026-11-06',
+    kind: 'improved',
+    area: 'Trading Dashboard',
+    title: 'Dashboard: the asset buttons under the profit chart slide in one row',
+    summary:
+      'The coloured asset buttons under “Equity by Asset” used to wrap onto several lines. They now sit in one row that slides along by itself, with arrows on both sides. Example: with 10 coins, the row shows as many as fit and moves one coin along every 3 seconds.',
+    howItWorks: [
+      'The row moves one asset along every 3 seconds and goes back to the start after the last one.',
+      'Use the arrows on either side, or swipe on a phone, to move it yourself. After that it waits 8 seconds before moving again.',
+      'It stops moving while the mouse is over it, so a button never slides away just as someone clicks it. Clicking a button still shows or hides that asset’s line on the chart, as before.',
+      'When all the assets fit on one line there are no arrows and nothing moves. It also stays still for anyone whose device is set to reduce motion.',
+      'The same applies to the strategy buttons when the chart is switched to By Strategy.',
+    ],
+    technical: [
+      'components/ui/AutoCarousel.tsx (reusable): overflow-x row with snap, prev/next wrap around, setInterval step paused on mouse hover / focus-within / document.hidden / 8 s after user input; off under prefers-reduced-motion and when nothing overflows. Items are not duplicated (they are toggle buttons).',
+      'Used by EquityByGroupCard for its asset / strategy legend.',
+    ],
+    links: [{ label: 'Trading Dashboard', href: '/dashboard' }],
+  },
   // ── 2026-10-28 ───────────────────────────────────────────────────────────
   {
     id: 'visitor-counter',

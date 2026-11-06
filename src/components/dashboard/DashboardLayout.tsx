@@ -7,7 +7,6 @@ import TraderSidebar from './TraderSidebar'
 import TopBar from './TopBar'
 import OnboardingGate from './OnboardingGate'
 import ConfirmModal from '../ui/ConfirmModal'
-import { ExchangeFilterProvider } from '../../context/ExchangeFilterContext'
 import { logout } from '../../services/auth'
 import { useSessionUser } from '../../hooks/useSessionUser'
 import { needsEmailVerification, VERIFY_EMAIL_PATH } from '../../lib/emailVerification'
@@ -21,10 +20,10 @@ interface DashboardLayoutProps {
 
 /**
  * Shared chrome for every dashboard page: shell + sidebar + top bar, AOS init,
- * and the standard yes/no logout confirmation. Also owns the top bar's
- * exchange filter, so the page content below can read the same value the
- * pills write (it survives navigation via localStorage — each page mounts
- * its own layout).
+ * and the standard yes/no logout confirmation. The top bar's exchange filter
+ * is provided by App, ABOVE the pages — never here: the page that renders
+ * this layout is the one reading the filter, and a provider below its reader
+ * hands it the default 'all' whatever the pills say.
  */
 export default function DashboardLayout({
   title,
@@ -50,34 +49,32 @@ export default function DashboardLayout({
   if (needsEmailVerification(user)) return <Navigate to={VERIFY_EMAIL_PATH} replace />
 
   return (
-    <ExchangeFilterProvider>
-      <DashboardShell
-        sidebar={<TraderSidebar onLogout={() => setConfirmLogout(true)} />}
-      >
-        <TopBar showExchangeFilter={exchangeFilter} />
-        <OnboardingGate />
-        {children}
-        <ConfirmModal
-          open={confirmLogout}
-          title="Log out?"
-          message="You will be signed out of your trader portal."
-          confirmLabel="Yes, log out"
-          cancelLabel="No"
-          danger
-          onConfirm={async () => {
-            setConfirmLogout(false)
-            try {
-              await logout()
-            } catch {
-              // An expired token answers 401 — which is exactly when someone
-              // reaches for Log out. The session is cleared locally either way.
-            } finally {
-              navigate('/auth')
-            }
-          }}
-          onCancel={() => setConfirmLogout(false)}
-        />
-      </DashboardShell>
-    </ExchangeFilterProvider>
+    <DashboardShell
+      sidebar={<TraderSidebar onLogout={() => setConfirmLogout(true)} />}
+    >
+      <TopBar showExchangeFilter={exchangeFilter} />
+      <OnboardingGate />
+      {children}
+      <ConfirmModal
+        open={confirmLogout}
+        title="Log out?"
+        message="You will be signed out of your trader portal."
+        confirmLabel="Yes, log out"
+        cancelLabel="No"
+        danger
+        onConfirm={async () => {
+          setConfirmLogout(false)
+          try {
+            await logout()
+          } catch {
+            // An expired token answers 401 — which is exactly when someone
+            // reaches for Log out. The session is cleared locally either way.
+          } finally {
+            navigate('/auth')
+          }
+        }}
+        onCancel={() => setConfirmLogout(false)}
+      />
+    </DashboardShell>
   )
 }
