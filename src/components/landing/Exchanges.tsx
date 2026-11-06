@@ -3,12 +3,12 @@ import type { TrackRecordStats } from '../../types/publicStats'
 
 const CONTAINER = 'max-w-[1280px] mx-auto px-10 max-[560px]:px-5'
 
-/** Binance is the one venue customers can connect; the other two are on the
- *  way (staff-only in the app — see `staffOnly` in exchanges/meta.ts). */
+/** Binance and MEXC are open to customers; Bybit is on the way (staff-only in
+ *  the app — keep in step with `staffOnly` in exchanges/meta.ts). */
 const EXCHANGES = [
   { name: 'Binance', live: true },
+  { name: 'MEXC', live: true },
   { name: 'Bybit', live: false },
-  { name: 'MEXC', live: false },
 ]
 
 interface ExchangesProps {

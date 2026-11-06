@@ -4,7 +4,7 @@ const STEPS = [
   {
     num: '01',
     title: 'Connect your exchange',
-    body: 'Link your Binance account with a trade-only API key. Withdrawals stay disabled. Bybit and MEXC are coming soon.',
+    body: 'Link your Binance or MEXC account with a trade-only API key. Withdrawals stay disabled. Bybit is coming soon.',
   },
   {
     num: '02',

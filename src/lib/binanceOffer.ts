@@ -99,6 +99,6 @@ export const OFFER_FAQ: OfferQuestion[] = [
   },
   {
     q: 'Binance does not serve my country. What then?',
-    a: 'Then the offer cannot apply, because the account has to be on binance.com. Bybit and MEXC are coming soon at the standard rate.',
+    a: 'Then the offer cannot apply, because the account has to be on binance.com. You can connect MEXC instead at the standard rate, and Bybit is coming soon.',
   },
 ]

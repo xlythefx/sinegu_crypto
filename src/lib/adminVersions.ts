@@ -15,6 +15,31 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-11-06 ───────────────────────────────────────────────────────────
   {
+    id: 'mexc-open-to-customers',
+    date: '2026-11-06',
+    kind: 'new',
+    area: 'Exchange Accounts',
+    title: 'Customers can now connect MEXC',
+    summary:
+      'MEXC was open to staff accounts only. Every customer can now connect a MEXC account, the same way as Binance. Bybit stays staff-only for now. Example: a customer who cannot use Binance in their country can connect MEXC and trade the coins switched on there (LTC and RENDER today).',
+    howItWorks: [
+      'Exchange Accounts → Connect exchange now offers MEXC to everyone, with the same steps as Binance: pick live or demo, paste the two keys, review, confirm.',
+      'MEXC trades only the coins switched on for MEXC under Admin → Trading Assets. Today that is LTC and RENDER.',
+      'Bybit still shows “Coming soon” to customers. Staff and testers can still connect it.',
+      'The website now says Binance and MEXC are live in the home page, How it works, the FAQ and the Trading Bot page.',
+      'Not yet: MEXC customers do not receive a monthly invoice, because billing only covers Binance so far. See Admin → To be Done.',
+    ],
+    technical: [
+      'Server: EXCHANGES_STAFF_ONLY=bybit in api/.env + config:cache (was unset = code default mexc,bybit). Backup of the previous file: _backups/api.env.before-open-mexc.20261106.',
+      'Client twin: EXCHANGE_META.mexc.staffOnly false. ExchangesV2 now marks a venue Live only when available AND not staffOnly (it had shown Bybit as Live).',
+      'InvoiceService / monthly_invoices.INVOICED_EXCHANGES are still Binance-only; owner decision mexc-customer-billing.',
+    ],
+    links: [
+      { label: 'Exchange Accounts', href: '/dashboard/exchanges' },
+      { label: 'To be Done', href: '/admin/todo' },
+    ],
+  },
+  {
     id: 'dashboard-exchange-filter-fix',
     date: '2026-11-06',
     kind: 'fixed',

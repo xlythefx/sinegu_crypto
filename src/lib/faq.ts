@@ -26,7 +26,7 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'Which exchanges can I use?',
-        a: 'Binance, for now. Bybit and MEXC are coming soon.',
+        a: 'Binance and MEXC. Bybit is coming soon.',
       },
       {
         q: 'Do you hold my money?',

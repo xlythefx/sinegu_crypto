@@ -31,8 +31,8 @@ function Mark({ kind, dim }: { kind: ExchangeKind; dim?: boolean }) {
 }
 
 /**
- * Step 1 — which exchange. Binance connects for everyone; MEXC and Bybit are
- * locked to staff while they are still being proven. Both read "Coming soon"
+ * Step 1 — which exchange. Binance and MEXC connect for everyone; Bybit is
+ * locked to staff while it is still being proven. It reads "Coming soon"
  * to a customer, which is the truth they need — showing the venues is the
  * roadmap, hiding them would read as "never". A venue the user already holds
  * an account on is locked too — one account per exchange.

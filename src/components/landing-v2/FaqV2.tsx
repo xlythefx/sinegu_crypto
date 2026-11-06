@@ -12,7 +12,7 @@ const FAQS = [
   },
   {
     q: 'Which exchanges are supported?',
-    a: 'Binance is live today. Bybit and MEXC support is coming soon — once their integrations land, you’ll be able to connect those accounts the same way, with no changes on your end.',
+    a: 'Binance and MEXC are live today. Bybit support is coming soon — once it lands, you’ll be able to connect a Bybit account the same way, with no changes on your end.',
   },
   {
     q: 'Do I need trading experience?',

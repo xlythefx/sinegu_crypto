@@ -110,7 +110,7 @@ export default function ConnectExchange() {
   const accounts = data?.accounts ?? []
   const connectedKinds: ExchangeKind[] = accounts.map(exchangeOf)
   // Venues this user may connect, minus the ones they already hold. A
-  // staff-only venue (MEXC today) is simply not on offer to a customer — the
+  // staff-only venue (Bybit today) is simply not on offer to a customer — the
   // API refuses it anyway, and a wizard that lets them fill in keys first
   // would only be a longer way to say no.
   const role = sessionUser?.type

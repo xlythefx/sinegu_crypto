@@ -136,10 +136,17 @@ three. **All three are wired as of 2026-09-24**; MEXC and Bybit are staff-only
 to connect (below). Canonical labels/brand colors/order live in
 `src/components/exchanges/meta.ts`.
 
-**MEXC and Bybit are live in the engine but STAFF-ONLY to connect** (MEXC
-2026-09-23, Bybit 2026-09-24). They trade and sync like Binance; they have
-simply not run long enough on a real customer account to sell, so only
-`admin` / `master` / `developer` may connect one. The gate is
+**MEXC is OPEN to customers since 2026-11-06; Bybit is still STAFF-ONLY to
+connect** (staff-only since MEXC 2026-09-23, Bybit 2026-09-24). Prod's
+`api/.env` carries `EXCHANGES_STAFF_ONLY=bybit` and `meta.ts` has
+`mexc.staffOnly: false`. **Opening a venue takes BOTH halves**, server first
+(so the wizard never offers what the API refuses): the box's key +
+`config:cache`, then the frontend flag + a website deploy — the "never a
+deploy" below predates the wizard's own copy of the lock. **MEXC customers
+are not invoiced yet** (only `BinancePnlSource` exists; owner decision
+`mexc-customer-billing`). Bybit has not run long enough on a real customer
+account to sell, so only `admin` / `master` / `developer` / `tester` may
+connect one. The gate is
 `config('exchanges.staff_only')` (CSV env `EXCHANGES_STAFF_ONLY`, default
 `mexc,bybit`) checked in
 `ExchangeAccountController::store` against `EnsureAdmin::ROLES` — the admin

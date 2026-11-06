@@ -382,10 +382,24 @@ export const ADMIN_TODOS: AdminTodo[] = [
     why: 'MEXC trades, bills and syncs like Binance, but only admin / master / developer accounts may connect one — customers see "Coming soon". Nothing opens it by itself: until you decide, every MEXC signal only ever reaches staff accounts.',
     steps: [
       'Prove it on a real (non-testnet) staff account first: a full round trip, the fee receipts landing, and the funding sign confirmed (see the funding item below).',
-      'To open MEXC ALONE: on the server set EXCHANGES_STAFF_ONLY=bybit in /var/www/sinegualerts/api/.env and run php artisan config:cache. Nothing else — no deploy, no code change. Note the CSV: since Bybit landed on 2026-09-24 the key lists BOTH closed venues, so clearing it entirely would open Bybit at the same time. Setting it back to `mexc,bybit` closes both again, and accounts already connected keep trading either way.',
+      'To open MEXC ALONE: on the server set EXCHANGES_STAFF_ONLY=bybit in /var/www/sinegualerts/api/.env and run php artisan config:cache, THEN deploy the website with MEXC no longer marked staff-only in the app (the connect page carries its own copy of the lock). Note the CSV: since Bybit landed on 2026-09-24 the key lists BOTH closed venues, so clearing it entirely would open Bybit at the same time. Setting it back to `mexc,bybit` closes both again, and accounts already connected keep trading either way.',
       'Connecting the MASTER account to MEXC is a separate switch with its own consequence: it is what turns on MEXC Telegram recaps and the PnL line on MEXC close messages, which stay silent while the master has no account there.',
     ],
     envKeys: ['EXCHANGES_STAFF_ONLY'],
+  },
+  {
+    id: 'mexc-customer-billing',
+    feature: 'MEXC',
+    kind: 'decision',
+    title: 'How MEXC customers are billed until MEXC invoicing exists',
+    added: '2026-11-06',
+    why: 'MEXC opened to customers on Nov 6, 2026, but invoices only exist for Binance: the monthly run on the 1st skips MEXC, and the manual-fee tool in the Sandbox bills Binance accounts only. A customer who trades on MEXC therefore gets no invoice and pays no profit share until MEXC billing is built — and an unpaid MEXC month also never pauses their account.',
+    steps: [
+      'Decide: build MEXC invoicing before customers fund MEXC accounts, or accept that the first MEXC months go unbilled.',
+      'Until it exists, see who trades on MEXC under Admin → API Keys (filter MEXC), and each customer’s MEXC results on their user page with the MEXC pill selected.',
+      'Write the decision in the note here.',
+    ],
+    links: [{ label: 'API Keys', href: '/admin/api-keys' }],
   },
   {
     id: 'mexc-verify-funding-sign',
@@ -481,7 +495,7 @@ export const ADMIN_TODOS: AdminTodo[] = [
     steps: [
       'Prove it on a real (non-demo) staff account first: a full round trip, the fee receipts landing, and the funding sign confirmed.',
       'To open it: on the server set EXCHANGES_STAFF_ONLY=mexc in /var/www/sinegualerts/api/.env and run php artisan config:cache. That leaves MEXC closed and opens Bybit; clearing the key entirely would open both.',
-      'The landing-page and FAQ copy still says Bybit is coming soon — that is deliberate while it is staff-only, and it is a frontend change to make when it opens.',
+      'Then deploy the website with Bybit no longer marked staff-only in the app (the connect page carries its own copy of the lock), and with the landing-page, FAQ and Trading Bot copy that still says Bybit is coming soon updated in the same change.',
     ],
     envKeys: ['EXCHANGES_STAFF_ONLY'],
   },

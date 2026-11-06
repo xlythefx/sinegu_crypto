@@ -13,21 +13,24 @@ export default function ExchangesV2() {
             Connect where you already trade.
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-[16px] text-muted">
-            Link an account with trade-only API keys. Binance is live today — Bybit
-            and MEXC are landing soon.
+            Link an account with trade-only API keys. Binance and MEXC are live
+            today — Bybit is landing soon.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {EXCHANGE_ORDER.map((kind, i) => {
             const ex = EXCHANGE_META[kind]
+            // "Live" = a customer can connect it: wired AND not staff-only
+            // (`available` alone is true for every wired venue, Bybit included).
+            const live = ex.available && !ex.staffOnly
             return (
               <div
                 key={kind}
                 data-aos="fade-up"
                 data-aos-delay={i * 80}
                 className={`relative overflow-hidden rounded-card border p-7 transition-colors ${
-                  ex.available
+                  live
                     ? 'border-accent-line bg-surface'
                     : 'border-border bg-surface2'
                 }`}
@@ -48,7 +51,7 @@ export default function ExchangesV2() {
                       {ex.label}
                     </span>
                   </div>
-                  {ex.available ? (
+                  {live ? (
                     <span className="inline-flex items-center gap-1.5 rounded-pill bg-[var(--accentSoft)] px-3 py-1.5 text-[11.5px] font-semibold text-green">
                       <Check size={13} /> Live
                     </span>

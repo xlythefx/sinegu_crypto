@@ -8,8 +8,9 @@ import type { LegalDocumentContent } from '../types/legal'
  *
  * 1. The product is **Pixel Alpha** everywhere a human reads it.
  * 2. The venues are **exchanges** (Binance / Bybit / MEXC), never "brokers",
- *    and those three are the whole universe — Binance is live, Bybit and MEXC
- *    are "coming soon" until their tables land.
+ *    and those three are the whole universe — Binance and MEXC are open to
+ *    customers (MEXC since 2026-11-06), Bybit is "coming soon" while it is
+ *    staff-only (`staffOnly` in components/exchanges/meta.ts).
  * 3. Every number quoted here must match what the engine actually enforces
  *    (`trading-flask/binance_abcd/`) — the 1,000 USDT deposit gate, 20% of
  *    profit above the high-water mark, no withdrawal permission. A marketing
@@ -18,7 +19,7 @@ import type { LegalDocumentContent } from '../types/legal'
  */
 export const TRADING_BOT: LegalDocumentContent = {
   title: 'The Pixel Alpha Trading Bot',
-  updatedAt: 'September 4, 2026',
+  updatedAt: 'November 6, 2026',
   lede: 'Pixel Alpha is an automated crypto trading bot that runs on your own exchange account. You connect your exchange with trade-only API keys, our system sends the signals, and every trade is executed in your account — your money never leaves it. There is no subscription and no upfront cost: you pay 20% of the profit you actually make, and nothing at all in a month you do not.',
 
   sections: [
@@ -88,22 +89,22 @@ export const TRADING_BOT: LegalDocumentContent = {
       blocks: [
         {
           kind: 'p',
-          text: 'Pixel Alpha supports three exchanges, and only these three. We would rather run one integration properly than five badly, so each exchange goes live only once its execution, balance and position syncing have been proven on real money.',
+          text: 'Pixel Alpha supports three exchanges, and only these three. We would rather run one integration properly than five badly, so each exchange opens to customers only once its execution, balance and position syncing have been proven end to end.',
         },
         { kind: 'h3', text: '3.1 Binance — live' },
         {
           kind: 'p',
           text: 'Binance USD-M Futures is fully supported today: live orders, balance and position syncing, closed-trade history, funding and transfer tracking, and per-account invoicing. A Binance testnet mode is also available if you want to watch the bot operate on play money before committing real capital.',
         },
-        { kind: 'h3', text: '3.2 Bybit — coming soon' },
+        { kind: 'h3', text: '3.2 MEXC — live' },
         {
           kind: 'p',
-          text: 'Bybit support is in development. The strategy, the sizing rules and the billing model are identical; only the exchange adapter differs. It will appear in your dashboard as connectable the day it goes live — you will not need a new account or a new plan.',
+          text: 'MEXC USDT-M Futures is supported: live orders, balance and position syncing, closed-trade history, and funding and transfer tracking. The strategy and the sizing rules are the same as on Binance. A MEXC demo mode is also available if you want to watch the bot on test funds first.',
         },
-        { kind: 'h3', text: '3.3 MEXC — coming soon' },
+        { kind: 'h3', text: '3.3 Bybit — coming soon' },
         {
           kind: 'p',
-          text: 'MEXC support is likewise in development and will follow the same path. Until then the option is visible but locked, so you always know what is actually available rather than discovering it after you have created a key.',
+          text: 'Bybit support is in development and will follow the same path. Until then the option is visible but locked, so you always know what is actually available rather than discovering it after you have created a key. It will appear in your dashboard as connectable the day it goes live — you will not need a new account or a new plan.',
         },
         {
           kind: 'p',
