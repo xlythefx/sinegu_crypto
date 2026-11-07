@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { History, Layers, TrendingUpDown } from 'lucide-react'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { CheckCircle2, History, Layers, TrendingUpDown, X } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
 import AssetHistoryTab from '../../components/admin/assets/AssetHistoryTab'
@@ -61,11 +61,36 @@ export default function AdminAssets() {
   const selectExchange = (next: ExchangeFilter) =>
     setParam('exchange', next === 'all' ? null : next)
 
+  // "LTCUSDT on Binance saved." — handed over by the New / Edit coin page.
+  const location = useLocation()
+  const navigate = useNavigate()
+  const saved = (location.state as { saved?: string } | null)?.saved ?? null
+  const dismissSaved = () =>
+    navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null })
+
   const list = useMemo(() => assets ?? [], [assets])
   const counts = useMemo(() => countByExchange(list), [list])
 
   return (
     <AdminLayout title="Trading Assets" subtitle="Manage tradable instruments">
+      {saved && (
+        <div
+          className="mb-stack flex items-center gap-3 rounded-row border border-[color-mix(in_srgb,var(--green)_35%,transparent)] bg-[color-mix(in_srgb,var(--green)_8%,transparent)] py-2 pl-3.5 pr-2 animate-[fadeup_0.35s_ease-out]"
+          role="status"
+        >
+          <CheckCircle2 size={16} className="flex-none text-green" aria-hidden="true" />
+          <p className="min-w-0 flex-1 text-[13px] font-semibold text-text">{saved}</p>
+          <button
+            type="button"
+            onClick={dismissSaved}
+            className="inline-flex h-9 w-9 flex-none cursor-pointer items-center justify-center rounded-btn text-muted hover:text-text focus-visible:outline-2 focus-visible:outline-accent"
+            aria-label="Dismiss"
+          >
+            <X size={15} aria-hidden="true" />
+          </button>
+        </div>
+      )}
+
       <div className="mb-stack flex flex-col gap-3">
         <Tabs tabs={TABS} active={tab} onChange={selectTab} label="Trading assets sections" />
         {assets && (

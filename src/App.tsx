@@ -56,6 +56,7 @@ import AdminReferrals from './pages/admin/AdminReferrals'
 import AdminReleasePayment from './pages/admin/AdminReleasePayment'
 import AdminTodo from './pages/admin/AdminTodo'
 import AdminVisitors from './pages/admin/AdminVisitors'
+import AdminAssetEditor from './pages/admin/AdminAssetEditor'
 
 function App() {
   return (
@@ -101,6 +102,8 @@ function App() {
               <Route path="/admin/api-keys" element={<AdminApiKeys />} />
               <Route path="/admin/strategies/:key" element={<AdminStrategyDetail />} />
               <Route path="/admin/strategies" element={<AdminStrategies />} />
+              <Route path="/admin/assets/new" element={<AdminAssetEditor />} />
+              <Route path="/admin/assets/:assetId/edit" element={<AdminAssetEditor />} />
               <Route path="/admin/assets" element={<AdminAssets />} />
               <Route path="/admin/positions" element={<AdminPositions />} />
               <Route path="/admin/engine" element={<AdminEngine />} />

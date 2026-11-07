@@ -1,5 +1,7 @@
+import type { ReactNode } from 'react'
 import { History, Pencil, ShieldAlert, Trash2, TrendingUpDown } from 'lucide-react'
 import AssetLogo from './assets/AssetLogo'
+import EntryPips from './assets/EntryPips'
 import KilledAssetStrip from './assets/KilledAssetStrip'
 import PendingSizingStrip from './assets/PendingSizingStrip'
 import { EXCHANGE_META, exchangeFromBroker } from '../exchanges/meta'
@@ -29,8 +31,8 @@ const SIDE_TONE: Record<AdminAsset['side'], string> = {
   ALL: 'text-muted border-border bg-surface2',
 }
 
-const ICON_BTN_BASE =
-  'inline-flex h-8 w-8 items-center justify-center rounded-btn border border-border bg-surface2 text-muted transition-[border-color,color] duration-150 disabled:cursor-not-allowed disabled:opacity-50'
+const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent'
+const ICON_BTN_BASE = `inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-btn border border-border bg-surface2 text-muted transition-[border-color,color] duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS}`
 
 /** One number with its caption and the unit that makes it mean something. */
 function Metric({
@@ -41,7 +43,7 @@ function Metric({
 }: {
   label: string
   value: string
-  hint: string
+  hint: ReactNode
   accent?: boolean
 }) {
   return (
@@ -61,7 +63,7 @@ function Metric({
       >
         {value}
       </p>
-      <span className="mt-1 block text-[10.5px] leading-tight text-muted">{hint}</span>
+      <span className="mt-1.5 block text-[10.5px] leading-tight text-muted">{hint}</span>
     </div>
   )
 }
@@ -91,8 +93,8 @@ export default function AssetCard({
 
   return (
     <article
-      className={`flex flex-col gap-3.5 rounded-card border bg-surface p-4 transition-[border-color] duration-150 hover:border-accent ${
-        asset.enabled ? 'border-border' : 'border-hair'
+      className={`flex flex-col gap-3.5 rounded-card border bg-surface p-4 transition-[border-color,opacity] duration-150 hover:border-accent-line ${
+        asset.enabled ? 'border-border' : 'border-hair opacity-80 hover:opacity-100'
       }`}
     >
       <header className="flex items-start gap-3">
@@ -104,9 +106,15 @@ export default function AssetCard({
         />
 
         <div className="min-w-0 flex-1">
-          <p className="truncate font-mono text-[15px] font-extrabold tracking-[-0.01em]">
+          <button
+            type="button"
+            onClick={() => onEdit(asset)}
+            disabled={busy}
+            className={`block max-w-full cursor-pointer truncate rounded-[4px] text-left font-mono text-[15px] font-extrabold tracking-[-0.01em] hover:text-accent disabled:cursor-not-allowed ${FOCUS}`}
+            title={`Edit ${asset.ticker}`}
+          >
             {displaySymbol(asset.ticker)}
-          </p>
+          </button>
           <p className="mt-0.5 truncate text-[11.5px] text-muted">
             <span className={exchange ? 'font-semibold text-text' : ''}>{venue}</span>
             {asset.type && ` · ${asset.type}`}
@@ -156,9 +164,9 @@ export default function AssetCard({
           label="Max position size"
           value={fmtQty(asset.max_increments)}
           hint={
-            asset.base_size > 0
-              ? `= ${Math.max(1, Math.round(asset.max_increments / asset.base_size))} entries max`
-              : 'set a base size first'
+            <EntryPips
+              entries={asset.base_size > 0 ? Math.max(1, Math.round(asset.max_increments / asset.base_size)) : null}
+            />
           }
         />
       </div>
@@ -191,7 +199,7 @@ export default function AssetCard({
       <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-hair pt-3">
         <button
           type="button"
-          className="inline-flex items-center gap-2 rounded-pill bg-transparent py-1 pr-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className={`inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-pill bg-transparent pr-2 disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS}`}
           onClick={() => onToggle(asset)}
           disabled={busy}
           aria-label={`${asset.enabled ? 'Disable' : 'Enable'} ${asset.ticker} on ${venue}`}
@@ -214,7 +222,7 @@ export default function AssetCard({
               asset.enabled ? 'text-green' : 'text-muted'
             }`}
           >
-            {asset.enabled ? 'Enabled' : 'Disabled'}
+            {asset.enabled ? 'Trading' : 'Off'}
           </span>
         </button>
 
@@ -230,13 +238,13 @@ export default function AssetCard({
           </button>
           <button
             type="button"
-            className={`${ICON_BTN_BASE} hover:border-accent hover:text-text`}
+            className={`inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-btn border border-border bg-surface2 px-3.5 text-[12.5px] font-semibold text-text transition-[border-color] duration-150 hover:border-accent disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS}`}
             onClick={() => onEdit(asset)}
             disabled={busy}
             aria-label={`Edit ${asset.ticker} on ${venue}`}
-            title="Edit asset"
           >
-            <Pencil size={15} />
+            <Pencil size={14} aria-hidden="true" />
+            Edit
           </button>
           <button
             type="button"

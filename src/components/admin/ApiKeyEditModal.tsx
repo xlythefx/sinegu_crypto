@@ -3,7 +3,7 @@ import { KeyRound, Lock } from 'lucide-react'
 import { EXCHANGE_META } from '../exchanges/meta'
 import type { AdminApiKey, AdminApiKeyUpdateInput } from '../../types/admin'
 
-/* ---- shared class strings (same vocabulary as AssetFormModal) ---- */
+/* ---- shared class strings (the admin form-modal vocabulary) ---- */
 const FIELD = 'flex flex-col gap-1.5'
 const FIELD_LABEL = 'text-[12px] font-semibold text-muted'
 const FIELD_HINT = 'text-[11px] text-faint'

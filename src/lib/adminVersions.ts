@@ -15,6 +15,33 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-11-07 ───────────────────────────────────────────────────────────
   {
+    id: 'assets-editor-page',
+    date: '2026-11-07',
+    kind: 'improved',
+    area: 'Trading Assets',
+    title: 'Trading Assets: adding or editing a coin now has its own page, with a live preview',
+    summary:
+      'The “Create / Edit asset” pop-up had grown too long to use comfortably (sizes, the Binance check, streak sizing, the kill switch). It is now a page of its own: the form on the left and, beside it, a preview of the coin’s card that changes as you type, plus the Binance check. The list of coins got a tidier filter bar and clearer cards. Example: typing a base size of 0.5 with “3×” picked shows straight away “1.5 LTC · up to 3 entries per position” and the card preview with three dots.',
+    howItWorks: [
+      'On Admin → Trading Assets, press New coin (or “Add Binance coin” on an exchange’s section, which opens the page with that exchange picked). Press Edit on a card, or click the coin’s name, to change it.',
+      'The page is in four parts: Coin (ticker, image, exchange, trade direction), Sizing (base size and max position), Trading (on or off) and Streak sizing & kill switch (folded away until you need it).',
+      'On a computer, the preview card and the Binance check stay in view on the right while you scroll the form. On a phone, they appear right after Sizing.',
+      'The bar at the bottom says whether there is anything to save. If something is wrong (an empty ticker, a max position smaller than one entry), it says what and takes you to it. Saving still asks for confirmation, and you return to the list with a “saved” note.',
+      'Leaving the page with unsaved changes asks first.',
+      'On the list: filter by status (Trading, Off, Needs attention = stopped by the kill switch or a size change waiting for a close), by type, or search by ticker. The filters stay in the address, so a link keeps them. Each card shows how many entries fit as dots (or the number, for long stacks) and has a labelled Edit button.',
+    ],
+    technical: [
+      'Routes /admin/assets/new[?broker=] and /admin/assets/:assetId/edit → pages/admin/AdminAssetEditor (loads GET /admin/assets, picks the row). Saves through the existing createAsset / updateAsset (unchanged API).',
+      'components/admin/assets/editor/* (AssetEditor, Identity/Sizing/Trading/StreakSection, AssetPreview, EditorActionBar, ChoiceGroup); state in hooks/useAssetDraft + hooks/useAssetImage, pure rules in lib/assetDraft (draftFrom opens on intendedSizing, so a waiting size change is kept). Replaces AssetFormModal.',
+      'List filters moved to the shared filter kit (useUrlFilters: q, status, type); lib/assetFilters. Designed with the ui-ux-pro-max guidance (44px targets, inline validation, sticky save bar, visible focus).',
+    ],
+    links: [
+      { label: 'Trading Assets', href: '/admin/assets' },
+      { label: 'New coin', href: '/admin/assets/new' },
+    ],
+  },
+  // ── 2026-11-07 ───────────────────────────────────────────────────────────
+  {
     id: 'binance-sizing-check',
     date: '2026-11-07',
     kind: 'new',

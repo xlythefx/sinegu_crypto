@@ -4,7 +4,7 @@ import { isTester } from '../../lib/roles'
 import { TESTER_TINT } from './badges'
 import type { AdminUserCreateInput, UserRole, UserStatus } from '../../types/admin'
 
-/* ---- shared class strings (same vocabulary as AssetFormModal) ---- */
+/* ---- shared class strings (the admin form-modal vocabulary) ---- */
 const FIELD = 'flex flex-col gap-1.5'
 const FIELD_LABEL = 'text-[12px] font-semibold text-muted'
 const FIELD_HINT = 'text-[11px] text-faint'
