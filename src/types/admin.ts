@@ -1250,3 +1250,36 @@ export interface AdminTronTransfersData {
   counts: AdminTronCounts
   transfers: AdminTronTransfer[]
 }
+
+/** What Binance says about a coin: listed, its order minimums and the mark price. */
+export interface BinanceCoinRules {
+  listed: boolean
+  status: string | null
+  price: number | null
+  step_size: string | null
+  /** Smallest quantity of one MARKET order (the stricter of LOT_SIZE / MARKET_LOT_SIZE). */
+  min_qty: number | null
+  /** Smallest order value in USDT. */
+  min_notional: number | null
+}
+
+/** GET /admin/assets/binance-check — the asset form's Binance check. */
+export interface BinanceSizingCheckData {
+  ticker: string
+  symbol: string
+  /** null when Binance could not be reached (see binance_error). */
+  binance: BinanceCoinRules | null
+  binance_error: string | null
+  /** The smallest account the engine would open a position on (deposit gate passed, key working). */
+  accounts: {
+    count: number
+    smallest_balance: number | null
+    smallest_name: string | null
+    /** No live account qualifies, so these are demo accounts. */
+    demo_only: boolean
+  }
+  /** The leverage signals carry: this coin's latest main-feed signal, else any coin's, else any feed's. */
+  leverage: { value: number | null; source: 'coin' | 'exchange' | 'any_feed' | null }
+  min_deposit: number
+  checked_at: string
+}

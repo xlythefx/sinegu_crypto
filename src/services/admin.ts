@@ -33,6 +33,7 @@ import type {
   AssetStreakSize,
   AssetStreakSizingInput,
   AssetStreaks,
+  BinanceSizingCheckData,
   BulkKeyDeleteResult,
   CacheClearResult,
   ClearInvoicesResult,
@@ -179,6 +180,18 @@ function normalizeAsset(asset: AdminAsset): AdminAsset {
       price: num(asset.main_account?.price),
     },
   }
+}
+
+/**
+ * GET /admin/assets/binance-check — for the asset form, before saving: the
+ * coin's order minimums and mark price on Binance, the smallest account the
+ * engine would trade it on, and the leverage the signals carry.
+ */
+export async function getBinanceSizingCheck(ticker: string): Promise<BinanceSizingCheckData> {
+  return apiFetch<BinanceSizingCheckData & { success: boolean }>(
+    `/admin/assets/binance-check?ticker=${encodeURIComponent(ticker)}`,
+    { auth: true },
+  )
 }
 
 export async function getAdminAssets(): Promise<AdminAsset[]> {

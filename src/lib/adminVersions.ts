@@ -13,6 +13,32 @@ import type { AdminChange } from '../types/adminVersions'
  *    later change to the same feature gets its own entry.
  */
 export const ADMIN_CHANGES: AdminChange[] = [
+  // ── 2026-11-07 ───────────────────────────────────────────────────────────
+  {
+    id: 'binance-sizing-check',
+    date: '2026-11-07',
+    kind: 'new',
+    area: 'Trading assets',
+    title: 'Pick the max position as 1×, 2× or 3×, and check a coin’s size against Binance before saving',
+    summary:
+      'When you add or edit a Binance coin, the max position is now a choice of 1×, 2× or 3× the base size, so nobody has to multiply by hand. A new Binance check shows, in dollars, the smallest order Binance accepts for the coin, what one entry and the full position are worth, and how much of the smallest trading account’s balance the full position ties up. If that is too much, it suggests a smaller base size you can use with one click. Example: LTC at $52.49 with a base size of 14 and 3× is a full position of 42 LTC ≈ $2,205. At 25× leverage that needs about $88 of margin, 19% of a 470 USDT account, so it fits. On a 300 USDT account it would be 29%, and the check suggests a base size of 11 instead.',
+    howItWorks: [
+      'Admin → Trading Assets → Add coin (or Edit) on a Binance coin: choose 1×, 2× or 3× under Max position. Custom still lets you type the amount. A coin whose max is not exactly 1×, 2× or 3× its base size opens on Custom, unchanged.',
+      'The Binance check fills in once the ticker is typed. Binance minimum order: the smallest order Binance takes for this coin, in coins and dollars. Base size: one entry, and how many times the minimum it is. It is flagged when it is under the minimum, or close to it.',
+      'Full position: all the entries the max allows, on the smallest account, with the margin it needs at the leverage the signals use.',
+      'Smallest trading account: the smallest account the bot would actually trade, so one that has deposited at least 1,000 USDT and has a working key. It is green up to 25% of its balance, amber above 25%, and red when the full position needs more than its whole balance.',
+      'Amber or red comes with a suggested base size and a “Use” button that puts it in the form. Nothing is saved until you press Save.',
+      'Prices move, so the check is a snapshot. Press the refresh arrow to check again. MEXC and Bybit coins keep the old fields.',
+    ],
+    technical: [
+      'GET /api/admin/assets/binance-check?ticker= (admin, throttle 30/min) → App\\Services\\Assets\\BinanceSizingCheck: /fapi/v1/exchangeInfo cut to step size, min quantity (the stricter of LOT_SIZE / MARKET_LOT_SIZE) and MIN_NOTIONAL, cached 1 h with a 7-day last-good copy; /fapi/v1/premiumIndex mark price, cached 30 s.',
+      'Smallest account: EngineController::accounts’ filter, minus blocked keys, with initial_deposit + net transfers >= services.engine.min_deposit and balance > 0. Live first, demo only when no live account qualifies (demo_only).',
+      'Leverage: the latest non-null trade_logs.leverage for exchange=binance, main feed, this ticker; else main feed, any ticker; else any feed. If there is none, the client assumes 25×.',
+      'Client: lib/binanceSizingCheck.ts (entries = entriesFor, entry = scalePreview, floors to the step size; the suggestion is 25% × min(balance, 1000) × leverage ÷ (entries × price), floored to 2 significant figures and the step size). UI: components/admin/assets/BinanceSizingCheck.tsx + hooks/useBinanceSizingCheck.ts.',
+      'Tests: tests/Feature/AssetBinanceCheckTest.php.',
+    ],
+    links: [{ label: 'Trading Assets', href: '/admin/assets' }],
+  },
   // ── 2026-11-06 ───────────────────────────────────────────────────────────
   {
     id: 'mexc-open-to-customers',

@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ChevronDown, Hourglass, ImagePlus, X } from 'lucide-react'
+import BinanceSizingCheck from './assets/BinanceSizingCheck'
 import KillSwitchField from './assets/KillSwitchField'
 import StreakSizingFields from './assets/StreakSizingFields'
+import { useBinanceSizingCheck } from '../../hooks/useBinanceSizingCheck'
+import { MAX_MULTIPLES, maxFor, multipleOf, type MaxMultiple } from '../../lib/binanceSizingCheck'
 import { fmtDateTime } from '../../lib/format'
-import { holderText, intendedSizing, mainEntryText } from '../../lib/assetSizing'
+import { baseCoin, holderText, intendedSizing, mainEntryText } from '../../lib/assetSizing'
 import {
   isKilled,
   killDraftError,
@@ -75,6 +78,8 @@ export default function AssetFormModal({
   const [form, setForm] = useState<AssetInput>(EMPTY)
   const [maxIncrements, setMaxIncrements] = useState('1')
   const [baseSize, setBaseSize] = useState('0.001')
+  // Binance: max position = base size × this multiple; 'custom' types the amount.
+  const [maxMultiple, setMaxMultiple] = useState<MaxMultiple | 'custom'>(3)
 
   // Streak sizing. This form always sends the switch and the ladder, so it
   // owns them: what is shown here is exactly what gets saved (rows with no
@@ -113,6 +118,8 @@ export default function AssetFormModal({
       })
       setMaxIncrements(String(sizing.max_increments))
       setBaseSize(String(sizing.base_size))
+      // A max that is not exactly 1×/2×/3× the base opens on Custom, untouched.
+      setMaxMultiple(multipleOf(sizing.max_increments, sizing.base_size) ?? 'custom')
       setExistingImage(asset.asset_image)
       setStreakEnabled(sizing.streak_sizing_enabled)
       setStreakRows(rowsFromSteps(sizing.streak_sizes))
@@ -123,6 +130,7 @@ export default function AssetFormModal({
       setForm(defaultBroker ? { ...EMPTY, broker: defaultBroker } : EMPTY)
       setMaxIncrements('1')
       setBaseSize('0.001')
+      setMaxMultiple(3)
       setExistingImage(null)
       setStreakEnabled(false)
       setStreakRows([])
@@ -143,6 +151,17 @@ export default function AssetFormModal({
       if (previewUrl) URL.revokeObjectURL(previewUrl)
     }
   }, [previewUrl])
+
+  const isBinance = form.broker === 'Binance'
+
+  // Binance: keep the max position at base size × the picked multiple.
+  useEffect(() => {
+    if (!open || form.broker !== 'Binance' || maxMultiple === 'custom') return
+    const base = Number(baseSize)
+    if (Number.isFinite(base) && base > 0) setMaxIncrements(String(maxFor(base, maxMultiple)))
+  }, [open, form.broker, baseSize, maxMultiple])
+
+  const binanceCheck = useBinanceSizingCheck(open && isBinance ? form.ticker : null)
 
   useEffect(() => {
     if (!open) return
@@ -204,6 +223,7 @@ export default function AssetFormModal({
   const waiting = asset?.pending_sizing ?? null
 
   const streakSteps = stepsFromRows(streakRows)
+  const largestStreakSize = streakSteps.reduce((m, s) => Math.max(m, Number(s.size) || 0), 0)
   const killValue = killDraftValue(kill)
   const killed = asset !== null && isKilled(asset)
 
@@ -246,6 +266,43 @@ export default function AssetFormModal({
   else if (typeof killValue === 'number') {
     streakSummary.push(`kill switch after ${killValue} ${killValue === 1 ? 'loss' : 'losses'}`)
   } else if (kill.on) streakSummary.push('kill switch on')
+
+  const baseSizeField = (
+    <label className={FIELD}>
+      <span className={FIELD_LABEL}>Base size *</span>
+      <input
+        type="number"
+        className={CONTROL}
+        value={baseSize}
+        onChange={(e) => setBaseSize(e.target.value)}
+        min="0.000001"
+        step="0.000001"
+        required
+      />
+      <span className="mt-1 font-mono text-[11px] text-muted">
+        one entry, per 1,000 USDT of balance
+      </span>
+    </label>
+  )
+
+  /*
+    The max position is a SIZE, and the engine turns it into a stack depth
+    (size / base size). Showing that depth live is the whole point: typing "3"
+    means three CONTRACTS, not three entries, and the difference is invisible
+    until a position stacks further than it should. Mirrors the same
+    derivation in AssetCard and assets_api.
+  */
+  const stackNote = maxTooSmall ? (
+    <span className="mt-1 text-[11.5px] font-semibold leading-[1.45] text-red" role="alert">
+      Smaller than the base size — one entry would already be over the limit.
+    </span>
+  ) : (
+    <span className="mt-1 font-mono text-[11px] text-muted">
+      {stackDepth === null
+        ? 'set a base size to see the stack depth'
+        : `= ${stackDepth} entr${stackDepth === 1 ? 'y' : 'ies'} max per position`}
+    </span>
+  )
 
   return (
     <div
@@ -405,53 +462,78 @@ export default function AssetFormModal({
           </small>
         </label>
 
-        <div className="grid grid-cols-2 gap-3">
-          <label className={FIELD}>
-            <span className={FIELD_LABEL}>Max position size *</span>
-            <input
-              type="number"
-              className={CONTROL}
-              value={maxIncrements}
-              onChange={(e) => setMaxIncrements(e.target.value)}
-              min="0.001"
-              step="0.001"
-              required
-            />
-            {/*
-              This field is a SIZE, and the engine turns it into a stack depth
-              (size / base size). Showing that depth live is the whole point:
-              typing "3" here means three CONTRACTS, not three entries, and the
-              difference is invisible until a position stacks further than it
-              should. Mirrors the same derivation in AssetCard and assets_api.
-            */}
-            {maxTooSmall ? (
-              <span className="mt-1 text-[11.5px] font-semibold leading-[1.45] text-red" role="alert">
-                Smaller than the base size — one entry would already be over the limit.
+        {isBinance ? (
+          <>
+            {baseSizeField}
+            {/* Binance: the max position is picked as a multiple of the base
+                size, so nobody has to multiply by hand. Custom types it. */}
+            <div className={FIELD}>
+              <span className={FIELD_LABEL} id="afm-max-multiple">
+                Max position *
               </span>
-            ) : (
-              <span className="mt-1 font-mono text-[11px] text-muted">
-                {stackDepth === null
-                  ? 'set a base size to see the stack depth'
-                  : `= ${stackDepth} entr${stackDepth === 1 ? 'y' : 'ies'} max per position`}
-              </span>
-            )}
-          </label>
-          <label className={FIELD}>
-            <span className={FIELD_LABEL}>Base size *</span>
-            <input
-              type="number"
-              className={CONTROL}
-              value={baseSize}
-              onChange={(e) => setBaseSize(e.target.value)}
-              min="0.000001"
-              step="0.000001"
-              required
-            />
-            <span className="mt-1 font-mono text-[11px] text-muted">
-              one entry, per 1,000 USDT of balance
-            </span>
-          </label>
-        </div>
+              <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-labelledby="afm-max-multiple">
+                {[...MAX_MULTIPLES, 'custom' as const].map((m) => {
+                  const active = maxMultiple === m
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => setMaxMultiple(m)}
+                      className={`h-[42px] rounded-field border text-[13px] font-bold font-body transition-colors duration-150 ${
+                        active
+                          ? 'border-accent bg-accent text-on-accent'
+                          : 'border-border bg-surface2 text-muted hover:border-accent hover:text-text'
+                      }`}
+                    >
+                      {m === 'custom' ? 'Custom' : `${m}×`}
+                    </button>
+                  )
+                })}
+              </div>
+              {maxMultiple === 'custom' && (
+                <input
+                  type="number"
+                  className={CONTROL}
+                  value={maxIncrements}
+                  onChange={(e) => setMaxIncrements(e.target.value)}
+                  min="0.001"
+                  step="0.001"
+                  aria-label="Max position size"
+                  placeholder="Max position in coins"
+                  required
+                />
+              )}
+              {maxTooSmall ? stackNote : (
+                <span className="mt-1 font-mono text-[11px] text-muted">
+                  {stackDepth === null
+                    ? 'set a base size to see the max position'
+                    : `= ${maxIncrements} ${baseCoin(form.ticker || 'COIN')} · ${stackDepth} entr${
+                        stackDepth === 1 ? 'y' : 'ies'
+                      } max per position`}
+                </span>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <label className={FIELD}>
+              <span className={FIELD_LABEL}>Max position size *</span>
+              <input
+                type="number"
+                className={CONTROL}
+                value={maxIncrements}
+                onChange={(e) => setMaxIncrements(e.target.value)}
+                min="0.001"
+                step="0.001"
+                required
+              />
+              {stackNote}
+            </label>
+            {baseSizeField}
+          </div>
+        )}
 
         {/* What the size means in coins and dollars on the account the
             strategy is measured on — "120" alone hides that it is 2,100
@@ -459,6 +541,23 @@ export default function AssetFormModal({
         {entryText && (
           <p className="-mt-1 rounded-row border border-border bg-surface2 px-3 py-2 font-mono text-[11.5px] leading-[1.5] text-muted">
             {entryText}
+          </p>
+        )}
+
+        {/* Binance's minimum order and the smallest account, in dollars. */}
+        {isBinance && (
+          <BinanceSizingCheck
+            ticker={form.ticker}
+            baseSize={Number(baseSize) > 0 ? Number(baseSize) : 0}
+            maxPosition={Number(maxIncrements)}
+            check={binanceCheck}
+            onUseBase={(b) => setBaseSize(String(b))}
+          />
+        )}
+        {isBinance && streakEnabled && largestStreakSize > Number(baseSize) && (
+          <p className="-mt-1 text-[11.5px] leading-[1.5] text-faint">
+            Streak sizing can make an entry as big as {largestStreakSize} — the check above uses the
+            base size, so a streak entry ties up more margin than it shows.
           </p>
         )}
 
