@@ -162,6 +162,12 @@ export default function AdminInvoiceDetailModal({
                   </p>
                 </div>
               </div>
+              {/* Transfers move the mark and are never billed (2026-11-08). */}
+              {invoice.capitalFlow !== 0 && (
+                <Row k="Deposits − withdrawals this month" tone={invoice.capitalFlow >= 0 ? 'pos' : 'neg'}>
+                  {fmtSignedMoney(invoice.capitalFlow)}
+                </Row>
+              )}
             </section>
           </div>
 

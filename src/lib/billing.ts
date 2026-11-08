@@ -5,6 +5,7 @@
  */
 
 import type { ExchangeKind } from '../types/exchanges'
+import { fmtMoney } from './format'
 
 export type InvoiceStatus = 'pending' | 'paid'
 
@@ -44,6 +45,12 @@ export interface Invoice {
   realizedPercent: number
   unrealizedPercent: number
   depositAmount?: number
+  /**
+   * Net money added (+) or taken out (−) during the month. Never billed as
+   * profit or counted as a loss: the high-water mark moves by the same amount
+   * (2026-11-08), which is why a mark can go DOWN.
+   */
+  capitalFlow: number
   isFirstInvoice: boolean
   referenceLabel: string
   referenceValue: number
@@ -76,6 +83,8 @@ export interface ApiInvoice {
   fee_realized: number
   fee_unrealized: number
   deposit_amount?: number
+  /** Absent from an API older than 2026-11-08 — read as 0. */
+  capital_flow?: number
   is_first_invoice: boolean
   reference_label: string
   reference_value: number
@@ -114,10 +123,24 @@ export function mapApiInvoice(row: ApiInvoice): Invoice {
         ? Math.round((row.fee_unrealized / row.unrealized_pnl) * 100)
         : UNREALIZED_FEE_PERCENT,
     depositAmount: row.deposit_amount,
+    capitalFlow: row.capital_flow ?? 0,
     isFirstInvoice: row.is_first_invoice,
     referenceLabel: row.reference_label,
     referenceValue: row.reference_value,
   }
+}
+
+/**
+ * One sentence on the month's deposits / withdrawals, or null when no money
+ * moved. Shared by the invoice page, the printable document and the admin
+ * view so all three say the same thing.
+ */
+export function capitalFlowNote(inv: Invoice): string | null {
+  const flow = Math.round(inv.capitalFlow * 100) / 100
+  if (flow === 0) return null
+  // fmtMoney prints the absolute value, so the verb carries the direction.
+  const moved = flow > 0 ? `added ${fmtMoney(flow)}` : `took out ${fmtMoney(flow)}`
+  return `This month you ${moved}. Money you add or take out is not profit or loss, so it was not billed — the high-water mark moved by the same amount.`
 }
 
 /** A period earns a fee only when its total fee is positive. */

@@ -246,7 +246,19 @@ binance|bybit|mexc — renamed from `binance_invoices`, HWM stored on the row).
 `InvoiceService` (`generateForAccount` + a single idempotent `settle()`) is the reusable
 core; a `PnlSource` adapter per exchange (only `BinancePnlSource` so far). Fees are
 mother-style: per-user `realized_percentage × realized + unrealized_percentage × unrealized`
-(defaults 20% / 6% on `user_credentials`). Endpoints: user `GET /invoices`,`/invoices/{id}`;
+(defaults 20% / 6% on `user_credentials`).
+**Deposits and withdrawals are neither profit nor loss (2026-11-08)** —
+`InvoiceService::applyHighWaterMark` is the one definition: the HWM test uses
+`performance_equity = equity now − the month's net transfers − transfers made
+after month end but before the run`, and `hwm_after = max(hwm_before,
+performance_equity) + the month's transfers`, so the mark FALLS with a
+withdrawal and rises with a deposit. First invoice: `hwm_before =
+initial_deposit + transfers before the month`. Because a mark can now fall,
+**"the current HWM" is the LATEST month's `hwm_after`
+(`Invoice::latestHwmByAccount`), never `MAX(hwm_after)`.** Found when October
+2026 billed a +120.18 month $0 because of a 254.99 withdrawal (re-issued at
+$24.04); the Invoice Scenarios catalogue now runs in CI (`InvoiceScenariosTest`).
+Endpoints: user `GET /invoices`,`/invoices/{id}`;
 admin `GET/POST/PUT/DELETE /admin/invoices*`. **Admin Invoice History** (`/admin/invoices`)
 lists/filters/settles/deletes; **Admin Sandbox → Invoice Testing** generates an invoice from
 a user's closed P&L and marks it paid (manual charging). Its **Manual fee** tab

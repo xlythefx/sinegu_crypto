@@ -74,7 +74,10 @@ function setupLine(s: InvoiceScenario['setup']): string {
   } else {
     bits.push('no closed trades')
   }
-  if (s.deposits.length) bits.push(`deposits ${s.deposits.map((d) => fmtMoney(d)).join(', ')}`)
+  // A negative entry is a withdrawal (the runner records it as one).
+  if (s.deposits.length) {
+    bits.push(s.deposits.map((d) => (d < 0 ? `withdraws ${fmtMoney(-d)}` : `deposits ${fmtMoney(d)}`)).join(', '))
+  }
   if (s.prior_hwm !== null) bits.push(`prior peak ${fmtMoney(s.prior_hwm)}`)
   return bits.join(' · ')
 }

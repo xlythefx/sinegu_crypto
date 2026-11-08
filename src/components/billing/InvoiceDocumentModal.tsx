@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { COMPANY, OFFICE, VAT_RATE } from '../../lib/company'
 import { fmtMoney, fmtSignedMoney, fmtSignedPct, fmtMediumDate } from '../../lib/format'
-import { hasFee, type Invoice } from '../../lib/billing'
+import { capitalFlowNote, hasFee, type Invoice } from '../../lib/billing'
 import { EXCHANGE_META } from '../exchanges/meta'
 
 /**
@@ -89,6 +89,7 @@ export default function InvoiceDocumentModal({
   const fee = hasFee(invoice)
   const overdue = !paid && invoice.isOverdue && fee
   const exchange = EXCHANGE_META[invoice.exchange].label
+  const flowNote = capitalFlowNote(invoice)
 
   // Line items mirror the fee breakdown exactly: one line per profit share that
   // actually earned a fee. A zero-fee period still prints a line — an invoice
@@ -500,6 +501,7 @@ export default function InvoiceDocumentModal({
                 Fees are charged only on profit above your high-water mark of{' '}
                 {invoice.hwmBefore != null ? fmtMoney(invoice.hwmBefore) : 'your starting capital'}
                 {' '}— you never pay twice on the same gains.{' '}
+                {flowNote && `${flowNote} `}
                 {paid
                   ? 'This billing period is settled. Thank you.'
                   : `Settle in USDT (TRC-20) or by card from your ${COMPANY.name} billing page.`}

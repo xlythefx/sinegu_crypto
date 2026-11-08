@@ -13,6 +13,33 @@ import type { AdminChange } from '../types/adminVersions'
  *    later change to the same feature gets its own entry.
  */
 export const ADMIN_CHANGES: AdminChange[] = [
+  // ── 2026-11-08 ───────────────────────────────────────────────────────────
+  {
+    id: 'billing-transfers-not-profit',
+    date: '2026-11-08',
+    kind: 'fixed',
+    area: 'Billing',
+    title: 'Billing: money a customer adds or takes out no longer counts as profit or loss',
+    summary:
+      'We only charge while a customer’s account is above its previous high point (the high-water mark). That check used to look at the plain balance, so a withdrawal looked like a trading loss and a deposit looked like a gain. Example from October: a customer closed +$120.18 in trades and withdrew $254.99, ended below his September high point, and was billed $0. Now the withdrawal is put back before the check: he was above his high point, so the bill is 20% of $120.18 = $24.04. That October invoice has been re-issued.',
+    howItWorks: [
+      'Before deciding whether to charge, the monthly bill adds back everything the customer withdrew that month and takes away everything they deposited. Only what trading did is compared with the high point.',
+      'The high point then moves with the money. Withdraw $2,000 and it drops by $2,000; deposit $5,000 and it rises by $5,000. Next month is measured against what is actually in the account, so nobody has to “earn back” cash they took out, and a top-up never pays for profit that was not made.',
+      'Money moved on the morning of the 1st, before the bill runs, belongs to the new month and is set aside the same way.',
+      'The fee itself is unchanged: 20% of the month’s closed profit (6% of open profit), whenever the account is above its high point.',
+      'The invoice page, the printable invoice and the admin invoice view now say how much was added or taken out that month, so a high point that went down is explained.',
+      'October’s invoices were re-checked with the new rule. Only one amount changed (the $24.04 above); the other customers lost money in October, so their $0 stands. Lloyd’s high point was lowered by the $5,910 he took out, so December’s bill measures him fairly.',
+    ],
+    technical: [
+      'InvoiceService::applyHighWaterMark (pure) is the one definition: performance_equity = equity_now − flow_in_month − flow_after_month_end; chargeable when > hwm_before; hwm_after = max(hwm_before, performance_equity) + flow_in_month. First invoice: hwm_before = initial_deposit + flows before the month.',
+      'BinancePnlSource adds flowBefore / flowAfter. Readers of the current mark use Invoice::latestHwmByAccount (latest month per exchange:account) instead of MAX(hwm_after), which is wrong once a mark can fall: UserStatsService summary, AdminUserController (accounts[].hwm, summary.hwm). AdminInsights forecast status uses performance_equity.',
+      'toApiArray adds capital_flow; lib/billing capitalFlowNote. Three new hand-derived Invoice Scenarios (withdrawal_profit_month, withdrawal_loss_month, deposit_hides_loss); InvoiceScenariosTest runs the whole catalogue in CI; InvoiceCapitalFlowTest. Issued invoices are not regenerated; October 2026 rows were corrected once from their stored figures.',
+    ],
+    links: [
+      { label: 'Invoice History', href: '/admin/invoices' },
+      { label: 'Invoice Scenarios', href: '/admin/sandbox' },
+    ],
+  },
   // ── 2026-11-07 ───────────────────────────────────────────────────────────
   {
     id: 'assets-editor-page',

@@ -34,7 +34,7 @@ import { createStripeCheckout, getPaymentMethods } from '../services/payments'
 import { ApiError, getApiErrorMessage } from '../services/api'
 import type { PaymentMethods } from '../types/payments'
 import ConfirmModal from '../components/ui/ConfirmModal'
-import { hasFee, type Invoice } from '../lib/billing'
+import { capitalFlowNote, hasFee, type Invoice } from '../lib/billing'
 import { fmtMoney, fmtSignedMoney, fmtSignedPct, formatDate } from '../lib/format'
 
 /**
@@ -235,6 +235,7 @@ export default function InvoiceDetail() {
   }
 
   const paid = invoice.status === 'paid'
+  const flowNote = capitalFlowNote(invoice)
   const fee = hasFee(invoice)
   const brand = EXCHANGE_META[invoice.exchange].color
 
@@ -622,6 +623,11 @@ export default function InvoiceDetail() {
                 </span>
               </div>
             </div>
+            {flowNote && (
+              <p className="mt-3.5 rounded-row border border-border bg-surface2 px-3.5 py-2.5 text-[12px] leading-[1.5] text-text">
+                {flowNote}
+              </p>
+            )}
             <p className="text-[12px] text-muted mt-3.5 leading-[1.5]">
               Future fees are charged only on gains above the new high-water mark —
               you never pay twice on the same profit.
