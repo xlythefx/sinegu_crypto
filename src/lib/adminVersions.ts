@@ -15,6 +15,25 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-11-08 ───────────────────────────────────────────────────────────
   {
+    id: 'usdt-payment-watcher-restored',
+    date: '2026-11-08',
+    kind: 'fixed',
+    area: 'Billing',
+    title: 'Crypto payments: USDT payments are confirmed automatically again',
+    summary:
+      'From 7 October the job that spots incoming USDT (TRC-20) payments and marks invoices paid had stopped working: a library update on 7 October rejected one of its settings, so it failed every minute without anyone seeing it. No customer was affected, because October’s invoices were all $0 and nobody had to pay. It works again, so a customer who pays an invoice in USDT is marked paid within minutes, as before.',
+    howItWorks: [
+      'Nothing changes for the customer: they send USDT to the address on their invoice and it is matched by the amount.',
+      'When it restarted, the job first caught up on the transfers it had missed since 2 October, so anything paid in that gap is picked up.',
+      'Admin → Crypto Transfers shows when each network was last scanned; it should now say a minute or two ago.',
+    ],
+    technical: [
+      'Guzzle 8.2 (installed with the 2026-10-07 dependency sweep) throws InvalidArgumentException on a raw CURLOPT_IPRESOLVE inside the "curl" request option. TronGateway and CoinsbuyGateway now pin IPv4 with Guzzle’s own force_ip_resolve => v4. payments:watch-tron had failed with exit 1 every minute since 2026-10-07 08:44 UTC (45,632 log errors).',
+      'Http::fake() never reaches Guzzle’s option check, which is why every gateway test kept passing. PaymentHttpOptionsTest now pins the option on the real PendingRequest of both gateways.',
+    ],
+    links: [{ label: 'Crypto Transfers', href: '/admin/tron-transfers' }],
+  },
+  {
     id: 'billing-transfers-not-profit',
     date: '2026-11-08',
     kind: 'fixed',
