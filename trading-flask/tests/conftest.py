@@ -114,6 +114,17 @@ def _reset_exchange_state():
     binance_api._LISTED_CACHE.clear()
 
 
+@pytest.fixture(autouse=True)
+def _asset_lists_loaded(monkeypatch):
+    """Every venue's asset list counts as LOADED with nothing switched off, so
+    a test that fakes `get_asset` returning None means "no such coin"
+    (`asset_not_added`) — not "the list never loaded". A test about the other
+    rejections sets `assets_api._disabled` itself."""
+    import binance_abcd.assets_api as assets_api
+
+    monkeypatch.setattr(assets_api, "_disabled", {ex: {} for ex in ("binance", "mexc", "bybit")})
+
+
 @pytest.fixture()
 def app():
     from binance_abcd.main import create_app

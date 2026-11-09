@@ -32,6 +32,7 @@ from flask import Blueprint, jsonify, request
 from binance_abcd import engine_client, hooks, notify, symbol_locks
 from binance_abcd.accounts_api import fetch_accounts
 from binance_abcd.assets_api import get_asset
+from binance_abcd.assets_api import rejection as asset_rejection
 from binance_abcd.exchange_api import ExchangeClient
 from binance_abcd.exchanges import client_for, exchange_of, label, labels, tradeable
 from binance_abcd.exchanges import enabled as enabled_exchanges
@@ -1046,7 +1047,8 @@ def _plan_exchange(
 ) -> dict:
     """What one exchange will do with the signal.
 
-    ``{"reject": reason}`` when an entry fails this venue's asset gate,
+    ``{"reject": reason}`` when an entry fails this venue's asset gate (plus
+    ``reject_detail`` for a switched-off coin: was it the kill switch?),
     ``{"empty": True}`` when it has no eligible accounts, otherwise the asset,
     the accounts and the batched open-amounts read. Each venue is planned on
     its own so a ticker not configured on MEXC cannot stop Binance trading it.
@@ -1062,8 +1064,11 @@ def _plan_exchange(
     asset = get_asset(symbol, exchange)
     if is_entry:
         # FAIL CLOSED: entries need an enabled asset row with a base size.
+        # The reason says WHICH gap — switched off, never added, or a list
+        # that never loaded — so the admin alert can say what to do.
         if asset is None:
-            return {"reject": "asset_not_configured"}
+            reason, detail = asset_rejection(symbol, exchange)
+            return {"reject": reason, "reject_detail": detail}
         if not asset.get("base_size"):
             return {"reject": "asset_misconfigured_base_size"}
         # Directional gate from the asset's side column (ALL | LONG | SHORT).
@@ -1189,10 +1194,16 @@ def _process_trade_job(
             f"{label(ex)}: {reason}" for ex, reason in reasons.items()
         )
         log.warning("signal rejected: %s %s (%s) [%s feed]", action, symbol, reason_text, job_feed)
+        # One plain sentence per venue on what is wrong and where to fix it;
+        # the reason code stays in the message for searching.
+        hints = list(dict.fromkeys(
+            h for ex in run
+            if (h := notify.reject_hint(reasons[ex], symbol, label(ex), plans[ex].get("reject_detail"), action=action))
+        ))
         if is_test:
-            notify.notify_test_feed_rejected(action, symbol, reason_text, label=labels(run))
+            notify.notify_test_feed_rejected(action, symbol, reason_text, label=labels(run), hints=hints)
         else:
-            notify.notify_rejected(action, symbol, reason_text, label=labels(run))
+            notify.notify_rejected(action, symbol, reason_text, label=labels(run), hints=hints)
         per_exchange = [
             _reject_summary(action, symbol, price, strategy, leverage, reasons[ex], ex, feed=job_feed) for ex in run
         ]

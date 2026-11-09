@@ -15,6 +15,29 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-11-08 ───────────────────────────────────────────────────────────
   {
+    id: 'signal-rejected-says-why',
+    date: '2026-11-09',
+    kind: 'improved',
+    area: 'Signal Log',
+    title: 'Rejected signals now say whether the coin is turned off or was never added',
+    summary:
+      'When a buy or sell signal arrives for a coin the bot cannot trade, the admin Telegram group gets a "Signal rejected" message. It used to say "asset_not_configured" in every case, whether an admin had switched the coin off or nobody had ever added it, so you could not tell which one to fix. Example: with Litecoin switched off, the message now reads "LTCUSDT is turned off on Binance. Turn it back on in Admin → Trading Assets to trade it."',
+    howItWorks: [
+      'Coin switched off by an admin: the message says it is turned off and where to turn it back on.',
+      'Coin switched off by the kill switch: the message says so and gives the reason, e.g. "the master lost 3 trades in a row".',
+      'Coin never added for that exchange: the message says it is not added yet and to add it with a base size.',
+      'Other refusals get their own sentence too: no base size set, coin set to long-only or short-only, no account on that exchange to receive it, or the coin list could not be loaded.',
+      'In the Signal Log, a signal refused because the coin is switched off now counts as normal (the switch did its job), so it no longer turns the health banner amber. A coin that was never added still shows as a problem, labelled "Coin not added yet".',
+      'Exits are unchanged: an open position always closes, whether its coin is on or off.',
+    ],
+    technical: [
+      'GET /engine/{x}/assets adds `disabled: [{ticker, killed, killed_reason}]`; `assets` is still enabled-only. assets_api.rejection() returns asset_disabled | asset_not_added | assets_unavailable (list never loaded) | asset_not_configured (API too old to send `disabled`).',
+      'notify.reject_hint() writes the sentence; notify_rejected / notify_test_feed_rejected take `hints`. The reason code stays on the message’s Reason line.',
+      'SignalHealth: asset_disabled → asset_off (normal), asset_not_added → asset_missing (problem), assets_unavailable (problem). Older asset_not_configured rows stay the generic "Signal rejected", since they could have meant either.',
+    ],
+    links: [{ label: 'Trading Assets', href: '/admin/assets' }, { label: 'Signal Log', href: '/admin/trade-logs' }],
+  },
+  {
     id: 'usdt-payment-watcher-restored',
     date: '2026-11-08',
     kind: 'fixed',

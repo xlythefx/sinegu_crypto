@@ -101,6 +101,44 @@ def test_assets_client_indexes_enabled_by_ticker():
     assert assets["BADUSDT"]["side"] == "ALL"
 
 
+def test_a_missing_coin_says_whether_it_is_off_killed_or_never_added(monkeypatch):
+    """The API lists switched-off coins apart (2026-11-09) so a rejected entry
+    can name its cause instead of the old catch-all `asset_not_configured`."""
+    monkeypatch.setattr(assets_api, "_disabled", {})
+    # Never loaded: nothing can be said about any coin.
+    assert assets_api.rejection("LTCUSDT") == ("assets_unavailable", {})
+
+    payload = {"success": True,
+               "assets": [{"ticker": "BTCUSDT", "base_size": 0.005, "max_increments": 0.05, "side": "ALL", "enabled": True}],
+               "disabled": [
+                   {"ticker": "ltcusdt", "killed": False, "killed_reason": None},
+                   {"ticker": "RENDERUSDT", "killed": True, "killed_reason": "The master lost 3 trades in a row on RENDERUSDT."},
+               ]}
+    with patch.object(assets_api.engine_client, "get_json", return_value=payload):
+        assets_api.invalidate_assets_cache()
+        assert assets_api.get_asset("LTCUSDT") is None       # still not tradeable
+        assert assets_api.rejection("LTCUSDT") == ("asset_disabled", {"killed": False, "killed_reason": None})
+        assert assets_api.rejection("RENDERUSDT") == (
+            "asset_disabled", {"killed": True, "killed_reason": "The master lost 3 trades in a row on RENDERUSDT."})
+        assert assets_api.rejection("PEPEUSDT") == ("asset_not_added", {})
+
+    # An API older than the `disabled` key cannot tell the two apart.
+    old = {"success": True, "assets": payload["assets"]}
+    with patch.object(assets_api.engine_client, "get_json", return_value=old):
+        assets_api.invalidate_assets_cache()
+        assets_api.fetch_assets(force=True)
+        assert assets_api.rejection("LTCUSDT") == ("asset_not_configured", {})
+
+    # A failed reload keeps the last good answer, like the asset list itself.
+    with patch.object(assets_api.engine_client, "get_json", return_value=payload):
+        assets_api.invalidate_assets_cache()
+        assets_api.fetch_assets(force=True)
+    with patch.object(assets_api.engine_client, "get_json", return_value=None):
+        assets_api.invalidate_assets_cache()
+        assets_api.fetch_assets(force=True)
+        assert assets_api.rejection("LTCUSDT")[0] == "asset_disabled"
+
+
 def test_the_cap_column_is_a_position_size_not_an_entry_count():
     """The live regression: LTCUSDT is base_size 14, max size 42 — a 3-deep
     stack. Read as a count it meant '42 entries' and the cap never fired, which

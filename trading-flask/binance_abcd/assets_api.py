@@ -42,6 +42,36 @@ ASSETS_BROKER = exchanges.spec(ENGINE_EXCHANGE).assets_broker
 _caches: dict[str, TTLCache] = {}
 _caches_lock = threading.Lock()
 
+# Per exchange, from the last SUCCESSFUL load: the coins that exist but are
+# switched off, ``{ticker: {"killed": bool, "killed_reason": str | None}}`` —
+# or None when the API is older than the `disabled` key and cannot say. An
+# exchange missing from the dict has never loaded at all. Only `rejection()`
+# reads it: what may be TRADED is still the enabled list alone.
+_disabled: dict[str, dict[str, dict] | None] = {}
+
+# Why an entry found no tradeable asset row (see rejection()).
+ASSET_DISABLED = "asset_disabled"          # the row exists, switched off
+ASSET_NOT_ADDED = "asset_not_added"        # no row for this ticker on the venue
+ASSET_NOT_CONFIGURED = "asset_not_configured"  # either — an API too old to say
+ASSETS_UNAVAILABLE = "assets_unavailable"  # the list never loaded
+
+
+def _disabled_map(data: dict) -> dict[str, dict] | None:
+    rows = data.get("disabled")
+    if not isinstance(rows, list):
+        return None
+    out: dict[str, dict] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        ticker = str(row.get("ticker", "")).upper()
+        if ticker:
+            out[ticker] = {
+                "killed": bool(row.get("killed")),
+                "killed_reason": row.get("killed_reason") or None,
+            }
+    return out
+
 
 def _loader(exchange: str):
     broker = exchanges.spec(exchange).assets_broker
@@ -54,6 +84,7 @@ def _loader(exchange: str):
         if not isinstance(assets, list):
             log.warning("[%s] assets payload malformed: %.200s", exchange, data)
             return None
+        _disabled[exchange] = _disabled_map(data)
 
         by_ticker: dict[str, dict] = {}
         for asset in assets:
@@ -144,6 +175,25 @@ def fetch_assets(force: bool = False, exchange: str = ENGINE_EXCHANGE) -> dict[s
 
 def get_asset(ticker: str, exchange: str = ENGINE_EXCHANGE) -> dict | None:
     return fetch_assets(exchange=exchange).get(ticker.upper())
+
+
+def rejection(ticker: str, exchange: str = ENGINE_EXCHANGE) -> tuple[str, dict]:
+    """Why `ticker` has no tradeable row on `exchange`: (reason, detail).
+
+    Asked only after get_asset() came back empty — which loads the list — so
+    it never makes a call of its own. Until 2026-11-09 every such entry was
+    `asset_not_configured`, which read the same for a coin an admin paused
+    and one nobody ever added, and sent people looking in the wrong place.
+    """
+    if exchange not in _disabled:
+        return ASSETS_UNAVAILABLE, {}
+    disabled = _disabled[exchange]
+    if disabled is None:
+        return ASSET_NOT_CONFIGURED, {}
+    info = disabled.get(ticker.upper())
+    if info is not None:
+        return ASSET_DISABLED, dict(info)
+    return ASSET_NOT_ADDED, {}
 
 
 def assets_cache_age(exchange: str = ENGINE_EXCHANGE) -> float | None:

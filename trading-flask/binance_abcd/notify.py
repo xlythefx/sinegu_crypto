@@ -746,14 +746,61 @@ def render_report(kind: str, summary: dict, exchange: Optional[str] = None) -> s
 
 # --- Admin: operational alerts ------------------------------------------------
 
-def notify_rejected(action: str, ticker: str, reason: str, label: Optional[str] = None) -> None:
-    """A signal never reached the fan-out on ANY venue (asset not configured,
-    side gate, no accounts). `label` names the venue(s) it was rejected on."""
+_ASSETS_PAGE = "Admin → Trading Assets"
+
+
+def reject_hint(
+    reason: str, ticker: str, venue: str, detail: Optional[dict] = None, *, action: str = "",
+) -> Optional[str]:
+    """One plain sentence for a venue's rejection: what is wrong, where to fix
+    it. None for a reason with nothing useful to add.
+
+    Built 2026-11-09: `asset_not_configured` read the same for a coin an admin
+    switched off and a coin never added, so an admin who had paused LTC was
+    sent looking for a missing setup. The code stays on the message's Reason
+    line; this is the line a person acts on.
+    """
+    t, v = _esc(ticker), _esc(venue)
+    detail = detail or {}
+    if reason == "asset_disabled":
+        if detail.get("killed"):
+            why = f" ({_esc(detail['killed_reason'])})" if detail.get("killed_reason") else ""
+            return (f"🛑 {t} was switched off by the <b>kill switch</b> on {v}{why}. "
+                    f"Turn it back on in {_ASSETS_PAGE} when you are ready.")
+        return f"🔴 {t} is <b>turned off</b> on {v}. Turn it back on in {_ASSETS_PAGE} to trade it."
+    if reason == "asset_not_added":
+        return f"➕ {t} is <b>not added</b> on {v} yet. Add it in {_ASSETS_PAGE} (with a base size) to trade it."
+    if reason == "asset_not_configured":
+        return f"❓ {t} is not set up on {v} — it is either turned off or not added yet. Check {_ASSETS_PAGE}."
+    if reason == "assets_unavailable":
+        return (f"📡 The coin list for {v} could not be loaded from the API, so the entry could not be "
+                f"checked. Check that the API is up (Admin → Bot Engine).")
+    if reason == "asset_misconfigured_base_size":
+        return f"⚙️ {t} on {v} has <b>no base size</b>. Set one in {_ASSETS_PAGE}."
+    if reason.startswith("side_") and "_blocks_" in reason:
+        allowed = reason[len("side_"):].split("_blocks_", 1)[0]
+        what = f"this {_esc(action)}" if action else "this direction"
+        return (f"↔️ {t} on {v} is set to <b>{_esc(allowed)} only</b>, so {what} is not traded. "
+                f"Change its side in {_ASSETS_PAGE} to allow it.")
+    if reason == "no_accounts":
+        return f"👤 No account on {v} is set up to receive this signal."
+    return None
+
+
+def _rejected_text(action: str, ticker: str, reason: str, label: Optional[str], hints: Sequence[str]) -> str:
     venue = f" · {_esc(label)}" if label else ""
-    _send_admin(
-        f"⚠️ <b>Signal rejected</b> — {_esc(action)} {_esc(ticker)}{venue}\n"
-        f"Reason: <code>{_esc(reason)}</code> — no order placed."
-    )
+    lines = [f"⚠️ <b>Signal rejected</b> — {_esc(action)} {_esc(ticker)}{venue}", *hints]
+    lines.append(f"Reason: <code>{_esc(reason)}</code> — no order placed.")
+    return "\n".join(lines)
+
+
+def notify_rejected(
+    action: str, ticker: str, reason: str, label: Optional[str] = None, hints: Sequence[str] = (),
+) -> None:
+    """A signal never reached the fan-out on ANY venue (coin turned off or not
+    added, side gate, no accounts). `label` names the venue(s) it was rejected
+    on; `hints` are reject_hint()'s sentences, already escaped HTML."""
+    _send_admin(_rejected_text(action, ticker, reason, label, hints))
 
 
 def notify_account_failures(
@@ -937,15 +984,13 @@ def notify_test_feed(
     _send_private("\n".join(lines))
 
 
-def notify_test_feed_rejected(action: str, ticker: str, reason: str, label: Optional[str] = None) -> None:
-    """A test signal that reached no account (coin not configured, side gate,
-    no tester account on the venue). Private, like the rest of the feed."""
-    venue = f" · {_esc(label)}" if label else ""
-    _send_private(
-        f"{_TEST_BANNER}\n"
-        f"⚠️ <b>Signal rejected</b> — {_esc(action)} {_esc(ticker)}{venue}\n"
-        f"Reason: <code>{_esc(reason)}</code> — no order placed."
-    )
+def notify_test_feed_rejected(
+    action: str, ticker: str, reason: str, label: Optional[str] = None, hints: Sequence[str] = (),
+) -> None:
+    """A test signal that reached no account (coin turned off or not added,
+    side gate, no tester account on the venue). Private, like the rest of the
+    feed."""
+    _send_private(f"{_TEST_BANNER}\n{_rejected_text(action, ticker, reason, label, hints)}")
 
 
 def notify_max_increments(

@@ -1232,6 +1232,17 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   master has no account on) — only a master row with a problem outcome
   counts. A new engine skip reason needs a line in `SignalHealth::classify`,
   or it lands as `other_skip` (a problem).
+  **Rejected signals name their cause (2026-11-09).** An entry with no
+  tradeable asset row used to be `asset_not_configured` whether the coin was
+  switched off or never added. `GET /engine/{x}/assets` now also sends
+  `disabled: [{ticker, killed, killed_reason}]` (`assets` stays enabled-only),
+  and `assets_api.rejection()` answers `asset_disabled` (off — by an admin or
+  the kill switch), `asset_not_added`, `assets_unavailable` (the list never
+  loaded) or the old `asset_not_configured` (an API too old to say). The admin
+  alert carries one plain sentence per venue (`notify.reject_hint`) above the
+  Reason line. SignalHealth: `asset_off` is NORMAL (the switch working — it
+  must not turn the banner amber), `asset_missing` and `assets_unavailable`
+  are problems; old `asset_not_configured` rows stay the generic `rejected`.
   **One timeline (2026-10-14):** every row says LONG / SHORT and Entry / Exit
   (`side` / `type`, also filters); **retries fold under the signal they re-run**
   (`retries[]`; a `retry` row within 60 min after a signal with the same
@@ -1775,8 +1786,9 @@ for the overlay's `position: fixed` and trap it inside.
        (`EngineCache::killSwitchTripped` → `notify.notify_kill_switch`,
        `_send_private` — never the public channel).
      - While a coin is off, its entry signals still arrive and are rejected
-       as `asset_not_configured` in the admin chat — the kill switch message
-       beside them says why.
+       in the admin chat as `asset_disabled`, with a line saying it was the
+       kill switch and why (2026-11-09 — see "Rejected signals name their
+       cause" below).
   `total_deposit` comes from `GET /api/engine/{exchange}/accounts` as
   `initial_deposit + (deposits − withdrawals)` over `binance_transactions` —
   **not** raw `initial_deposit`, which `EngineSyncController` writes once and

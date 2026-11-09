@@ -92,7 +92,21 @@ def test_entry_fails_closed_without_asset(fake_accounts, fake_assets):
     assert summary["category"] == "rejected"
     assert summary["target_count"] == 0
     entry_mock.assert_not_called()
-    assert summary["details"][0]["reason"] == "asset_not_configured"
+    assert summary["details"][0]["reason"] == "asset_not_added"
+
+
+def test_a_switched_off_coin_is_rejected_as_off_and_the_alert_says_so(fake_accounts, fake_assets, monkeypatch):
+    import binance_abcd.assets_api as assets_api
+
+    monkeypatch.setattr(assets_api, "_disabled", {"binance": {"XRPUSDT": {"killed": False, "killed_reason": None}}})
+    with patch.object(webhook.notify, "notify_rejected") as rejected:
+        summary, entry_mock, _, _ = _run_job(fake_accounts, fake_assets, ticker="XRPUSDT")
+
+    entry_mock.assert_not_called()
+    assert summary["details"][0]["reason"] == "asset_disabled"
+    assert rejected.call_args.args[2] == "asset_disabled"
+    (hint,) = rejected.call_args.kwargs["hints"]
+    assert "XRPUSDT is <b>turned off</b> on Binance" in hint
 
 
 def test_exit_runs_even_without_asset(fake_accounts, fake_assets):

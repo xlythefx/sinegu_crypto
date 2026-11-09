@@ -152,7 +152,7 @@ def test_a_ticker_not_configured_on_one_venue_only_rejects_that_venue():
     logs = dict(_trade_logs(m))
     assert logs["binance"]["category"] == "signal"
     assert logs["mexc"]["category"] == "rejected"
-    assert logs["mexc"]["details"] == [{"reason": "asset_not_configured", "exchange": "mexc"}]
+    assert logs["mexc"]["details"] == [{"reason": "asset_not_added", "exchange": "mexc"}]
     m["rejected"].assert_not_called()  # the signal traded; nobody is paged
     assert m["notify_entry"].call_args.kwargs["label"] == "Binance"
 
@@ -160,9 +160,9 @@ def test_a_ticker_not_configured_on_one_venue_only_rejects_that_venue():
 def test_rejected_everywhere_is_one_alert_and_one_row_per_venue():
     summary, m = _run(ticker="XRPUSDT")
     assert summary["category"] == "rejected" and summary["target_count"] == 0
-    assert summary["details"][0]["reason"] == "asset_not_configured"
+    assert summary["details"][0]["reason"] == "asset_not_added"
     m["rejected"].assert_called_once()
-    assert m["rejected"].call_args.args[2] == "asset_not_configured"
+    assert m["rejected"].call_args.args[2] == "asset_not_added"
     assert m["rejected"].call_args.kwargs["label"] == "Binance + MEXC"
     assert sorted(ex for ex, _ in _trade_logs(m)) == ["binance", "mexc"]
     m["entry"].assert_not_called()
@@ -173,7 +173,7 @@ def test_different_reasons_per_venue_are_named_in_the_one_alert():
     with patch.dict(ASSETS, {("DOGEUSDT", "binance"): {"ticker": "DOGEUSDT", "base_size": 100.0, "max_size": 300.0, "max_increments": 3.0, "side": "LONG"}}):
         _, m = _run("SELL", "DOGEUSDT")
     reason = m["rejected"].call_args.args[2]
-    assert "Binance: side_LONG_blocks_SELL" in reason and "MEXC: asset_not_configured" in reason
+    assert "Binance: side_LONG_blocks_SELL" in reason and "MEXC: asset_not_added" in reason
 
 
 def test_a_venue_with_no_accounts_is_skipped_silently_while_another_runs():

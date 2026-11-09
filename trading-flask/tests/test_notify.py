@@ -377,6 +377,44 @@ def test_rejected_signal_names_the_reason(sent):
     assert "asset_not_configured" in sent[0][0]
 
 
+def test_a_rejection_says_what_is_wrong_and_where_to_fix_it():
+    """2026-11-09: `asset_not_configured` read the same for a coin an admin
+    paused and one never added. Each cause now gets its own sentence."""
+    off = notify.reject_hint("asset_disabled", "LTCUSDT", "Binance", {"killed": False})
+    assert "LTCUSDT is <b>turned off</b> on Binance" in off and "Trading Assets" in off
+
+    killed = notify.reject_hint(
+        "asset_disabled", "LTCUSDT", "Binance",
+        {"killed": True, "killed_reason": "The master lost 3 trades in a row on LTCUSDT."},
+    )
+    assert "<b>kill switch</b>" in killed and "lost 3 trades in a row" in killed
+
+    missing = notify.reject_hint("asset_not_added", "PEPEUSDT", "MEXC")
+    assert "PEPEUSDT is <b>not added</b> on MEXC" in missing and "base size" in missing
+
+    assert "either turned off or not added" in notify.reject_hint("asset_not_configured", "X", "Binance")
+    assert "could not be loaded" in notify.reject_hint("assets_unavailable", "X", "Binance")
+    assert "no base size" in notify.reject_hint("asset_misconfigured_base_size", "X", "Binance")
+    side = notify.reject_hint("side_LONG_blocks_SELL", "DOGEUSDT", "Binance", action="SELL")
+    assert "<b>LONG only</b>" in side and "this SELL is not traded" in side
+    assert "No account on Bybit" in notify.reject_hint("no_accounts", "X", "Bybit")
+    assert notify.reject_hint("something_new", "X", "Binance") is None
+
+
+def test_the_hint_sits_between_the_title_and_the_reason_code(sent):
+    hint = notify.reject_hint("asset_disabled", "LTCUSDT", "Binance", {"killed": False})
+    notify.notify_rejected("BUY", "LTCUSDT", "asset_disabled", label="Binance", hints=[hint])
+    lines = sent[0][0].split("\n")
+    assert lines[0].startswith("⚠️ <b>Signal rejected</b> — BUY LTCUSDT · Binance")
+    assert lines[1] == hint
+    assert lines[2] == "Reason: <code>asset_disabled</code> — no order placed."
+
+
+def test_a_hint_escapes_what_the_api_sent():
+    hint = notify.reject_hint("asset_disabled", "LTCUSDT", "Binance", {"killed": True, "killed_reason": "<b>x</b> & y"})
+    assert "&lt;b&gt;x&lt;/b&gt; &amp; y" in hint
+
+
 def test_a_refused_key_alert_carries_the_fix_not_just_the_complaint(sent):
     """Binance's own sentence names three possible faults and no remedy. The
     person reading this alert has to answer a customer, so the alert says what
