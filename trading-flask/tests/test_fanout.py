@@ -107,6 +107,45 @@ def test_a_switched_off_coin_is_rejected_as_off_and_the_alert_says_so(fake_accou
     assert rejected.call_args.args[2] == "asset_disabled"
     (hint,) = rejected.call_args.kwargs["hints"]
     assert "XRPUSDT is <b>turned off</b> on Binance" in hint
+    assert rejected.call_args.kwargs["daily"] is True
+
+
+def test_a_switched_off_coin_is_announced_once_a_day_across_feeds(fake_accounts, fake_assets, monkeypatch):
+    """Owner, 2026-11-09: with LTC off, every LTC signal (main and test feed,
+    BUY and SELL) re-posted the same alert. The first of the day is enough;
+    the Signal Log still gets a row for every one."""
+    import binance_abcd.assets_api as assets_api
+    import binance_abcd.daily_alerts as daily_alerts
+
+    monkeypatch.setattr(assets_api, "_disabled", {"binance": {"LTCUSDT": {"killed": False, "killed_reason": None}}})
+    days = iter(["2026-11-09"] * 4 + ["2026-11-10"])
+    monkeypatch.setattr(daily_alerts, "today", lambda: next(days))
+
+    with (
+        patch.object(webhook.notify, "notify_rejected") as rejected,
+        patch.object(webhook.notify, "notify_test_feed_rejected") as test_rejected,
+        patch.object(webhook, "_post_trade_log") as trade_log,
+    ):
+        _run_job(fake_accounts, fake_assets, ticker="LTCUSDT")                    # announced
+        _run_job(fake_accounts, fake_assets, ticker="LTCUSDT")                    # quiet
+        _run_job(fake_accounts, fake_assets, action="SELL", ticker="LTCUSDT")     # quiet
+        _run_job(fake_accounts, fake_assets, ticker="LTCUSDT", feed="test")       # quiet: same coin, same day
+        _run_job(fake_accounts, fake_assets, ticker="LTCUSDT")                    # next day: announced
+
+    assert rejected.call_count == 2
+    test_rejected.assert_not_called()
+    assert trade_log.call_count == 5                    # every signal still logged
+    assert {c.args[0]["details"][0]["reason"] for c in trade_log.call_args_list} == {"asset_disabled"}
+
+
+def test_a_coin_never_added_still_alerts_every_time(fake_accounts, fake_assets):
+    """Only "turned off" is a known, deliberate state. A missing coin is a
+    setup gap someone must fix, so it keeps paging."""
+    with patch.object(webhook.notify, "notify_rejected") as rejected:
+        _run_job(fake_accounts, fake_assets, ticker="XRPUSDT")
+        _run_job(fake_accounts, fake_assets, ticker="XRPUSDT")
+    assert rejected.call_count == 2
+    assert rejected.call_args.kwargs["daily"] is False
 
 
 def test_exit_runs_even_without_asset(fake_accounts, fake_assets):

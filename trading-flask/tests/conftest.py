@@ -75,6 +75,15 @@ def _isolate_published_closes(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_daily_alerts(tmp_path, monkeypatch):
+    """Keep tests from stamping the real out/daily_alerts.json — a test that
+    marked LTCUSDT announced today would silence the live admin alert."""
+    import binance_abcd.daily_alerts as daily_alerts
+
+    monkeypatch.setattr(daily_alerts, "STATE_FILE", tmp_path / "daily_alerts.json")
+
+
+@pytest.fixture(autouse=True)
 def _isolate_watermarks(tmp_path, monkeypatch):
     """Keep poller tests from reading or advancing the real out/last_*_sync.json —
     a test that stamped a fresh closes or fee watermark would make the live

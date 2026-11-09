@@ -787,20 +787,29 @@ def reject_hint(
     return None
 
 
-def _rejected_text(action: str, ticker: str, reason: str, label: Optional[str], hints: Sequence[str]) -> str:
+def _rejected_text(
+    action: str, ticker: str, reason: str, label: Optional[str], hints: Sequence[str], daily: bool = False,
+) -> str:
     venue = f" · {_esc(label)}" if label else ""
     lines = [f"⚠️ <b>Signal rejected</b> — {_esc(action)} {_esc(ticker)}{venue}", *hints]
     lines.append(f"Reason: <code>{_esc(reason)}</code> — no order placed.")
+    if daily:
+        # The webhook holds the rest of today's copies back (daily_alerts);
+        # say so, or the silence after this message reads as signals stopping.
+        lines.append(f"🔕 Shown once a day: more {_esc(ticker)} signals today are refused without "
+                     f"another message (the Signal Log still lists each one).")
     return "\n".join(lines)
 
 
 def notify_rejected(
     action: str, ticker: str, reason: str, label: Optional[str] = None, hints: Sequence[str] = (),
+    daily: bool = False,
 ) -> None:
     """A signal never reached the fan-out on ANY venue (coin turned off or not
     added, side gate, no accounts). `label` names the venue(s) it was rejected
-    on; `hints` are reject_hint()'s sentences, already escaped HTML."""
-    _send_admin(_rejected_text(action, ticker, reason, label, hints))
+    on; `hints` are reject_hint()'s sentences, already escaped HTML; `daily`
+    marks the once-a-day "coin turned off" message."""
+    _send_admin(_rejected_text(action, ticker, reason, label, hints, daily))
 
 
 def notify_account_failures(
@@ -986,11 +995,12 @@ def notify_test_feed(
 
 def notify_test_feed_rejected(
     action: str, ticker: str, reason: str, label: Optional[str] = None, hints: Sequence[str] = (),
+    daily: bool = False,
 ) -> None:
     """A test signal that reached no account (coin turned off or not added,
     side gate, no tester account on the venue). Private, like the rest of the
     feed."""
-    _send_private(f"{_TEST_BANNER}\n{_rejected_text(action, ticker, reason, label, hints)}")
+    _send_private(f"{_TEST_BANNER}\n{_rejected_text(action, ticker, reason, label, hints, daily)}")
 
 
 def notify_max_increments(

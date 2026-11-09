@@ -29,7 +29,7 @@ from typing import Any, Optional, Sequence
 
 from flask import Blueprint, jsonify, request
 
-from binance_abcd import engine_client, hooks, notify, symbol_locks
+from binance_abcd import daily_alerts, engine_client, hooks, notify, symbol_locks
 from binance_abcd.accounts_api import fetch_accounts
 from binance_abcd.assets_api import get_asset
 from binance_abcd.assets_api import rejection as asset_rejection
@@ -1200,10 +1200,17 @@ def _process_trade_job(
             h for ex in run
             if (h := notify.reject_hint(reasons[ex], symbol, label(ex), plans[ex].get("reject_detail"), action=action))
         ))
-        if is_test:
-            notify.notify_test_feed_rejected(action, symbol, reason_text, label=labels(run), hints=hints)
+        # A coin switched off is announced ONCE per day per venue (owner,
+        # 2026-11-09) — main and test feed alike, BUY and SELL alike. Any
+        # other cause on any venue still alerts every time: that one needs a
+        # human. The Signal Log row below is written either way.
+        daily = all(r == "asset_disabled" for r in reasons.values())
+        if daily and not daily_alerts.first_today(f"asset_disabled|{ex}|{symbol}" for ex in run):
+            log.info("signal rejected: %s %s — coin off, already announced today", action, symbol)
+        elif is_test:
+            notify.notify_test_feed_rejected(action, symbol, reason_text, label=labels(run), hints=hints, daily=daily)
         else:
-            notify.notify_rejected(action, symbol, reason_text, label=labels(run), hints=hints)
+            notify.notify_rejected(action, symbol, reason_text, label=labels(run), hints=hints, daily=daily)
         per_exchange = [
             _reject_summary(action, symbol, price, strategy, leverage, reasons[ex], ex, feed=job_feed) for ex in run
         ]

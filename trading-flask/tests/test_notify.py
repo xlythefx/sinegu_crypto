@@ -410,6 +410,37 @@ def test_the_hint_sits_between_the_title_and_the_reason_code(sent):
     assert lines[2] == "Reason: <code>asset_disabled</code> — no order placed."
 
 
+def test_the_once_a_day_message_says_more_will_be_quiet(sent):
+    notify.notify_rejected("BUY", "LTCUSDT", "asset_disabled", label="Binance", hints=[], daily=True)
+    assert sent[0][0].endswith(
+        "🔕 Shown once a day: more LTCUSDT signals today are refused without another message "
+        "(the Signal Log still lists each one).")
+    notify.notify_rejected("BUY", "PEPEUSDT", "asset_not_added", label="Binance")
+    assert "🔕" not in sent[1][0]
+
+
+def test_daily_alerts_fire_once_per_key_per_day():
+    from binance_abcd import daily_alerts
+
+    assert daily_alerts.first_today(["off|binance|LTCUSDT"], day="2026-11-09") is True
+    assert daily_alerts.first_today(["off|binance|LTCUSDT"], day="2026-11-09") is False
+    # One new subject among known ones is news: send, and remember both.
+    assert daily_alerts.first_today(["off|binance|LTCUSDT", "off|mexc|LTC_USDT"], day="2026-11-09") is True
+    assert daily_alerts.first_today(["off|mexc|LTC_USDT"], day="2026-11-09") is False
+    # A new day starts over, and yesterday's entries are dropped from the file.
+    assert daily_alerts.first_today(["off|binance|LTCUSDT"], day="2026-11-10") is True
+    assert daily_alerts._load() == {"off|binance|LTCUSDT": "2026-11-10"}
+
+
+def test_an_unreadable_daily_file_means_send(tmp_path, monkeypatch):
+    from binance_abcd import daily_alerts
+
+    bad = tmp_path / "daily_alerts.json"
+    bad.write_text("{ truncated", encoding="utf-8")
+    monkeypatch.setattr(daily_alerts, "STATE_FILE", bad)
+    assert daily_alerts.first_today(["k"], day="2026-11-09") is True
+
+
 def test_a_hint_escapes_what_the_api_sent():
     hint = notify.reject_hint("asset_disabled", "LTCUSDT", "Binance", {"killed": True, "killed_reason": "<b>x</b> & y"})
     assert "&lt;b&gt;x&lt;/b&gt; &amp; y" in hint
