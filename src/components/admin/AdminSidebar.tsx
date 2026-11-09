@@ -20,6 +20,7 @@ import {
   ListTodo,
   Webhook,
   Eye,
+  Bot,
 } from 'lucide-react'
 import { usePortalSwitch } from '../ui/PortalSwitchOverlay'
 import { getUser } from '../../lib/session'
@@ -80,6 +81,8 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { label: 'Signal Log', url: '/admin/trade-logs', icon: ScrollText },
   // Every engine address (main + test feed) with copyable links — full admins only.
   { label: 'Webhooks', url: '/admin/webhooks', icon: Webhook },
+  // Keys for the read-only AI connector (the employer's Grok) + what it asked — full admins only.
+  { label: 'AI Access', url: '/admin/ai-access', icon: Bot },
   { label: 'Invoice History', url: '/admin/invoices', icon: FileText },
   // Every admin since the rail went public (TRON_PUBLIC=true on prod
   // 2026-10-02): held payments and disputed claims are worked from here.

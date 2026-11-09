@@ -18,6 +18,23 @@ import type { AdminTodo } from '../types/adminTodos'
  *    the note and the date it was settled stay readable.
  */
 export const ADMIN_TODOS: AdminTodo[] = [
+  // ── AI Access (2026-11-09) ──────────────────────────────────────────────
+  {
+    id: 'ai-access-connect-grok',
+    feature: 'AI Access',
+    kind: 'action',
+    title: 'Connect your Grok app to Pixel Alpha',
+    added: '2026-11-09',
+    why: 'Grok can answer questions about signals, trades, assets and billing only once it has a connector with a key. Until then nothing can read the platform through it.',
+    steps: [
+      'Open Admin → AI Access and create a key named for the person who will use it (e.g. "Boss’s Grok"). Copy it right away — it is shown only once.',
+      'In the Grok app (paid plan), go to Connectors → New connector → Custom.',
+      'Fill the form exactly as the "Connect Grok" card shows: Name, Type "Remote HTTPS", the Server URL, and under HTTP headers the Key "X-Api-Key" with the key you copied as the Value. Leave Client ID empty. Click Add plugin.',
+      'Ask Grok a first question, e.g. "Using Pixel Alpha, how many LTC signals came in this month?". The question should appear under "What it asked" on the AI Access page within a few seconds.',
+      'Send the key only to the person who will use it, never in a group chat. If it is ever shared by mistake, revoke it on the same page and make a new one.',
+    ],
+    links: [{ label: 'Admin → AI Access', href: '/admin/ai-access' }],
+  },
   // ── Visitor counter (2026-10-28) ────────────────────────────────────────
   {
     id: 'privacy-policy-visits-notice',

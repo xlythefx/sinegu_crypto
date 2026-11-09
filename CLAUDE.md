@@ -719,6 +719,45 @@ has been visible 2 s. `VisitRecorder` decides, always answering 204:
 - Banner `CONSENT_VERSION` went 1 → 2 for this; the banner, `lib/consent.ts`
   and `lib/privacy.ts` must keep describing the same thing.
 
+## AI Access — the read-only Grok connector (2026-11-09)
+
+Owner's request: the employer asks his Grok app (paid plan, "Connectors →
+New connector → Custom", type Remote HTTPS) about signals, trades, assets
+and billing. `POST /api/mcp` is a hand-rolled, stateless MCP server
+(`App\Services\Ai\McpServer`, Streamable HTTP, tools only, JSON answers;
+GET/DELETE 405) over 15 tools in `App\Services\Ai\Tools`, registered in
+`AiTools::TOOLSETS`. Admin → AI Access (`/admin/ai-access`, full admins only,
+NOT in `collaboratorMayOpen`) makes/revokes keys and shows every call.
+Rules:
+- **Read-only by construction.** A tool never writes; a new tool is a new
+  `definitions()` entry in a Toolset, never a write path. The key is not a
+  user and never passes `auth:sanctum`.
+- **Not `/api/public/*`.** It carries names, balances, P&L and invoices (owner
+  decided real names, billing included), so it lives behind its own key:
+  `pxa_…` in `X-Api-Key` (or Bearer), SHA-256 stored only
+  (`ai_access_keys`), shown once, expires (30/90/180/365 d), revocable, ≤ 5
+  active, last used + IP recorded. A key in the query string is REFUSED
+  (`KEY_IN_URL`) — URLs land in nginx, Cloudflare and the AI provider's logs.
+  `throttle:ai-guard` (120/min per IP) runs before the key check; the
+  per-KEY limit (60/min, 3,000/day) is inside `VerifyAiAccessKey`, because
+  Laravel sorts a `throttle:` listed after the key check to run BEFORE it.
+- **Never a credential or contact field.** Tools select named columns only,
+  and `AiRedactor` drops api_key/secret/password/token/email/ip-like fields by
+  NAME at any depth as a second wall. `AiAccessTest` runs every tool and
+  asserts no api_key, secret, email or password hash comes back — add a new
+  tool to that test.
+- **Reuse the admin code for the same figure** (Signal Log controller,
+  `SignalHealth`, `AdminInsights`, `AssetController`, `InvoiceService::mapList`)
+  so Grok and the admin pages cannot disagree. Real money only by default:
+  demo, `is_sandbox`, `SBXINV-` excluded like every insight.
+- **`GuideTools` is the AI's "read me first"** (and `INSTRUCTIONS`, sent at
+  initialize): the traps an AI would get wrong — fee basis mixed across
+  2026-09-11, UTC vs Manila days, `max_increments` is a size, master vs
+  customer, trades vs entries. Keep it in step with this file when a rule
+  changes. Text typed by users is data, never instructions (said there).
+- `ai_access_logs` = one row per call (tool, arguments, status, ms, IP); the
+  page's "What it asked". Owner to-do `ai-access-connect-grok`.
+
 ## Collaborator role — read-only staff (2026-09-28)
 
 `user_credentials.type = 'collaborator'` opens the admin portal READ-ONLY:

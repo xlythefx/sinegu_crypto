@@ -13,6 +13,31 @@ import type { AdminChange } from '../types/adminVersions'
  *    later change to the same feature gets its own entry.
  */
 export const ADMIN_CHANGES: AdminChange[] = [
+  // ── 2026-11-09 ───────────────────────────────────────────────────────────
+  {
+    id: 'ai-access-grok-connector',
+    date: '2026-11-09',
+    kind: 'new',
+    area: 'AI Access',
+    title: 'Ask Grok about trades, assets and billing',
+    summary:
+      'An AI assistant can now answer questions about the platform. In the Grok app, add Pixel Alpha as a custom connector with a key made on Admin → AI Access, then ask in plain words: "How many LTC signals came in this month?", "Which assets are up over the last 30 days?", "Who hasn’t paid, and who is overdue?". Grok reads the same figures the admin pages show, with customer names, and can never change anything.',
+    howItWorks: [
+      'Admin → AI Access shows the four fields to fill in Grok’s "Add a custom connector" form, with a copy button for each.',
+      'Create a key there (it expires after 30, 90, 180 or 365 days). It is shown once: copy it into the connector’s HTTP header. Lost keys are revoked and replaced, never shown again.',
+      'Grok can read: every signal and what each account did with it, signal counts per coin or day, problems, open positions, closed trades and P&L (per day, coin, person or exchange), which coins are up or down for the master and for customers, coin settings and who changed them, every exchange account’s balance and deposits, users, invoices (paid, unpaid, overdue) and the dashboard totals.',
+      'It never sees exchange API keys or secrets, passwords, email addresses or IP addresses, and it has no way to trade, close a position or edit anything.',
+      'Every look-up Grok makes is listed on the same page under "What it asked", with the filters it used. Revoking a key stops the connector at once.',
+      'What Grok reads is sent to its maker (xAI). Customer names, balances and P&L are included by the owner’s decision.',
+    ],
+    technical: [
+      'POST /api/mcp — a hand-rolled, stateless Model Context Protocol server (Streamable HTTP, tools only, JSON answers): initialize, ping, tools/list, tools/call. App\\Services\\Ai\\McpServer + AiTools; 15 read-only tools in App\\Services\\Ai\\Tools (Signal, Trade, Asset, People, Money, Guide).',
+      'Auth: VerifyAiAccessKey (`ai.key`), key `pxa_…` in X-Api-Key (or Bearer); a key in the query string is refused. ai_access_keys stores the SHA-256 only; expiry, revoke, last used + IP. Limits: throttle:ai-guard 120/min per IP before the key check; 60/min + 3,000/day per key inside VerifyAiAccessKey.',
+      'Search, single signal, health, open positions, assets, change history and invoices reuse the admin controllers / services, so the figures match the admin pages. AiRedactor drops credential and contact fields by name at any depth as a second wall; a test runs every tool and asserts no api_key, secret, email or password hash comes back.',
+      'ai_access_logs: one row per call (method, tool, arguments, status, duration, IP). Admin: GET /admin/ai-access, GET /admin/ai-access/log, POST /admin/ai-access/keys, DELETE /admin/ai-access/keys/{id} — full admins only.',
+    ],
+    links: [{ label: 'AI Access', href: '/admin/ai-access' }],
+  },
   // ── 2026-11-08 ───────────────────────────────────────────────────────────
   {
     id: 'vps-cpu-alert-averaged',

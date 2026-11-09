@@ -48,6 +48,7 @@ import AdminPositions from './pages/admin/AdminPositions'
 import AdminEngine from './pages/admin/AdminEngine'
 import AdminTradeLogs from './pages/admin/AdminTradeLogs'
 import AdminWebhooks from './pages/admin/AdminWebhooks'
+import AdminAiAccess from './pages/admin/AdminAiAccess'
 import AdminInvoiceHistory from './pages/admin/AdminInvoiceHistory'
 import AdminResources from './pages/admin/AdminResources'
 import AdminDatabase from './pages/admin/AdminDatabase'
@@ -109,6 +110,7 @@ function App() {
               <Route path="/admin/engine" element={<AdminEngine />} />
               <Route path="/admin/trade-logs" element={<AdminTradeLogs />} />
               <Route path="/admin/webhooks" element={<AdminWebhooks />} />
+              <Route path="/admin/ai-access" element={<AdminAiAccess />} />
               <Route path="/admin/invoices" element={<AdminInvoiceHistory />} />
               <Route path="/admin/referrals/release/:referrerUniId" element={<AdminReleasePayment />} />
               <Route path="/admin/referrals" element={<AdminReferrals />} />
