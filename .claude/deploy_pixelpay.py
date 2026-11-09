@@ -39,6 +39,7 @@ Usage:
     backup        tar web/ + api/ + .env into _backups/<ts>
     deploy-web    build the frontend against https://pay.pixel-alpha.com/api, upload
     deploy-api    upload the API, composer, .env (first run), migrate, cron
+    cron          rewrite /etc/cron.d/pixelpay only (scheduler starts :30, apart from Pixel Alpha's :00)
     create-admin  one admin with a random password (saved to .claude/pixelpay.creds.json)
     verify        Pay end to end + isolation + Pixel Alpha still healthy
     full          backup -> deploy-web -> deploy-api -> verify
@@ -580,14 +581,38 @@ def _lock_down_api(ssh) -> None:
     sh(ssh, f"[ -f {PAY_ENV} ] && chown root:{PAY_USER} {PAY_ENV} && chmod 640 {PAY_ENV} || true")
 
 
+# Starts 30 s into the minute (2026-11-09). Pixel Alpha's scheduler fires at
+# :00 too, and the two together launched ~8 PHP processes in two seconds —
+# both cores at ~98% for a moment every minute, which the VPS watcher reported
+# as a CPU alert. Laravel decides what is due from the clock when it runs,
+# and :30 is still the same minute, so every job keeps its schedule.
+PAY_CRON_OFFSET_SECONDS = 30
+
 PAY_CRON_CONF = f"""# Managed by sinegual-crypto/.claude/deploy_pixelpay.py — edits here are overwritten.
 # Laravel scheduler for Pixel Pay (sandbox5x:check-pending every minute), as the
-# pool user so storage/ keeps the owner php-fpm expects.
+# pool user so storage/ keeps the owner php-fpm expects. The sleep keeps it
+# {PAY_CRON_OFFSET_SECONDS}s apart from Pixel Alpha's scheduler (/etc/cron.d/sinegualerts, :00),
+# so the two never start their PHP processes in the same second.
 SHELL=/bin/sh
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-* * * * * {PAY_USER} cd {PAY_API} && /usr/bin/php artisan schedule:run >> {PAY_CRON_LOG} 2>&1
+* * * * * {PAY_USER} sleep {PAY_CRON_OFFSET_SECONDS} && cd {PAY_API} && /usr/bin/php artisan schedule:run >> {PAY_CRON_LOG} 2>&1
 """
+
+
+def _write_cron(ssh) -> None:
+    d._write_remote_text(ssh, PAY_CRON, PAY_CRON_CONF, mode_if_new=0o644)
+    sh(ssh, f"chown root:root {PAY_CRON} && chmod 644 {PAY_CRON} && touch {PAY_CRON_LOG} && "
+            f"chown {PAY_USER}:{PAY_USER} {PAY_CRON_LOG}")
+    log(f"  scheduler cron: {PAY_CRON} (+{PAY_CRON_OFFSET_SECONDS}s)")
+
+
+def do_cron(ssh) -> None:
+    """Rewrite the scheduler cron file alone — no code, no restart."""
+    log(f"=== CRON {PAY_CRON} ===")
+    _write_cron(ssh)
+    sh(ssh, f"tail -n 1 {PAY_CRON}")
+    log("=== CRON DONE ===\n")
 
 # Bootstraps Laravel and prints which database and MySQL user it is really on —
 # the gate in front of `migrate`.
@@ -643,10 +668,7 @@ def do_deploy_api(ssh):
     sh(ssh, _as_pay("php artisan config:cache"))
     sh(ssh, f"cd {PAY_API} && [ -L public/storage ] || php artisan storage:link", check=False)
 
-    d._write_remote_text(ssh, PAY_CRON, PAY_CRON_CONF, mode_if_new=0o644)
-    sh(ssh, f"chown root:root {PAY_CRON} && chmod 644 {PAY_CRON} && touch {PAY_CRON_LOG} && "
-            f"chown {PAY_USER}:{PAY_USER} {PAY_CRON_LOG}")
-    log(f"  scheduler cron: {PAY_CRON}")
+    _write_cron(ssh)
 
     sh(ssh, "systemctl reload php8.3-fpm")
     log("=== DEPLOY api DONE ===\n")
@@ -763,7 +785,7 @@ def main() -> int:
         "inspect": do_inspect, "provision": do_provision, "provision-db": do_provision_db,
         "nginx": do_nginx, "tls": do_tls, "backup": do_backup, "deploy-web": do_deploy_web,
         "deploy-api": do_deploy_api, "create-admin": do_create_admin, "verify": do_verify,
-        "full": do_full,
+        "full": do_full, "cron": do_cron,
     }
     fn = dispatch.get(cmd)
     if fn is None:

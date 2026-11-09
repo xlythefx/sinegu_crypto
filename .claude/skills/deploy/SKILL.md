@@ -120,7 +120,13 @@ anything else); its DB + admin passwords are in gitignored
 
 ```bash
 python .claude/deploy_pixelpay.py inspect | full | deploy-web | deploy-api | verify
+python .claude/deploy_pixelpay.py cron   # rewrite /etc/cron.d/pixelpay alone (starts :30)
 ```
+
+Pay's scheduler runs 30 s into each minute (`sleep 30` in its cron line, since
+2026-11-09) so it never starts its PHP jobs in the same second as Pixel Alpha's
+(`/etc/cron.d/sinegualerts`, :00): together they held both cores at ~98% for
+two seconds every minute.
 
 nginx vhost: `/etc/nginx/sites-available/sinegualerts` (written by `deploy-nginx`,
 `default` removed). Serves the SPA at `/`, Laravel at `/api`, immutable caching on

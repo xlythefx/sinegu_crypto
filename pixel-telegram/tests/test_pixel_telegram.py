@@ -163,6 +163,96 @@ def test_nothing_over_threshold_is_silent():
     assert lines == [] and alerts == {}
 
 
+# --- CPU is an average over the window, not a 1-second glance -------------------
+
+def _snap(at, user, system, idle, steal=0.0):
+    return {"at": at, "times": {"user": user, "nice": 0.0, "system": system, "idle": idle,
+                                "iowait": 0.0, "irq": 0.0, "softirq": 0.0, "steal": steal,
+                                "guest": 0.0, "guest_nice": 0.0}}
+
+
+def test_cpu_is_busy_time_over_total_time_between_two_readings():
+    before = _snap(0, user=100, system=50, idle=1000)
+    after = _snap(120, user=160, system=80, idle=1150)     # +90 busy, +150 idle
+    assert metrics_mod.cpu_percent_between(before, after) == pytest.approx(37.5)
+
+
+def test_a_two_second_burst_no_longer_reads_as_a_busy_box():
+    """The 8 Nov alert: both schedulers start their PHP jobs in the same
+    second, both cores sit at ~98% for two seconds, then idle at ~3%. Seen
+    through a 1-second window that was 'CPU 96%'; over the 2 minutes between
+    checks it is what it is."""
+    cores, window = 2, 120
+    burst = 2 * cores * 0.98                                # cpu-seconds busy in the burst
+    rest = (window - 2) * cores * 0.03
+    busy = burst + rest
+    before = _snap(0, user=0, system=0, idle=0)
+    after = _snap(window, user=busy, system=0, idle=window * cores - busy)
+    percent = metrics_mod.cpu_percent_between(before, after)
+    assert percent < 10
+    lines, _ = threshold_alerts(_metrics(cpu=percent), {}, now=1000.0, cooldown_seconds=3600)
+    assert lines == []
+
+
+def test_a_reboot_or_a_bad_reading_is_not_compared():
+    before = _snap(0, user=5000, system=1000, idle=90000)
+    after = _snap(120, user=10, system=5, idle=200)        # counters reset
+    assert metrics_mod.cpu_percent_between(before, after) is None
+    assert metrics_mod.cpu_percent_between({"at": 0}, after) is None
+
+
+def test_the_average_needs_a_fair_window_else_it_samples(monkeypatch):
+    sampled = []
+    monkeypatch.setattr(metrics_mod.psutil, "cpu_percent",
+                        lambda interval: sampled.append(interval) or 12.0)
+    monkeypatch.setattr(metrics_mod, "cpu_snapshot", lambda now=None: _snap(now or 0, 160, 80, 1150))
+
+    previous = _snap(1000, user=100, system=50, idle=1000)
+    percent, window, snap = metrics_mod.cpu_average(previous, now=1120)
+    assert (percent, window, sampled) == (pytest.approx(37.5), 120, [])
+    assert snap["at"] == 1120
+
+    # No previous reading (first run), too old (timer stopped), too fresh
+    # (a report seconds after a watch): a 5-second sample, never 1 second.
+    for prev, now in ((None, 1120), (previous, 1000 + 3600), (previous, 1005)):
+        percent, window, _ = metrics_mod.cpu_average(prev, now=now)
+        assert (percent, window) == (12.0, metrics_mod.CPU_SAMPLE_SECONDS)
+    assert sampled == [metrics_mod.CPU_SAMPLE_SECONDS] * 3
+
+
+def test_a_cpu_alert_says_it_is_an_average():
+    lines, _ = threshold_alerts({**_metrics(cpu=97.0), "cpu_window_seconds": 120.0}, {},
+                                now=1000.0, cooldown_seconds=3600)
+    assert lines and "CPU 97%</b> (avg over 2 min)" in lines[0]
+    assert "(avg 2 min)" in metrics_mod.resource_lines({**_metrics(), "cpu_window_seconds": 120.0})[0]
+
+
+def test_watch_stores_the_counters_for_the_next_run_and_report_does_not(monkeypatch, tmp_path):
+    from pixel_telegram import main as main_mod
+
+    path = str(tmp_path / "state.json")
+    monkeypatch.setattr(config, "STATE_FILE", path)
+    monkeypatch.setattr(main_mod.services, "collect", lambda units: [])
+    monkeypatch.setattr(main_mod, "engine_health", lambda: None)
+    monkeypatch.setattr(main_mod, "send", lambda body, dry=False: True)
+    seen = []
+
+    def fake_collect(previous_cpu=None, now=None):
+        seen.append(previous_cpu)
+        return {**_metrics(), "cpu_window_seconds": 120.0, "cpu_snapshot": {"at": len(seen), "times": {}}}
+
+    monkeypatch.setattr(main_mod.metrics_mod, "collect", fake_collect)
+
+    class _Args:
+        dry = True
+
+    main_mod.cmd_watch(_Args())
+    main_mod.cmd_watch(_Args())
+    main_mod.cmd_report(_Args())
+    assert seen == [None, {"at": 1, "times": {}}, {"at": 2, "times": {}}]
+    assert state_mod.load(path)["cpu"] == {"at": 2, "times": {}}   # the report wrote nothing
+
+
 # --- Transport & state --------------------------------------------------------
 
 def test_send_is_a_noop_without_credentials(monkeypatch):

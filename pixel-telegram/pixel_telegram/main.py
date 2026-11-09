@@ -139,8 +139,9 @@ def threshold_alerts(metrics: dict, alerts: dict, now: float,
         if last is not None and now - float(last) < cooldown_seconds:
             continue
         label, _ = labels[key]
-        lines.append(f"🔴 <b>{label} {value:.0f}%</b> — over the {limit:.0f}% threshold "
-                     f"on {esc(config.VPS_NAME)}")
+        window = metrics_mod.window_label(metrics.get("cpu_window_seconds")) if key == "cpu" else ""
+        lines.append(f"🔴 <b>{label} {value:.0f}%</b>{f' (avg over {window})' if window else ''} — "
+                     f"over the {limit:.0f}% threshold on {esc(config.VPS_NAME)}")
         updated[key] = now
 
     return lines, updated
@@ -149,7 +150,10 @@ def threshold_alerts(metrics: dict, alerts: dict, now: float,
 # --- Commands -----------------------------------------------------------------
 
 def cmd_report(args) -> int:
-    metrics = metrics_mod.collect()
+    # Averaged since the last watch run, read-only: the report never writes
+    # the snapshot, so it cannot shorten the window the next watch measures.
+    store = state_mod.load(config.STATE_FILE)
+    metrics = metrics_mod.collect(previous_cpu=store.get("cpu"))
     unit_states = services.collect(config.UNITS)
     body = build_report(metrics, unit_states, engine_health())
     return 0 if send(body, dry=args.dry) else 1
@@ -162,12 +166,13 @@ def cmd_watch(args) -> int:
     unit_states = services.collect(config.UNITS)
     service_lines, seen = service_changes(store.get("units") or {}, unit_states)
 
-    metrics = metrics_mod.collect()
+    metrics = metrics_mod.collect(previous_cpu=store.get("cpu"), now=now)
     metric_lines, alerts = threshold_alerts(
         metrics, store.get("alerts") or {}, now, config.ALERT_COOLDOWN_MINUTES * 60)
 
     store["units"] = seen
     store["alerts"] = alerts
+    store["cpu"] = metrics["cpu_snapshot"]
     store["last_watch_at"] = now
     state_mod.save(config.STATE_FILE, store)
 

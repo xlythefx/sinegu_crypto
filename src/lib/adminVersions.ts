@@ -15,6 +15,25 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-11-08 ───────────────────────────────────────────────────────────
   {
+    id: 'vps-cpu-alert-averaged',
+    date: '2026-11-09',
+    kind: 'fixed',
+    area: 'Server monitoring',
+    title: 'Server CPU alerts only fire when the server is actually busy',
+    summary:
+      'The admin group sometimes got "CPU 96% — over the 95% threshold" from a server that averages 2–3% all day. Every minute, the background jobs of Pixel Alpha and Pixel Pay started together and kept the server busy for about two seconds; the alert measured a single second, and now and then that second landed on this burst (8 Nov, 6:40 PM). The alert now measures the average over the two minutes since its last check, and the two products’ jobs start half a minute apart.',
+    howItWorks: [
+      'The CPU figure in alerts and in the 4-hourly report is now the average since the previous check (normally 2 minutes), and the message says so: "CPU 97% (avg over 2 min)".',
+      'A busy spell that lasts minutes still triggers the alert; a two-second burst no longer can.',
+      'Pixel Pay’s every-minute jobs now start 30 seconds into the minute, so they no longer pile up with Pixel Alpha’s at the start of each minute. Nothing they do changes, only when in the minute they start.',
+    ],
+    technical: [
+      'pixel-telegram: metrics.cpu_average() — psutil.cpu_times() stored in state.json (`cpu`) by each watch run, busy % = Δ(total − idle − iowait) / Δtotal (psutil’s own arithmetic, steal counts as busy). Window must be 30 s – 15 min, else a 5 s sample (first run, stopped timer, a report seconds after a watch). The report reads the snapshot and never writes it.',
+      '/etc/cron.d/pixelpay: `sleep 30 &&` before schedule:run (deploy_pixelpay.py PAY_CRON_OFFSET_SECONDS; new `cron` command writes it alone). Laravel decides what is due from the clock, and :30 is the same minute.',
+      'Measured on 9 Nov: both cores ~98% busy at hh:mm:02 (a third of it host steal), 2–3% average all day, load 0.00.',
+    ],
+  },
+  {
     id: 'signal-rejected-says-why',
     date: '2026-11-09',
     kind: 'improved',
@@ -26,6 +45,7 @@ export const ADMIN_CHANGES: AdminChange[] = [
       'Coin switched off by an admin: the message says it is turned off and where to turn it back on.',
       'Coin switched off by the kill switch: the message says so and gives the reason, e.g. "the master lost 3 trades in a row".',
       'Coin never added for that exchange: the message says it is not added yet and to add it with a base size.',
+      'A switched-off coin is announced once a day per exchange: the first refused signal of the day (Philippine time) sends the message, and later ones that day, buy or sell, main or test feed, are refused without another message. The message says so. Every other cause still sends a message each time, because someone has to fix it.',
       'Other refusals get their own sentence too: no base size set, coin set to long-only or short-only, no account on that exchange to receive it, or the coin list could not be loaded.',
       'In the Signal Log, a signal refused because the coin is switched off now counts as normal (the switch did its job), so it no longer turns the health banner amber. A coin that was never added still shows as a problem, labelled "Coin not added yet".',
       'Exits are unchanged: an open position always closes, whether its coin is on or off.',
@@ -33,6 +53,7 @@ export const ADMIN_CHANGES: AdminChange[] = [
     technical: [
       'GET /engine/{x}/assets adds `disabled: [{ticker, killed, killed_reason}]`; `assets` is still enabled-only. assets_api.rejection() returns asset_disabled | asset_not_added | assets_unavailable (list never loaded) | asset_not_configured (API too old to send `disabled`).',
       'notify.reject_hint() writes the sentence; notify_rejected / notify_test_feed_rejected take `hints`. The reason code stays on the message’s Reason line.',
+      'Once a day: binance_abcd/daily_alerts.py, keys `asset_disabled|{exchange}|{symbol}`, REPORT_TIMEZONE days, state in out/daily_alerts.json (survives a restart). Only when every venue’s reason is asset_disabled; the trade_logs row is posted either way.',
       'SignalHealth: asset_disabled → asset_off (normal), asset_not_added → asset_missing (problem), assets_unavailable (problem). Older asset_not_configured rows stay the generic "Signal rejected", since they could have meant either.',
     ],
     links: [{ label: 'Trading Assets', href: '/admin/assets' }, { label: 'Signal Log', href: '/admin/trade-logs' }],

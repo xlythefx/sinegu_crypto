@@ -1243,6 +1243,12 @@ old vendored snapshot either, which remains recoverable at commit `2e6e884`).
   Reason line. SignalHealth: `asset_off` is NORMAL (the switch working — it
   must not turn the banner amber), `asset_missing` and `assets_unavailable`
   are problems; old `asset_not_configured` rows stay the generic `rejected`.
+  **A switched-off coin alerts ONCE A DAY per venue** (owner, same day —
+  `binance_abcd/daily_alerts.py`, Manila days, `out/daily_alerts.json`):
+  main + test feed, BUY + SELL share the one message, which says the rest are
+  quiet; only when EVERY venue's reason is `asset_disabled`. Every other
+  cause still alerts each time, and every signal still writes its trade_logs
+  row.
   **One timeline (2026-10-14):** every row says LONG / SHORT and Entry / Exit
   (`side` / `type`, also filters); **retries fold under the signal they re-run**
   (`retries[]`; a `retry` row within 60 min after a signal with the same
@@ -2094,6 +2100,14 @@ group **Pixel Alpha Admin Control**. Full docs in `pixel-telegram/README.md`.
   service on the box as freshly restarted. The one exception is a unit already
   DOWN on that first run: that is the report, not noise. `state/` is
   server-owned and excluded from the deploy sync for the same reason.
+- **CPU is an AVERAGE since the previous check, never a 1-second glance**
+  (2026-11-09). Each watch run stores `psutil.cpu_times()` in `state.json`
+  (`cpu`) and reports busy time over the interval since the last one (30 s –
+  15 min, else a 5 s sample); the report reads it and never writes it. A
+  1-second sample read "CPU 96%" whenever it hit the top-of-minute burst of
+  the box's two Laravel schedulers. That burst is also split now: Pixel Pay's
+  cron starts at :30 (`deploy_pixelpay.py` `PAY_CRON_OFFSET_SECONDS`,
+  `cron` command), Pixel Alpha's stays at :00.
 - **Alerts are rate-limited but re-arm on recovery** — one message per metric
   per hour, and dropping back under the threshold clears the cooldown, so the
   next breach is not swallowed by an hour that started before the box recovered.

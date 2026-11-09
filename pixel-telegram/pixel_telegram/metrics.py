@@ -52,11 +52,81 @@ def _load_average() -> Optional[tuple[float, float, float]]:
         return None
 
 
-def collect(cpu_interval: float = 1.0) -> dict:
+# --- CPU: an AVERAGE over the time between checks, never a 1-second glance ----
+#
+# Until 2026-11-09 the CPU figure was psutil.cpu_percent(interval=1): one
+# second, every two minutes. Both Laravel schedulers on the box start their
+# per-minute PHP jobs in the same second, which holds both cores at ~98% for
+# one or two seconds and then drops to idle — so whenever the watch timer's
+# second landed on that burst, the admin group read "CPU 96%" from a box
+# averaging 2–3% all day (10:40 UTC, 8 Nov). The watch now stores the CPU
+# counters each run and reports busy time over the whole interval since the
+# last one: a sustained load still reads as one, a two-second burst cannot.
+
+# A previous reading older than this (timer stopped, box just deployed) or
+# younger than CPU_WINDOW_MIN_SECONDS (a report right after a watch) is not a
+# fair window; a CPU_SAMPLE_SECONDS sample is taken instead.
+CPU_WINDOW_MIN_SECONDS = 30.0
+CPU_WINDOW_MAX_SECONDS = 15 * 60.0
+CPU_SAMPLE_SECONDS = 5.0
+
+
+def cpu_snapshot(now: Optional[float] = None) -> dict:
+    """The cumulative CPU counters, JSON-safe, stamped with the wall clock."""
+    return {"at": time.time() if now is None else now, "times": psutil.cpu_times()._asdict()}
+
+
+def _total_and_busy(times: dict) -> tuple[float, float]:
+    """psutil's own arithmetic: guest time is already inside user/nice on
+    Linux, and iowait is idle. Steal counts as busy — capacity we did not get."""
+    total = sum(float(v) for v in times.values())
+    total -= float(times.get("guest", 0.0)) + float(times.get("guest_nice", 0.0))
+    idle = float(times.get("idle", 0.0)) + float(times.get("iowait", 0.0))
+    return total, total - idle
+
+
+def cpu_percent_between(before: dict, after: dict) -> Optional[float]:
+    """Busy % between two snapshots, or None when they cannot be compared —
+    malformed, or counters that went backwards (a reboot resets them)."""
+    try:
+        total_1, busy_1 = _total_and_busy(before["times"])
+        total_2, busy_2 = _total_and_busy(after["times"])
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return None
+    elapsed = total_2 - total_1
+    if elapsed <= 0 or busy_2 < busy_1:
+        return None
+    return max(0.0, min(100.0, (busy_2 - busy_1) / elapsed * 100.0))
+
+
+def cpu_average(previous: Optional[dict], now: Optional[float] = None) -> tuple[float, float, dict]:
+    """(percent, window in seconds, snapshot to store for the next run)."""
+    now = time.time() if now is None else now
+    if isinstance(previous, dict):
+        try:
+            window = now - float(previous.get("at"))
+        except (TypeError, ValueError):
+            window = -1.0
+        if CPU_WINDOW_MIN_SECONDS <= window <= CPU_WINDOW_MAX_SECONDS:
+            current = cpu_snapshot(now)
+            percent = cpu_percent_between(previous, current)
+            if percent is not None:
+                return percent, window, current
+    percent = psutil.cpu_percent(interval=CPU_SAMPLE_SECONDS)
+    return percent, CPU_SAMPLE_SECONDS, cpu_snapshot()
+
+
+def collect(previous_cpu: Optional[dict] = None, now: Optional[float] = None) -> dict:
+    """Resources now. CPU is the average since `previous_cpu` (the snapshot the
+    last watch stored) — see cpu_average(); the new snapshot is returned as
+    `cpu_snapshot` for the caller to store."""
     memory = psutil.virtual_memory()
     disk = psutil.disk_usage(config.DISK_PATH if os.path.exists(config.DISK_PATH) else os.path.abspath(os.sep))
+    cpu_percent, cpu_window, snapshot = cpu_average(previous_cpu, now)
     return {
-        "cpu_percent": psutil.cpu_percent(interval=cpu_interval),
+        "cpu_percent": cpu_percent,
+        "cpu_window_seconds": cpu_window,
+        "cpu_snapshot": snapshot,
         "ram_percent": memory.percent,
         "ram_used_gb": memory.used / GB,
         "ram_total_gb": memory.total / GB,
@@ -68,10 +138,18 @@ def collect(cpu_interval: float = 1.0) -> dict:
     }
 
 
+def window_label(seconds: Optional[float]) -> str:
+    """'2 min' / '5 s' — how long the CPU figure was averaged over."""
+    if not seconds:
+        return ""
+    return f"{round(seconds / 60)} min" if seconds >= 90 else f"{round(seconds)} s"
+
+
 def resource_lines(metrics: dict) -> list[str]:
+    window = window_label(metrics.get("cpu_window_seconds"))
     lines = [
         f"{dot(metrics['cpu_percent'])} <b>CPU</b>  <code>{bar(metrics['cpu_percent'])}</code> "
-        f"{metrics['cpu_percent']:.0f}%",
+        f"{metrics['cpu_percent']:.0f}%" + (f"  (avg {window})" if window else ""),
         f"{dot(metrics['ram_percent'])} <b>RAM</b>  <code>{bar(metrics['ram_percent'])}</code> "
         f"{metrics['ram_percent']:.0f}%  ({metrics['ram_used_gb']:.1f}/{metrics['ram_total_gb']:.1f} GB)",
         f"{dot(metrics['disk_percent'])} <b>Disk</b> <code>{bar(metrics['disk_percent'])}</code> "
