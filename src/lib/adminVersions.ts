@@ -28,6 +28,7 @@ export const ADMIN_CHANGES: AdminChange[] = [
       'Grok can read: every signal and what each account did with it, signal counts per coin or day, problems, open positions, closed trades and P&L (per day, coin, person or exchange), which coins are up or down for the master and for customers, coin settings and who changed them, every exchange account’s balance and deposits, users, invoices (paid, unpaid, overdue) and the dashboard totals.',
       'It never sees exchange API keys or secrets, passwords, email addresses or IP addresses, and it has no way to trade, close a position or edit anything.',
       'Every look-up Grok makes is listed on the same page under "What it asked", with the filters it used. Revoking a key stops the connector at once.',
+      'The page also has tips for asking (start with "Using Pixel Alpha", name the period, the coin or the person) and what to do when Grok says the key is not valid, the limit was reached, or it cannot connect.',
       'What Grok reads is sent to its maker (xAI). Customer names, balances and P&L are included by the owner’s decision.',
     ],
     technical: [

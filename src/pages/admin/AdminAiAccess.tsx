@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom'
 import AdminLayout from '../../components/admin/AdminLayout'
 import ConnectGrokCard from '../../components/admin/ai-access/ConnectGrokCard'
+import HelpCard from '../../components/admin/ai-access/HelpCard'
 import KeysCard from '../../components/admin/ai-access/KeysCard'
 import QuestionLog from '../../components/admin/ai-access/QuestionLog'
 import WhatItReadsCard from '../../components/admin/ai-access/WhatItReadsCard'
@@ -40,8 +41,9 @@ export default function AdminAiAccess() {
       <div className="flex flex-col gap-stack">
         <ConnectGrokCard connector={data.connector} />
         <KeysCard data={data} onChanged={reload} delay={50} />
-        <QuestionLog titles={titles} delay={100} />
-        <WhatItReadsCard tools={data.tools} delay={150} />
+        <HelpCard delay={100} />
+        <QuestionLog titles={titles} delay={150} />
+        <WhatItReadsCard tools={data.tools} delay={200} />
       </div>
     </AdminLayout>
   )
