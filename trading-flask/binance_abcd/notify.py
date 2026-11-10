@@ -852,7 +852,24 @@ def notify_account_failures(
             f"{hooks.RETRY_MAX_ATTEMPTS} attempts — a red alert follows only if they all fail."
         )
     lines += _credential_fixes(failures)
+    lines += _leverage_fix(ticker, failures)
     _send_admin("\n".join(lines))
+
+
+def _leverage_fix(ticker: str, failures: list[tuple]) -> list[str]:
+    """One line when the exchange refused the LEVERAGE before the order failed
+    (webhook marks the error "…x leverage refused (…)"). The venue's -2027 on
+    its own reads as "the position is too big" and sends people to shrink a
+    size that was never the problem — the SANTOS signals of 9 Nov 2026 failed
+    at $98 because Binance no longer allowed 25x on the coin."""
+    if not any("leverage refused" in str(f[1] if len(f) > 1 else "") for f in failures):
+        return []
+    return [
+        "",
+        f"⚙️ <b>The exchange refused the leverage.</b> Set a lower leverage for "
+        f"{_esc(ticker)} in Admin → Trading Assets → Edit — the coin's own leverage "
+        f"replaces the alert's on the next signal.",
+    ]
 
 
 def _credential_fixes(failures: list[tuple]) -> list[str]:

@@ -15,6 +15,28 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-11-10 ───────────────────────────────────────────────────────────
   {
+    id: 'asset-leverage-per-coin',
+    date: '2026-11-10',
+    kind: 'new',
+    area: 'Trading assets',
+    title: 'Set the leverage for each coin',
+    summary:
+      'Each coin now has its own Leverage setting. When it is set, every entry on that coin uses it, whatever leverage the TradingView alert asks for. Left empty, nothing changes: the alert’s leverage is used (25× today). It exists because Binance stopped allowing 25× on SANTOS on 9 November, and all three SANTOS sell signals that night were refused on every account — even an order worth only $98.',
+    howItWorks: [
+      'Admin → Trading Assets → Edit a coin → Sizing → Leverage. Type a whole number from 1 to 125 (for example 10), or leave it empty to follow the alert.',
+      'It applies from the next signal and does not wait for an open position to close. The coin’s card shows "10× leverage on every entry", and the change is listed in Change history.',
+      'Each exchange’s coin has its own setting: SANTOS on Binance can use 10× while SANTOS on MEXC follows the alert.',
+      'The Binance check on the edit page now works out the margin with the coin’s own leverage when it has one.',
+      'When an exchange refuses the leverage and the entry then fails, the admin alert now says so — "25x leverage refused (Leverage 25 is not valid)" — and points to this setting, instead of only "Exceeded the maximum allowable position", which read like the size was too big.',
+    ],
+    technical: [
+      'assets.leverage (unsigned tinyint, nullable; migration 2026_11_10_000001). AssetController validates `sometimes|nullable|integer|between:1,125` — absent = unchanged (the card switch sends none), \'\' = not set. Recorded by AssetHistory. Sent to the engine on GET /engine/{exchange}/assets.',
+      'Engine: webhook._effective_leverage = asset.leverage → the signal\'s leverage → BINANCE_ABCD_DEFAULT_LEVERAGE (25; 0 = leave the account\'s setting alone). Each entry detail carries `leverage`; the venue\'s trade_logs row records it. A refused set_leverage is no longer swallowed: a failed entry\'s error names it (`leverage_refused`) and notify adds a fix line.',
+      'Tests: AssetLeverageTest (API), tests/test_asset_leverage.py (engine).',
+    ],
+    links: [{ label: 'Trading Assets', href: '/admin/assets' }],
+  },
+  {
     id: 'ai-access-never-expiring-keys',
     date: '2026-11-10',
     kind: 'improved',

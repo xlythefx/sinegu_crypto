@@ -36,9 +36,11 @@ from binance_abcd.assets_api import rejection as asset_rejection
 from binance_abcd.exchange_api import ExchangeClient
 from binance_abcd.exchanges import client_for, exchange_of, label, labels, tradeable
 from binance_abcd.exchanges import enabled as enabled_exchanges
+from binance_abcd.binance_api import error_summary
 from binance_abcd.hooks import (
     BOOKKEEPING_WORKERS,
     COARSE_STEP_TICKERS,
+    DEFAULT_LEVERAGE,
     DISPATCH_WORKERS,
     FANOUT_WORKERS,
     LEVERAGE_CACHE_TTL,
@@ -200,29 +202,55 @@ def _parse_leverage(raw: Any) -> Optional[int]:
     return max(1, min(125, lev))
 
 
-def _maybe_set_leverage(api: ExchangeClient, symbol: str, leverage: Optional[int]) -> None:
-    """set_leverage only when the cached last-applied value differs.
+def _effective_leverage(asset: Optional[dict], signal_leverage: Optional[int]) -> Optional[int]:
+    """The leverage an entry asks for: the coin's own setting (Admin -> Trading
+    Assets) wins over the alert's, and DEFAULT_LEVERAGE (25) fills in when
+    neither names one. None only when that default is switched off (0).
+
+    The coin's setting exists because a venue can lower a coin's maximum at
+    any time: on 9 Nov 2026 Binance stopped accepting 25x on SANTOSUSDT, every
+    SANTOS entry failed -2027 at every size, and the only fix was editing each
+    TradingView alert by hand."""
+    own = (asset or {}).get("leverage")
+    if isinstance(own, int) and 1 <= own <= 125:
+        return own
+    if signal_leverage is not None:
+        return signal_leverage
+    return DEFAULT_LEVERAGE if DEFAULT_LEVERAGE > 0 else None
+
+
+def _maybe_set_leverage(api: ExchangeClient, symbol: str, leverage: Optional[int]) -> Optional[str]:
+    """set_leverage only when the cached last-applied value differs. Returns the
+    exchange's refusal as text (e.g. "-4028 Leverage 25 is not valid"), None
+    when it was applied or nothing was asked.
+
+    The order is still placed after a refusal — at whatever leverage the
+    account already holds, which may well be fine — but a failed order then
+    names the refusal, because "-2027 Exceeded the maximum allowable position"
+    on its own sends whoever reads the alert to shrink a size that was never
+    the problem.
 
     A venue that takes leverage ON the order (MEXC) has nothing to cache: the
     adapter just remembers the value for the entry it is about to place.
     """
     if leverage is None:
-        return
+        return None
     if api.LEVERAGE_PER_ORDER:
         api.set_leverage(symbol, leverage)
-        return
+        return None
     key = (api.exchange, api.api_key, symbol.upper())
     now = time.time()
     with _LEVERAGE_LOCK:
         cached = _LEVERAGE_APPLIED.get(key)
         if cached and cached[0] == leverage and (now - cached[1]) < LEVERAGE_CACHE_TTL:
-            return
+            return None
     result = api.set_leverage(symbol, leverage)
     if isinstance(result, dict) and result.get("_error"):
         log.warning("[%s] set_leverage %sx %s failed: %.200s", api.exchange, leverage, symbol, result.get("response"))
-        return
+        return error_summary(result)
     with _LEVERAGE_LOCK:
         _LEVERAGE_APPLIED[key] = (leverage, now)
+    return None
 
 
 def _normalize_target_uni_ids(raw: Any) -> Optional[set[str]]:
@@ -934,7 +962,9 @@ def _run_account(
                     "main_increment": main_full["increment"],
                 }
 
-            _maybe_set_leverage(api, symbol, leverage)
+            lev = _effective_leverage(asset, leverage)
+            base["leverage"] = lev
+            leverage_refused = _maybe_set_leverage(api, symbol, lev)
             result = handle_entry(api, symbol, "BUY" if action == "BUY" else "SELL", quantity, price)
 
             if result is not None and result.get("status") == NOT_LISTED:
@@ -948,10 +978,14 @@ def _run_account(
                 # and an entry replayed blind is how one signal becomes two
                 # positions. Exits are the opposite case: they re-read first.
                 retryable = bool(result and result.get("rate_limited"))
+                error = (result or {}).get("error", "no response")
+                if leverage_refused:
+                    error = f"{error} — {lev}x leverage refused ({leverage_refused})"
                 return base | {
-                    "error": (result or {}).get("error", "no response"),
+                    "error": error,
                     "retryable": retryable,
                     "sizing": sizing,
+                    **({"leverage_refused": leverage_refused} if leverage_refused else {}),
                 }
 
             # The order's real executed price beats TradingView's `close` for the
@@ -1308,8 +1342,11 @@ def _process_trade_job(
     per_exchange = []
     for ex in run:
         if ex in runnable:
+            # The Signal Log row records the leverage this venue's entries ASKED
+            # for (the coin's own setting beats the alert's), not the alert's.
+            venue_leverage = _effective_leverage(runnable[ex].get("asset"), leverage) if is_entry else leverage
             per_exchange.append(_exchange_summary(
-                action, symbol, price, strategy, leverage, ex, is_retry,
+                action, symbol, price, strategy, venue_leverage, ex, is_retry,
                 [r for r in results if r.get("exchange") == ex],
                 target_count=len(runnable[ex]["accounts"]),
                 feed=job_feed,

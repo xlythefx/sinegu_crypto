@@ -33,6 +33,7 @@ const FIELDS: { key: string; label: string }[] = [
   { key: 'enabled', label: 'Trading' },
   { key: 'base_size', label: 'Base size' },
   { key: 'max_increments', label: 'Max position size' },
+  { key: 'leverage', label: 'Leverage' },
   { key: 'streak_sizing_enabled', label: 'Streak sizing' },
   { key: 'streak_sizes', label: 'Streak steps' },
   { key: 'kill_switch_losses', label: 'Kill switch' },
@@ -52,9 +53,12 @@ export function formatValue(key: string, v: unknown): string {
   if (v === null || v === undefined || v === '') {
     if (key === 'kill_switch_losses') return 'off'
     if (key === 'streak_sizes') return 'none'
+    if (key === 'leverage') return 'from the alert'
     return '—'
   }
   switch (key) {
+    case 'leverage':
+      return `${Number(v)}×`
     case 'enabled':
       return v ? 'on' : 'off'
     case 'streak_sizing_enabled':

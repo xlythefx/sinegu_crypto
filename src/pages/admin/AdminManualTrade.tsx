@@ -437,7 +437,8 @@ export default function AdminManualTrade() {
                     onChange={(e) => setLeverage(e.target.value)}
                   />
                   <p className="mt-1 text-[11px] text-muted leading-[1.4]">
-                    Defaults to {DEFAULT_LEVERAGE}× — clear it to let the engine decide.
+                    Defaults to {DEFAULT_LEVERAGE}× — clear it to let the engine decide. A coin with its own
+                    leverage (Trading Assets) uses that instead.
                   </p>
                 </div>
               </div>

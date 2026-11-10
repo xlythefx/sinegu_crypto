@@ -1699,6 +1699,20 @@ for the overlay's `position: fixed` and trap it inside.
   help**: `/fapi/v3/account` is signed per account key, so no two accounts can
   share a response. What they share is the IP's weight budget, so the only
   levers are interval and spread (`POLLER_START_STAGGER_SECONDS`).
+- **Leverage per coin (2026-11-10).** An entry asks for `assets.leverage`
+  (Admin → Trading Assets → Sizing → Leverage, 1–125) when the coin has one,
+  else the alert's `leverage`, else `BINANCE_ABCD_DEFAULT_LEVERAGE` (25; 0 =
+  leave the account's own setting alone) — `webhook._effective_leverage`.
+  Per venue (one asset row per broker), applied at once (never pending), absent
+  on a write = unchanged, recorded in Change history and on each entry detail
+  (`leverage`) and the venue's trade_logs row. Built because Binance stopped
+  allowing 25× on SANTOSUSDT on 2026-11-09: `set_leverage` answered `-4028
+  Leverage 25 is not valid`, which the engine only LOGGED, and every order then
+  failed `-2027 Exceeded the maximum allowable position` — even 250 SANTOS
+  (~$98) — which read as "too big" and sent us shrinking the size. A refused
+  leverage is now carried on the failed entry (`leverage_refused`, appended to
+  the error) and `notify._leverage_fix` adds a "set it in Trading Assets" line.
+  Exits never set leverage.
 - **Live orders:** accounts with `demo=1` route to the Binance futures testnet;
   everything else is REAL. Entries fail closed on unconfigured assets.
 - **Sizing & the deposit gate** (`_scale_qty` + `_deposit_gate` in

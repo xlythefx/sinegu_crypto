@@ -4,8 +4,10 @@ import ChoiceGroup, { type Choice } from './ChoiceGroup'
 import EditorSection from './EditorSection'
 import { FIELD, FIELD_ERROR, FIELD_HINT, FIELD_LABEL, FIELD_NOTE, NUMBER_CONTROL } from './editorClasses'
 import {
+  DEFAULT_SIGNAL_LEVERAGE,
   draftBase,
   draftEntries,
+  draftLeverage,
   draftMax,
   isBinanceDraft,
   maxBelowBase,
@@ -38,7 +40,7 @@ const MULTIPLES: Choice<MaxMultiple | 'custom'>[] = [
  * position stacks further than it should.
  */
 export default function SizingSection({ draft, update, asset, showErrors }: SizingSectionProps) {
-  const ids = { base: useId(), max: useId(), multiple: useId() }
+  const ids = { base: useId(), max: useId(), multiple: useId(), leverage: useId() }
   const [left, setLeft] = useState({ base: false, max: false })
   const binance = isBinanceDraft(draft)
   const coin = baseCoin(draft.ticker || 'COIN')
@@ -47,6 +49,8 @@ export default function SizingSection({ draft, update, asset, showErrors }: Sizi
   const baseBad = !(draftBase(draft) > 0) && (left.base || showErrors)
   const maxBad = (!(max > 0) && (left.max || showErrors)) || maxBelowBase(draft)
   const waiting = asset?.pending_sizing ?? null
+  const leverage = draftLeverage(draft)
+  const leverageBad = Number.isNaN(leverage)
 
   const entriesLine =
     entries === null
@@ -133,6 +137,33 @@ export default function SizingSection({ draft, update, asset, showErrors }: Sizi
         ) : (
           <p className={FIELD_NOTE}>{entriesLine}</p>
         )}
+      </div>
+
+      <div className={FIELD}>
+        <label htmlFor={ids.leverage} className={FIELD_LABEL}>
+          Leverage <span className="font-normal text-faint">· optional</span>
+        </label>
+        <input
+          id={ids.leverage}
+          type="number"
+          inputMode="numeric"
+          className={NUMBER_CONTROL}
+          value={draft.leverage}
+          onChange={(e) => update({ leverage: e.target.value })}
+          min="1"
+          max="125"
+          step="1"
+          placeholder={`From the alert (${DEFAULT_SIGNAL_LEVERAGE}×)`}
+          aria-invalid={leverageBad}
+          aria-describedby={`${ids.leverage}-hint`}
+        />
+        <p id={`${ids.leverage}-hint`} className={leverageBad ? FIELD_ERROR : FIELD_HINT}>
+          {leverageBad
+            ? 'A whole number from 1 to 125, or leave it empty.'
+            : leverage === null
+              ? `Empty: every entry uses the leverage the TradingView alert asks for (${DEFAULT_SIGNAL_LEVERAGE}× today). Set it when the exchange no longer allows that on this coin.`
+              : `Every entry on this coin asks for ${leverage}×, whatever the alert says. Applies from the next signal.`}
+        </p>
       </div>
     </EditorSection>
   )

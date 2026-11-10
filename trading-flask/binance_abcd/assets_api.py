@@ -107,10 +107,25 @@ def _loader(exchange: str):
                 "max_increments": _increment_cap(max_size, base_size),
                 "side": str(asset.get("side") or "ALL").upper(),
                 "streak_sizes": _streak_ladder(asset),
+                "leverage": _asset_leverage(asset),
             }
         return by_ticker
 
     return _load_assets
+
+
+def _asset_leverage(asset: dict) -> int | None:
+    """The coin's own leverage (1-125), or None = not set (the alert's applies).
+    An older API sends no key; a value outside the range is ignored rather
+    than clamped — 0 or 500 is a typo, not a wish for 1x or 125x."""
+    raw = asset.get("leverage")
+    if raw in (None, ""):
+        return None
+    try:
+        value = int(float(raw))
+    except (TypeError, ValueError):
+        return None
+    return value if 1 <= value <= 125 else None
 
 
 STREAK_KINDS = ("loss", "win")

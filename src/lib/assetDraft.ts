@@ -27,9 +27,22 @@ export interface AssetDraft {
   /** Typed max position; read only when the picker is 'custom' or the venue is not Binance. */
   maxPosition: string
   maxMultiple: MaxMultiple | 'custom'
+  /** The coin's own leverage as typed; '' = not set (the alert's applies). */
+  leverage: string
   streakEnabled: boolean
   streakRows: StreakRow[]
   kill: KillSwitchDraft
+}
+
+/** Leverage every signal asks for today, and what the engine uses when an alert names none. */
+export const DEFAULT_SIGNAL_LEVERAGE = 25
+
+/** The typed leverage: null = not set, NaN = not a whole number from 1 to 125. */
+export function draftLeverage(d: Pick<AssetDraft, 'leverage'>): number | null {
+  const text = d.leverage.trim()
+  if (text === '') return null
+  const n = Number(text)
+  return Number.isInteger(n) && n >= 1 && n <= 125 ? n : NaN
 }
 
 /**
@@ -48,6 +61,7 @@ export function draftFrom(asset: AdminAsset | null, defaultBroker: string | null
       baseSize: '0.001',
       maxPosition: '0.003',
       maxMultiple: 3,
+      leverage: '',
       streakEnabled: false,
       streakRows: [],
       kill: killDraftFrom(null),
@@ -64,6 +78,7 @@ export function draftFrom(asset: AdminAsset | null, defaultBroker: string | null
     maxPosition: String(sizing.max_increments),
     // A max that is not exactly 1×/2×/3× the base opens on Custom, untouched.
     maxMultiple: multipleOf(sizing.max_increments, sizing.base_size) ?? 'custom',
+    leverage: asset.leverage === null ? '' : String(asset.leverage),
     streakEnabled: sizing.streak_sizing_enabled,
     streakRows: rowsFromSteps(sizing.streak_sizes),
     kill: killDraftFrom(asset.kill_switch_losses),
@@ -109,6 +124,7 @@ export function draftToInput(d: AssetDraft): AssetInput {
     enabled: d.enabled,
     base_size: draftBase(d),
     max_increments: draftMax(d),
+    leverage: draftLeverage(d),
     streak_sizing_enabled: d.streakEnabled,
     streak_sizes: stepsFromRows(d.streakRows),
     kill_switch_losses: killDraftValue(d.kill),
@@ -131,6 +147,9 @@ export function draftProblems(d: AssetDraft): DraftProblem[] {
   if (!(draftMax(d) > 0)) out.push({ section: 'sizing', message: 'Max position must be more than 0.' })
   else if (maxBelowBase(d)) {
     out.push({ section: 'sizing', message: 'Max position is smaller than one entry (the base size).' })
+  }
+  if (Number.isNaN(draftLeverage(d))) {
+    out.push({ section: 'sizing', message: 'Leverage must be a whole number from 1 to 125, or empty.' })
   }
   if (ladderHasErrors(d.streakRows)) {
     out.push({ section: 'streak', message: 'Fix the streak steps marked in red.' })
@@ -156,6 +175,7 @@ export function draftChanged(initial: AssetDraft, current: AssetDraft): boolean 
     a.enabled !== b.enabled ||
     !sameNumber(a.base_size, b.base_size) ||
     !sameNumber(a.max_increments, b.max_increments) ||
+    !sameNumber(a.leverage ?? undefined, b.leverage ?? undefined) ||
     a.streak_sizing_enabled !== b.streak_sizing_enabled ||
     !sameLadder(a.streak_sizes ?? [], b.streak_sizes ?? []) ||
     a.kill_switch_losses !== b.kill_switch_losses

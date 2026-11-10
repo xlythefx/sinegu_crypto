@@ -214,6 +214,13 @@ ACCOUNTS_CACHE_TTL = _env_float("ACCOUNTS_CACHE_TTL", 90.0)
 ASSETS_CACHE_TTL = _env_float("ASSETS_CACHE_TTL", 90.0)
 LEVERAGE_CACHE_TTL = _env_float("LEVERAGE_CACHE_TTL", 86400.0)
 
+# --- Leverage -----------------------------------------------------------------
+# What an entry asks the exchange for, best source first: the coin's own
+# leverage (Admin -> Trading Assets, `assets.leverage`), then the alert's
+# `leverage`, then this. 0 = no default: an entry naming none leaves the
+# account's existing setting alone (the behaviour before 2026-11-10).
+DEFAULT_LEVERAGE = _env_int("DEFAULT_LEVERAGE", 25)
+
 # --- Pollers ------------------------------------------------------------------
 RUN_POLLERS = _env_bool("RUN_POLLERS", True)
 BALANCES_FETCH_INTERVAL = _env_float("BALANCES_FETCH_INTERVAL", 300.0)

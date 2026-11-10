@@ -260,6 +260,12 @@ export interface AdminAsset {
   asset_image: string | null
   max_increments: number
   base_size: number
+  /**
+   * The coin's own leverage (1–125): every entry asks the exchange for it
+   * instead of the leverage the TradingView alert names. null = not set, so
+   * the alert's applies (25× when it names none). Applies at once.
+   */
+  leverage: number | null
   enabled: boolean
   /** Streak sizing switch. Off = every entry uses base_size. */
   streak_sizing_enabled: boolean
@@ -372,6 +378,8 @@ export interface AssetInput {
   streak_sizing_enabled?: boolean
   streak_sizes?: AssetStreakSize[]
   kill_switch_losses?: number | null
+  /** Absent = unchanged (the card's on/off switch), null = not set (the alert's leverage applies). */
+  leverage?: number | null
 }
 
 /**

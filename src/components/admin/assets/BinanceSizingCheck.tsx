@@ -23,6 +23,8 @@ interface Props {
   maxPosition: number
   check: BinanceSizingCheckState
   onUseBase: (base: number) => void
+  /** The coin's own leverage from the form; null = not set (the signals' leverage applies). */
+  coinLeverage?: number | null
 }
 
 const usd = (v: number) => fmtMoney(v, Math.abs(v) >= 1000 ? 0 : 2)
@@ -88,11 +90,13 @@ function Suggestion({ tone, children, action }: { tone: 'warn' | 'bad'; children
 const BTN =
   'inline-flex h-9 flex-none items-center justify-center gap-1.5 rounded-pill border border-border bg-surface2 px-3.5 text-[12px] font-semibold text-text hover:border-accent'
 
-export default function BinanceSizingCheck({ ticker, baseSize, maxPosition, check, onUseBase }: Props) {
+export default function BinanceSizingCheck({ ticker, baseSize, maxPosition, check, onUseBase, coinLeverage = null }: Props) {
   const { data, loading, error, reload } = check
   const symbol = ticker.trim().toUpperCase()
-  // Leverage is the signal's on this engine; before any signal has carried one, assume QuantLab's.
-  const leverage = data?.leverage.value ?? FALLBACK_SIGNAL_LEVERAGE
+  // The coin's own leverage beats the signal's in the engine; without one it is the
+  // signal's, and before any signal has carried one, assume QuantLab's.
+  const ownLeverage = coinLeverage !== null && Number.isFinite(coinLeverage) ? coinLeverage : null
+  const leverage = ownLeverage ?? data?.leverage.value ?? FALLBACK_SIGNAL_LEVERAGE
   const sizing =
     data
       ? checkSizing({
@@ -154,7 +158,9 @@ export default function BinanceSizingCheck({ ticker, baseSize, maxPosition, chec
     const coin = sizing?.coin ?? symbol
     const lev = leverage
     const leverageNote =
-      data.leverage.source === 'coin'
+      ownLeverage !== null
+        ? 'this coin’s leverage setting'
+        : data.leverage.source === 'coin'
         ? `this coin’s latest signal`
         : data.leverage.source === 'exchange'
           ? 'the latest Binance signal (none for this coin yet)'
@@ -303,8 +309,8 @@ export default function BinanceSizingCheck({ ticker, baseSize, maxPosition, chec
 
         <p className="text-[11px] leading-[1.5] text-faint">
           {rules.price ? `Mark price ${usd(rules.price)}, checked ${new Date(data.checked_at).toLocaleTimeString()}. ` : ''}
-          Prices move, so check again before saving. If Binance caps {coin} below {lev}×, the account
-          gets the lower leverage and more margin is needed.
+          Prices move, so check again before saving. If Binance does not allow {lev}× on {coin}, it refuses
+          every entry, whatever the size — set a lower Leverage under Sizing.
         </p>
       </div>
     )

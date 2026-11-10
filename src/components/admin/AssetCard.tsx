@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { History, Pencil, ShieldAlert, Trash2, TrendingUpDown } from 'lucide-react'
+import { Gauge, History, Pencil, ShieldAlert, Trash2, TrendingUpDown } from 'lucide-react'
 import AssetLogo from './assets/AssetLogo'
 import EntryPips from './assets/EntryPips'
 import KilledAssetStrip from './assets/KilledAssetStrip'
@@ -186,6 +186,18 @@ export default function AssetCard({
             {ladderShortText(asset.streak_sizes)}
           </span>
         </div>
+      )}
+
+      {/* The coin's own leverage, which replaces the alert's on every entry.
+          Nothing is shown when it is not set: the alert's leverage applies. */}
+      {asset.leverage !== null && (
+        <p className="-mt-1 flex items-start gap-2 px-0.5 text-[11.5px] leading-[1.45] text-muted">
+          <Gauge size={13} className="mt-px flex-none text-faint" aria-hidden="true" />
+          <span>
+            <b className="font-semibold text-text">{asset.leverage}× leverage</b> on every entry, whatever the alert
+            asks for.
+          </span>
+        </p>
       )}
 
       {/* A kill switch that is set and counting (a tripped one is the strip above). */}

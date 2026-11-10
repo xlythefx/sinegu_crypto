@@ -14,6 +14,7 @@ import { useBinanceSizingCheck } from '../../../../hooks/useBinanceSizingCheck'
 import {
   changesSizing,
   draftBase,
+  draftLeverage,
   draftMax,
   draftToInput,
   isBinanceDraft,
@@ -169,6 +170,7 @@ export default function AssetEditor({ asset, defaultBroker, onSave, onLeave }: A
                 maxPosition={draftMax(draft)}
                 check={check}
                 onUseBase={(b) => update({ baseSize: String(b) })}
+                coinLeverage={draftLeverage(draft)}
               />
             )}
           </aside>

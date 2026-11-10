@@ -1,8 +1,8 @@
-import { Eye, TrendingUpDown } from 'lucide-react'
+import { Eye, Gauge, TrendingUpDown } from 'lucide-react'
 import AssetLogo from '../AssetLogo'
 import EntryPips from '../EntryPips'
 import { EXCHANGE_META, exchangeFromBroker } from '../../../exchanges/meta'
-import { draftBase, draftEntries, draftMax, type AssetDraft } from '../../../../lib/assetDraft'
+import { draftBase, draftEntries, draftLeverage, draftMax, type AssetDraft } from '../../../../lib/assetDraft'
 import { mainEntryText } from '../../../../lib/assetSizing'
 import { displaySymbol } from '../../../../lib/chart'
 import { fmtQty } from '../../../../lib/format'
@@ -36,6 +36,7 @@ export default function AssetPreview({ draft, asset, image }: AssetPreviewProps)
   const entries = draftEntries(draft)
   const steps = stepsFromRows(draft.streakRows)
   const entryText = asset && base > 0 ? mainEntryText(asset, base) : null
+  const leverage = draftLeverage(draft)
 
   return (
     <section aria-labelledby="asset-preview-title" className="rounded-card border border-border bg-surface p-4 sm:p-5">
@@ -81,6 +82,16 @@ export default function AssetPreview({ draft, asset, image }: AssetPreviewProps)
             </dd>
           </div>
         </dl>
+
+        {leverage !== null && !Number.isNaN(leverage) && (
+          <p className="flex items-start gap-2 px-0.5 text-[11.5px] leading-[1.45] text-muted">
+            <Gauge size={13} className="mt-px flex-none text-faint" aria-hidden="true" />
+            <span>
+              <b className="font-semibold text-text">{leverage}× leverage</b> on every entry, whatever the alert asks
+              for.
+            </span>
+          </p>
+        )}
 
         {draft.streakEnabled && steps.length > 0 && (
           <p className="flex min-w-0 items-center gap-2 rounded-row border border-accent-line bg-accent-soft px-3 py-2">

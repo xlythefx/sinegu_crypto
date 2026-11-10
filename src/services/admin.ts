@@ -128,6 +128,11 @@ export async function getAdminPerformance(
  * and the editor read in. The kill-switch fields get the same treatment: an
  * API without them reads as "no kill switch, never tripped".
  */
+function leverageOf(raw: unknown): number | null {
+  const n = raw === null || raw === undefined || raw === '' ? NaN : Number(raw)
+  return Number.isInteger(n) && n >= 1 && n <= 125 ? n : null
+}
+
 function normalizeAsset(asset: AdminAsset): AdminAsset {
   if (!asset) return asset
   const raw: Partial<AssetStreakSize>[] = Array.isArray(asset.streak_sizes)
@@ -153,6 +158,8 @@ function normalizeAsset(asset: AdminAsset): AdminAsset {
     streak_sizing_enabled: Boolean(asset.streak_sizing_enabled),
     streak_sizes: sortSteps(steps),
     kill_switch_losses: kill !== null && Number.isInteger(kill) && kill > 0 ? kill : null,
+    // An API older than the column sends none: "not set", the alert's leverage applies.
+    leverage: leverageOf(asset.leverage),
     killed_at: asset.killed_at || null,
     killed_reason: asset.killed_reason || null,
     kill_switch_armed_at: asset.kill_switch_armed_at || null,
@@ -280,6 +287,10 @@ function buildAssetForm(input: AssetInput, image?: AssetImageChange): FormData {
       'kill_switch_losses',
       input.kill_switch_losses === null ? '' : String(input.kill_switch_losses),
     )
+  }
+  // And for the coin's leverage: absent = unchanged, '' = not set (the alert's applies).
+  if (input.leverage !== undefined) {
+    form.append('leverage', input.leverage === null ? '' : String(input.leverage))
   }
   if (image?.file) form.append('asset_image', image.file)
   else if (image?.remove) form.append('remove_image', '1')
