@@ -191,7 +191,7 @@ export function fmtTimeMillis(dt: string): string {
 }
 
 /** A DB datetime with no zone designator is UTC (see fmtDateTime). */
-function parseUtc(dt: string): Date | null {
+export function parseUtc(dt: string): Date | null {
   const iso = dt.replace(' ', 'T')
   const zoned = /(?:Z|[+-]\d{2}:?\d{2})$/.test(iso) ? iso : `${iso}Z`
   const date = new Date(zoned)

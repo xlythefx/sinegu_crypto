@@ -21,6 +21,7 @@ import {
   Webhook,
   Eye,
   Bot,
+  Clapperboard,
 } from 'lucide-react'
 import { usePortalSwitch } from '../ui/PortalSwitchOverlay'
 import { getUser } from '../../lib/session'
@@ -72,6 +73,9 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { label: 'User Management', url: '/admin/users', icon: UserCog, collaborator: true },
   // The public website's traffic — every staff role, IP included (owner, 2026-10-28).
   { label: 'Visitors', url: '/admin/visitors', icon: Eye, collaborator: true },
+  // X / TikTok planning + Higgsfield generations — the marketing team's page, and
+  // the ONE admin area a collaborator may write in (owner, 2026-11-10).
+  { label: 'Creatives', url: '/admin/creatives', icon: Clapperboard, collaborator: true },
   { label: 'API Keys', url: '/admin/api-keys', icon: KeyRound },
   { label: 'Strategies', url: '/admin/strategies', icon: Target, collaborator: true },
   { label: 'Trading Assets', url: '/admin/assets', icon: Coins },

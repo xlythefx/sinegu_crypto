@@ -581,6 +581,10 @@ NGINX_CSP_POLICY = (
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
     "font-src 'self' https://fonts.gstatic.com data:; "
     "img-src 'self' data: blob: https:; "
+    # Admin → Creatives plays Higgsfield's videos straight from its CDN (they
+    # are never stored on our server); without this, media falls back to
+    # default-src 'self' and an ENFORCED policy would block every preview.
+    "media-src 'self' blob: https:; "
     "connect-src 'self'; "
     "frame-src 'self' https://checkout.stripe.com; "
     "form-action 'self' https://checkout.stripe.com; "
@@ -1882,6 +1886,15 @@ MIRRORED_API_ENV_KEYS = (
     "STRIPE_SECRET_KEY",
     "STRIPE_SECRET_KEY_TEST",
     "STRIPE_WEBHOOK_SECRET",
+    # Higgsfield (Admin → Creatives, 2026-11-10) — the product's Higgsfield
+    # Cloud account that the marketing team generates images and videos on.
+    # It identifies the ACCOUNT (and the balance it spends), so it is the same
+    # on every machine.
+    #
+    # Deliberately NOT mirrored:
+    #   HIGGSFIELD_CACERT — describes the BOX, like TRON_CACERT.
+    "HIGGSFIELD_KEY_ID",
+    "HIGGSFIELD_KEY_SECRET",
 )
 
 # Written with PROD values, never mirrored — these describe the BOX. Locally

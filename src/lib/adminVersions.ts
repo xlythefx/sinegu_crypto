@@ -15,6 +15,30 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-11-10 ───────────────────────────────────────────────────────────
   {
+    id: 'creatives-page',
+    date: '2026-11-10',
+    kind: 'new',
+    area: 'Creatives',
+    title: 'Creatives: plan marketing posts and make videos with Higgsfield',
+    summary:
+      'A new Admin → Creatives page for the marketing team. They can plan posts for X and TikTok, and make images and short videos with Higgsfield using one fixed pixel-art mascot, "Pixel", so the character looks the same in every post. Spending has a monthly cap of $100 that any admin can change. Higgsfield keeps each video for 7 days; download it before then, because nothing is stored on our server.',
+    howItWorks: [
+      'Planner: every post idea is a card that moves from Idea → Script → Generating → Review → Approved → Posted, with its platform (X or TikTok), planned date, hook, script, caption and hashtags.',
+      'Character: the mascot’s description and up to 8 reference pictures. Those pictures go along with every character image and video, which is what keeps Pixel looking the same. Start by making a few candidates with "Image from text", then keep the best ones with "Use as character reference".',
+      'Studio: pick a model, type what should happen, and press "Check price" first. Generate asks for confirmation and shows the cost. Rough prices: a picture costs under 10 cents, a 5-second video made from a picture about $0.30 (10 seconds about $0.60), and a 10-second character video with Seedance about $4.60 at 720p.',
+      'Each result shows how long Higgsfield will keep it ("Deleted by Higgsfield in 6 d 4 h") and has a Download button. After 7 days it is gone.',
+      'Budget: this month’s spend against the cap, broken down per person. A generation that would go over the cap is refused before any money is spent. Any admin can change the cap; setting it to $0 turns generating off. Failed or blocked generations cost nothing.',
+      'The marketing team (collaborators) can use everything on this page except changing the cap. Everywhere else they are still read-only.',
+    ],
+    technical: [
+      'API: /admin/creatives* in its own `staff` route group, the only admin area where a collaborator may write. PUT /admin/creatives/budget is in the `admin` group. Tables creative_settings / _characters / _character_refs / _plans / _generations (migration 2026_11_10_000002).',
+      'App\\Services\\Creatives: HiggsfieldGateway (Authorization: Key id:secret; estimate / submit / status / cancel / file upload), CreativeModels (4 presets: Soul v2 image, Grok Image 2.0 with references, Kling 2.5 Turbo Pro image-to-video, Seedance 2.5 reference-to-video), CreativeBudget (UTC month; the estimate is reserved under lockForUpdate and refunded to 0 when a generation fails, is blocked or is canceled).',
+      'Videos are never stored: outputs are Higgsfield URLs until expires_at (7 days). Download streams through a signed route without writing to disk. Only the reference images are stored on the API\'s private disk and re-uploaded to Higgsfield per generation. creatives:poll runs every minute.',
+      'Keys HIGGSFIELD_KEY_ID / HIGGSFIELD_KEY_SECRET are mirrored by sync-api-env. Tests: CreativesTest.',
+    ],
+    links: [{ label: 'Creatives', href: '/admin/creatives' }],
+  },
+  {
     id: 'asset-leverage-per-coin',
     date: '2026-11-10',
     kind: 'new',

@@ -18,6 +18,21 @@ import type { AdminTodo } from '../types/adminTodos'
  *    the note and the date it was settled stay readable.
  */
 export const ADMIN_TODOS: AdminTodo[] = [
+  // ── Creatives (2026-11-10) ──────────────────────────────────────────────
+  {
+    id: 'creatives-caption-writer',
+    feature: 'Creatives',
+    kind: 'decision',
+    title: 'Decide whether Creatives should write captions and hashtags with AI',
+    added: '2026-11-10',
+    why: 'The Creatives page plans posts and makes images and videos, but the marketing team types every caption and hashtag by hand. An AI writer could draft them from the plan’s hook and script. It needs an AI text service (for example Claude), which has its own monthly cost and its own key.',
+    steps: [
+      'Decide whether the team wants AI-drafted captions and hashtags for X and TikTok, or prefers to keep writing them by hand.',
+      'If yes: say which service to use and how much it may spend each month. Its key then goes into the API settings on the server, never into a chat or a task.',
+      'Write the choice in the note below.',
+    ],
+    links: [{ label: 'Admin → Creatives', href: '/admin/creatives' }],
+  },
   // ── AI Access (2026-11-09) ──────────────────────────────────────────────
   {
     id: 'ai-access-connect-grok',

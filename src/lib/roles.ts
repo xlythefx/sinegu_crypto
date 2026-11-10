@@ -35,7 +35,9 @@ export function canSeeAdminPortal(role: UserRole | undefined): boolean {
 
 /**
  * Read-only staff: sees the dashboard overview, users and strategies, and
- * never a write control. The API's `staff` route group is the enforcement.
+ * never a write control — except on Admin → Creatives, the marketing team's
+ * page (collaborators ARE the marketing team, owner 2026-11-10). The API's
+ * `staff` route group is the enforcement.
  */
 export function isCollaborator(role: UserRole | undefined): boolean {
   return role === 'collaborator'
@@ -44,11 +46,16 @@ export function isCollaborator(role: UserRole | undefined): boolean {
 /**
  * The admin paths a collaborator may open. Everything else in the portal
  * redirects to /admin (AdminLayout) — the API would 403 it anyway.
+ *
+ * All of them are read-only for a collaborator but `/admin/creatives`
+ * (content plans, the character, Higgsfield generations): the ONE admin area
+ * they may WRITE, through the API's `admin/creatives` staff group. Even there
+ * the monthly cap stays full-admin (`can_edit_budget`).
  */
 export function collaboratorMayOpen(pathname: string): boolean {
   const path = pathname.replace(/\/+$/, '') || '/'
   if (path === '/admin') return true
-  return ['/admin/users', '/admin/strategies', '/admin/visitors'].some(
+  return ['/admin/users', '/admin/strategies', '/admin/visitors', '/admin/creatives'].some(
     (base) => path === base || path.startsWith(`${base}/`),
   )
 }

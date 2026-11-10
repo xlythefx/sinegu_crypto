@@ -760,11 +760,52 @@ Rules:
 - `ai_access_logs` = one row per call (tool, arguments, status, ms, IP); the
   page's "What it asked". Owner to-do `ai-access-connect-grok`.
 
+## Creatives — marketing content + Higgsfield (2026-11-10)
+
+Owner's request: the marketing team plans X and TikTok posts and generates
+images/videos with Higgsfield, always with ONE invented pixel-art mascot
+("Pixel") so it looks the same everywhere. `/admin/creatives`
+(`pages/admin/AdminCreatives.tsx`, `components/admin/creatives/`), tabs
+Planner / Studio / Character / Budget. API `/admin/creatives*`,
+`App\Services\Creatives\*`. Rules:
+- **Collaborators are the marketing team and may WRITE here, nowhere else.**
+  The `admin/creatives` route group uses `staff` on purpose, and its comment
+  says so. It must never take a non-creative route. Only
+  `PUT /admin/creatives/budget` (the cap) sits in the `admin` group: any
+  full admin may set it.
+- **The cap holds before money moves.** The monthly cap (UTC month, default
+  $100, 0 = off) is checked against Higgsfield's FREE estimate inside a
+  transaction locking the settings row. The estimate is reserved as
+  `charged_usd`, set to 0 when a generation fails, is blocked or is canceled
+  (Higgsfield refunds those). No estimate = no generation. A submit Higgsfield
+  never answered keeps its reservation, since it may have been charged.
+  Generation rows are never deleted: that would drop spend from the month.
+- **Videos are never stored on our server.** Higgsfield keeps outputs 7 days
+  (`expires_at`), then they are gone. The page shows the countdown, and
+  Download streams through a signed route without writing to disk. It only
+  ever fetches URLs Higgsfield itself returned, never a client-supplied URL.
+  The ONLY stored files are the character's reference images (≤ 8, private
+  local disk), re-uploaded to Higgsfield per generation, because its uploads
+  are temporary.
+- **The key is `Authorization: Key {HIGGSFIELD_KEY_ID}:{HIGGSFIELD_KEY_SECRET}`**:
+  product identity, mirrored by `sync-api-env`, pinned empty in
+  `phpunit.xml`, never printed or returned. Tests fake every call.
+- Presets live in `CreativeModels` (Soul v2 image, Grok Image 2.0 with
+  references, Kling 2.5 Turbo Pro image-to-video, Seedance 2.5
+  reference-to-video). Seedance's estimate returns a description, not a
+  number, so it is priced per second from the rates in the preset. Prices on
+  2026-11-10: image $0.004–0.07; Kling $0.30 (5 s) / $0.60 (10 s); Seedance
+  $0.46/s at 720p.
+- No AI captions and no auto-posting yet (owner decision
+  `creatives-caption-writer`). Posting is download → post by hand.
+
 ## Collaborator role — read-only staff (2026-09-28)
 
 `user_credentials.type = 'collaborator'` opens the admin portal READ-ONLY:
 the dashboard Overview, User Management (list + user detail) and Strategies —
-nothing else, and no write control anywhere.
+nothing else, and no write control anywhere. **The one exception is
+Admin → Creatives** (2026-11-10): collaborators are the marketing team and
+write there (see "Creatives" above).
 - **The API is the enforcement.** `EnsureStaff` / the `staff` route group holds
   exactly the GETs a collaborator may call (insights overview + platform,
   users list/detail/summary/daily-pnl/analytics, strategies reads). **New
@@ -777,7 +818,7 @@ nothing else, and no write control anywhere.
   a collaborator must not get those). `STAFF_ROLES` / `canSeeAdminPortal` admit
   the portal (trader sidebar button, `AdminLayout`); `isCollaborator` hides
   writes; `collaboratorMayOpen(pathname)` is the path allowlist (`/admin`
-  exactly, `/admin/users[/*]`, `/admin/strategies[/*]`, `/admin/visitors`) — `AdminLayout`
+  exactly, `/admin/users[/*]`, `/admin/strategies[/*]`, `/admin/visitors`, `/admin/creatives[/*]`) — `AdminLayout`
   redirects anything else to `/admin`, and `AdminSidebar` items opt in with
   `collaborator: true`. Keep the two in step.
 - What a collaborator does not see: dashboard tabs other than Overview; links

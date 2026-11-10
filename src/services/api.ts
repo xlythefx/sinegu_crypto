@@ -180,6 +180,7 @@ function endSession(reason: 'expired' | 'suspended'): void {
 
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  /** JSON-encoded — except a `FormData`, which goes as multipart (file uploads). */
   body?: unknown
   auth?: boolean
 }
@@ -189,7 +190,10 @@ export async function apiFetch<T>(
   { method = 'GET', body, auth = false }: RequestOptions = {},
 ): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' }
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  // A FormData body sets no Content-Type: the browser writes
+  // `multipart/form-data` itself, with the boundary the parts need.
+  const multipart = typeof FormData !== 'undefined' && body instanceof FormData
+  if (body !== undefined && !multipart) headers['Content-Type'] = 'application/json'
   const token = auth ? getToken() : null
   if (token) headers.Authorization = `Bearer ${token}`
 
@@ -198,7 +202,7 @@ export async function apiFetch<T>(
     res = await fetch(`${API_URL}${path}`, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: body === undefined ? undefined : multipart ? (body as FormData) : JSON.stringify(body),
     })
   } catch {
     throw new ApiError(0, 'Cannot reach the server. Is the API running?')
