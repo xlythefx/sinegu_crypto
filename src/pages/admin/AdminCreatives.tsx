@@ -22,16 +22,18 @@ const TABS: TabItem<CreativesTab>[] = [
 ]
 
 const TITLE = 'Creatives'
-const SUBTITLE = 'Plan X and TikTok posts and make images and videos of the Pixel Alpha character with Higgsfield.'
+const SUBTITLE =
+  'Plan X and TikTok posts, let Claude draft them, and make images and videos of the Pixel Alpha character with Higgsfield.'
 
 /**
  * Admin → Creatives: the marketing team's page — the ONE admin area a
  * collaborator may write in (owner, 2026-11-10). Four tabs in `?tab=`:
- * Planner (default), Studio (`&plan=` preselects a plan), Character, Budget.
- * Only changing the monthly cap is full-admin (`can_edit_budget`).
+ * Planner (default, with the AI writer), Studio (`&plan=` preselects a plan
+ * and fills its video prompt), Character, Budget. Only the monthly cap and the
+ * weekly-recap switch are full-admin (`can_edit_budget`).
  */
 export default function AdminCreatives() {
-  const { meta, budget, setBudget, loading, error, reload } = useCreativesMeta()
+  const { meta, budget, setBudget, ai, setAi, loading, error, reload } = useCreativesMeta()
   const [params, setParams] = useSearchParams()
   const raw = params.get('tab')
   const tab: CreativesTab = TABS.some((t) => t.key === raw) ? (raw as CreativesTab) : 'planner'
@@ -43,7 +45,7 @@ export default function AdminCreatives() {
     return <Navigate to="/auth" replace />
   }
 
-  if (!meta || !budget) {
+  if (!meta || !budget || !ai) {
     return (
       <AdminLayout title={TITLE} subtitle={SUBTITLE}>
         <DataState loading={loading} error={error} onRetry={reload} label="Creatives" />
@@ -62,7 +64,16 @@ export default function AdminCreatives() {
 
       {/* keyed re-mount replays the reveal on every tab switch */}
       <div key={tab} className="animate-[fadeup_0.35s_ease-out]">
-        {tab === 'planner' && <PlannerTab onGenerate={generateFor} />}
+        {tab === 'planner' && (
+          <PlannerTab
+            onGenerate={generateFor}
+            ai={ai}
+            onAi={setAi}
+            canEditAi={meta.can_edit_budget}
+            budget={budget}
+            onBudget={setBudget}
+          />
+        )}
         {tab === 'studio' && (
           <StudioTab
             meta={meta}

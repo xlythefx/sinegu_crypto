@@ -796,8 +796,25 @@ Planner / Studio / Character / Budget. API `/admin/creatives*`,
   number, so it is priced per second from the rates in the preset. Prices on
   2026-11-10: image $0.004–0.07; Kling $0.30 (5 s) / $0.60 (10 s); Seedance
   $0.46/s at 720p.
-- No AI captions and no auto-posting yet (owner decision
-  `creatives-caption-writer`). Posting is download → post by hand.
+- **The AI writer (2026-11-10, the owner chose Claude):** "Write it for me"
+  turns a short brief ("bot recap this week") into a full plan draft: title,
+  hook, script, caption, hashtags, `video_prompt`. Also "Suggest ideas", and
+  `creatives:weekly-recap` (Saturdays 00:15 Manila) saves a drafted "Weekly
+  recap" plan in Idea (`creative_settings.ai_weekly_recap`, full admins
+  toggle). The Anthropic PHP SDK runs `claude-opus-5-5` at effort medium with
+  structured JSON output; the key is `ANTHROPIC_API_KEY` (mirrored, pinned
+  empty in phpunit).
+  - **It shares the monthly cap.** Cost = usage × $4 / $20 per M tokens, recorded
+    in `creative_ai_calls` (refusals too) and added to `CreativeBudget`. A call
+    is refused when < $0.50 remains.
+  - **The model only ever sees PUBLIC figures** (`CreativeFacts`, from the
+    published track record: the week's daily % chained, trades, coins). Never
+    a $ amount, balance, name or uni_id; a test inspects the prompt for it.
+  - **PHP, not the model, guards the output.** A cited number missing from
+    FACTS → a `warnings` entry; over the platform caption limit → warning;
+    any % → the disclaimer is appended. A draft is never saved or posted by
+    itself, except the weekly one, which lands in Idea for a human.
+- No auto-posting. Posting is download → post by hand.
 
 ## Collaborator role — read-only staff (2026-09-28)
 

@@ -24,7 +24,7 @@ interface StudioWorkspaceProps {
   onBudget: (budget: CreativeBudget) => void
   plans: CreativePlan[]
   plansFailed: boolean
-  /** Preselected from `?plan=` (Planner's "Generate for this plan"). */
+  /** Preselected from `?plan=` (Planner's "Generate for this plan" / "Make the video"). */
   initialPlan: CreativePlan | null
   character: CreativeCharacter | null
   onCharacter: (character: CreativeCharacter) => void
@@ -46,6 +46,8 @@ function startDownload(path: string): void {
  * Studio: the form and the gallery, side by side from 1280px and stacked
  * below. The two talk through the draft: "Animate" on a picture switches the
  * form to the animate model with that picture and scrolls back up to it.
+ * A plan with a video prompt (the AI writes one) fills the prompt box when it
+ * is picked — never over something typed.
  */
 export default function StudioWorkspace({
   meta,
@@ -62,6 +64,7 @@ export default function StudioWorkspace({
     models: meta.models,
     initialPlanId: initialPlan?.id ?? null,
     initialPlatform: initialPlan?.platform ?? null,
+    initialPrompt: initialPlan?.video_prompt ?? '',
   })
   const gallery = useCreativeGenerations()
   const now = useNow(60_000)
@@ -70,8 +73,14 @@ export default function StudioWorkspace({
   const [cancelling, setCancelling] = useState<CreativeGeneration | null>(null)
   const [cancelError, setCancelError] = useState<string | null>(null)
 
+  const planPrompt = (id: number | null) => plans.find((p) => p.id === id)?.video_prompt ?? ''
+
   const onPlanChange = (id: number | null) => {
     const plan = plans.find((p) => p.id === id) ?? null
+    // Swap in the new plan's prompt only over an empty box or the previous plan's own prompt.
+    if (draft.prompt.trim() === '' || draft.prompt === planPrompt(draft.planId)) {
+      draft.setPrompt(plan?.video_prompt ?? '')
+    }
     draft.setPlan(plan?.id ?? null, plan?.platform ?? null)
     // Keep `?plan=` in step so a reload lands on the same choice.
     setParams(
@@ -145,6 +154,7 @@ export default function StudioWorkspace({
         generations={gallery.generations ?? []}
         now={now}
         onPlanChange={onPlanChange}
+        planPrompt={planPrompt(draft.planId)}
         onCreated={gallery.upsert}
         onSubmitFailed={gallery.refresh}
         onOpenCharacter={onOpenCharacter}

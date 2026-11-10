@@ -1,9 +1,10 @@
 import { CalendarDays, Sparkles } from 'lucide-react'
-import { fmtMediumDate } from '../../../../lib/format'
+import { fmtDateTime, fmtMediumDate } from '../../../../lib/format'
 import { isPlanLate, stageMeta } from '../../../../lib/creatives'
 import type { CreativePlan, CreativePlanStatus } from '../../../../types/creatives'
 import { FormatPill, PlatformPill } from '../PlatformPill'
 import TonePill from '../TonePill'
+import AiDraftPill from '../ai/AiDraftPill'
 import { STAGE_ICON } from '../creativeIcons'
 import PlanQuickMenu from './PlanQuickMenu'
 
@@ -19,7 +20,7 @@ interface PlanCardProps {
 
 /**
  * One content plan: title, platform, format, planned date and how many
- * generations it has. The whole card opens the editor; the ⋯ button moves it
+ * generations it has — plus "AI draft" when its words came from Claude. The whole card opens the editor; the ⋯ button moves it
  * to another stage without opening anything.
  */
 export default function PlanCard({ plan, showStage = false, moving, onOpen, onGenerate, onMove }: PlanCardProps) {
@@ -61,6 +62,9 @@ export default function PlanCard({ plan, showStage = false, moving, onOpen, onGe
         )}
         <PlatformPill platform={plan.platform} />
         <FormatPill format={plan.format} />
+        {plan.ai_drafted_at && (
+          <AiDraftPill title={`Written with the AI writer (${fmtDateTime(plan.ai_drafted_at)}) — check it before posting`} />
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[11.5px] text-muted">

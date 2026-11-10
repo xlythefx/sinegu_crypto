@@ -15,6 +15,30 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-11-10 ───────────────────────────────────────────────────────────
   {
+    id: 'creatives-ai-writer',
+    date: '2026-11-10',
+    kind: 'new',
+    area: 'Creatives',
+    title: 'The AI writes the post for you',
+    summary:
+      'Type a short idea, such as "bot recap this week", and Claude (Anthropic\'s AI) writes the whole post: the title, the hook, a scene-by-scene script, the caption, the hashtags and the description the Studio uses to make the video with Pixel. It can also suggest ideas for the week, and every Saturday it drafts a weekly recap by itself. Everything it writes is a draft for the team to check.',
+    howItWorks: [
+      'Planner → New plan (or open a plan) → "Write it for me": type the idea, pick X or TikTok, and press Write. It takes up to half a minute. If the plan already has text, it asks before replacing it.',
+      'For results posts it uses only the bot\'s public figures: the same percentages, trade counts and coins the Telegram recaps post, for example "+3.1% this week over 12 trades, LTC the best coin". It never sees or writes dollar amounts, balances or customer names. A post that quotes a result always gets the line "Past performance does not guarantee future results."',
+      'If a draft quotes a number that is not in the week\'s figures, an amber note says so, so nobody posts a wrong figure by accident.',
+      'Planner → "Suggest ideas" gives a handful of post ideas, each with a hook and why it could work. "Add to planner" saves one, and "Write it" drafts it in full.',
+      '"Make the video" on a drafted plan opens the Studio with the plan and the video description already filled in.',
+      'Every Saturday just after midnight (Manila time), right after the weekly Telegram recap, a "Weekly recap" plan appears in the Idea column, already written. Admins can switch this off on the Planner.',
+      'Each draft costs a few cents (typically $0.03 to $0.10) and counts against the same monthly cap as the videos. The Budget tab shows how much went to AI writing.',
+    ],
+    technical: [
+      'Anthropic PHP SDK, model claude-opus-5-5 at effort medium with structured JSON output; cost from usage at $4 / $20 per million input / output tokens, recorded in creative_ai_calls and added to CreativeBudget\'s month total. Refused before the call when less than $0.50 remains.',
+      'FACTS come from the public track record computation (Asia/Manila days, the week\'s daily % chained like the Telegram weekly recap). Unknown-number warnings, the platform caption limit and the disclaimer are checked in PHP after the model answers.',
+      'POST /admin/creatives/ai/draft, /ai/ideas (staff group); PUT /admin/creatives/ai/settings (admin group). creatives:weekly-recap runs Saturdays 00:15 Asia/Manila. Migration 2026_11_10_000003. ANTHROPIC_API_KEY is mirrored by sync-api-env. Tests: CreativesAiTest.',
+    ],
+    links: [{ label: 'Creatives', href: '/admin/creatives' }],
+  },
+  {
     id: 'creatives-page',
     date: '2026-11-10',
     kind: 'new',

@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, Ellipsis, LoaderCircle, Pencil, Sparkles } from 'lucide-react'
+import { Check, Clapperboard, Ellipsis, LoaderCircle, Pencil, Sparkles } from 'lucide-react'
 import { PLAN_STAGES } from '../../../../lib/creatives'
+import { makeLabel } from '../../../../lib/creativesAi'
 import type { CreativePlan, CreativePlanStatus } from '../../../../types/creatives'
 import { STAGE_ICON } from '../creativeIcons'
 
@@ -19,8 +20,9 @@ const ITEM =
   'flex w-full min-h-10 cursor-pointer items-center gap-2.5 rounded-[10px] px-2.5 text-left text-[13px] font-semibold transition-colors duration-150'
 
 /**
- * A card's quick actions: open it, generate for it, or move it to another
- * stage in one tap. Portaled and placed from the trigger's rect (the board
+ * A card's quick actions: open it, generate for it ("Make the video" once it
+ * has a video prompt — the Studio opens with it filled in), or move it to
+ * another stage in one tap. Portaled and placed from the trigger's rect (the board
  * scrolls sideways inside an AOS card, which would clip or trap it).
  */
 export default function PlanQuickMenu({ plan, moving, onEdit, onGenerate, onMove }: PlanQuickMenuProps) {
@@ -115,8 +117,12 @@ export default function PlanQuickMenu({ plan, moving, onEdit, onGenerate, onMove
               className={`${ITEM} text-text hover:bg-surface2`}
               onClick={() => pick(onGenerate)}
             >
-              <Sparkles size={14} className="flex-none text-accent" aria-hidden="true" />
-              Generate for this plan
+              {plan.video_prompt ? (
+                <Clapperboard size={14} className="flex-none text-accent" aria-hidden="true" />
+              ) : (
+                <Sparkles size={14} className="flex-none text-accent" aria-hidden="true" />
+              )}
+              {plan.video_prompt ? makeLabel(plan.format) : 'Generate for this plan'}
             </button>
             <p className="mt-1.5 border-t border-hair px-2.5 pb-1.5 pt-2.5 font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
               Move to

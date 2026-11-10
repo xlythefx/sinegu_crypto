@@ -31,10 +31,11 @@ function Tile({ label, value, hint }: { label: string; value: string; hint: stri
 }
 
 /**
- * This month's Higgsfield spend against the cap, and who spent it. A
- * generation's price is reserved the moment it starts and given back if it
- * fails, is blocked or is cancelled, so "spent" already includes what is
- * still generating — the cap can never be overrun by two people at once.
+ * This month's spend against the cap — Higgsfield generations and Claude's
+ * writing share the one cap — and who spent it. A generation's price is
+ * reserved the moment it starts and given back if it fails, is blocked or is
+ * cancelled, so "spent" already includes what is still generating — the cap
+ * can never be overrun by two people at once.
  */
 export default function BudgetTab({ budget, onBudget, canEdit }: BudgetTabProps) {
   const { data } = useApiData(getCreativeBudget)
@@ -51,6 +52,8 @@ export default function BudgetTab({ budget, onBudget, canEdit }: BudgetTabProps)
   const settledShare = cap > 0 ? Math.min(share, Math.max(0, budget.spent_usd - budget.reserved_usd) / cap) : 1
   const warn = cap <= 0 || share >= WARN_SHARE
   const people = [...budget.by_person].sort((a, b) => b.spent_usd - a.spent_usd)
+  const aiUsd = budget.ai_usd ?? 0
+  const aiCalls = budget.ai_calls ?? 0
 
   return (
     <div className="grid grid-cols-1 gap-stack xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start">
@@ -59,7 +62,7 @@ export default function BudgetTab({ budget, onBudget, canEdit }: BudgetTabProps)
           icon={Wallet}
           id="creatives-budget"
           title={`${fmtLongMonth(budget.month)} budget`}
-          subtitle="A calendar month in UTC. Each price is reserved when a generation starts; failed, blocked and cancelled ones are given back."
+          subtitle="A calendar month in UTC, shared by generations and AI writing. A generation’s price is reserved when it starts; failed, blocked and cancelled ones are given back."
           actions={
             canEdit ? (
               <button type="button" className={`${BTN_GHOST} max-sm:w-full`} onClick={() => setEditing(true)}>
@@ -114,13 +117,22 @@ export default function BudgetTab({ budget, onBudget, canEdit }: BudgetTabProps)
           </p>
         )}
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Tile label="Left" value={fmtBudget(budget.remaining_usd)} hint="What can still be spent this month." />
           <Tile label="Reserved" value={fmtBudget(budget.reserved_usd)} hint="Still generating — given back if it fails." />
           <Tile
             label="Generations"
             value={budget.generations.toLocaleString()}
             hint="Started this month."
+          />
+          <Tile
+            label="AI writing"
+            value={fmtBudget(aiUsd)}
+            hint={
+              aiCalls === 0
+                ? 'Nothing written by Claude yet this month.'
+                : `${aiCalls === 1 ? '1 draft or idea list' : `${aiCalls.toLocaleString()} drafts and idea lists`} by Claude — included in spent.`
+            }
           />
         </div>
 
@@ -142,12 +154,13 @@ export default function BudgetTab({ budget, onBudget, canEdit }: BudgetTabProps)
         />
         {people.length === 0 ? (
           <p className="rounded-row border border-dashed border-border px-4 py-8 text-center text-[13px] text-muted">
-            Nobody has generated anything this month yet.
+            Nobody has generated or drafted anything this month yet.
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
             {people.map((p, i) => {
               const pct = budget.spent_usd > 0 ? (p.spent_usd / budget.spent_usd) * 100 : 0
+              const personAi = p.ai_calls ?? 0
               return (
                 <li
                   key={p.uni_id ?? `unknown-${i}`}
@@ -163,8 +176,9 @@ export default function BudgetTab({ budget, onBudget, canEdit }: BudgetTabProps)
                     <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-pill bg-surface">
                       <div className="h-full rounded-pill bg-accent" style={{ width: `${pct}%` }} />
                     </div>
-                    <span className="flex-none font-mono text-[11px] text-faint">
+                    <span className="flex-none text-right font-mono text-[11px] text-faint">
                       {p.generations === 1 ? '1 generation' : `${p.generations} generations`}
+                      {personAi > 0 && ` · ${personAi === 1 ? '1 AI draft' : `${personAi} AI drafts`}`}
                     </span>
                   </div>
                 </li>

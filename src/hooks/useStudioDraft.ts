@@ -35,6 +35,8 @@ interface StudioDraftOptions {
   models: CreativeModelPreset[]
   initialPlanId: number | null
   initialPlatform: CreativePlatform | null
+  /** The plan's video prompt ("Make the video") — the prompt box starts with it. */
+  initialPrompt?: string
 }
 
 const ANIMATE_KEY = 'kling-animate'
@@ -44,10 +46,10 @@ const ANIMATE_KEY = 'kling-animate'
  * model's defaults (a 4:3 picked for one model may not exist on the next),
  * keeping the aspect ratio of the chosen plan's platform where it exists.
  */
-export function useStudioDraft({ models, initialPlanId, initialPlatform }: StudioDraftOptions): StudioDraft {
+export function useStudioDraft({ models, initialPlanId, initialPlatform, initialPrompt }: StudioDraftOptions): StudioDraft {
   const first = models[0] ?? null
   const [modelKey, setModelKey] = useState<string>(first?.key ?? '')
-  const [prompt, setPrompt] = useState('')
+  const [prompt, setPrompt] = useState(initialPrompt ?? '')
   const [params, setParams] = useState<Record<string, CreativeParamValue>>(() =>
     first ? defaultParams(first, initialPlatform) : {},
   )

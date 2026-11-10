@@ -1895,6 +1895,14 @@ MIRRORED_API_ENV_KEYS = (
     #   HIGGSFIELD_CACERT — describes the BOX, like TRON_CACERT.
     "HIGGSFIELD_KEY_ID",
     "HIGGSFIELD_KEY_SECRET",
+    # Claude (Admin → Creatives' AI writer, 2026-11-10) — the product's
+    # Anthropic account. Same category: it names the account that pays.
+    #
+    # Deliberately NOT mirrored:
+    #   ANTHROPIC_CACERT — describes the BOX, like TRON_CACERT.
+    #   CREATIVES_AI_MODEL / CREATIVES_AI_EFFORT — the defaults are the decision;
+    #     an override is set on a box on purpose.
+    "ANTHROPIC_API_KEY",
 )
 
 # Written with PROD values, never mirrored — these describe the BOX. Locally

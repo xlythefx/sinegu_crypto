@@ -62,4 +62,10 @@ export const NOTICE = {
   error: `${NOTICE_BASE} border-[color-mix(in_srgb,var(--red)_35%,transparent)] bg-[color-mix(in_srgb,var(--red)_8%,transparent)] text-red`,
   success: `${NOTICE_BASE} border-[color-mix(in_srgb,var(--green)_35%,transparent)] bg-[color-mix(in_srgb,var(--green)_8%,transparent)] text-green`,
   info: `${NOTICE_BASE} border-accent-line bg-accent-soft text-accent`,
+  /** Amber "check this" (the project's amber IS the gold accent) — stronger edge than info, body in text colour. */
+  warn: `${NOTICE_BASE} border-[color-mix(in_srgb,var(--accent)_55%,transparent)] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-text [&>svg]:text-accent`,
 } as const
+
+/** The AI writer's panel: a gold-edged card that reads as "Claude's corner" in both themes. */
+export const AI_PANEL =
+  'flex min-w-0 flex-col gap-3.5 rounded-row border border-accent-line bg-[linear-gradient(160deg,var(--accentSoft),var(--surface))] p-3.5 sm:p-4'

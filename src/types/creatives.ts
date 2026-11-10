@@ -45,8 +45,11 @@ export interface CreativeModelPreset {
 export interface CreativeBudgetPerson {
   uni_id: string | null
   name: string | null
+  /** Generations AND AI writing together. */
   spent_usd: number
   generations: number
+  /** AI drafts and idea lists this person asked for (absent from an API older than the AI writer). */
+  ai_calls?: number
 }
 
 export interface CreativeBudget {
@@ -61,15 +64,30 @@ export interface CreativeBudget {
   remaining_usd: number
   /** How many generations this month. */
   generations: number
+  /** The AI-writing part of `spent_usd` (absent from an API older than the AI writer). */
+  ai_usd?: number
+  /** AI drafts, idea lists and weekly recaps written this month. */
+  ai_calls?: number
   by_person: CreativeBudgetPerson[]
   updated_by_name: string | null
   /** ISO. */
   updated_at: string | null
 }
 
+/** The AI writer (Claude) on this server. */
+export interface CreativeAiMeta {
+  /** False = no Anthropic key on this server: the AI buttons are off, writing by hand still works. */
+  configured: boolean
+  model: string
+  /** Claude drafts a "Weekly recap" plan every Saturday (full admins switch it). */
+  weekly_recap: boolean
+}
+
 export interface CreativesMeta {
   /** False = no Higgsfield key on this server: planning works, generating does not. */
   configured: boolean
+  /** The AI writer. The service fills "not connected" when an older API sends none. */
+  ai: CreativeAiMeta
   /** How long Higgsfield keeps a result before deleting it (7). */
   retention_days: number
   /** Reference images the character may hold (8). */
@@ -98,6 +116,10 @@ export interface CreativePlan {
   hashtags: string | null
   notes: string | null
   posted_url: string | null
+  /** The Studio prompt for this post (the AI writes one; editable). */
+  video_prompt: string | null
+  /** ISO — set when fields from an AI draft were saved; null = written by hand. */
+  ai_drafted_at: string | null
   generations_count: number
   created_by_name: string | null
   updated_by_name: string | null
@@ -119,6 +141,90 @@ export interface CreativePlanInput {
   hashtags: string | null
   notes: string | null
   posted_url: string | null
+  /** ≤ 4000. */
+  video_prompt: string | null
+  /** True = these fields came from an AI draft (the server stamps `ai_drafted_at` once). */
+  ai_drafted?: boolean
+}
+
+/* ---------- the AI writer ---------- */
+
+/** One AI draft of a whole plan. Never saved by the API — the modal fills its fields with it. */
+export interface CreativeAiDraft {
+  /** ≤ 160. */
+  title: string
+  /** The first line / first 2 seconds. */
+  hook: string
+  /** Scene by scene ("1. (0–3 s) …"), or slide by slide for an image / carousel. */
+  script: string
+  /** Within the platform's limit; the disclaimer is appended when a % is cited. */
+  caption: string
+  /** Space-separated, each starting with #. */
+  hashtags: string
+  /** A Studio prompt for the scene (the Studio adds the character's look itself). */
+  video_prompt: string
+  /** Why this angle, what to check before posting. */
+  notes: string
+  /** Every figure the draft cites, verbatim from the week's facts ([] when none). */
+  numbers_used: string[]
+  /** Checked on the server after the model answered: unknown figures, a caption over the limit. */
+  warnings: string[]
+}
+
+/** The PUBLIC figures a draft was allowed to quote (the published track record's week). */
+export interface CreativeAiFacts {
+  /** False = nothing was published for the window, so the draft quotes no figures. */
+  available: boolean
+  /** "3–9 Nov 2026". */
+  period: string
+  return_pct: number | null
+  trades: number
+  trading_days: number
+  green_days: number
+  best_day: { date: string; pct: number } | null
+  top_coins: { symbol: string; share_pct: number }[]
+}
+
+export interface CreativeAiDraftInput {
+  /** 3–500. */
+  brief: string
+  platform: CreativePlatform
+  format?: CreativeFormat
+  /** Links the call's cost record to the plan being edited. */
+  plan_id?: number
+  /** Default true: let the draft quote this week's public results. */
+  use_facts?: boolean
+}
+
+export interface CreativeAiDraftResult {
+  draft: CreativeAiDraft
+  /** null when the facts were not used. */
+  facts_used: CreativeAiFacts | null
+  cost_usd: number
+  budget: CreativeBudget
+}
+
+export interface CreativeAiIdea {
+  title: string
+  hook: string
+  why: string
+  platform: CreativePlatform
+  format: CreativeFormat
+}
+
+export interface CreativeAiIdeasInput {
+  /** 3–8, default 5. */
+  count?: number
+  /** ≤ 300. */
+  focus?: string
+  /** null = either platform. */
+  platform?: CreativePlatform | null
+}
+
+export interface CreativeAiIdeasResult {
+  ideas: CreativeAiIdea[]
+  cost_usd: number
+  budget: CreativeBudget
 }
 
 export interface CreativeCharacterRef {

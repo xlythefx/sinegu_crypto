@@ -45,6 +45,8 @@ interface GenerateFormProps {
   generations: CreativeGeneration[]
   now: number
   onPlanChange: (planId: number | null) => void
+  /** The picked plan's video prompt ('' when none) — the box says when it holds exactly that. */
+  planPrompt?: string
   onCreated: (generation: CreativeGeneration) => void
   /** A refused submit may still have left a (failed) row — re-read the gallery. */
   onSubmitFailed: () => void
@@ -72,6 +74,7 @@ export default function GenerateForm({
   generations,
   now,
   onPlanChange,
+  planPrompt = '',
   onCreated,
   onSubmitFailed,
   onOpenCharacter,
@@ -248,8 +251,15 @@ export default function GenerateForm({
             }
             disabled={busy}
           />
-          <span className={`${HINT} text-right`}>
-            {promptLength.toLocaleString()} / {PROMPT_MAX.toLocaleString()}
+          <span className={`${HINT} flex justify-between gap-3`}>
+            <span>
+              {planPrompt.trim() !== '' && draft.prompt === planPrompt
+                ? 'From the plan’s video prompt — change it as you like.'
+                : ''}
+            </span>
+            <span className="flex-none">
+              {promptLength.toLocaleString()} / {PROMPT_MAX.toLocaleString()}
+            </span>
           </span>
         </label>
 
