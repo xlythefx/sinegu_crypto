@@ -15,6 +15,30 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-11-10 ───────────────────────────────────────────────────────────
   {
+    id: 'after-fees-first-and-invoice-workings',
+    date: '2026-11-10',
+    kind: 'improved',
+    area: 'User Management',
+    title: 'Profit after fees comes first on a user\'s profile, and every bill shows how it was worked out',
+    summary:
+      'On a user\'s Performance Analytics, the profit AFTER exchange fees is now the main number everywhere, with the before-fees figure when you hover or tap it. Each month also shows the bill it led to, and every invoice explains step by step how it came to its amount. Asked after Dima saw +$190 for a customer\'s October and could not see how the bill was $24.04.',
+    howItWorks: [
+      'Open a user → Performance Analytics. The top card leads with "Profit after fees", for example +$120.18, with before fees (+$189.70) and exchange fees (−$69.52) beside it. Total Return, Avg Daily P&L, Best and Worst Day, the monthly and weekday bars and each coin\'s P&L all show after fees; hover any of them for the before-fees figure.',
+      'The month-by-month table under the chart now ends with "Our fee": what that month was billed and whether it is paid, due or overdue, for example "October · +$120.18 after fees · $24.04 · Due Nov 11". Click the fee to open the invoice.',
+      'Every invoice (from this table, the Invoices tab or Invoice History) starts with "How this bill was worked out": the high point the month started from; the account value when the bill was made, with that month\'s withdrawals added back (they are not losses); whether that is above the high point; the month\'s profit before fees, minus exchange fees, after fees; our 20% of it; and the new high point.',
+      'Deposits & Withdrawals now lists every transfer with a "Show all" button, not only the last five. Small BNB transfers (a customer topping up BNB to pay Binance fees at a discount) show as BNB, for example "+0.0196 BNB", and are left out of the dollar totals. Before, they printed as "+$0.02" deposits.',
+      'A new "Grown by Trading" tile shows what trading added: the balance now minus the money put in, for example $2,025.45 − $1,830.93 = +$194.52.',
+      'The customer\'s own Performance Analytics still leads with before fees. It gets the transfer list fix and the "Grown by Trading" tile.',
+    ],
+    technical: [
+      'invoices.realized_pnl_gross + exchange_fees (migration 2026_11_10_000010): written by InvoiceService::computeForAccount from BinancePnlSource\'s new realizedGross (SUM(realized_pnl + COALESCE(exchange_fee,0)) for the month); fees = gross − realized_pnl, so a row always reconciles. Backfilled the same way for existing invoices (gross survives fee rebases; fees derived against the row\'s own realized_pnl). Invoice::toApiArray also returns performance_equity. NULL = not recorded.',
+      'InvoiceWorkings (components/billing) restates the row; invoices made before 2026-11-08 (performance_equity = the plain balance) are told the old way, without the "added back" lines. Rendered in AdminInvoiceDetailModal.',
+      'AnalyticsView showAfterFees now flips AnalyticsKpis / ReturnFlipCard / MonthlyBreakdownCard / DayOfWeekCard / PositionDistributionCard to the *_net figures (after-fees % = net ÷ the API\'s own denominator; best/worst day picked on daily_pnl_net). UserAnalyticsTab feeds it the user\'s invoices (not for collaborators, whose invoice read is 403). The equity curve, win rate, drawdown and Sharpe cards stay before fees and say so.',
+      'GET /analytics flows: every transfer (≤ 200) with currency + in_totals; deposits / withdrawals / net_flow count dollar currencies only (baseline unchanged, so no other figure moves).',
+    ],
+    links: [{ label: 'User Management', href: '/admin/users' }],
+  },
+  {
     id: 'user-profile-after-fees-invoices',
     date: '2026-11-10',
     kind: 'improved',

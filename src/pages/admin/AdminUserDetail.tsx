@@ -29,7 +29,7 @@ import UserSettingsCard from '../../components/admin/user-detail/UserSettingsCar
 import UserHeaderActions from '../../components/admin/user-detail/UserHeaderActions'
 import UserPositionsTab from '../../components/admin/user-detail/UserPositionsTab'
 import UserSignupTab from '../../components/admin/user-detail/UserSignupTab'
-import AnalyticsView from '../../components/analytics/AnalyticsView'
+import UserAnalyticsTab from '../../components/admin/user-detail/UserAnalyticsTab'
 import PnlCardModal from '../../components/admin/pnl-card/PnlCardModal'
 import { EXCHANGE_META } from '../../components/exchanges/meta'
 import { useApiData } from '../../hooks/useApiData'
@@ -286,12 +286,11 @@ export default function AdminUserDetail() {
           ) : tab === 'signup' ? (
             <UserSignupTab uniId={uniId} />
           ) : tab === 'analytics' ? (
-            <AnalyticsView
+            <UserAnalyticsTab
+              uniId={uniId}
+              user={{ name: user.name || null, email: user.email || null }}
               fetchAnalytics={fetchAnalytics}
-              sourceKey={uniId}
-              showStrategyCard={false}
-              capture={{ name: user.name || uniId }}
-              showAfterFees
+              withInvoices={!readOnly}
             />
           ) : tab === 'invoices' ? (
             <UserInvoicesTab

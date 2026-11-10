@@ -1,14 +1,17 @@
+import { useState } from 'react'
 import {
   ArrowDownCircle,
   ArrowUpCircle,
+  ChevronDown,
   Clock,
   PiggyBank,
+  Sprout,
   TrendingUp,
   Wallet,
 } from 'lucide-react'
 import MetricTile from './MetricTile'
 import { fmtMediumDate, fmtMoney, fmtSignedMoney } from '../../lib/format'
-import type { CapitalFlows } from '../../types/analytics'
+import type { CapitalFlows, FlowTransaction } from '../../types/analytics'
 
 interface CapitalFlowCardProps {
   flows: CapitalFlows
@@ -17,16 +20,51 @@ interface CapitalFlowCardProps {
   initialDeposit?: number
 }
 
+/** How many transfers show before "Show all". */
+const FIRST_ROWS = 5
+
+/** "0.01957863" -> "0.01957863", "0.10000000" -> "0.1": a coin amount with
+ *  every significant decimal and no trailing zeros. */
+function fmtCoin(n: number): string {
+  return Math.abs(n)
+    .toFixed(8)
+    .replace(/\.?0+$/, '')
+}
+
+/** A transfer in its own currency: "+$1,100.00", or "+0.0196 BNB". */
+function signedAmount(tx: FlowTransaction, isDeposit: boolean): string {
+  const amount = Math.abs(tx.amount)
+  if (tx.in_totals === false) return `${isDeposit ? '+' : '−'}${fmtCoin(amount)} ${tx.currency ?? ''}`.trim()
+  return fmtSignedMoney(isDeposit ? amount : -amount)
+}
+
 /** "Capital Flow Summary" — funding KPIs, deposit/withdrawal composition bar
- *  and the most recent transactions. */
+ *  and every transfer, newest first (the first five, then "Show all").
+ *
+ *  Dollar totals count dollar transfers only. A coin moved in — a BNB top-up
+ *  for Binance's fee discount — is listed in its own currency and marked as
+ *  not counted (2026-11-10: "0.0196 BNB" used to print as a "+$0.02 deposit",
+ *  which read as a mystery deposit next to the real ones). */
 export default function CapitalFlowCard({
   flows,
   currentCapital,
   initialDeposit,
 }: CapitalFlowCardProps) {
+  const [showAll, setShowAll] = useState(false)
+
   const totalMovement = flows.deposits + flows.withdrawals
   const depPct = totalMovement > 0 ? (flows.deposits / totalMovement) * 100 : 0
   const wdPct = totalMovement > 0 ? 100 - depPct : 0
+
+  // What trading added: the balance now, less every dollar put in (the
+  // starting balance plus deposits net of withdrawals). The sum someone
+  // reading this card does in their head — "put in 1,830, holds 2,025".
+  const putIn = (initialDeposit ?? 0) + flows.net_flow
+  const grown = currentCapital - putIn
+
+  const total = flows.count ?? flows.recent.length
+  const rows = showAll ? flows.recent : flows.recent.slice(0, FIRST_ROWS)
+  const hidden = flows.recent.length - rows.length
 
   return (
     <section
@@ -91,6 +129,15 @@ export default function CapitalFlowCard({
           sub="Held before the first recorded transfer"
           icon={PiggyBank}
         />
+        <MetricTile
+          label="Grown by Trading"
+          value={initialDeposit === undefined ? '—' : fmtSignedMoney(grown)}
+          tone={initialDeposit === undefined ? '' : grown < 0 ? 'neg' : 'pos'}
+          sub={`Current capital − ${fmtMoney(putIn)} put in`}
+          icon={Sprout}
+          iconTone={grown < 0 ? 'neg' : 'pos'}
+          tooltip="What trading added to the money put in: the balance now, minus the initial deposit and every dollar deposit, plus every withdrawal."
+        />
       </div>
 
       <div className="mt-3.5 border border-hair bg-surface2 rounded-row py-[13px] px-[14px] flex flex-col gap-[9px]">
@@ -119,9 +166,16 @@ export default function CapitalFlowCard({
       </div>
 
       <div className="mt-stack">
-        <div className="flex items-center gap-[7px] mb-2.5 text-[10.5px] font-extrabold tracking-[0.5px] text-faint uppercase">
-          <Clock size={14} />
-          <span>Recent Transactions</span>
+        <div className="flex items-center justify-between gap-2 mb-2.5">
+          <div className="flex items-center gap-[7px] text-[10.5px] font-extrabold tracking-[0.5px] text-faint uppercase">
+            <Clock size={14} />
+            <span>Deposits &amp; Withdrawals</span>
+          </div>
+          {total > 0 && (
+            <span className="font-mono text-[11px] text-muted">
+              {total} transfer{total === 1 ? '' : 's'}
+            </span>
+          )}
         </div>
         <div className="border border-hair rounded-row overflow-hidden">
           {flows.recent.length === 0 && (
@@ -131,43 +185,59 @@ export default function CapitalFlowCard({
               </span>
             </div>
           )}
-          {flows.recent.map((tx, i) => {
+          {rows.map((tx, i) => {
             const isDeposit = tx.type.toLowerCase() === 'deposit'
+            const coin = tx.in_totals === false
             return (
               <div
-                className="flex items-center justify-between gap-3 py-[11px] px-3.5 border-b border-hair last:border-b-0"
+                className={`flex items-center justify-between gap-3 py-[11px] px-3.5 border-b border-hair last:border-b-0 ${
+                  i >= FIRST_ROWS ? 'animate-[fadeup_0.35s_ease-out]' : ''
+                }`}
                 key={i}
               >
                 <div className="flex items-center gap-[11px] min-w-0">
                   <span
-                    className={`w-8 h-8 rounded-[9px] flex items-center justify-center flex-none ${isDeposit ? 'text-green bg-[rgba(47,214,122,0.1)]' : 'text-red bg-[rgba(255,90,90,0.1)]'}`}
+                    className={`w-8 h-8 rounded-[9px] flex items-center justify-center flex-none ${
+                      coin
+                        ? 'text-muted bg-surface2'
+                        : isDeposit
+                          ? 'text-green bg-[rgba(47,214,122,0.1)]'
+                          : 'text-red bg-[rgba(255,90,90,0.1)]'
+                    }`}
                   >
-                    {isDeposit ? (
-                      <ArrowDownCircle size={16} />
-                    ) : (
-                      <ArrowUpCircle size={16} />
-                    )}
+                    {isDeposit ? <ArrowDownCircle size={16} /> : <ArrowUpCircle size={16} />}
                   </span>
-                  <div>
+                  <div className="min-w-0">
                     <div className="text-[13px] font-extrabold">
                       {isDeposit ? 'Deposit' : 'Withdrawal'}
                     </div>
                     <div className="text-[11px] text-muted font-semibold">
                       {fmtMediumDate(tx.date)}
+                      {coin && ` · ${tx.currency ?? 'coin'}, not in the dollar totals`}
                     </div>
                   </div>
                 </div>
                 <span
-                  className={`font-mono text-[13px] font-extrabold ${isDeposit ? 'text-green' : 'text-red'}`}
+                  className={`font-mono text-[13px] font-extrabold whitespace-nowrap ${
+                    coin ? 'text-muted' : isDeposit ? 'text-green' : 'text-red'
+                  }`}
                 >
-                  {fmtSignedMoney(
-                    isDeposit ? Math.abs(tx.amount) : -Math.abs(tx.amount),
-                  )}
+                  {signedAmount(tx, isDeposit)}
                 </span>
               </div>
             )
           })}
         </div>
+        {(hidden > 0 || showAll) && flows.recent.length > FIRST_ROWS && (
+          <button
+            type="button"
+            onClick={() => setShowAll((s) => !s)}
+            className="mt-2.5 w-full inline-flex items-center justify-center gap-1.5 h-9 rounded-btn border border-border bg-surface2 text-[12px] font-semibold text-text cursor-pointer transition-colors hover:border-accent-line hover:text-accent"
+          >
+            {showAll ? 'Show the latest 5' : `Show all ${flows.recent.length} transfers`}
+            <ChevronDown size={14} className={`transition-transform ${showAll ? 'rotate-180' : ''}`} />
+          </button>
+        )}
       </div>
     </section>
   )

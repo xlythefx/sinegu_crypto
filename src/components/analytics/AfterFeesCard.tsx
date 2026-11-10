@@ -21,7 +21,9 @@ interface AfterFeesCardProps {
 
 const CELL = 'rounded-row border border-hair bg-surface2 px-4 py-3 flex flex-col gap-1 min-w-0'
 const CELL_LABEL = 'text-[10.5px] font-extrabold tracking-[0.5px] text-faint uppercase'
-const CELL_VALUE = 'font-mono text-[22px] font-extrabold tracking-[-0.4px] leading-tight'
+const CELL_ROW =
+  'rounded-row border border-hair bg-surface2 px-4 py-3 flex items-center justify-between gap-3 min-w-0'
+const CELL_VALUE_SM = 'font-mono text-[17px] font-extrabold tracking-[-0.3px] leading-tight'
 
 /** "Oct 1, 2026 – Oct 31, 2026", "From Oct 1, 2026", "All time". */
 function rangeLabel(from: string, to: string): string {
@@ -70,24 +72,33 @@ export default function AfterFeesCard({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2.5 max-[640px]:grid-cols-1">
-        <div className={CELL}>
-          <span className={CELL_LABEL}>Before fees</span>
-          <span className={`${CELL_VALUE} ${gross < 0 ? 'text-red' : 'text-text'}`}>
-            {fmtSignedMoney(gross)}
-          </span>
-        </div>
-        <div className={CELL}>
-          <span className={CELL_LABEL}>Exchange fees</span>
-          <span className={`${CELL_VALUE} text-text`}>
-            {fees === 0 ? '$0.00' : `${fees > 0 ? '−' : '+'}${fmtMoney(fees)}`}
-          </span>
-        </div>
-        <div className={`${CELL} border-accent-line bg-accent-soft`}>
-          <span className={`${CELL_LABEL} text-accent`}>After fees</span>
-          <span className={`${CELL_VALUE} ${net < 0 ? 'text-red' : 'text-green'}`}>
+      {/* After fees leads (owner, 2026-11-10: "priority after fees"); the
+          two figures it comes from sit beside it, smaller, as the working. */}
+      <div className="grid grid-cols-[1.4fr_1fr] gap-2.5 max-[640px]:grid-cols-1">
+        <div className={`${CELL} justify-center border-accent-line bg-accent-soft py-4`}>
+          <span className={`${CELL_LABEL} text-accent`}>Profit after fees</span>
+          <span
+            className={`font-mono text-[32px] font-extrabold tracking-[-0.6px] leading-tight ${
+              net < 0 ? 'text-red' : 'text-green'
+            }`}
+          >
             {fmtSignedMoney(net)}
           </span>
+          <span className="text-[11.5px] font-semibold text-muted">What the account kept from these trades</span>
+        </div>
+        <div className="grid grid-rows-2 gap-2.5">
+          <div className={CELL_ROW}>
+            <span className={CELL_LABEL}>Before fees</span>
+            <span className={`${CELL_VALUE_SM} ${gross < 0 ? 'text-red' : 'text-text'}`}>
+              {fmtSignedMoney(gross)}
+            </span>
+          </div>
+          <div className={CELL_ROW}>
+            <span className={CELL_LABEL}>Exchange fees</span>
+            <span className={`${CELL_VALUE_SM} text-text`}>
+              {fees === 0 ? '$0.00' : `${fees > 0 ? '−' : '+'}${fmtMoney(fees)}`}
+            </span>
+          </div>
         </div>
       </div>
 

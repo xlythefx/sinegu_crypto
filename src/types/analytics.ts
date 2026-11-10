@@ -68,14 +68,22 @@ export interface ExchangeStat {
 
 export interface FlowTransaction {
   type: string
+  /** In `currency` — dollars for USDT, a coin amount for BNB. */
   amount: number
+  /** 'USDT', 'BNB', … Absent from an API older than 2026-11-10 (read as USDT). */
+  currency?: string
+  /** False for a coin (a BNB fee top-up): listed, but not in the dollar totals. */
+  in_totals?: boolean
   date: string
 }
 
 export interface CapitalFlows {
+  /** Dollar transfers only (USDT and friends) since 2026-11-10. */
   deposits: number
   withdrawals: number
   net_flow: number
+  /** Every transfer (an older API sent the last five). */
+  count?: number
   /** Newest first. */
   recent: FlowTransaction[]
 }

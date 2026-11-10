@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowUpRight, CheckCircle2, Clock, Eye, FileText, Receipt } from 'lucide-react'
 import ExchangeBadge from '../../billing/ExchangeBadge'
+import PnlBreakdown from '../../ui/PnlBreakdown'
 import InvoiceDocumentModal from '../../billing/InvoiceDocumentModal'
 import AdminInvoiceDetailModal from '../invoices/AdminInvoiceDetailModal'
 import { useApiData } from '../../../hooks/useApiData'
@@ -182,7 +183,13 @@ export default function UserInvoicesTab({ uniId, exchange, user }: UserInvoicesT
                           <ExchangeBadge exchange={inv.exchange} />
                         </td>
                         <td className={`${TD} font-mono font-bold ${inv.realizedPnl < 0 ? 'text-red' : 'text-green'}`}>
-                          {fmtSignedMoney(inv.realizedPnl)}
+                          {inv.realizedPnlGross !== null ? (
+                            <PnlBreakdown gross={inv.realizedPnlGross} net={inv.realizedPnl} heading={inv.monthLabel}>
+                              {fmtSignedMoney(inv.realizedPnl)}
+                            </PnlBreakdown>
+                          ) : (
+                            fmtSignedMoney(inv.realizedPnl)
+                          )}
                         </td>
                         <td className={`${TD} font-mono ${inv.unrealizedPnl < 0 ? 'text-red' : 'text-muted'}`}>
                           {inv.unrealizedPnl === 0 ? '—' : fmtSignedMoney(inv.unrealizedPnl)}

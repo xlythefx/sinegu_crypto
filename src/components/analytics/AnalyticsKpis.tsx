@@ -19,8 +19,16 @@ interface AnalyticsKpisProps {
   bestDay: DayExtreme | null
   worstDay: DayExtreme | null
   fees: FeeSummary
-  /** Prints each money card's after-fees figure on the card (admin read of a user). */
-  showAfterFees?: boolean
+  /**
+   * The admin's read of one user (owner, 2026-11-10: "priority after fees"):
+   * every money figure leads AFTER exchange fees, with before fees in the
+   * hover. Best / Worst Day are then the best and worst days after fees,
+   * which the caller passes as `bestDay` / `worstDay`.
+   */
+  afterFees?: boolean
+  /** Total Return / Return on Deposit percentages after fees (afterFees only). */
+  totalReturnPctNet?: number | null
+  returnOnDepositPctNet?: number | null
 }
 
 const CARD = 'rounded-card p-card border border-border bg-surface flex flex-col gap-2'
@@ -29,22 +37,11 @@ const LABEL =
 const VALUE = 'font-mono text-[27px] font-extrabold tracking-[-0.6px]'
 const SUB = 'text-[11.5px] font-semibold text-muted'
 
-/** "After fees +$41.20" — the visible twin of a before-fees KPI. */
-function AfterFeesLine({ net }: { net: number }) {
-  return (
-    <div className="text-[11.5px] font-semibold text-muted">
-      After fees{' '}
-      <span className={`font-mono font-bold ${net < 0 ? 'text-red' : 'text-green'}`}>
-        {fmtSignedMoney(net)}
-      </span>
-    </div>
-  )
-}
-
 /** The analytics KPI cards: the flippable Total Return / Return on Deposit
- *  card, Avg Daily P&L, Best Day, Worst Day — all BEFORE exchange fees, each
- *  money figure showing its after-fees twin on hover — and Exchange Fees,
- *  the cost of running the strategy as a number of its own. */
+ *  card, Avg Daily P&L, Best Day, Worst Day — BEFORE exchange fees on the
+ *  trader's page and AFTER them on the admin's read (`afterFees`), each money
+ *  figure showing the other basis on hover — and Exchange Fees, the cost of
+ *  running the strategy as a number of its own. */
 export default function AnalyticsKpis({
   totalReturnPct,
   totalReturnAbs,
@@ -57,9 +54,15 @@ export default function AnalyticsKpis({
   bestDay,
   worstDay,
   fees,
-  showAfterFees = false,
+  afterFees = false,
+  totalReturnPctNet = null,
+  returnOnDepositPctNet = null,
 }: AnalyticsKpisProps) {
   const feesSince = fees.trades_without_fee > 0 ? fees.since : null
+  const basis = afterFees ? 'after fees' : 'before fees'
+  const avgShown = afterFees ? avgDailyPnlNet : avgDailyPnl
+  const bestShown = bestDay ? (afterFees ? bestDay.pnl_net : bestDay.pnl) : null
+  const worstShown = worstDay ? (afterFees ? worstDay.pnl_net : worstDay.pnl) : null
 
   return (
     <div
@@ -74,6 +77,9 @@ export default function AnalyticsKpis({
         returnOnDeposit={returnOnDeposit}
         filtered={filtered}
         feesSince={feesSince}
+        afterFees={afterFees}
+        totalReturnPctNet={totalReturnPctNet}
+        returnOnDepositPctNet={returnOnDepositPctNet}
       />
 
       <div className={CARD}>
@@ -83,17 +89,18 @@ export default function AnalyticsKpis({
             <LineChart size={16} />
           </span>
         </div>
-        <div className={`${VALUE} ${(avgDailyPnl ?? 0) < 0 ? 'text-red' : 'text-accent'}`}>
-          {avgDailyPnl === null || avgDailyPnlNet === null ? (
+        <div className={`${VALUE} ${(avgShown ?? 0) < 0 ? 'text-red' : 'text-accent'}`}>
+          {avgDailyPnl === null || avgDailyPnlNet === null || avgShown === null ? (
             '—'
           ) : (
             <PnlBreakdown gross={avgDailyPnl} net={avgDailyPnlNet} feesSince={feesSince} heading="Per trading day">
-              {fmtSignedMoney(avgDailyPnl)}
+              {fmtSignedMoney(avgShown)}
             </PnlBreakdown>
           )}
         </div>
-        <div className={SUB}>{tradingDays} trading days · before fees</div>
-        {showAfterFees && avgDailyPnlNet !== null && <AfterFeesLine net={avgDailyPnlNet} />}
+        <div className={SUB}>
+          {tradingDays} trading days · {basis}
+        </div>
       </div>
 
       <div className={CARD}>
@@ -105,19 +112,18 @@ export default function AnalyticsKpis({
             <Award size={16} />
           </span>
         </div>
-        <div className={`${VALUE} ${bestDay && bestDay.pnl < 0 ? 'text-red' : 'text-green'}`}>
-          {bestDay ? (
+        <div className={`${VALUE} ${bestShown !== null && bestShown < 0 ? 'text-red' : 'text-green'}`}>
+          {bestDay && bestShown !== null ? (
             <PnlBreakdown gross={bestDay.pnl} net={bestDay.pnl_net} heading={fmtMediumDate(bestDay.date)}>
-              {fmtSignedMoney(bestDay.pnl)}
+              {fmtSignedMoney(bestShown)}
             </PnlBreakdown>
           ) : (
             '—'
           )}
         </div>
         <div className={SUB}>
-          {bestDay ? `${fmtMediumDate(bestDay.date)} · before fees` : 'Largest single day gain'}
+          {bestDay ? `${fmtMediumDate(bestDay.date)} · ${basis}` : 'Largest single day gain'}
         </div>
-        {showAfterFees && bestDay && <AfterFeesLine net={bestDay.pnl_net} />}
       </div>
 
       <div className={CARD}>
@@ -129,19 +135,18 @@ export default function AnalyticsKpis({
             <TrendingDown size={16} />
           </span>
         </div>
-        <div className={`${VALUE} ${worstDay && worstDay.pnl >= 0 ? 'text-green' : 'text-red'}`}>
-          {worstDay ? (
+        <div className={`${VALUE} ${worstShown !== null && worstShown >= 0 ? 'text-green' : 'text-red'}`}>
+          {worstDay && worstShown !== null ? (
             <PnlBreakdown gross={worstDay.pnl} net={worstDay.pnl_net} heading={fmtMediumDate(worstDay.date)}>
-              {fmtSignedMoney(worstDay.pnl)}
+              {fmtSignedMoney(worstShown)}
             </PnlBreakdown>
           ) : (
             '—'
           )}
         </div>
         <div className={SUB}>
-          {worstDay ? `${fmtMediumDate(worstDay.date)} · before fees` : 'Largest single day loss'}
+          {worstDay ? `${fmtMediumDate(worstDay.date)} · ${basis}` : 'Largest single day loss'}
         </div>
-        {showAfterFees && worstDay && <AfterFeesLine net={worstDay.pnl_net} />}
       </div>
 
       {/* What the exchange took: commission on every fill plus funding while

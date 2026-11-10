@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowRight, CheckCircle2, FileText, Receipt, X } from 'lucide-react'
 import ExchangeBadge from '../../billing/ExchangeBadge'
+import InvoiceWorkings from '../../billing/InvoiceWorkings'
 import { fmtMoney, fmtSignedMoney, fmtSignedPct, formatDate } from '../../../lib/format'
 import type { AdminInvoiceRow } from '../../../services/admin'
 
@@ -116,6 +117,9 @@ export default function AdminInvoiceDetailModal({
               {paid ? `Paid on ${formatDate(invoice.paidDate)}` : `Due by ${formatDate(invoice.dueDate)}`}
             </p>
           </div>
+
+          {/* The answer to "how did it come to this amount?", first. */}
+          <InvoiceWorkings invoice={invoice} />
 
           {/* billing period first, like the customer's invoice page */}
           <section className={SECTION}>

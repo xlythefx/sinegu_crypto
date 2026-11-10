@@ -9,11 +9,14 @@ const CIRCUMFERENCE = 2 * Math.PI * R
 
 interface PositionDistributionCardProps {
   bySymbol: SymbolStat[]
+  /** Each coin's P&L after exchange fees (the admin's read of a user). */
+  afterFees?: boolean
 }
 
 /** "Position Distribution by Asset" — donut of trades per ticker + legend. */
 export default function PositionDistributionCard({
   bySymbol,
+  afterFees = false,
 }: PositionDistributionCardProps) {
   const totalTrades = bySymbol.reduce((sum, s) => sum + s.trades, 0)
   const segments = bySymbol.map((s, i) => ({
@@ -42,7 +45,7 @@ export default function PositionDistributionCard({
             Position Distribution by Asset
           </div>
           <div className="text-[12px] text-muted mt-px">
-            Distribution of trades by ticker symbol · P&L before fees
+            Distribution of trades by ticker symbol · P&L {afterFees ? 'after' : 'before'} fees
           </div>
         </div>
       </div>
@@ -114,9 +117,9 @@ export default function PositionDistributionCard({
               </div>
               <PnlBreakdown gross={s.pnl} net={s.pnlNet} heading={s.name} className="flex-none">
                 <span
-                  className={`font-mono text-[12px] font-bold ${s.pnl < 0 ? 'text-red' : 'text-green'}`}
+                  className={`font-mono text-[12px] font-bold ${(afterFees ? s.pnlNet : s.pnl) < 0 ? 'text-red' : 'text-green'}`}
                 >
-                  {fmtSignedMoney(s.pnl)}
+                  {fmtSignedMoney(afterFees ? s.pnlNet : s.pnl)}
                 </span>
               </PnlBreakdown>
             </div>

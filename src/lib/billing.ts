@@ -24,6 +24,8 @@ export interface Invoice {
   accountName: string
   /** e.g. "June 2026" */
   monthLabel: string
+  /** 'YYYY-MM' — the billing month, for matching an invoice to a month's trades. */
+  monthYear: string
   invoiceDate: string
   dueDate: string
   paidDate: string | null
@@ -51,6 +53,18 @@ export interface Invoice {
    * (2026-11-08), which is why a mark can go DOWN.
    */
   capitalFlow: number
+  /**
+   * The account value with the month's transfers set aside — what the
+   * high-water-mark test compared with `hwmBefore`. Null on an older API.
+   */
+  performanceEquity: number | null
+  /**
+   * The month's closed trades BEFORE exchange fees, and those fees; with
+   * `realizedPnl` (after fees) they read "before − fees = billed on". Null =
+   * not recorded (an older API, or an account whose trades are gone).
+   */
+  realizedPnlGross: number | null
+  exchangeFees: number | null
   isFirstInvoice: boolean
   referenceLabel: string
   referenceValue: number
@@ -85,6 +99,10 @@ export interface ApiInvoice {
   deposit_amount?: number
   /** Absent from an API older than 2026-11-08 — read as 0. */
   capital_flow?: number
+  /** These three are absent from an API older than 2026-11-10. */
+  performance_equity?: number | null
+  realized_pnl_gross?: number | null
+  exchange_fees?: number | null
   is_first_invoice: boolean
   reference_label: string
   reference_value: number
@@ -98,6 +116,7 @@ export function mapApiInvoice(row: ApiInvoice): Invoice {
     formattedId: row.formatted_id,
     accountName: row.account_name,
     monthLabel: row.month_label,
+    monthYear: row.month_year,
     invoiceDate: row.invoice_date,
     dueDate: row.due_date,
     paidDate: row.paid_date,
@@ -124,6 +143,9 @@ export function mapApiInvoice(row: ApiInvoice): Invoice {
         : UNREALIZED_FEE_PERCENT,
     depositAmount: row.deposit_amount,
     capitalFlow: row.capital_flow ?? 0,
+    performanceEquity: row.performance_equity ?? null,
+    realizedPnlGross: row.realized_pnl_gross ?? null,
+    exchangeFees: row.exchange_fees ?? null,
     isFirstInvoice: row.is_first_invoice,
     referenceLabel: row.reference_label,
     referenceValue: row.reference_value,

@@ -2522,6 +2522,21 @@ own job). The rule per surface:
   is null when no capital is on record; the old Amount/% toggle is gone.
 - **Positions page and admin user detail keep `realized_pnl` / `total_pnl`
   (after fees)**: a total beside a list of net trades must sum to them.
+- **Exception: the ADMIN's read of one user leads AFTER fees** (owner,
+  2026-11-10, "priority after fees", after Dima read a customer's October as
+  +$190 and the bill was 20% of +$120.18). `AnalyticsView showAfterFees`
+  (set only by `UserAnalyticsTab` on admin user detail) flips the KPIs,
+  Total Return %, monthly / weekday bars and per-coin P&L to `*_net`, before
+  fees in the hover; the monthly table carries each month's invoice (fee +
+  status, click → `AdminInvoiceDetailModal`). The equity curve and the ratio
+  cards stay before fees and say so. The trader's own page is unchanged.
+- **Invoices store the month's closes before fees too** (`realized_pnl_gross`,
+  `exchange_fees` = gross − `realized_pnl`, so a row always reconciles;
+  NULL = not recorded). `components/billing/InvoiceWorkings.tsx` ("How this
+  bill was worked out") restates the row in the rule's order; invoices made
+  before 2026-11-08 stored the plain balance as `performance_equity` and are
+  told the old way. Analytics transfers carry `currency`: a BNB fee top-up is
+  listed as BNB and left out of the dollar totals (`baseline` unchanged).
 The switch is server-side, once: `UserStatsService::withFeeBasis()` stamps
 every row with `pnl_gross` / `pnl_net` / `pnl_fee` / `fee_known`, and
 `feeSummary()` returns `{total, trades_with_fee, trades_without_fee, since}`.

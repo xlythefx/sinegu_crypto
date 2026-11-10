@@ -16,6 +16,11 @@ interface ReturnFlipCardProps {
   filtered: boolean
   /** Set when some trades in the totals carry no fee on record. */
   feesSince: string | null
+  /** Lead with the after-fees figures (the admin's read of a user). */
+  afterFees?: boolean
+  /** Both faces' percentages after fees — read only when `afterFees`. */
+  totalReturnPctNet?: number | null
+  returnOnDepositPctNet?: number | null
 }
 
 const CARD =
@@ -137,11 +142,20 @@ export default function ReturnFlipCard({
   returnOnDeposit,
   filtered,
   feesSince,
+  afterFees = false,
+  totalReturnPctNet = null,
+  returnOnDepositPctNet = null,
 }: ReturnFlipCardProps) {
   const [face, setFace] = useState<Face>('total')
   const flip = () => setFace((f) => (f === 'total' ? 'deposit' : 'total'))
 
   const bar = (pct: number | null) => Math.min(100, Math.max(0, pct ?? 0))
+  const basis = afterFees ? 'after fees' : 'before fees'
+  // What each face leads with; the hover always carries both.
+  const totalPct = afterFees ? totalReturnPctNet : totalReturnPct
+  const totalAbs = afterFees ? totalReturnAbsNet : totalReturnAbs
+  const depositPct = afterFees ? returnOnDepositPctNet : returnOnDeposit.pct
+  const depositAbs = afterFees ? returnOnDeposit.realized_net : returnOnDeposit.realized
 
   return (
     // h-full all the way down so the card still fills the KPI row when a
@@ -157,17 +171,15 @@ export default function ReturnFlipCard({
           <CardFace
             active={face === 'total'}
             label={filtered ? 'Filtered Return' : 'Total Return'}
-            value={
-              totalReturnPct === null ? '—' : fmtSignedPct(totalReturnPct)
-            }
-            negative={(totalReturnPct ?? totalReturnAbs) < 0}
-            barPct={bar(totalReturnPct)}
+            value={totalPct === null ? '—' : fmtSignedPct(totalPct)}
+            negative={(totalPct ?? totalAbs) < 0}
+            barPct={bar(totalPct)}
             hint={
               <>
                 <PnlBreakdown gross={totalReturnAbs} net={totalReturnAbsNet} feesSince={feesSince}>
-                  {fmtSignedMoney(totalReturnAbs)}
+                  {fmtSignedMoney(totalAbs)}
                 </PnlBreakdown>{' '}
-                {filtered ? 'on the selection' : 'absolute return'} · before fees
+                {filtered ? 'on the selection' : 'absolute return'} · {basis}
               </>
             }
             note={
@@ -187,13 +199,9 @@ export default function ReturnFlipCard({
           <CardFace
             active={face === 'deposit'}
             label="Return on Deposit"
-            value={
-              returnOnDeposit.pct === null
-                ? '—'
-                : fmtSignedPct(returnOnDeposit.pct, 2)
-            }
-            negative={(returnOnDeposit.pct ?? returnOnDeposit.realized) < 0}
-            barPct={bar(returnOnDeposit.pct)}
+            value={depositPct === null ? '—' : fmtSignedPct(depositPct, 2)}
+            negative={(depositPct ?? depositAbs) < 0}
+            barPct={bar(depositPct)}
             hint={
               returnOnDeposit.deposits > 0 ? (
                 <>
@@ -202,9 +210,9 @@ export default function ReturnFlipCard({
                     net={returnOnDeposit.realized_net}
                     feesSince={feesSince}
                   >
-                    {fmtSignedMoney(returnOnDeposit.realized)}
+                    {fmtSignedMoney(depositAbs)}
                   </PnlBreakdown>{' '}
-                  on {fmtMoney(returnOnDeposit.deposits)} deposited · before fees
+                  on {fmtMoney(returnOnDeposit.deposits)} deposited · {basis}
                 </>
               ) : (
                 'No deposits on record yet'

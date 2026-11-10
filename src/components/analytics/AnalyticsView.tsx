@@ -24,7 +24,8 @@ import type { AnalyticsFilters as AnalyticsQuery } from '../../services/analytic
 import { ApiError } from '../../services/api'
 import { displaySymbol } from '../../lib/chart'
 import { EXCHANGE_META, EXCHANGE_ORDER } from '../exchanges/meta'
-import type { Analytics, ChipMode } from '../../types/analytics'
+import type { Analytics, ChipMode, DayExtreme } from '../../types/analytics'
+import type { Invoice } from '../../lib/billing'
 
 /** Toggle one value in a Set, returning a new Set (never mutate state). */
 function toggle(set: Set<string>, value: string): Set<string> {
@@ -53,13 +54,36 @@ interface AnalyticsViewProps {
    */
   capture?: { name: string }
   /**
-   * Puts the after-fees figures ON the page — a "Profit after exchange fees"
-   * card, an after-fees line on each money KPI, and a month-by-month table —
-   * instead of only in the hover. The admin's read of one user (2026-11-10);
-   * the trader's own page keeps before fees as the headline.
+   * The admin's read of one user (2026-11-10; owner: "priority after fees"):
+   * a "Profit after exchange fees" card on top, and every money KPI, the
+   * monthly / weekday bars and each coin's P&L lead AFTER exchange fees, with
+   * before fees in the hover. Adds the month-by-month table. The trader's own
+   * page keeps before fees as the headline.
    */
   showAfterFees?: boolean
+  /**
+   * The user's invoices (every exchange). The monthly table then shows each
+   * month's bill beside its profit; narrowed here to the exchange in view.
+   */
+  invoices?: Invoice[]
+  /** Opens one invoice's "how this bill was worked out". */
+  onOpenInvoice?: (invoice: Invoice) => void
 }
+
+/** The best and worst day AFTER fees — the API picks them before fees, and on
+ *  an after-fees page the two can be different days. */
+function netExtremes(gross: Record<string, number>, net: Record<string, number>) {
+  let best: DayExtreme | null = null
+  let worst: DayExtreme | null = null
+  for (const [date, pnlNet] of Object.entries(net)) {
+    const day = { date, pnl: gross[date] ?? pnlNet, pnl_net: pnlNet }
+    if (best === null || pnlNet > best.pnl_net) best = day
+    if (worst === null || pnlNet < worst.pnl_net) worst = day
+  }
+  return { best, worst }
+}
+
+const pct2 = (n: number) => Math.round(n * 100) / 100
 
 /**
  * The whole Performance Analytics page body (filters + every card), shared by
@@ -72,6 +96,8 @@ export default function AnalyticsView({
   showStrategyCard = true,
   capture,
   showAfterFees = false,
+  invoices,
+  onOpenInvoice,
 }: AnalyticsViewProps) {
   /** Wrap one card in the screenshot control — only when `capture` is set. */
   const cap = (title: string, card: ReactNode) =>
@@ -159,6 +185,24 @@ export default function AnalyticsView({
   // arrive, faded, rather than blanking the page to a spinner.
   const refreshing = loading && !!data
 
+  // After-fees twins the payload does not carry ready-made. Both percentages
+  // use the API's own denominators (Total Return: net money put in; Return
+  // on Deposit: money deposited), so they differ from the before-fees ones
+  // only by the fees.
+  const extremes = showAfterFees && data ? netExtremes(data.daily_pnl, data.daily_pnl_net) : null
+  const totalReturnPctNet =
+    data && data.baseline > 0 ? pct2((data.total_return_abs_net / data.baseline) * 100) : null
+  const returnOnDepositPctNet =
+    data && data.return_on_deposit.deposits > 0
+      ? pct2((data.return_on_deposit.realized_net / data.return_on_deposit.deposits) * 100)
+      : null
+  const invoicesInView =
+    invoices === undefined
+      ? undefined
+      : filters.exchange === 'all'
+        ? invoices
+        : invoices.filter((i) => i.exchange === filters.exchange)
+
   return (
     <div className="flex flex-col gap-stack">
       <AnalyticsFilterPanel
@@ -240,10 +284,12 @@ export default function AnalyticsView({
                 avgDailyPnl={data.avg_daily_pnl}
                 avgDailyPnlNet={data.avg_daily_pnl_net}
                 tradingDays={data.trading_days}
-                bestDay={data.best_day}
-                worstDay={data.worst_day}
+                bestDay={extremes ? extremes.best : data.best_day}
+                worstDay={extremes ? extremes.worst : data.worst_day}
                 fees={data.fees}
-                showAfterFees={showAfterFees}
+                afterFees={showAfterFees}
+                totalReturnPctNet={totalReturnPctNet}
+                returnOnDepositPctNet={returnOnDepositPctNet}
               />,
             )}
           </Dimmable>
@@ -273,7 +319,7 @@ export default function AnalyticsView({
             <Dimmable dim={noTrades}>
               {cap(
                 'Position Distribution by Asset',
-                <PositionDistributionCard bySymbol={data.by_symbol} />,
+                <PositionDistributionCard bySymbol={data.by_symbol} afterFees={showAfterFees} />,
               )}
             </Dimmable>
           </div>
@@ -309,7 +355,7 @@ export default function AnalyticsView({
           <Dimmable dim={noTrades}>
             {cap(
               'Performance by Day of Week',
-              <DayOfWeekCard dayOfWeek={data.day_of_week} />,
+              <DayOfWeekCard dayOfWeek={data.day_of_week} afterFees={showAfterFees} />,
             )}
           </Dimmable>
 
@@ -317,7 +363,13 @@ export default function AnalyticsView({
             <Dimmable dim={noTrades}>
               {cap(
                 'Monthly Performance Breakdown',
-                <MonthlyBreakdownCard monthly={data.monthly} showTable={showAfterFees} />,
+                <MonthlyBreakdownCard
+                  monthly={data.monthly}
+                  afterFees={showAfterFees}
+                  showTable={showAfterFees}
+                  invoices={invoicesInView}
+                  onOpenInvoice={onOpenInvoice}
+                />,
               )}
             </Dimmable>
             <Dimmable dim={noAccountsInScope && noFlows}>

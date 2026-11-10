@@ -16,29 +16,38 @@ const BAR_W = 46
 
 interface DayOfWeekCardProps {
   dayOfWeek: Record<Weekday, DayOfWeekStat>
+  /** Bars after exchange fees (the admin's read of a user); before in the hover. */
+  afterFees?: boolean
 }
 
 /** "Performance by Day of Week" — signed bar chart, best/worst summary.
- *  Bars are BEFORE exchange fees; hover one for the after-fees figure. */
-export default function DayOfWeekCard({ dayOfWeek }: DayOfWeekCardProps) {
+ *  Bars are BEFORE exchange fees (AFTER on the admin's read); hover one for
+ *  all three figures. */
+export default function DayOfWeekCard({ dayOfWeek, afterFees = false }: DayOfWeekCardProps) {
   const [hover, setHover] = useState<number | null>(null)
 
-  const days = WEEKDAYS.map((day) => ({
-    day,
-    pnl: dayOfWeek[day]?.pnl ?? 0,
-    pnlNet: dayOfWeek[day]?.pnl_net ?? 0,
-    trades: dayOfWeek[day]?.trades ?? 0,
-  }))
+  const days = WEEKDAYS.map((day) => {
+    const pnl = dayOfWeek[day]?.pnl ?? 0
+    const pnlNet = dayOfWeek[day]?.pnl_net ?? 0
+    return {
+      day,
+      pnl,
+      pnlNet,
+      /** The bar's figure on this page's basis. */
+      shown: afterFees ? pnlNet : pnl,
+      trades: dayOfWeek[day]?.trades ?? 0,
+    }
+  })
   const hasData = days.some((d) => d.trades > 0)
 
-  const max = Math.max(...days.map((d) => d.pnl), 0)
-  const min = Math.min(...days.map((d) => d.pnl), 0)
+  const max = Math.max(...days.map((d) => d.shown), 0)
+  const min = Math.min(...days.map((d) => d.shown), 0)
   const span = max - min || 1
   const yOf = (v: number) => TOP + ((max - v) / span) * PLOT
   const zeroY = yOf(0)
 
-  const best = days.reduce((a, b) => (b.pnl > a.pnl ? b : a), days[0])
-  const worst = days.reduce((a, b) => (b.pnl < a.pnl ? b : a), days[0])
+  const best = days.reduce((a, b) => (b.shown > a.shown ? b : a), days[0])
+  const worst = days.reduce((a, b) => (b.shown < a.shown ? b : a), days[0])
 
   const hovered = hover !== null && days[hover].trades > 0 ? days[hover] : null
   const hoverX = hover !== null ? (hover * SLOT + SLOT / 2) / W : 0
@@ -59,7 +68,7 @@ export default function DayOfWeekCard({ dayOfWeek }: DayOfWeekCardProps) {
               Performance by Day of Week
             </div>
             <div className="text-[12px] text-muted mt-px">
-              Identify which weekdays drive your edge · before fees
+              Identify which weekdays drive your edge · {afterFees ? 'after fees' : 'before fees'}
             </div>
           </div>
         </div>
@@ -72,7 +81,7 @@ export default function DayOfWeekCard({ dayOfWeek }: DayOfWeekCardProps) {
               {hasData ? best.day : '—'}
             </span>
             <span className="font-mono text-[11px] text-muted font-bold">
-              {hasData ? fmtSignedMoney(best.pnl, 0) : '—'}
+              {hasData ? fmtSignedMoney(best.shown, 0) : '—'}
             </span>
           </div>
           <div className="flex flex-col gap-px">
@@ -83,7 +92,7 @@ export default function DayOfWeekCard({ dayOfWeek }: DayOfWeekCardProps) {
               {hasData ? worst.day : '—'}
             </span>
             <span className="font-mono text-[11px] text-muted font-bold">
-              {hasData ? fmtSignedMoney(worst.pnl, 0) : '—'}
+              {hasData ? fmtSignedMoney(worst.shown, 0) : '—'}
             </span>
           </div>
         </div>
@@ -106,9 +115,9 @@ export default function DayOfWeekCard({ dayOfWeek }: DayOfWeekCardProps) {
           />
           {days.map((d, i) => {
             const x = i * SLOT + (SLOT - BAR_W) / 2
-            const y = d.pnl >= 0 ? yOf(d.pnl) : zeroY
-            const h = Math.abs(yOf(d.pnl) - zeroY)
-            const pos = d.pnl >= 0
+            const y = d.shown >= 0 ? yOf(d.shown) : zeroY
+            const h = Math.abs(yOf(d.shown) - zeroY)
+            const pos = d.shown >= 0
             return (
               <g
                 key={d.day}
@@ -133,7 +142,7 @@ export default function DayOfWeekCard({ dayOfWeek }: DayOfWeekCardProps) {
                     textAnchor="middle"
                     className={`font-mono text-[11px] font-bold ${pos ? 'fill-green' : 'fill-red'}`}
                   >
-                    {fmtSignedMoney(d.pnl, 0)}
+                    {fmtSignedMoney(d.shown, 0)}
                   </text>
                 )}
                 <text
