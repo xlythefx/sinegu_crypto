@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CircleAlert, Lightbulb, Plus, SquareKanban } from 'lucide-react'
 import DataState from '../../../dashboard/DataState'
 import { FilterGroup, Segmented, type SegmentedOption } from '../../../ui/filters'
@@ -37,6 +37,17 @@ interface PlannerTabProps {
   budget: CreativeBudget
   /** AI writing is paid from the month's cap — every answer carries the new figure. */
   onBudget: (budget: CreativeBudget) => void
+  /**
+   * 'auto' = the board from 1024px, the list below. 'list' = always the list
+   * (the chat workspace's narrow Plans panel, whatever the screen).
+   */
+  layout?: 'auto' | 'list'
+  /** Open this plan's editor once the plans are in (a plan chip in the chat). */
+  openPlanId?: number | null
+  /** Called once `openPlanId` was handled, so it is not opened again. */
+  onOpenedPlan?: () => void
+  /** Goes up when someone else (the agent) changed plans — the list re-reads. */
+  reloadSignal?: number
 }
 
 const FILTER_DEFAULTS = { platform: 'all', stage: 'all' }
@@ -49,20 +60,48 @@ type Editing = { plan: CreativePlan | null; defaults?: PlanDefaults } | null
 
 /**
  * Content plans on a board, Idea → Posted. From 1024px every stage is a
- * column; on a phone or tablet a stage picker and one list take their place.
+ * column; on a phone or tablet — and always in the chat workspace's narrow
+ * Plans panel (`layout="list"`) — a stage picker and one list take their place.
  * Filters live in the URL and sit outside the re-keyed board, so changing one
  * replays the reveal without remounting the controls. "Suggest ideas" and
  * every plan's "Write it for me" hand the writing to Claude; the weekly-recap
  * switch is the full admins' (collaborators see it read-only).
  */
-export default function PlannerTab({ onGenerate, ai, onAi, canEditAi, budget, onBudget }: PlannerTabProps) {
+export default function PlannerTab({
+  onGenerate,
+  ai,
+  onAi,
+  canEditAi,
+  budget,
+  onBudget,
+  layout = 'auto',
+  openPlanId = null,
+  onOpenedPlan,
+  reloadSignal = 0,
+}: PlannerTabProps) {
   const { plans, loading, error, reload, upsert, remove } = useCreativePlans()
   const { filters, set } = useUrlFilters(FILTER_DEFAULTS, { allowed: FILTER_ALLOWED })
-  const wide = !useIsMobile(1024)
+  const wideScreen = !useIsMobile(1024)
+  const wide = layout === 'auto' && wideScreen
   const [editing, setEditing] = useState<Editing>(null)
   const [movingId, setMovingId] = useState<number | null>(null)
   const [moveError, setMoveError] = useState<string | null>(null)
   const [ideasOpen, setIdeasOpen] = useState(false)
+
+  // Only a change after mounting means the agent changed something — the first read is already on its way.
+  const mountSignal = useRef(reloadSignal)
+  useEffect(() => {
+    if (reloadSignal !== mountSignal.current) reload()
+  }, [reloadSignal, reload])
+
+  // A plan chip in the chat: open that plan's editor as soon as the list is in.
+  useEffect(() => {
+    if (openPlanId === null || !plans) return
+    const target = plans.find((p) => p.id === openPlanId)
+    if (target) setEditing({ plan: target })
+    else setMoveError('That plan no longer exists — it may have been deleted.')
+    onOpenedPlan?.()
+  }, [openPlanId, plans, onOpenedPlan])
 
   const list = useMemo(() => plans ?? [], [plans])
   const onPlatform = useMemo(
@@ -129,7 +168,7 @@ export default function PlannerTab({ onGenerate, ai, onAi, canEditAi, budget, on
         : 'No plans for this platform yet.'
 
   return (
-    <section className={SECTION} data-aos="fade-up" aria-labelledby="creatives-plans">
+    <section className={`${SECTION} @container`} data-aos="fade-up" aria-labelledby="creatives-plans">
       <SectionHeader
         icon={SquareKanban}
         id="creatives-plans"

@@ -12,7 +12,7 @@ interface PlanListProps {
   onMove: (plan: CreativePlan, status: CreativePlanStatus) => void
 }
 
-/** Phone and tablet: one list for the picked stage, two cards a row from 640px. */
+/** Phone, tablet and the narrow Plans panel: one list for the picked stage, two cards a row once there is room (576px). */
 export default function PlanList({ plans, mixedStages, movingId, emptyText, onOpen, onGenerate, onMove }: PlanListProps) {
   if (plans.length === 0) {
     return (
@@ -22,7 +22,7 @@ export default function PlanList({ plans, mixedStages, movingId, emptyText, onOp
     )
   }
   return (
-    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+    <div className="grid grid-cols-1 gap-2.5 @xl:grid-cols-2">
       {plans.map((plan) => (
         <PlanCard
           key={plan.id}

@@ -1,11 +1,11 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { CircleAlert } from 'lucide-react'
+import { ChevronDown, CircleAlert, WandSparkles } from 'lucide-react'
 import ConfirmModal from '../../../ui/ConfirmModal'
 import { useCreativeGenerations } from '../../../../hooks/useCreativeGenerations'
 import { useNow } from '../../../../hooks/useNow'
 import { useStudioDraft } from '../../../../hooks/useStudioDraft'
-import { creativeErrorMessage, fmtCost, signedUrl } from '../../../../lib/creatives'
+import { creativeErrorMessage, fmtCost, startSignedDownload } from '../../../../lib/creatives'
 import { addCharacterRefFromGeneration, cancelGeneration } from '../../../../services/creatives'
 import type {
   CreativeBudget,
@@ -29,17 +29,16 @@ interface StudioWorkspaceProps {
   character: CreativeCharacter | null
   onCharacter: (character: CreativeCharacter) => void
   onOpenCharacter: () => void
-}
-
-/** Open a signed download in a new tab — an attachment downloads and the tab closes; an error never replaces this page. */
-function startDownload(path: string): void {
-  const a = document.createElement('a')
-  a.href = signedUrl(path)
-  a.target = '_blank'
-  a.rel = 'noopener'
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
+  /**
+   * 'page' = form and gallery side by side from 1280px. 'panel' = the chat
+   * workspace's Gallery panel: one column, the form folded under "Make it
+   * yourself" above the gallery (opened by `makeOpen`, by Animate, or by a plan).
+   */
+  variant?: 'page' | 'panel'
+  /** Panel only: start with "Make it yourself" open. */
+  makeOpen?: boolean
+  /** Goes up when something outside (the agent's jobs) made new generations — the gallery re-reads. */
+  reloadSignal?: number
 }
 
 /**
@@ -59,6 +58,9 @@ export default function StudioWorkspace({
   character,
   onCharacter,
   onOpenCharacter,
+  variant = 'page',
+  makeOpen = false,
+  reloadSignal = 0,
 }: StudioWorkspaceProps) {
   const draft = useStudioDraft({
     models: meta.models,
@@ -72,6 +74,16 @@ export default function StudioWorkspace({
   const [, setParams] = useSearchParams()
   const [cancelling, setCancelling] = useState<CreativeGeneration | null>(null)
   const [cancelError, setCancelError] = useState<string | null>(null)
+  const panel = variant === 'panel'
+  // A plan handed over ("Make the video") is something to make, so the form starts open.
+  const [formOpen, setFormOpen] = useState(!panel || makeOpen || initialPlan !== null)
+
+  // Only a change after mounting means something new — the first read is already on its way.
+  const { refresh } = gallery
+  const mountSignal = useRef(reloadSignal)
+  useEffect(() => {
+    if (reloadSignal !== mountSignal.current) refresh()
+  }, [reloadSignal, refresh])
 
   const planPrompt = (id: number | null) => plans.find((p) => p.id === id)?.video_prompt ?? ''
 
@@ -96,7 +108,9 @@ export default function StudioWorkspace({
 
   const onAnimate = (g: CreativeGeneration, index: number) => {
     draft.animate({ generation_id: g.id, index })
-    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setFormOpen(true)
+    // The folded form mounts on this render — scroll once it is there.
+    requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   }
 
   const onUseAsRef = async (g: CreativeGeneration, index: number) => {
@@ -116,7 +130,7 @@ export default function StudioWorkspace({
     try {
       const path = await gallery.freshDownloadPath(g, index)
       if (!path) return `Higgsfield has deleted this file — results are only kept for ${meta.retention_days} days.`
-      startDownload(path)
+      startSignedDownload(path)
       return null
     } catch (err) {
       return creativeErrorMessage(err, 'Could not start the download.')
@@ -138,46 +152,88 @@ export default function StudioWorkspace({
     }
   }
 
-  return (
-    <div className="grid grid-cols-1 gap-stack xl:grid-cols-[minmax(0,460px)_minmax(0,1fr)] xl:items-start">
-      <GenerateForm
-        formRef={formRef}
-        configured={meta.configured}
-        retentionDays={meta.retention_days}
-        budget={budget}
-        onBudget={onBudget}
-        draft={draft}
-        models={meta.models}
-        plans={plans}
-        plansFailed={plansFailed}
-        character={character}
-        generations={gallery.generations ?? []}
-        now={now}
-        onPlanChange={onPlanChange}
-        planPrompt={planPrompt(draft.planId)}
-        onCreated={gallery.upsert}
-        onSubmitFailed={gallery.refresh}
-        onOpenCharacter={onOpenCharacter}
-      />
+  const form = (
+    <GenerateForm
+      formRef={formRef}
+      configured={meta.configured}
+      retentionDays={meta.retention_days}
+      budget={budget}
+      onBudget={onBudget}
+      draft={draft}
+      models={meta.models}
+      plans={plans}
+      plansFailed={plansFailed}
+      character={character}
+      generations={gallery.generations ?? []}
+      now={now}
+      onPlanChange={onPlanChange}
+      planPrompt={planPrompt(draft.planId)}
+      onCreated={gallery.upsert}
+      onSubmitFailed={gallery.refresh}
+      onOpenCharacter={onOpenCharacter}
+    />
+  )
 
-      <div className="flex min-w-0 flex-col gap-stack">
-        {cancelError && (
-          <p className={NOTICE.error} role="alert">
-            <CircleAlert size={15} aria-hidden="true" />
-            {cancelError}
-          </p>
-        )}
-        <GenerationGallery
-          state={gallery}
-          now={now}
-          retentionDays={meta.retention_days}
-          onDownload={onDownload}
-          onAnimate={onAnimate}
-          onUseAsRef={onUseAsRef}
-          onCancel={setCancelling}
-          delay={60}
-        />
-      </div>
+  const galleryColumn = (
+    <div className="flex min-w-0 flex-col gap-stack">
+      {cancelError && (
+        <p className={NOTICE.error} role="alert">
+          <CircleAlert size={15} aria-hidden="true" />
+          {cancelError}
+        </p>
+      )}
+      <GenerationGallery
+        state={gallery}
+        now={now}
+        retentionDays={meta.retention_days}
+        onDownload={onDownload}
+        onAnimate={onAnimate}
+        onUseAsRef={onUseAsRef}
+        onCancel={setCancelling}
+        delay={60}
+      />
+    </div>
+  )
+
+  return (
+    <>
+      {panel ? (
+        <div className="flex min-w-0 flex-col gap-stack">
+          <div className="flex min-w-0 flex-col gap-stack">
+            <button
+              type="button"
+              onClick={() => setFormOpen((v) => !v)}
+              aria-expanded={formOpen}
+              className="flex w-full cursor-pointer items-center gap-3 rounded-row border border-border bg-surface px-4 py-3.5 text-left transition-[border-color] duration-150 hover:border-accent-line"
+            >
+              <span
+                className="grid h-9 w-9 flex-none place-items-center rounded-[10px] border border-accent-line bg-accent-soft text-accent"
+                aria-hidden="true"
+              >
+                <WandSparkles size={16} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13.5px] font-bold text-text">Make it yourself</span>
+                <span className="mt-0.5 block text-[12px] leading-[1.5] text-muted">
+                  Pick a model and write the prompt. It shows the price before anything is spent.
+                </span>
+              </span>
+              <ChevronDown
+                size={17}
+                aria-hidden="true"
+                className={`flex-none text-muted transition-transform duration-200 ${formOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {formOpen && <div className="animate-[fadeup_0.3s_ease-out]">{form}</div>}
+          </div>
+          {galleryColumn}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-stack xl:grid-cols-[minmax(0,460px)_minmax(0,1fr)] xl:items-start">
+          {form}
+          {galleryColumn}
+        </div>
+      )}
 
       <ConfirmModal
         open={cancelling !== null}
@@ -195,6 +251,6 @@ export default function StudioWorkspace({
         onConfirm={() => void cancel()}
         onCancel={() => setCancelling(null)}
       />
-    </div>
+    </>
   )
 }

@@ -12,6 +12,12 @@ interface StudioTabProps {
   budget: CreativeBudget
   onBudget: (budget: CreativeBudget) => void
   onOpenCharacter: () => void
+  /** See StudioWorkspace: 'panel' is the chat workspace's Gallery panel. */
+  variant?: 'page' | 'panel'
+  /** Panel only: start with "Make it yourself" open. */
+  makeOpen?: boolean
+  /** Goes up when the agent's jobs made something — the gallery re-reads. */
+  reloadSignal?: number
 }
 
 /**
@@ -20,14 +26,22 @@ interface StudioTabProps {
  * the character (whether it has reference images yet). A failed plan list
  * never blocks generating — the form just has no plans to pick.
  */
-export default function StudioTab({ meta, budget, onBudget, onOpenCharacter }: StudioTabProps) {
+export default function StudioTab({
+  meta,
+  budget,
+  onBudget,
+  onOpenCharacter,
+  variant = 'page',
+  makeOpen = false,
+  reloadSignal = 0,
+}: StudioTabProps) {
   const { plans, loading, error } = useCreativePlans()
   const characterState = useApiData(getCreativeCharacter)
   const [characterOverride, setCharacter] = useState<CreativeCharacter | null>(null)
   const [params] = useSearchParams()
 
   if (!plans && loading) {
-    return <DataState loading error={null} onRetry={() => {}} label="the studio" />
+    return <DataState loading error={null} onRetry={() => {}} label="the gallery" />
   }
 
   const planId = Number(params.get('plan'))
@@ -44,6 +58,9 @@ export default function StudioTab({ meta, budget, onBudget, onOpenCharacter }: S
       character={characterOverride ?? characterState.data}
       onCharacter={setCharacter}
       onOpenCharacter={onOpenCharacter}
+      variant={variant}
+      makeOpen={makeOpen}
+      reloadSignal={reloadSignal}
     />
   )
 }

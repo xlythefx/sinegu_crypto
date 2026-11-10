@@ -9,7 +9,7 @@ import CharacterRefs from './CharacterRefs'
 
 interface CharacterTabProps {
   maxReferences: number
-  /** Jump to Studio (the "how to start" line links there). */
+  /** Open the Gallery's "Make it yourself" (the "how to start" line links there). */
   onOpenStudio: () => void
 }
 
@@ -38,22 +38,25 @@ export default function CharacterTab({ maxReferences, onOpenStudio }: CharacterT
           <p className="font-bold text-text">How {character.name} stays the same in every post</p>
           <p className="mt-0.5">
             These pictures and words are sent with every character image and video. To start, make candidates with
-            “Image from text” in{' '}
+            “Image from text” in the Gallery’s{' '}
             <button
               type="button"
               onClick={onOpenStudio}
               className="cursor-pointer font-semibold text-accent underline-offset-2 hover:underline"
             >
-              Studio
+              Make it yourself
             </button>{' '}
-            and keep the best ones with “Use as character reference”.
+            and keep the best ones with “Use as character reference” — or ask the agent to make some.
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-stack xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:items-start">
-        <CharacterForm character={character} onSaved={setCharacter} delay={40} />
-        <CharacterRefs character={character} maxReferences={maxReferences} onChanged={setCharacter} delay={80} />
+      {/* Side by side only when the space it sits in is wide (a panel is not). */}
+      <div className="@container">
+        <div className="grid grid-cols-1 gap-stack @5xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] @5xl:items-start">
+          <CharacterForm character={character} onSaved={setCharacter} delay={40} />
+          <CharacterRefs character={character} maxReferences={maxReferences} onChanged={setCharacter} delay={80} />
+        </div>
       </div>
     </div>
   )

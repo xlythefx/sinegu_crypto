@@ -391,6 +391,17 @@ body {
     transform: scaleX(1);
   }
 }
+/* A side sheet sliding in from the right edge (Admin → Creatives panels below 1280px). */
+@keyframes sheetin {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .motion-sheen,
   .motion-shimmer {

@@ -56,8 +56,10 @@ export default function BudgetTab({ budget, onBudget, canEdit }: BudgetTabProps)
   const aiCalls = budget.ai_calls ?? 0
 
   return (
-    <div className="grid grid-cols-1 gap-stack xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start">
-      <section className={SECTION} data-aos="fade-up" aria-labelledby="creatives-budget">
+    // Side by side only when the space it sits in is wide (a panel is not).
+    <div className="@container">
+    <div className="grid grid-cols-1 gap-stack @5xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] @5xl:items-start">
+      <section className={`${SECTION} @container`} data-aos="fade-up" aria-labelledby="creatives-budget">
         <SectionHeader
           icon={Wallet}
           id="creatives-budget"
@@ -117,7 +119,7 @@ export default function BudgetTab({ budget, onBudget, canEdit }: BudgetTabProps)
           </p>
         )}
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 @sm:grid-cols-2">
           <Tile label="Left" value={fmtBudget(budget.remaining_usd)} hint="What can still be spent this month." />
           <Tile label="Reserved" value={fmtBudget(budget.reserved_usd)} hint="Still generating — given back if it fails." />
           <Tile
@@ -191,6 +193,7 @@ export default function BudgetTab({ budget, onBudget, canEdit }: BudgetTabProps)
       {canEdit && (
         <BudgetCapModal open={editing} budget={budget} onClose={() => setEditing(false)} onSaved={onBudget} />
       )}
+    </div>
     </div>
   )
 }

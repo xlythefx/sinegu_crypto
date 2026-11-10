@@ -40,8 +40,9 @@ interface GenerationCardProps {
   onCancel: (generation: CreativeGeneration) => void
 }
 
+// One fixed track: an auto row would grow to the picture's own height and crop it instead of fitting it.
 const PREVIEW_BOX =
-  'relative grid h-[240px] w-full place-items-center overflow-hidden rounded-row border border-hair bg-surface2 sm:h-[280px]'
+  'relative grid h-[240px] w-full grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] place-items-center overflow-hidden rounded-row border border-hair bg-surface2 sm:h-[280px]'
 
 /** What the preview area says when there is nothing to show. */
 function EmptyPreview({ generation, retentionDays }: { generation: CreativeGeneration; retentionDays: number }) {

@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePoll } from './usePoll'
-import { creativeErrorMessage, isPollingGeneration } from '../lib/creatives'
+import { creativeErrorMessage, DOWNLOAD_FRESH_MS, isPollingGeneration } from '../lib/creatives'
 import { getCreativeGeneration, getCreativeGenerations } from '../services/creatives'
 import type { CreativeGeneration } from '../types/creatives'
 
 const PAGE_SIZE = 30
 /** How often a list with something still generating is re-read. */
 const POLL_MS = 5000
-/** A signed download path is valid 30 min; refresh it a little before that. */
-const DOWNLOAD_FRESH_MS = 25 * 60 * 1000
 
 export interface CreativeGenerationsState {
   generations: CreativeGeneration[] | null

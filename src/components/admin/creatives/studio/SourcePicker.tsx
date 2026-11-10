@@ -124,7 +124,7 @@ export default function SourcePicker({
         <span className={FILTER_LABEL}>{characterName}’s reference images</span>
         {refs.length === 0 ? (
           <p className="rounded-[10px] border border-dashed border-border px-3 py-4 text-center text-[12px] text-muted">
-            No reference images yet — add them on the Character tab.
+            No reference images yet — add them in the Pixel panel.
           </p>
         ) : (
           <div className="grid grid-cols-4 gap-2 @md:grid-cols-6">

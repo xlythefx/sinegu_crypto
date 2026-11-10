@@ -814,6 +814,32 @@ Planner / Studio / Character / Budget. API `/admin/creatives*`,
     FACTS → a `warnings` entry; over the platform caption limit → warning;
     any % → the disclaimer is appended. A draft is never saved or posted by
     itself, except the weekly one, which lands in Idea for a human.
+- **The chat agent (2026-11-10)** is the page's default view. Panels (Plans,
+  Gallery, Pixel, Brief, Memory, Budget) open on demand (`?panel=`). It has
+  two modes, both open to collaborators: **Ask** (reads, discusses, saves
+  memory on request) and **Generate** (plans + paid jobs).
+  - **The loop is client-stepped**: `POST /agent/turn` = at most ONE Claude call
+    (Cloudflare 100 s); the client repeats while `continue`, with a cap of 8 per
+    user message.
+  - **Opus 5.5 preserved thinking**: the history is APPEND-ONLY and assistant
+    blocks are stored and replayed exactly. Never edit or drop earlier messages,
+    and never vary the tool list (Ask is enforced in the tool handlers). Per-turn
+    state goes in a `[Context]` block at the top of each new user message.
+  - **The tool schemas are strict and EVERY property is required**
+    (`CreativeAgentPrompt::tools`), because strict tools share a small
+    request-wide budget of optional parameters. So Claude sends "nothing" as a
+    value ("any", 0, source type "none", "") and sends params and plan changes
+    as name/value lists. `CreativeAgentTools::normalize` turns those into the
+    contract's shapes. A new tool or field changes BOTH files, and
+    `test_tool_inputs_in_the_strict_schema_shapes` sends the schemas' shapes,
+    which is what the real model sends (seen in a live run on 2026-11-10).
+  - **Nothing paid without a click**: `propose_job` only prices; `approve`
+    checks the budget and runs the steps through `CreativeGenerator`. Jobs
+    advance in `creatives:poll`.
+  - **Memory is team-wide** (`creative_memories`). The brief is Markdown on
+    `creative_settings`. Chat sessions are per person and pruned after 7 days,
+    by the owner's choice: only the current chat matters.
+  - Every model call is an AI call of kind `agent` under the same cap.
 - No auto-posting. Posting is download → post by hand.
 
 ## Collaborator role — read-only staff (2026-09-28)

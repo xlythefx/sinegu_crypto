@@ -36,6 +36,29 @@ export const ADMIN_CHANGES: AdminChange[] = [
     links: [{ label: 'User Management', href: '/admin/users' }],
   },
   {
+    id: 'creatives-agent-chat',
+    date: '2026-11-10',
+    kind: 'new',
+    area: 'Creatives',
+    title: 'Talk to the Creatives agent: Ask mode and Generate mode',
+    summary:
+      'Creatives is now mostly a chat. The marketing team talks to an AI agent that knows the brand, the mascot Pixel, the planner and this week\'s public results. In Ask mode it discusses, brainstorms and gives feedback without spending anything. In Generate mode it writes plans and makes pictures and marketing videos, but nothing paid starts until someone presses Go on a card that shows the total price. Plans, gallery, Pixel, the brand brief, memory and budget are panels you open only when you need them.',
+    howItWorks: [
+      'Ask mode, for example: "What should we post this week?" or "Is this hook strong enough?". It reads everything but cannot change plans or spend money.',
+      'Generate mode, for example: "Make this week\'s recap video". The agent writes the plan and then shows one card: "1 picture of Pixel and a 10-second video, about $0.67. Go?". One click runs it; the picture and then the video appear in the chat with a Download button. A video takes a few minutes, and the card fills in by itself.',
+      'The Brief panel is the team\'s brand document: who we talk to, tone of voice, do\'s and don\'ts, and ready-made video recipes (Weekly recap, Meet Pixel, How the bot works in 20 seconds). The agent follows it in every message. Edit it any time.',
+      'The Memory panel holds short notes the agent keeps for the whole team, such as "TikTok captions work best under 150 characters". It saves one when you ask ("remember that…"). You can edit or delete any note.',
+      'Only the current chat is kept. "New chat" starts fresh, and decisions stay safe in Memory, the Brief and the plans.',
+      'Each chat message costs a few cents and counts against the same $100 monthly cap as everything else in Creatives. The marketing team (collaborators) can use both modes.',
+    ],
+    technical: [
+      'Client-stepped tool-use loop: POST /admin/creatives/agent/turn makes at most one Claude call per request (Cloudflare\'s 100 s), and the client repeats while status is "continue" (cap 8 calls per user message). claude-opus-5-5 via the Anthropic PHP SDK; append-only history with assistant blocks stored exactly; an identical tool list in both modes, with Ask enforced server-side.',
+      'Paid work only via propose_job → POST /agent/jobs/{id}/approve (budget checked, 60-min expiry). Steps run through CreativeGenerator, and a from_step source lets a Kling step animate an earlier step\'s image. Jobs advance in creatives:poll.',
+      'Tables creative_agent_sessions/_messages/_jobs and creative_memories, plus brief_markdown on creative_settings (migration 2026_11_10_000004). Sessions older than 7 days are pruned daily. Every model call is recorded as an AI call of kind "agent". Tests: CreativesAgentTest.',
+    ],
+    links: [{ label: 'Creatives', href: '/admin/creatives' }],
+  },
+  {
     id: 'creatives-ai-writer',
     date: '2026-11-10',
     kind: 'new',

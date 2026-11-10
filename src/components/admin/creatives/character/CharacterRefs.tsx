@@ -51,7 +51,7 @@ function RefTile({ refImage, onDelete, busy }: { refImage: CreativeCharacterRef;
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             <TonePill tone={refImage.source === 'generation' ? 'accent' : 'muted'}>
-              {refImage.source === 'generation' ? 'From Studio' : 'Uploaded'}
+              {refImage.source === 'generation' ? 'From the Gallery' : 'Uploaded'}
             </TonePill>
             <span className="font-mono text-[10.5px] text-faint">{fmtSize(refImage.bytes)}</span>
           </div>
@@ -132,7 +132,7 @@ export default function CharacterRefs({ character, maxReferences, onChanged, del
   }
 
   return (
-    <section className={SECTION} data-aos="fade-up" data-aos-delay={delay} aria-labelledby="creatives-refs">
+    <section className={`${SECTION} @container`} data-aos="fade-up" data-aos-delay={delay} aria-labelledby="creatives-refs">
       <SectionHeader
         icon={Images}
         id="creatives-refs"
@@ -140,7 +140,7 @@ export default function CharacterRefs({ character, maxReferences, onChanged, del
         subtitle={`${count} of ${maxReferences}. Sent with every character image and video, so ${character.name} always looks the same.`}
       />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+      <div className="grid grid-cols-1 gap-3 @md:grid-cols-[minmax(0,1fr)_auto] @md:items-end">
         <label className={FIELD}>
           <span className={LABEL}>Label for the next picture (optional)</span>
           <input
@@ -191,11 +191,11 @@ export default function CharacterRefs({ character, maxReferences, onChanged, del
 
       {count === 0 ? (
         <p className="rounded-row border border-dashed border-border px-4 py-8 text-center text-[13px] leading-[1.6] text-muted">
-          No reference images yet. Upload one, or make candidates in Studio and keep the best with “Use as character
-          reference”.
+          No reference images yet. Upload one, or make candidates in the Gallery and keep the best with “Use as
+          character reference”.
         </p>
       ) : (
-        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-4">
+        <ul className="grid grid-cols-2 gap-3 @sm:grid-cols-3 @2xl:grid-cols-4">
           {character.refs.map((r) => (
             <RefTile key={r.id} refImage={r} busy={busy} onDelete={() => setDeleting(r)} />
           ))}

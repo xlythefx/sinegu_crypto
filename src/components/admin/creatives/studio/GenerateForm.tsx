@@ -107,7 +107,7 @@ export default function GenerateForm({
         : model.needs_source && !draft.source
           ? 'Pick the picture to animate.'
           : needsRefs
-            ? `This model needs pictures of ${name}. Add at least one reference image on the Character tab first.`
+            ? `This model needs pictures of ${name}. Add at least one reference image in the Pixel panel first.`
             : paramProblem(model, draft.params)
 
   const checkPrice = async (): Promise<CreativeEstimate | null> => {
@@ -146,7 +146,7 @@ export default function GenerateForm({
       const b = result.budget
       setError(
         b.cap_usd <= 0
-          ? 'Generating is switched off: this month’s cap is $0. A full admin can raise it on the Budget tab.'
+          ? 'Generating is switched off: this month’s cap is $0. A full admin can raise it in Budget.'
           : `This costs ${fmtCost(result.usd)}, but only ${fmtBudget(b.remaining_usd)} of this month’s ${fmtBudget(b.cap_usd)} is left. Pick a cheaper setting, or ask a full admin to raise the cap.`,
       )
       return
@@ -305,7 +305,7 @@ export default function GenerateForm({
               onClick={onOpenCharacter}
               className="cursor-pointer rounded-pill border border-accent-line px-3 py-1 text-[11.5px] font-bold whitespace-nowrap transition-colors hover:bg-accent hover:text-on-accent"
             >
-              Open the Character tab
+              Open the Pixel panel
             </button>
           </div>
         )}

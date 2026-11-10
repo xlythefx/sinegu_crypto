@@ -319,3 +319,144 @@ export interface CreativeEstimate {
   /** False = this would pass the month's cap; the server would refuse it. */
   allowed: boolean
 }
+
+/* ---------- the chat agent (Admin → Creatives workspace) ---------- */
+
+/** Ask = talk it through (reads, saves memory, never spends). Generate = it may propose paid jobs. */
+export type CreativeAgentMode = 'ask' | 'generate'
+
+export type CreativeAgentMessageKind = 'user' | 'assistant' | 'activity' | 'job' | 'plan' | 'notice'
+
+/** One tool the agent ran, as one plain line ("Read the planner", "Saved to memory: …"). */
+export interface CreativeAgentActivity {
+  tool: string
+  label: string
+  ok: boolean
+}
+
+/**
+ * What the chat shows — never the raw model blocks (thinking, tool calls).
+ * Ordered by id; a session answer carries every one, a turn only the new ones.
+ */
+export interface CreativeAgentMessage {
+  id: number
+  kind: CreativeAgentMessageKind
+  /** user / assistant (Markdown) / notice; for 'plan', the plan's title. */
+  text?: string
+  activity?: CreativeAgentActivity
+  /** kind 'job' — the card is drawn from the session's `jobs`. */
+  job_id?: number
+  /** kind 'plan' — "Created plan: …", opens the Plans panel at that plan. */
+  plan_id?: number
+  mode?: CreativeAgentMode
+  /** ISO. */
+  created_at: string
+}
+
+export type CreativeAgentJobStatus = 'proposed' | 'running' | 'completed' | 'failed' | 'canceled' | 'expired'
+
+export type CreativeAgentStepStatus = 'waiting' | 'running' | 'completed' | 'failed' | 'canceled'
+
+/** One paid step of a job: one Higgsfield generation, priced before Go. */
+export interface CreativeAgentJobStep {
+  label: string
+  model: string
+  model_label: string
+  usd: number
+  status: CreativeAgentStepStatus
+  /** null until the step has started. */
+  generation: CreativeGeneration | null
+  error: string | null
+}
+
+/**
+ * A job the agent proposed in Generate mode: one or more priced steps,
+ * started with ONE "Go" (approve). It never spends by itself.
+ */
+export interface CreativeAgentJob {
+  id: number
+  title: string
+  status: CreativeAgentJobStatus
+  plan_id: number | null
+  plan_title: string | null
+  /** The whole job, every step together. */
+  estimated_usd: number
+  steps: CreativeAgentJobStep[]
+  approved_by_name: string | null
+  /** ISO. */
+  created_at: string
+  /** ISO — a proposed job must get its Go before this (60 min), else it expires. */
+  expires_at: string | null
+}
+
+export interface CreativeAgentSession {
+  /** uuid. */
+  id: string
+  /** The mode the last turn ran in. */
+  mode: CreativeAgentMode
+}
+
+/** GET /agent/session and POST /agent/sessions. */
+export interface CreativeAgentSessionState {
+  session: CreativeAgentSession
+  messages: CreativeAgentMessage[]
+  jobs: CreativeAgentJob[]
+  budget: CreativeBudget
+}
+
+export type CreativeAgentTurnStatus = 'continue' | 'done' | 'awaiting_approval' | 'error'
+
+export interface CreativeAgentTurnInput {
+  session_id: string
+  mode: CreativeAgentMode
+  /** 1–4000. Left out for the next step of the same answer (`continue`). */
+  text?: string
+}
+
+/** One model call. `continue` = call again (no text) for the next step. */
+export interface CreativeAgentTurnResult {
+  status: CreativeAgentTurnStatus
+  /** Only the NEW messages. */
+  messages: CreativeAgentMessage[]
+  /** New or changed jobs. */
+  jobs: CreativeAgentJob[]
+  budget: CreativeBudget
+  /** What this one call cost (Claude), already counted in `budget`. */
+  cost_usd: number
+}
+
+export interface CreativeAgentJobResult {
+  job: CreativeAgentJob
+  budget: CreativeBudget
+}
+
+/** The brand brief: one Markdown document the agent always follows. */
+export interface CreativeBrief {
+  markdown: string
+  updated_by_name: string | null
+  /** ISO. */
+  updated_at: string | null
+}
+
+export type CreativeMemoryCategory = 'brand' | 'audience' | 'performance' | 'process' | 'other'
+
+/** A team-wide note the agent remembers across chats. */
+export interface CreativeMemory {
+  id: number
+  /** ≤ 500. */
+  text: string
+  /** A string so a category the server adds later still renders (as "Other"). */
+  category: CreativeMemoryCategory | (string & {})
+  /** Saved by the agent in a chat, or typed by a person in the Memory panel. */
+  source: 'agent' | 'person'
+  created_by_name: string | null
+  /** Not in the contract; shown when an API sends it. */
+  updated_by_name?: string | null
+  /** ISO. */
+  updated_at: string
+}
+
+export interface CreativeMemoryInput {
+  text: string
+  category?: CreativeMemoryCategory
+}

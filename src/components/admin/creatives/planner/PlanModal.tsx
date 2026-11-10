@@ -227,7 +227,7 @@ export default function PlanModal({
   const count = plan?.generations_count ?? 0
   const deleteMessage =
     count > 0
-      ? `The plan is removed for good. Its ${count === 1 ? 'generated image or video keeps its record' : `${count} generated images and videos keep their records`} in Studio — prompt, cost and who made it — just no longer linked to a plan.`
+      ? `The plan is removed for good. Its ${count === 1 ? 'generated image or video keeps its record' : `${count} generated images and videos keep their records`} in the Gallery — prompt, cost and who made it — just no longer linked to a plan.`
       : 'The plan is removed for good. This cannot be undone.'
 
   const hasPrompt = form.video_prompt.trim() !== ''
@@ -371,12 +371,12 @@ export default function PlanModal({
               value={form.video_prompt}
               maxLength={VIDEO_PROMPT_MAX}
               onChange={(e) => set('video_prompt', e.target.value)}
-              placeholder="What happens on screen, for the Studio — e.g. Pixel at a glowing trading desk, charts ticking up behind it, slow push-in."
+              placeholder="What happens on screen — e.g. Pixel at a glowing trading desk, charts ticking up behind it, slow push-in."
             />
             <span className={promptTooLong ? `${HINT} font-semibold text-red` : HINT}>
               {promptTooLong
-                ? `The Studio takes up to ${STUDIO_PROMPT_MAX.toLocaleString()} characters — shorten this before you make it.`
-                : `“${make}” opens the Studio with this filled in. Pixel’s look is added there, so describe the scene, not the character.`}
+                ? `“Make it yourself” takes up to ${STUDIO_PROMPT_MAX.toLocaleString()} characters — shorten this before you make it.`
+                : `“${make}” opens “Make it yourself” in the Gallery with this filled in. Pixel’s look is added there, so describe the scene, not the character.`}
             </span>
           </label>
           <label className={FIELD}>

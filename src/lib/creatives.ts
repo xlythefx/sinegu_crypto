@@ -140,6 +140,23 @@ export function signedUrl(path: string): string {
   return `${new URL(API_URL).origin}${path.startsWith('/') ? '' : '/'}${path}`
 }
 
+/**
+ * Open a signed download in a new tab: an attachment downloads and the tab
+ * closes, and an error never replaces the page the person is on.
+ */
+export function startSignedDownload(path: string): void {
+  const a = document.createElement('a')
+  a.href = signedUrl(path)
+  a.target = '_blank'
+  a.rel = 'noopener'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+
+/** A signed download path is valid 30 min; one read longer ago than this is fetched again first. */
+export const DOWNLOAD_FRESH_MS = 25 * 60 * 1000
+
 /** "$0.004" / "$0.298" / "$12.50" — cents and below keep their digits. */
 export function fmtCost(usd: number): string {
   if (usd === 0) return '$0.00'
@@ -276,14 +293,14 @@ export function creativeErrorMessage(err: unknown, fallback: string): string {
     case 'BUDGET_EXCEEDED': {
       const b = budgetFrom(err)
       if (b && b.cap_usd <= 0) {
-        return 'Generating is switched off: this month’s cap is $0. A full admin can raise it on the Budget tab.'
+        return 'Generating is switched off: this month’s cap is $0. A full admin can raise it in Budget.'
       }
       return b
         ? `This would go over this month’s budget: ${fmtBudget(b.remaining_usd)} of ${fmtBudget(b.cap_usd)} is left. Pick a cheaper setting, or ask a full admin to raise the cap.`
         : 'This would go over this month’s budget. Pick a cheaper setting, or ask a full admin to raise the cap.'
     }
     case 'NO_REFERENCES':
-      return 'This model needs pictures of the character. Add at least one reference image on the Character tab first.'
+      return 'This model needs pictures of the character. Add at least one reference image in the Pixel panel first.'
     case 'NOT_CONFIGURED':
       return 'Higgsfield isn’t connected on this server, so nothing can be generated here. Planning still works.'
     case 'HIGGSFIELD_REJECTED':
@@ -295,7 +312,7 @@ export function creativeErrorMessage(err: unknown, fallback: string): string {
     case 'SOURCE_UNAVAILABLE':
       return 'The picture to animate is no longer available (Higgsfield may have deleted it). Pick another one.'
     case 'TOO_MANY_REFERENCES':
-      return 'The character already has the most reference images allowed. Delete one on the Character tab first.'
+      return 'The character already has the most reference images allowed. Delete one in the Pixel panel first.'
     case 'NOT_CANCELLABLE':
       return 'Higgsfield has already started on it, so it can no longer be cancelled.'
     case 'NOT_FOUND':

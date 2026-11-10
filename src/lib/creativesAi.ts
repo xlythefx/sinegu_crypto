@@ -36,10 +36,10 @@ export const AI_MAX_CALL_USD = 0.5
  */
 export function aiBudgetWarning(budget: CreativeBudget): string | null {
   if (budget.cap_usd <= 0) {
-    return 'This month’s cap is $0, so the AI writer is switched off too. A full admin can raise it on the Budget tab.'
+    return 'This month’s cap is $0, so the AI writer is switched off too. A full admin can raise it in Budget.'
   }
   if (budget.remaining_usd < AI_MAX_CALL_USD) {
-    return `Less than ${fmtBudget(AI_MAX_CALL_USD)} is left in this month’s budget, so Claude may not be able to answer. A full admin can raise the cap on the Budget tab.`
+    return `Less than ${fmtBudget(AI_MAX_CALL_USD)} is left in this month’s budget, so Claude may not be able to answer. A full admin can raise the cap in Budget.`
   }
   return null
 }
@@ -135,7 +135,7 @@ export function creativeAiErrorMessage(err: unknown, fallback: string): string {
       case 'BUDGET_EXCEEDED': {
         const b = errorBudget(err)
         if (b && b.cap_usd <= 0) {
-          return 'AI writing is switched off: this month’s cap is $0. A full admin can raise it on the Budget tab.'
+          return 'AI writing is switched off: this month’s cap is $0. A full admin can raise it in Budget.'
         }
         return b
           ? `There isn’t enough left in this month’s budget for the AI writer: ${fmtBudget(b.remaining_usd)} of ${fmtBudget(b.cap_usd)} is left, and it needs ${fmtBudget(AI_MAX_CALL_USD)} spare to be safe. Ask a full admin to raise the cap.`
