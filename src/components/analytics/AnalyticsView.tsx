@@ -9,6 +9,7 @@ import TradeQualityCard from './TradeQualityCard'
 import RiskMetricsCard from './RiskMetricsCard'
 import UnrealizedByExchangeCard from './UnrealizedByExchangeCard'
 import AnalyticsKpis from './AnalyticsKpis'
+import AfterFeesCard from './AfterFeesCard'
 import PerformanceChartCard from './PerformanceChartCard'
 import PositionDistributionCard from './PositionDistributionCard'
 import DayOfWeekCard from './DayOfWeekCard'
@@ -51,6 +52,13 @@ interface AnalyticsViewProps {
    * then renders exactly as before.
    */
   capture?: { name: string }
+  /**
+   * Puts the after-fees figures ON the page — a "Profit after exchange fees"
+   * card, an after-fees line on each money KPI, and a month-by-month table —
+   * instead of only in the hover. The admin's read of one user (2026-11-10);
+   * the trader's own page keeps before fees as the headline.
+   */
+  showAfterFees?: boolean
 }
 
 /**
@@ -63,6 +71,7 @@ export default function AnalyticsView({
   sourceKey = '',
   showStrategyCard = true,
   capture,
+  showAfterFees = false,
 }: AnalyticsViewProps) {
   /** Wrap one card in the screenshot control — only when `capture` is set. */
   const cap = (title: string, card: ReactNode) =>
@@ -202,6 +211,23 @@ export default function AnalyticsView({
               </p>
             )
           )}
+          {showAfterFees && (
+            <Dimmable dim={noTrades}>
+              {cap(
+                'Profit after exchange fees',
+                <AfterFeesCard
+                  gross={data.total_realized}
+                  net={data.total_realized_net}
+                  trades={data.fees.trades_with_fee + data.fees.trades_without_fee}
+                  from={filters.from}
+                  to={filters.to}
+                  filtered={data.filters.filtered}
+                  feesSince={data.fees.trades_without_fee > 0 ? data.fees.since : null}
+                  tradesWithoutFee={data.fees.trades_without_fee}
+                />,
+              )}
+            </Dimmable>
+          )}
           <Dimmable dim={noTrades}>
             {cap(
               'Key Metrics',
@@ -217,6 +243,7 @@ export default function AnalyticsView({
                 bestDay={data.best_day}
                 worstDay={data.worst_day}
                 fees={data.fees}
+                showAfterFees={showAfterFees}
               />,
             )}
           </Dimmable>
@@ -290,7 +317,7 @@ export default function AnalyticsView({
             <Dimmable dim={noTrades}>
               {cap(
                 'Monthly Performance Breakdown',
-                <MonthlyBreakdownCard monthly={data.monthly} />,
+                <MonthlyBreakdownCard monthly={data.monthly} showTable={showAfterFees} />,
               )}
             </Dimmable>
             <Dimmable dim={noAccountsInScope && noFlows}>

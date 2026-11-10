@@ -27,6 +27,21 @@ const MONTH_LABELS = [
 
 interface MonthlyBreakdownCardProps {
   monthly: MonthlyStat[]
+  /**
+   * Adds a month-by-month table under the chart — before fees, exchange fees,
+   * after fees — so the after-fees figure is on the page, not only on hover.
+   * The admin's read of one user; the trader's own page leaves it off.
+   */
+  showTable?: boolean
+}
+
+const TH =
+  'text-right first:text-left text-[10px] uppercase tracking-[0.07em] text-faint font-bold py-2 px-2.5 border-b border-hair whitespace-nowrap'
+const TD = 'text-right first:text-left py-2.5 px-2.5 border-b border-hair font-mono text-[12.5px] whitespace-nowrap'
+
+/** 'YYYY-MM' -> 'Oct 2026'. */
+function monthName(key: string): string {
+  return `${MONTH_LABELS[Number(key.slice(5, 7)) - 1] ?? key.slice(5, 7)} ${key.slice(0, 4)}`
 }
 
 /** "Monthly Performance Breakdown" — P&L for every month (Jan–Dec) of the
@@ -35,6 +50,7 @@ interface MonthlyBreakdownCardProps {
  *  the year's fees are totalled under the chart. */
 export default function MonthlyBreakdownCard({
   monthly,
+  showTable = false,
 }: MonthlyBreakdownCardProps) {
   const [hover, setHover] = useState<number | null>(null)
 
@@ -164,7 +180,7 @@ export default function MonthlyBreakdownCard({
       </div>
 
       <div className="mt-2 flex items-center justify-between gap-3 flex-wrap font-mono text-[10.5px] text-faint tracking-[0.4px]">
-        <span>Hover a month for the after-fees figure</span>
+        <span>{showTable ? 'Every month with trades is listed below' : 'Hover a month for the after-fees figure'}</span>
         <span>
           Exchange fees in {yearLabel} ·{' '}
           <span className="text-text font-bold">
@@ -172,6 +188,51 @@ export default function MonthlyBreakdownCard({
           </span>
         </span>
       </div>
+
+      {showTable && <MonthTable monthly={monthly} />}
     </section>
+  )
+}
+
+/** Newest month first; months with no closed trade are left out. Fees are
+ *  derived (before − after) so each row reconciles across its own cells. */
+function MonthTable({ monthly }: { monthly: MonthlyStat[] }) {
+  const rows = monthly.filter((m) => m.trades > 0).slice().reverse()
+  if (rows.length === 0) return null
+
+  return (
+    <div className="mt-4 overflow-x-auto">
+      <table className="w-full border-collapse">
+        <thead>
+          <tr>
+            <th className={TH}>Month</th>
+            <th className={TH}>Trades</th>
+            <th className={TH}>Before fees</th>
+            <th className={TH}>Exchange fees</th>
+            <th className={TH}>After fees</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((m) => {
+            const fee = Math.round((m.pnl - m.pnl_net) * 100) / 100
+            return (
+              <tr key={m.month} className="transition-colors hover:bg-surface2">
+                <td className={`${TD} font-sans font-semibold`}>{monthName(m.month)}</td>
+                <td className={`${TD} text-muted`}>{m.trades.toLocaleString('en-US')}</td>
+                <td className={`${TD} ${m.pnl < 0 ? 'text-red' : 'text-text'}`}>
+                  {fmtSignedMoney(m.pnl)}
+                </td>
+                <td className={`${TD} text-muted`}>
+                  {fee === 0 ? '$0.00' : `${fee > 0 ? '−' : '+'}${fmtMoney(fee)}`}
+                </td>
+                <td className={`${TD} font-bold ${m.pnl_net < 0 ? 'text-red' : 'text-green'}`}>
+                  {fmtSignedMoney(m.pnl_net)}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
   )
 }

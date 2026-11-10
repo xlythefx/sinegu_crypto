@@ -15,6 +15,27 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-11-10 ───────────────────────────────────────────────────────────
   {
+    id: 'user-profile-after-fees-invoices',
+    date: '2026-11-10',
+    kind: 'improved',
+    area: 'User Management',
+    title: 'A user\'s profit after exchange fees, and their invoices, on their profile',
+    summary:
+      'On a user\'s profile (User Management → open a user), Performance Analytics now prints the profit AFTER exchange fees on the page instead of only when you hover a number, and a new Invoices tab lists every invoice with the profit it billed on. Asked by Dima: filtering a user to October showed $190 before Binance fees, with no visible after-fees figure.',
+    howItWorks: [
+      'Performance Analytics → pick the dates (for example Oct 1 to Oct 31). A new "Profit after exchange fees" card at the top shows three figures for the closed trades in those dates, for example: before fees +$190.00, exchange fees −$40.00, after fees +$150.00.',
+      'Avg Daily P&L, Best Day and Worst Day each carry an "After fees" line under the before-fees figure.',
+      'Monthly Performance Breakdown lists every month with trades below the chart: trades, before fees, exchange fees, after fees.',
+      'The new Invoices tab: what this user has been billed, paid and still owes, then each invoice with its month, exchange, the closed profit it billed on, our fee, status, due and paid dates. "View" opens the invoice details and the printable copy. Marking paid or deleting stays on Invoice History.',
+      'Admins only. The customer\'s own Performance Analytics page is unchanged (before fees stays the main number, with after fees on hover), and collaborators do not see the Invoices tab.',
+    ],
+    technical: [
+      'No API change: AnalyticsView takes showAfterFees (set only by AdminUserDetail) and reads total_realized / total_realized_net, best_day / worst_day / avg_daily_pnl *_net and monthly[].pnl_net, all already in GET /admin/users/{uniId}/analytics and scoped by its date and chip filters. Fees are derived as before − after, so each row reconciles.',
+      'Invoices tab = UserInvoicesTab over GET /admin/users/{uniId}/invoices (follows the exchange pill), reusing AdminInvoiceDetailModal and InvoiceDocumentModal. Figures are the invoice snapshot, never recomputed.',
+    ],
+    links: [{ label: 'User Management', href: '/admin/users' }],
+  },
+  {
     id: 'creatives-ai-writer',
     date: '2026-11-10',
     kind: 'new',

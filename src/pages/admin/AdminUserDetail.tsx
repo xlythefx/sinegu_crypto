@@ -6,6 +6,7 @@ import {
   Fingerprint,
   ImageDown,
   LayoutDashboard,
+  Receipt,
   Wallet,
   type LucideIcon,
 } from 'lucide-react'
@@ -22,6 +23,7 @@ import UserPerformanceMetrics from '../../components/admin/user-detail/UserPerfo
 import UserCapitalFlow from '../../components/admin/user-detail/UserCapitalFlow'
 import UserPerformanceChart from '../../components/admin/user-detail/UserPerformanceChart'
 import UserInvoicesTable from '../../components/admin/user-detail/UserInvoicesTable'
+import UserInvoicesTab from '../../components/admin/user-detail/UserInvoicesTab'
 import UserReferralsTable from '../../components/admin/user-detail/UserReferralsTable'
 import UserSettingsCard from '../../components/admin/user-detail/UserSettingsCard'
 import UserHeaderActions from '../../components/admin/user-detail/UserHeaderActions'
@@ -48,28 +50,31 @@ const CARD_BTN =
 const TAB_BTN =
   'inline-flex items-center gap-1.5 text-[12.5px] font-semibold py-[7px] px-4 rounded-btn cursor-pointer transition-colors duration-150'
 
-type Tab = 'overview' | 'positions' | 'analytics' | 'signup'
+type Tab = 'overview' | 'positions' | 'analytics' | 'invoices' | 'signup'
 
 const TABS: { key: Tab; label: string; Icon: LucideIcon }[] = [
   { key: 'overview', label: 'Overview', Icon: LayoutDashboard },
   { key: 'positions', label: 'Positions', Icon: Wallet },
   { key: 'analytics', label: 'Performance Analytics', Icon: BarChart3 },
+  { key: 'invoices', label: 'Invoices', Icon: Receipt },
   { key: 'signup', label: 'Sign-up info', Icon: Fingerprint },
 ]
 
 /**
- * A read-only collaborator never sees Positions (the API 403s it). Sign-up
- * info is every staff role's (owner, 2026-10-14 — IP included).
+ * A read-only collaborator never sees Positions or Invoices (the API 403s
+ * both). Sign-up info is every staff role's (owner, 2026-10-14 — IP included).
  */
 const COLLABORATOR_TABS: readonly Tab[] = ['overview', 'analytics', 'signup']
 
 /** Tabs whose content the exchange pill scopes; the others ignore it. */
-const EXCHANGE_SCOPED: readonly Tab[] = ['overview', 'positions']
+const EXCHANGE_SCOPED: readonly Tab[] = ['overview', 'positions', 'invoices']
 
 /**
  * Admin drill-down into one user: Overview stats, Positions, and the user's
  * full Performance Analytics (the same `AnalyticsView` the trader sees, read
- * through the admin endpoint, with a PNG download on every card).
+ * through the admin endpoint, with a PNG download on every card and the
+ * after-fees figures printed rather than hover-only), and Invoices (every
+ * invoice with the profit it billed on).
  *
  * A read-only collaborator gets Overview + Performance Analytics only, and the
  * Overview without the cards whose reads they may not make (exchange
@@ -286,6 +291,13 @@ export default function AdminUserDetail() {
               sourceKey={uniId}
               showStrategyCard={false}
               capture={{ name: user.name || uniId }}
+              showAfterFees
+            />
+          ) : tab === 'invoices' ? (
+            <UserInvoicesTab
+              uniId={uniId}
+              exchange={exchange}
+              user={{ name: user.name || null, email: user.email || null }}
             />
           ) : (
             <UserPositionsTab

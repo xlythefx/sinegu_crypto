@@ -19,6 +19,8 @@ interface AnalyticsKpisProps {
   bestDay: DayExtreme | null
   worstDay: DayExtreme | null
   fees: FeeSummary
+  /** Prints each money card's after-fees figure on the card (admin read of a user). */
+  showAfterFees?: boolean
 }
 
 const CARD = 'rounded-card p-card border border-border bg-surface flex flex-col gap-2'
@@ -26,6 +28,18 @@ const LABEL =
   'inline-flex items-center gap-[5px] text-[10.5px] font-extrabold tracking-[0.5px] text-faint uppercase pt-[5px]'
 const VALUE = 'font-mono text-[27px] font-extrabold tracking-[-0.6px]'
 const SUB = 'text-[11.5px] font-semibold text-muted'
+
+/** "After fees +$41.20" — the visible twin of a before-fees KPI. */
+function AfterFeesLine({ net }: { net: number }) {
+  return (
+    <div className="text-[11.5px] font-semibold text-muted">
+      After fees{' '}
+      <span className={`font-mono font-bold ${net < 0 ? 'text-red' : 'text-green'}`}>
+        {fmtSignedMoney(net)}
+      </span>
+    </div>
+  )
+}
 
 /** The analytics KPI cards: the flippable Total Return / Return on Deposit
  *  card, Avg Daily P&L, Best Day, Worst Day — all BEFORE exchange fees, each
@@ -43,6 +57,7 @@ export default function AnalyticsKpis({
   bestDay,
   worstDay,
   fees,
+  showAfterFees = false,
 }: AnalyticsKpisProps) {
   const feesSince = fees.trades_without_fee > 0 ? fees.since : null
 
@@ -78,6 +93,7 @@ export default function AnalyticsKpis({
           )}
         </div>
         <div className={SUB}>{tradingDays} trading days · before fees</div>
+        {showAfterFees && avgDailyPnlNet !== null && <AfterFeesLine net={avgDailyPnlNet} />}
       </div>
 
       <div className={CARD}>
@@ -101,6 +117,7 @@ export default function AnalyticsKpis({
         <div className={SUB}>
           {bestDay ? `${fmtMediumDate(bestDay.date)} · before fees` : 'Largest single day gain'}
         </div>
+        {showAfterFees && bestDay && <AfterFeesLine net={bestDay.pnl_net} />}
       </div>
 
       <div className={CARD}>
@@ -124,6 +141,7 @@ export default function AnalyticsKpis({
         <div className={SUB}>
           {worstDay ? `${fmtMediumDate(worstDay.date)} · before fees` : 'Largest single day loss'}
         </div>
+        {showAfterFees && worstDay && <AfterFeesLine net={worstDay.pnl_net} />}
       </div>
 
       {/* What the exchange took: commission on every fill plus funding while
