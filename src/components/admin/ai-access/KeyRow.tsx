@@ -42,7 +42,7 @@ export default function KeyRow({ aiKey, onRevoke, busy }: KeyRowProps) {
               ? `${aiKey.revoked_at ? fmtDateTime(aiKey.revoked_at) : '—'}${aiKey.revoked_by_name ? ` · ${aiKey.revoked_by_name}` : ''}`
               : aiKey.expires_at
                 ? fmtDateTime(aiKey.expires_at)
-                : 'Never'}
+                : 'Never · until revoked'}
           </dd>
         </div>
         <div>

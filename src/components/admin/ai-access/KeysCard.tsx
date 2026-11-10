@@ -8,6 +8,9 @@ import { createAiKey, revokeAiKey } from '../../../services/aiAccess'
 import { getApiErrorMessage } from '../../../services/api'
 import type { AiAccessData, AiAccessKey } from '../../../types/aiAccess'
 
+/** The select's value for a key with no expiry date. */
+const NEVER = 'never'
+
 interface KeysCardProps {
   data: AiAccessData
   /** Re-read the page after a key is made or revoked. */
@@ -21,7 +24,8 @@ interface KeysCardProps {
  */
 export default function KeysCard({ data, onChanged, delay }: KeysCardProps) {
   const [name, setName] = useState('Grok')
-  const [days, setDays] = useState(data.default_expiry_days)
+  /** null = never expires. */
+  const [days, setDays] = useState<number | null>(data.default_expiry_days)
   const [confirmCreate, setConfirmCreate] = useState(false)
   const [revoking, setRevoking] = useState<AiAccessKey | null>(null)
   const [busy, setBusy] = useState(false)
@@ -91,8 +95,8 @@ export default function KeysCard({ data, onChanged, delay }: KeysCardProps) {
             Keys
           </h2>
           <p className="mt-0.5 text-[12.5px] leading-[1.55] text-muted">
-            One key per person or device. It expires on its own, can be revoked at any moment, and only opens read-only
-            questions. {active} of {data.max_active_keys} active.
+            One key per person or device. It expires after the time you pick (or never), can be revoked at any moment,
+            and only opens read-only questions. {active} of {data.max_active_keys} active.
           </p>
         </div>
       </header>
@@ -106,7 +110,7 @@ export default function KeysCard({ data, onChanged, delay }: KeysCardProps) {
 
       {created && <NewKeyReveal name={created.name} plainKey={created.plain} onDone={() => setCreated(null)} />}
 
-      <form onSubmit={submit} className="grid min-w-0 grid-cols-1 gap-3.5 sm:grid-cols-[minmax(0,1fr)_180px_auto] sm:items-end">
+      <form onSubmit={submit} className="grid min-w-0 grid-cols-1 gap-3.5 sm:grid-cols-[minmax(0,1fr)_210px_auto] sm:items-end">
         <label className={FIELD}>
           <span className={LABEL}>Name</span>
           <input
@@ -122,8 +126,8 @@ export default function KeysCard({ data, onChanged, delay }: KeysCardProps) {
           <span className={LABEL}>Expires after</span>
           <select
             className={SELECT}
-            value={days}
-            onChange={(e) => setDays(Number(e.target.value))}
+            value={days ?? NEVER}
+            onChange={(e) => setDays(e.target.value === NEVER ? null : Number(e.target.value))}
             disabled={busy || atLimit}
           >
             {data.expiry_days.map((d) => (
@@ -131,6 +135,7 @@ export default function KeysCard({ data, onChanged, delay }: KeysCardProps) {
                 {d} days
               </option>
             ))}
+            <option value={NEVER}>Never (until revoked)</option>
           </select>
         </label>
         <button type="submit" className={BTN_PRIMARY} disabled={busy || atLimit}>
@@ -154,7 +159,11 @@ export default function KeysCard({ data, onChanged, delay }: KeysCardProps) {
       <ConfirmModal
         open={confirmCreate}
         title={`Create the key “${name.trim()}”?`}
-        message={`Whoever holds it can read every signal, trade, account and invoice — customer names included — through their AI assistant for ${days} days, until you revoke it. It cannot change anything.`}
+        message={
+          days === null
+            ? 'Whoever holds it can read every signal, trade, account and invoice — customer names included — through their AI assistant. This key NEVER expires: it keeps working until you revoke it on this page. It cannot change anything.'
+            : `Whoever holds it can read every signal, trade, account and invoice — customer names included — through their AI assistant for ${days} days, until you revoke it. It cannot change anything.`
+        }
         confirmLabel="Create key"
         cancelLabel="Cancel"
         onConfirm={create}

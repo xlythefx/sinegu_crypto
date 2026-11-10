@@ -13,6 +13,25 @@ import type { AdminChange } from '../types/adminVersions'
  *    later change to the same feature gets its own entry.
  */
 export const ADMIN_CHANGES: AdminChange[] = [
+  // ── 2026-11-10 ───────────────────────────────────────────────────────────
+  {
+    id: 'ai-access-never-expiring-keys',
+    date: '2026-11-10',
+    kind: 'improved',
+    area: 'AI Access',
+    title: 'AI keys that never expire',
+    summary:
+      'A key for Grok can now be made to last for ever, so it never has to be replaced and re-pasted into Grok. It still stops working the moment it is revoked.',
+    howItWorks: [
+      'On Admin → AI Access, pick "Never (until revoked)" under "Expires after" before pressing Create key. The confirmation says plainly that this key keeps working until someone revokes it.',
+      'In the list of keys it reads "Expires: Never · until revoked". The Revoke button works exactly as for any other key: the connector using it stops at once.',
+      '30, 90, 180 and 365 days are still offered, and 90 days stays the default.',
+    ],
+    technical: [
+      'POST /admin/ai-access/keys takes `never_expires: true` (an absent lifetime still means the 90-day default, never "for ever"); the key is stored with expires_at NULL, which the gate already treated as never expiring. AiAccessTest covers it, including a 5-year time jump and a revoke afterwards.',
+    ],
+    links: [{ label: 'AI Access', href: '/admin/ai-access' }],
+  },
   // ── 2026-11-09 ───────────────────────────────────────────────────────────
   {
     id: 'ai-access-grok-connector',

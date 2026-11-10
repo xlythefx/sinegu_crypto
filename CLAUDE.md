@@ -735,7 +735,9 @@ Rules:
 - **Not `/api/public/*`.** It carries names, balances, P&L and invoices (owner
   decided real names, billing included), so it lives behind its own key:
   `pxa_…` in `X-Api-Key` (or Bearer), SHA-256 stored only
-  (`ai_access_keys`), shown once, expires (30/90/180/365 d), revocable, ≤ 5
+  (`ai_access_keys`), shown once, expires (30/90/180/365 d, or NEVER —
+  owner, 2026-11-10: `never_expires: true` → `expires_at` NULL; an absent
+  lifetime is still the 90-day default), revocable, ≤ 5
   active, last used + IP recorded. A key in the query string is REFUSED
   (`KEY_IN_URL`) — URLs land in nginx, Cloudflare and the AI provider's logs.
   `throttle:ai-guard` (120/min per IP) runs before the key check; the

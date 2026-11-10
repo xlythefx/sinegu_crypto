@@ -13,11 +13,12 @@ export async function getAiAccess(): Promise<AiAccessData> {
   return { ...data, keys: data.keys ?? [], tools: data.tools ?? [] }
 }
 
-export async function createAiKey(name: string, expiresInDays: number): Promise<AiCreatedKey> {
+/** `expiresInDays: null` = a key that never expires (valid until revoked). */
+export async function createAiKey(name: string, expiresInDays: number | null): Promise<AiCreatedKey> {
   const { key, plain_key } = await apiFetch<{ success: boolean } & AiCreatedKey>('/admin/ai-access/keys', {
     method: 'POST',
     auth: true,
-    body: { name, expires_in_days: expiresInDays },
+    body: expiresInDays === null ? { name, never_expires: true } : { name, expires_in_days: expiresInDays },
   })
   return { key, plain_key }
 }
