@@ -8,12 +8,36 @@ const DEFAULTS = {
   date: '30d',
   from: '',
   to: '',
+  // A bar clicked on the chart (one day, or a week's first and last day).
+  day: '',
+  day_to: '',
   view: 'clean',
   path: 'all',
   country: 'all',
   device: 'all',
   ip: '',
   q: '',
+}
+
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/
+
+export interface DayPick {
+  from: string
+  to: string
+}
+
+/**
+ * The clicked bar, kept inside the period: a week bar that runs past the
+ * period's end is cut at it, and a pick left over from another period (a
+ * shared link, the period changed by hand) is dropped rather than shown.
+ */
+function pickWithin(day: string, dayTo: string, range: { from: string; to: string }): DayPick | null {
+  if (!ISO_DAY.test(day)) return null
+  let from = day
+  let to = ISO_DAY.test(dayTo) && dayTo >= day ? dayTo : day
+  if (range.from && from < range.from) from = range.from
+  if (range.to && to > range.to) to = range.to
+  return from <= to ? { from, to } : null
 }
 
 const ALLOWED = {
@@ -30,6 +54,11 @@ const ALLOWED = {
  * - the LOG filters (show, page, country, device, IP) narrow the log only —
  *   the cards above it always describe the whole period.
  *
+ * A bar clicked on the chart (`day` / `day_to`, Dima 2026-11-11) narrows
+ * the cards AND the log to that day or week; the chart itself keeps drawing
+ * the whole period, so the next bar is one click away. `scope` is whichever
+ * applies. Changing the period drops the pick.
+ *
  * The log's page number is derived from the filters it was chosen under, so
  * any filter change lands back on page 1 with no reset effect.
  */
@@ -39,10 +68,13 @@ export function useVisitorFilters() {
   const preset = isDatePreset(f.date) ? f.date : '30d'
   const range = useMemo(() => rangeFor(preset, { from: f.from, to: f.to }), [preset, f.from, f.to])
 
+  const pick = useMemo(() => pickWithin(f.day, f.day_to, range), [f.day, f.day_to, range])
+  const scope = pick ?? range
+
   const logFilters = useMemo<VisitorLogFilters>(
     () => ({
-      from: range.from,
-      to: range.to,
+      from: scope.from,
+      to: scope.to,
       view: f.view as VisitorLogView,
       page: f.path,
       country: f.country,
@@ -50,10 +82,11 @@ export function useVisitorFilters() {
       ip: f.ip,
       q: f.q,
     }),
-    [range.from, range.to, f.view, f.path, f.country, f.device, f.ip, f.q],
+    [scope.from, scope.to, f.view, f.path, f.country, f.device, f.ip, f.q],
   )
   const rangeKey = `${range.from}|${range.to}`
-  const logKey = `${rangeKey}|${f.view}|${f.path}|${f.country}|${f.device}|${f.ip}|${f.q}`
+  const scopeKey = `${scope.from}|${scope.to}`
+  const logKey = `${scopeKey}|${f.view}|${f.path}|${f.country}|${f.device}|${f.ip}|${f.q}`
 
   const [paging, setPaging] = useState({ key: logKey, page: 1 })
   const page = paging.key === logKey ? paging.page : 1
@@ -70,6 +103,12 @@ export function useVisitorFilters() {
     datePreset: preset,
     range,
     rangeKey,
+    pick,
+    scope,
+    scopeKey,
+    /** Narrow the page to one bar of the chart (a day, or a week's first and last day). */
+    pickDays: (from: string, to: string) => url.setMany({ day: from, day_to: to === from ? '' : to }),
+    clearPick: () => url.setMany({ day: '', day_to: '' }),
     logFilters,
     logKey,
     logActive,

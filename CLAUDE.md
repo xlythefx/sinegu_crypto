@@ -667,6 +667,16 @@ DB reads only — never an exchange call). Rules:
   `BINANCE_ABCD_MIN_DEPOSIT`.
 - Skip reasons are shown in plain English via `lib/insightLabels.ts`; a new
   engine reason needs a line there.
+- **Customers → "Customer profit" ranks by RETURN, per calendar month
+  (2026-11-11, Dima: "top customers by profit not correct").** The old card
+  ranked dollars over a rolling 30 days: right figures, but a losing month
+  read as a top list of losers and the biggest account always looked worst.
+  `AdminInsights::customerProfit` = `UserStatsService::dailyReturns` per
+  customer (each day's P&L after fees over the capital that day STARTED
+  with, added up — the analytics page's Period Return), real money only,
+  disconnected accounts included, this month + last month, the master on
+  top. Never divide by today's balance: Lloyd lost $911 on ~$17k, then
+  withdrew ~$7k, and read −9% of what was left instead of ~−5%.
 - **Overview → Platform** (`insights/PlatformPane.tsx`) pools every account
   into one portfolio: `GET /admin/insights/platform` (money under management,
   P&L today / 7d / month / all, after fees with gross on hover) and
@@ -810,6 +820,11 @@ has been visible 2 s. `VisitRecorder` decides, always answering 204:
   only on the entry page, never our own.
 - Reads: `GET /admin/visitors/{summary,log}` (staff group, `VisitorStats`),
   UTC days; the log's accounts-per-IP come from `user_access_events`.
+- **Clicking a chart bar narrows the page to that day / week (2026-11-11,
+  Dima).** `?day=` (+ `?day_to=` for a week bar) in `useVisitorFilters`,
+  clamped inside the period and dropped when the period changes. The cards
+  and the log follow it (`scope`); the chart keeps the PERIOD's summary, so
+  the next day is one click away. Frontend only — a second summary call.
 - Banner `CONSENT_VERSION` went 1 → 2 for this; the banner, `lib/consent.ts`
   and `lib/privacy.ts` must keep describing the same thing.
 

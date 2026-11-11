@@ -4,7 +4,6 @@ import {
   Filter,
   Landmark,
   LogOut,
-  TrendingUp,
   UserMinus,
   UserPlus,
   Users,
@@ -13,9 +12,11 @@ import DataState from '../../dashboard/DataState'
 import MetricTile from '../../analytics/MetricTile'
 import { EXCHANGE_META } from '../../exchanges/meta'
 import { BarRow, EmptyNote, GRID_2, GRID_3, InsightCard, TILES } from './parts'
+import SignupsChart from './SignupsChart'
+import CustomerProfitCard from './CustomerProfitCard'
 import { useApiData } from '../../../hooks/useApiData'
 import { getCustomerInsights } from '../../../services/adminInsights'
-import { fmtMoney, fmtShortDate, fmtSignedMoney } from '../../../lib/format'
+import { fmtMoney } from '../../../lib/format'
 import { reasonLabel } from '../../../lib/insightLabels'
 import type { FunnelKey, RankedUser } from '../../../types/adminInsights'
 
@@ -62,7 +63,6 @@ export default function CustomersTab() {
   }
 
   const top = data.funnel[0]?.count ?? 0
-  const maxSignups = Math.max(1, ...data.signups_weekly.map((w) => w.signups))
 
   return (
     <div className="flex flex-col gap-stack">
@@ -151,31 +151,13 @@ export default function CustomersTab() {
       </div>
 
       <div className={GRID_3}>
-        <InsightCard icon={UserPlus} title="New sign-ups" subtitle="Per week, last 12 weeks">
-          <div className="flex h-[140px] items-end gap-1.5">
-            {data.signups_weekly.map((w) => (
-              <div key={w.week} className="flex h-full flex-1 flex-col items-center justify-end gap-1" title={`Week of ${fmtShortDate(w.week)}: ${w.signups}`}>
-                <span className="font-mono text-[10.5px] text-muted">{w.signups || ''}</span>
-                <div
-                  className="w-full rounded-t-[4px] bg-accent"
-                  style={{ height: `${(w.signups / maxSignups) * 100}%`, minHeight: w.signups ? 4 : 1 }}
-                />
-              </div>
-            ))}
-          </div>
-          <div className="mt-1.5 flex justify-between text-[11px] text-faint">
-            <span>{fmtShortDate(data.signups_weekly[0]?.week ?? '')}</span>
-            <span>this week</span>
-          </div>
-        </InsightCard>
+        <SignupsChart weeks={data.signups_weekly} />
 
         <InsightCard icon={Landmark} title="Top customers by capital" subtitle="Live balance across exchanges">
           <RankedList rows={data.top_capital} money={(n) => fmtMoney(n)} />
         </InsightCard>
 
-        <InsightCard icon={TrendingUp} title="Top customers by profit" subtitle="Closed trades, last 30 days">
-          <RankedList rows={data.top_pnl_30d} money={(n) => fmtSignedMoney(n)} />
-        </InsightCard>
+        <CustomerProfitCard profit={data.profit} />
       </div>
 
       <InsightCard icon={Users} title="By exchange" subtitle="Connected customer accounts per venue">

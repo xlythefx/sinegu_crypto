@@ -133,6 +133,32 @@ export interface RankedUser {
   value: number
 }
 
+/**
+ * One account holder's month: P&L after fees (`pnl`) and before (`pnl_gross`),
+ * and `pct` = each day's P&L over the capital that day started with, added
+ * up (the analytics page's Period Return). Null when no capital is on record.
+ */
+export interface ProfitFigures {
+  pnl: number
+  pnl_gross: number
+  fees: number
+  pct: number | null
+  trades: number
+}
+
+export interface ProfitRow extends ProfitFigures {
+  uni_id: string
+  name: string
+}
+
+/** A calendar month (UTC): every customer who closed a trade, best return first. */
+export interface ProfitWindow {
+  from: string
+  to: string
+  master: ProfitFigures | null
+  customers: ProfitRow[]
+}
+
 export interface CustomerInsights {
   min_deposit: number
   funnel: { key: FunnelKey; count: number }[]
@@ -142,7 +168,7 @@ export interface CustomerInsights {
   signups_weekly: { week: string; signups: number }[]
   by_exchange: { exchange: ExchangeKind; live: number; demo: number; capital: number }[]
   top_capital: RankedUser[]
-  top_pnl_30d: RankedUser[]
+  profit: { this_month: ProfitWindow; last_month: ProfitWindow }
   most_missed_7d: { uni_id: string; name: string; missed: number; top_reason: string | null }[]
 }
 

@@ -122,7 +122,9 @@ function visitorSeries() {
   }
   return out
 }
-function visitorSummary() {
+function visitorSummary(_user, _path, query) {
+  const from = query?.get('from') ?? ''
+  if (from && from === query?.get('to')) return visitorDay(from)
   const series = visitorSeries()
   const total = series.reduce((s, b) => s + b.visitors, 0)
   return {
@@ -144,9 +146,95 @@ function visitorSummary() {
     filtered: { bot: 3, foreign: 5, unknown_page: 0, team: 16, flood: 0, repeat: 5, suspicious: 0 },
   }
 }
+/** One clicked day (from = to): a smaller, different mix, so the narrowing shows. */
+function visitorDay(day) {
+  const v = visitorSeries().find((b) => b.start === day)?.visitors || 12
+  return {
+    success: true, range: { from: day, to: day }, since: day, ip_days: 90,
+    totals: { visitors: v, views: Math.round(v * 1.8), signups: 1, signup_rate: r2((1 / v) * 100), live_now: 0 },
+    bucket: 'day', series: [{ start: day, visitors: v, views: Math.round(v * 1.8), signups: 1 }],
+    funnel: [
+      { key: 'visited', count: v }, { key: 'opened_signup', count: 4 }, { key: 'signed_up', count: 1 },
+      { key: 'verified', count: 1 }, { key: 'approved', count: 1 }, { key: 'connected', count: 0 },
+    ],
+    pages: [
+      { path: '/', views: Math.round(v * 1.1), visitors: v }, { path: '/binance-offer', views: 9, visitors: 7 },
+      { path: '/auth', views: 6, visitors: 4 }, { path: '/docs/binance', views: 5, visitors: 3 },
+    ],
+    sources: [
+      { label: 't.me', direct: false, hosts: ['t.me'], visitors: Math.ceil(v * 0.6) },
+      { label: 'Direct', direct: true, hosts: [], visitors: Math.floor(v * 0.4) },
+    ],
+    referral_codes: [], campaigns: [], heard_about: [{ slug: 'telegram', label: 'Telegram', count: 1 }],
+    countries: [{ value: 'IL', visitors: Math.ceil(v * 0.5) }, { value: 'TH', visitors: Math.floor(v * 0.5) }],
+    devices: [{ value: 'mobile', visitors: Math.ceil(v * 0.7) }, { value: 'desktop', visitors: Math.floor(v * 0.3) }],
+    browsers: [{ value: 'Chrome', visitors: v }], systems: [{ value: 'Android', visitors: Math.ceil(v * 0.7) }, { value: 'Windows', visitors: Math.floor(v * 0.3) }],
+    filtered: { bot: 1, foreign: 0, unknown_page: 0, team: 2, flood: 0, repeat: 1, suspicious: 0 },
+  }
+}
 const VISITOR_LOG_BODY = {
   success: true, range: { from: '2026-10-01', to: '2026-10-31' }, rows: [],
   pagination: { total: 0, limit: 25, offset: 0 }, options: { pages: [], countries: [] }, ip_detail: null,
+}
+
+// ---------------------------------------------------------------- Admin Dashboard → Customers
+function customerInsights() {
+  const monday = new Date()
+  monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7))
+  const counts = [0, 0, 1, 0, 5, 3, 1, 3, 1, 0, 1, 0]
+  const signups_weekly = counts.map((n, i) => ({
+    week: new Date(monday.getTime() - (11 - i) * 7 * 86400000).toISOString().slice(0, 10), signups: n,
+  }))
+  const today = new Date().toISOString().slice(0, 10)
+  const firstOfMonth = `${today.slice(0, 8)}01`
+  const lastMonthEnd = new Date(Date.parse(`${firstOfMonth}T00:00:00Z`) - 86400000).toISOString().slice(0, 10)
+  const row = (uni_id, name, pnl, pct, trades, feeShare = 0.18) => {
+    const fees = r2(Math.abs(pnl) * feeShare + trades * 0.4)
+    return { uni_id, name, pnl, pnl_gross: r2(pnl + fees), fees, pct, trades }
+  }
+  return {
+    success: true, min_deposit: 1000,
+    funnel: [
+      { key: 'signed_up', count: 14 }, { key: 'approved', count: 12 }, { key: 'connected', count: 7 },
+      { key: 'funded', count: 6 }, { key: 'traded_7d', count: 5 },
+    ],
+    active: { today: 4, d7: 5, d30: 6 },
+    status: { pending: 1, active: 11, suspended: 2 },
+    stopped_30d: { disconnected: 1, disabled: 1, key_blocked: 1 },
+    signups_weekly,
+    by_exchange: [
+      { exchange: 'binance', live: 6, demo: 1, capital: 21430.5 },
+      { exchange: 'mexc', live: 1, demo: 1, capital: 1210 },
+      { exchange: 'bybit', live: 0, demo: 0, capital: 0 },
+    ],
+    top_capital: [
+      { uni_id: 'u-daniel', name: 'Daniel Moreau', value: 9820.4 }, { uni_id: 'u-noah', name: 'Noah Klein', value: 5410.1 },
+      { uni_id: 'u-sofia', name: 'Sofia Ramos', value: 2050.2 }, { uni_id: 'u-liam', name: 'Liam Becker', value: 1030.8 },
+      { uni_id: 'u-emma', name: 'Emma Duarte', value: 990.5 },
+    ],
+    profit: {
+      this_month: {
+        from: firstOfMonth, to: today,
+        master: row('m', 'Master', 182.4, 1.42, 9),
+        customers: [
+          row('u-sofia', 'Sofia Ramos', 31.2, 1.55, 9), row('u-noah', 'Noah Klein', 72.6, 1.38, 9),
+          row('u-daniel', 'Daniel Moreau', 120.5, 1.27, 8), row('u-liam', 'Liam Becker', -2.4, -0.23, 6),
+        ],
+      },
+      last_month: {
+        from: `${lastMonthEnd.slice(0, 8)}01`, to: lastMonthEnd,
+        master: row('m', 'Master', -610.3, -4.8, 31),
+        customers: [
+          row('u-sofia', 'Sofia Ramos', -0.9, -0.05, 30), row('u-liam', 'Liam Becker', -46.1, -4.6, 31),
+          row('u-noah', 'Noah Klein', -262.4, -4.9, 31), row('u-daniel', 'Daniel Moreau', -511.7, -5.1, 24),
+        ],
+      },
+    },
+    most_missed_7d: [
+      { uni_id: 'u-emma', name: 'Emma Duarte', missed: 12, top_reason: 'deposit below minimum' },
+      { uni_id: 'u-liam', name: 'Liam Becker', missed: 4, top_reason: 'api key blocked' },
+    ],
+  }
 }
 
 // ---------------------------------------------------------------- one user's admin profile
@@ -459,16 +547,17 @@ const GET = {
   '/admin/tron-transfers': TRANSFERS_BODY,
   '/admin/insights/overview': OVERVIEW_BODY,
   '/admin/visitors/summary': visitorSummary,
+  '/admin/insights/customers': customerInsights,
   '/admin/visitors/log': VISITOR_LOG_BODY,
 }
 
-export function answer(method, path, user) {
+export function answer(method, path, user, query = new URLSearchParams()) {
   if (path.startsWith('/public/visits')) return null
   if (method !== 'GET') return undefined
   const key = Object.keys(GET).filter((k) => path.startsWith(k)).sort((a, b) => b.length - a.length)[0]
   if (!key) return undefined
   const value = GET[key]
-  return typeof value === 'function' ? value(user, path) : value
+  return typeof value === 'function' ? value(user, path, query) : value
 }
 
 /** What the skill captures when it is given no route. */

@@ -14,6 +14,24 @@ function plural(n: number, one: string, many: string): string {
   return `${n.toLocaleString()} ${n === 1 ? one : many}`
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/** Last day of a bucket: the day itself, or six days after a week's first. */
+function bucketEnd(start: string, weekly: boolean): string {
+  if (!weekly) return start.slice(0, 10)
+  return new Date(Date.parse(`${start.slice(0, 10)}T00:00:00Z`) + 6 * DAY_MS).toISOString().slice(0, 10)
+}
+
+interface VisitorChartProps {
+  summary: VisitorSummary
+  /** First day of the picked bar, or null. */
+  selected?: string | null
+  /** A bar was clicked: its first and last day. */
+  onPick?: (from: string, to: string) => void
+  /** Let go of the picked bar (the whole period again). */
+  onClearPick?: () => void
+}
+
 /**
  * Visitors per day (per week for a long period) as bars on a labelled scale,
  * with the day's sign-ups as a green count above its bar. Every bucket from
@@ -22,8 +40,12 @@ function plural(n: number, one: string, many: string): string {
  *
  * Hover, focus or tap a bar and its numbers show under the chart — the one
  * reading that works on a phone, where a `title` tooltip never appears.
+ *
+ * Clicking a bar also PICKS it (Dima, 2026-11-11): the page narrows its cards
+ * and the visitor log to that day (or week), while this chart keeps drawing
+ * the whole period. Clicking the picked bar again lets go.
  */
-export default function VisitorChart({ summary }: { summary: VisitorSummary }) {
+export default function VisitorChart({ summary, selected = null, onPick, onClearPick }: VisitorChartProps) {
   const weekly = summary.bucket === 'week'
   const { series, trimmed } = fromTrackingStart(summary.series, summary.since, summary.bucket)
   const [active, setActive] = useState<number | null>(null)
@@ -35,7 +57,13 @@ export default function VisitorChart({ summary }: { summary: VisitorSummary }) {
     (best, b) => (b.visitors > (best?.visitors ?? 0) ? b : best),
     null,
   )
-  const picked = active === null ? null : series[active] ?? null
+  const selectedIndex = selected ? series.findIndex((b) => b.start.slice(0, 10) === selected) : -1
+  const focus = active ?? (selectedIndex >= 0 ? selectedIndex : null)
+  const picked = focus === null ? null : series[focus] ?? null
+  const choose = (b: (typeof series)[number]) => {
+    if (b.start.slice(0, 10) === selected) onClearPick?.()
+    else onPick?.(b.start.slice(0, 10), bucketEnd(b.start, weekly))
+  }
   const describe = (b: (typeof series)[number]) =>
     `${weekly ? 'Week of ' : ''}${fmtShortDate(b.start)}: ${plural(b.visitors, 'visitor', 'visitors')} · ${plural(b.views, 'page view', 'page views')} · ${plural(b.signups, 'sign-up', 'sign-ups')}`
 
@@ -43,7 +71,7 @@ export default function VisitorChart({ summary }: { summary: VisitorSummary }) {
     <InsightCard
       icon={BarChart3}
       title={weekly ? 'Visitors per week' : 'Visitors per day'}
-      subtitle="Bars are visitors (scale on the left); the green number above a bar is that day's sign-ups. UTC days."
+      subtitle={`Bars are visitors (scale on the left); the green number above a bar is that ${weekly ? 'week' : 'day'}'s sign-ups. UTC days. Click a bar to see its pages, sources and visits below.`}
     >
       {!anything ? (
         <EmptyNote>No visitors in this period yet.</EmptyNote>
@@ -85,18 +113,23 @@ export default function VisitorChart({ summary }: { summary: VisitorSummary }) {
                 <div className={`absolute inset-0 flex items-end ${series.length > 45 ? 'gap-px' : 'gap-1'}`}>
                   {series.map((b, i) => {
                     const pct = (b.visitors / top) * 100
-                    const dim = active !== null && active !== i
+                    const dim = focus !== null && focus !== i
+                    const isPicked = i === selectedIndex
                     return (
                       <button
                         key={b.start}
                         type="button"
                         aria-label={describe(b)}
+                        aria-pressed={isPicked}
                         title={describe(b)}
                         onMouseEnter={() => setActive(i)}
                         onFocus={() => setActive(i)}
-                        onClick={() => setActive(i)}
+                        onClick={() => choose(b)}
                         className="relative h-full min-w-0 flex-1 cursor-pointer rounded-t-[4px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
                       >
+                        {isPicked && (
+                          <span aria-hidden="true" className="absolute inset-x-0 bottom-0 top-0 rounded-t-[4px] bg-accent/10" />
+                        )}
                         <span
                           className={`absolute inset-x-0 bottom-0 rounded-t-[4px] transition-opacity duration-150 ${
                             b.visitors > 0 ? 'bg-accent' : 'bg-border'
@@ -142,12 +175,27 @@ export default function VisitorChart({ summary }: { summary: VisitorSummary }) {
           {/* The tapped / hovered bar's numbers; otherwise the busiest day. */}
           <p className="mt-3 min-h-[38px] rounded-row border border-border bg-surface2 px-3 py-2 text-[12.5px] text-muted" aria-live="polite">
             {picked ? (
-              <span className="text-text">{describe(picked)}</span>
+              <>
+                {focus === selectedIndex && <span className="font-semibold text-accent">Showing below: </span>}
+                <span className="text-text">{describe(picked)}</span>
+                {focus === selectedIndex && onClearPick && (
+                  <>
+                    {' · '}
+                    <button
+                      type="button"
+                      onClick={onClearPick}
+                      className="cursor-pointer border-0 bg-transparent p-0 text-[12.5px] font-semibold text-accent hover:underline"
+                    >
+                      whole period
+                    </button>
+                  </>
+                )}
+              </>
             ) : busiest ? (
               <>
                 Busiest {weekly ? 'week' : 'day'}:{' '}
                 <span className="text-text">{describe(busiest)}</span>
-                <span className="text-faint"> · tap or hover a bar for its numbers</span>
+                <span className="text-faint"> · click a bar to see that {weekly ? 'week' : 'day'} below</span>
               </>
             ) : (
               'Tap or hover a bar for its numbers.'

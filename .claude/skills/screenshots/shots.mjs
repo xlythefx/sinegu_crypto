@@ -132,8 +132,9 @@ async function capture(browser, base, route, vp) {
   await context.route((u) => u.hostname.endsWith('pixel-alpha.com') && !u.pathname.startsWith('/api/'), (r) => r.abort())
   await context.route((u) => u.pathname.startsWith('/api/'), async (r) => {
     const req = r.request()
-    const path = new URL(req.url()).pathname.replace(/^\/api/, '')
-    const body = answer(req.method(), path, USER)
+    const url = new URL(req.url())
+    const path = url.pathname.replace(/^\/api/, '')
+    const body = answer(req.method(), path, USER, url.searchParams)
     if (body === null) return r.fulfill({ status: 204, body: '' })
     if (body === undefined) {
       unanswered.add(`${req.method()} ${path}`)

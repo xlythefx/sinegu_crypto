@@ -15,6 +15,56 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-11-11 ───────────────────────────────────────────────────────────
   {
+    id: 'visitors-click-a-day',
+    date: '2026-11-11',
+    kind: 'new',
+    area: 'Visitors',
+    title: 'Click a day on the Visitors chart to see that day\'s pages, sources and visits',
+    summary:
+      'Clicking a bar on the Visitors chart now narrows the whole page to that day: the numbers, where visitors came from, which pages they opened, countries, devices and the visitor log. The chart keeps showing the whole period, so the next day is one click away.',
+    howItWorks: [
+      'Admin → Visitors → click any bar. A gold strip says "Showing Oct 30, 2026 only", and everything below the chart follows that day. For a long period the bars are weeks, and a click shows that week.',
+      'Click the same bar again, or "Back to the whole period", to go back. The period itself (Today, Last 7 days, Last 30 days, Custom dates) is still chosen at the top of the page.',
+      'The clicked day is part of the page\'s link, so a copied link opens on the same day.',
+    ],
+    technical: [
+      'Frontend only: ?day= (and ?day_to= for a week) in useVisitorFilters, kept inside the period; the cards fetch GET /admin/visitors/summary for that day, the log takes it as from/to, and the chart keeps the period\'s summary.',
+    ],
+    links: [{ label: 'Visitors', href: '/admin/visitors' }],
+  },
+  {
+    id: 'customers-signups-chart',
+    date: '2026-11-11',
+    kind: 'improved',
+    area: 'Admin Dashboard',
+    title: 'The New sign-ups chart has dates, a scale and works on a phone',
+    summary:
+      'The counts were right, but the chart had no dates under its bars and only showed numbers on a mouse hover. It now has a scale, a date under every other week, the current week drawn lighter ("so far"), and tapping a bar shows its exact dates, for example "Week of Sep 21 – 27: 5 sign-ups".',
+    howItWorks: [
+      'Admin Dashboard → Customers → New sign-ups. Weeks run Monday to Sunday (UTC); the last bar is this week so far, which is why it is usually low.',
+      'Under the chart: the total for the 12 weeks and the busiest week. "Per day" opens the Visitors page, which shows sign-ups day by day.',
+    ],
+    links: [{ label: 'Customers tab', href: '/admin?tab=customers' }],
+  },
+  {
+    id: 'customers-profit-ranking',
+    date: '2026-11-11',
+    kind: 'improved',
+    area: 'Admin Dashboard',
+    title: 'Customer profit: ranked by return, this month or last, with the strategy beside it',
+    summary:
+      '"Top customers by profit" listed dollars over the last 30 days. In a losing stretch every customer was red, so it read as a broken top list, and the biggest account always looked worst. It is now "Customer profit": every customer who traded in the month, split into "Made money" and "Lost money", ranked by percentage return, with the master account\'s result on top for comparison.',
+    howItWorks: [
+      'Admin Dashboard → Customers → Customer profit. Pick This month or Last month (calendar months).',
+      'The percentage is the same "Period Return" the customer\'s Performance Analytics shows: each day\'s profit over the balance that day started with, added up. Example: a customer who lost $911 on a $17,000 account and then withdrew $7,000 shows about −5%, not −9% of what is left.',
+      'The dollar figure under it is after exchange fees; hover it for before fees. Clicking a name opens that customer\'s Performance Analytics.',
+    ],
+    technical: [
+      'GET /admin/insights/customers: top_pnl_30d replaced by profit {this_month, last_month} = {from, to, master, customers[{uni_id, name, pnl, pnl_gross, fees, pct, trades}]}, built per user from UserStatsService::dailyReturns over real-money accounts (demo, sandbox, SBXINV- excluded; disconnected accounts included). Pinned in AdminInsightsTest.',
+    ],
+    links: [{ label: 'Customers tab', href: '/admin?tab=customers' }],
+  },
+  {
     id: 'mark-paid-how-and-who',
     date: '2026-11-11',
     kind: 'improved',
