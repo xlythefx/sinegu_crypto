@@ -454,7 +454,7 @@ export default function SandboxScenarioCard({ users }: { users: AdminUser[] }) {
                       <div className="text-[11px] uppercase tracking-[0.06em] text-faint mt-4 mb-1.5">
                         What the runner did
                       </div>
-                      <ol className="flex flex-col gap-1 m-0 pl-[18px] text-[12.5px] text-muted leading-[1.55]">
+                      <ol className="flex list-decimal flex-col gap-1 m-0 pl-[18px] text-[12.5px] text-muted leading-[1.55]">
                         {result.steps.map((step, i) => (
                           <li key={i}>{step}</li>
                         ))}

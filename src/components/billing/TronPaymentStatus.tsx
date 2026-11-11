@@ -97,7 +97,7 @@ export default function TronPaymentStatus({
             <AlertTriangle size={16} className="text-red flex-shrink-0" />
             This payment address has expired
           </p>
-          <ul className="text-[12px] text-muted leading-[1.55] mt-2 flex flex-col gap-1.5 pl-1">
+          <ul className="text-[12px] text-muted leading-[1.55] mt-2 flex list-disc flex-col gap-1.5 pl-5 marker:text-faint">
             <li>
               <strong className="text-text">Haven't sent yet?</strong> Get a new address below
               and send to that one.

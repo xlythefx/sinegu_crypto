@@ -194,6 +194,15 @@ body {
   button {
     font-family: inherit;
   }
+
+  /* No Tailwind preflight (see the top of this file), so a bare <ul>/<ol>
+     kept the browser's bullets: a dot beside every row of the admin
+     Overview's lists (2026-11-11). A list that WANTS markers says so with
+     list-disc / list-decimal, which (utilities layer) win over this. */
+  ul,
+  ol {
+    list-style: none;
+  }
 }
 
 ::selection {

@@ -75,8 +75,7 @@ export default function RecentPaymentsCard({
               {count > latest.length ? ` · newest ${latest.length} below` : ''}
             </span>
           </div>
-          {/* list-none: the app loads no Tailwind preflight, so a bare <ul> keeps its bullets. */}
-          <ul className="flex list-none flex-col divide-y divide-hair p-0">
+          <ul className="flex flex-col divide-y divide-hair">
             {latest.map((p) => {
               const to = `/admin/users/${p.uni_id}`
               const body = (
