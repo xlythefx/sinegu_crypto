@@ -51,5 +51,24 @@ shaped like the TypeScript type the page reads (`src/types/*`), and rerun.
 - **The app loads no Tailwind preflight.** Screenshots are where its effects
   show: browser bullets on lists, and 3 px borders on every side of a
   `border-dashed` line.
+- **The red "LIVE PROD DATA" badge is hidden** in every capture: the
+  pictures are sample data, and that badge would tell a reader otherwise.
 - Interactions (click a tab, hover a bar) are not built in. For a one-off,
-  copy `capture()` into a scratch script and add the clicks.
+  copy `capture()` into a scratch script and add the clicks. To show a
+  reader WHERE to click, outline the element and pin a numbered badge
+  appended to `document.documentElement` (not `body`, which is offset),
+  and hover a sidebar link first: the admin rail shows its labels only on
+  hover.
+
+## Sample pages worth knowing
+
+`/admin/users/u-daniel` is a full sample customer profile (an invented
+"Daniel Moreau", fixture `SAMPLE_USER_ID`): Overview, Performance Analytics
+(after-fees card, monthly table with each month's invoice) and Invoices, with
+three invoices worked out from the sample closes the way billing does it.
+
+## Screenshots for ClickUp
+
+When the team asks "where do I check", attach the PNGs to the task with
+`clickup_request_attachment_upload` (local files) and reply to the comment
+with the click path and the live link. Say the figures are sample data.

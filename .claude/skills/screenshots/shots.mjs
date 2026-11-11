@@ -150,7 +150,14 @@ async function capture(browser, base, route, vp) {
   await page.goto(base + route, { waitUntil: 'load' })
   await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {})
   // AOS hides below-the-fold cards until they are scrolled to.
-  await page.addStyleTag({ content: '[data-aos]{opacity:1!important;transform:none!important;transition:none!important}' })
+  // Transitions off too: a color/outline caught mid-transition reads as a faded frame.
+  await page.addStyleTag({ content: '[data-aos]{opacity:1!important;transform:none!important} *{transition:none!important}' })
+  // The dev build's "LIVE PROD DATA" badge would label sample data as real.
+  await page.evaluate(() => {
+    for (const el of document.querySelectorAll('div,span')) {
+      if (el.textContent.trim() === 'LIVE PROD DATA' && getComputedStyle(el).position === 'fixed') el.style.display = 'none'
+    }
+  })
   await page.waitForTimeout(700)
 
   const landed = new URL(page.url()).pathname
