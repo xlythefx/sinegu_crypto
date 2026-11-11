@@ -15,6 +15,23 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-11-11 ───────────────────────────────────────────────────────────
   {
+    id: 'daily-pct-withdrawal-after-trades',
+    date: '2026-11-11',
+    kind: 'fixed',
+    area: 'Performance Analytics',
+    title: 'A withdrawal no longer blows up that day\'s percentage',
+    summary:
+      'When a customer withdrew money on a day a trade closed, the day\'s percentage was measured on what was LEFT after the withdrawal. One customer emptied about $16,000 a few hours before a losing close and that day read −47%, while the strategy lost −2%. The trade had been sized on the money still in the account, so a withdrawal now counts after that day\'s trades.',
+    howItWorks: [
+      'Affects only days where a withdrawal and a closed trade fall on the same day: the P&L calendar cell, Period Return on Performance Analytics, and the Customer profit card. Example: that customer\'s 22 Oct goes from −47% to about −2%, and his October from −45.7% to about −0.2%.',
+      'Deposits are unchanged: they still count before the day\'s trades. Dollar figures, invoices and the public track record are unchanged.',
+    ],
+    technical: [
+      'UserStatsService::capitalWalk: max(flow, 0) before the day\'s P&L, min(flow, 0) after it. daily_returns rows are rewritten by pnl:daily-returns (every 15 min) or on the next analytics read. PublicStatsController\'s walk is untouched.',
+    ],
+    links: [{ label: 'Customers tab', href: '/admin?tab=customers' }],
+  },
+  {
     id: 'visitors-click-a-day',
     date: '2026-11-11',
     kind: 'new',

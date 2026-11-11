@@ -2684,8 +2684,11 @@ the ALL-TIME baseline, so a deposit made in September changed the percentage
 August had already reported — a finished month moved, and the owner read the
 drop as the product being wrong. It is now **"Period Return"**: each day's P&L
 over the capital THAT day started with, the daily factors chained, the same
-walk `PublicStatsController` publishes (flows land before the day's trades,
-capital compounds with realized P&L, a gross row's estimated commission comes
+walk `PublicStatsController` publishes (deposits land before the day's trades
+and — since 2026-11-11, `UserStatsService::capitalWalk` only — WITHDRAWALS
+AFTER them, because that day's trades were sized on the money still there:
+Lloyd emptied ~16k between two losing closes on 22 Oct and read −47% for a
+day the master lost −2%; capital compounds with realized P&L, a gross row's estimated commission comes
 off the CAPITAL only, seeded from `initial_deposit` — a walk from zero is the
 −980% of 2026-09-04). A transfer can no longer move the figure in either
 direction, so no "exclude deposits" toggle is needed. The denominator ships as
