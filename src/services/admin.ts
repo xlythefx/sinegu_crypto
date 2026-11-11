@@ -645,6 +645,51 @@ export interface AdminInvoiceRow extends Invoice {
   userEmail: string | null
 }
 
+/**
+ * How a paid invoice was paid (API `Billing\PaymentMethod` — the same words
+ * the payment emails and the Telegram message use).
+ */
+export interface AdminInvoicePayment {
+  /** stripe | tron | coinsbuy | manual; null = paid before the rail was recorded. */
+  provider: string | null
+  kind: 'card' | 'crypto' | 'manual' | 'unknown'
+  /** "Card (Stripe)", "USDT (TRC-20)", "Marked paid by an admin", … */
+  label: string
+  /** A Stripe test session or USDT on the Nile testnet: not real money. */
+  test: boolean
+  /** Stripe's checkout session id, or the TRON transaction hash. */
+  reference: string | null
+  /** The invoice's own dollar figure, as settled. */
+  paid_amount: number | null
+  paid_at: string | null
+  network: string | null
+  /** TronScan, for a USDT payment. */
+  explorer_url: string | null
+  /** What actually arrived on chain (it can be short by an exchange's withdrawal fee). */
+  received: { amount: string; asset: string } | null
+}
+
+/** GET /admin/invoices/{id} — one invoice with its customer and its payment. */
+export interface AdminInvoiceView extends AdminInvoiceRow {
+  /** The customer's uni_id — the link to their profile. */
+  userId: string | null
+  payment: AdminInvoicePayment | null
+}
+
+export async function getAdminInvoice(id: string): Promise<AdminInvoiceView> {
+  const res = await apiFetch<{
+    success: boolean
+    invoice: AdminApiInvoice & { payment?: AdminInvoicePayment | null }
+  }>(`/admin/invoices/${encodeURIComponent(id)}`, { auth: true })
+  return {
+    ...mapApiInvoice(res.invoice),
+    userName: res.invoice.user_name,
+    userEmail: res.invoice.user_email,
+    userId: res.invoice.user_id ?? null,
+    payment: res.invoice.payment ?? null,
+  }
+}
+
 export interface AdminInvoicesSummary {
   totalCollected: number
   countTotal: number

@@ -1,12 +1,10 @@
-import { useCallback, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { ArrowUpRight, CheckCircle2, Clock, Eye, FileText, Receipt } from 'lucide-react'
 import ExchangeBadge from '../../billing/ExchangeBadge'
 import PnlBreakdown from '../../ui/PnlBreakdown'
-import InvoiceDocumentModal from '../../billing/InvoiceDocumentModal'
-import AdminInvoiceDetailModal from '../invoices/AdminInvoiceDetailModal'
 import { useApiData } from '../../../hooks/useApiData'
-import { getAdminUserInvoices, type AdminInvoiceRow } from '../../../services/admin'
+import { getAdminUserInvoices } from '../../../services/admin'
 import { getApiErrorMessage } from '../../../services/api'
 import { fmtMediumDate, fmtMoney, fmtSignedMoney } from '../../../lib/format'
 import type { Invoice } from '../../../lib/billing'
@@ -81,15 +79,12 @@ export default function UserInvoicesTab({ uniId, exchange, user }: UserInvoicesT
     [uniId, exchange],
   )
   const { data, loading, error } = useApiData(fetchInvoices, [fetchInvoices])
-  const [viewing, setViewing] = useState<AdminInvoiceRow | null>(null)
-  const [docInvoice, setDocInvoice] = useState<AdminInvoiceRow | null>(null)
+  const navigate = useNavigate()
+  // The invoice opens on its own page; "Back" returns to this tab.
+  const view = (inv: Invoice) =>
+    navigate(`/admin/invoices/${inv.id}`, { state: { backLabel: `Back to ${user.name || 'the profile'}` } })
 
   const invoices = data ?? []
-  const asRow = (inv: Invoice): AdminInvoiceRow => ({
-    ...inv,
-    userName: user.name,
-    userEmail: user.email,
-  })
 
   const billed = invoices.reduce((s, i) => s + i.totalFee, 0)
   const paid = invoices.filter((i) => i.status === 'paid')
@@ -205,7 +200,7 @@ export default function UserInvoicesTab({ uniId, exchange, user }: UserInvoicesT
                           {inv.paidDate ? fmtMediumDate(inv.paidDate) : '—'}
                         </td>
                         <td className={`${TD} text-right`}>
-                          <button type="button" className={VIEW_BTN} onClick={() => setViewing(asRow(inv))}>
+                          <button type="button" className={VIEW_BTN} onClick={() => view(inv)}>
                             <Eye size={13} /> View
                           </button>
                         </td>
@@ -223,17 +218,6 @@ export default function UserInvoicesTab({ uniId, exchange, user }: UserInvoicesT
         )}
       </section>
 
-      <AdminInvoiceDetailModal
-        invoice={viewing}
-        onClose={() => setViewing(null)}
-        onViewDocument={(inv) => setDocInvoice(inv)}
-      />
-      <InvoiceDocumentModal
-        open={docInvoice !== null}
-        invoice={docInvoice}
-        customer={docInvoice ? { name: docInvoice.userName, email: docInvoice.userEmail } : null}
-        onClose={() => setDocInvoice(null)}
-      />
     </div>
   )
 }

@@ -330,10 +330,37 @@ function userProfile(path) {
   }
 }
 
+// ---------------------------------------------------------------- one invoice's page
+// /admin/invoices/{id}: the invoice + its customer + how it was paid. Invented
+// references only (a made-up Stripe session id and tx hash).
+function samplePayment(inv) {
+  if (inv.status !== 'paid' || inv.total_fee <= 0) return null
+  const base = { paid_amount: inv.total_fee, paid_at: `${inv.paid_date}T08:43:50Z`, network: null, explorer_url: null, received: null }
+  const n = Number(inv.id)
+  if (n % 3 === 0) {
+    const hash = `${String(n).repeat(6)}c0ffee`.padEnd(64, 'a').slice(0, 64)
+    return {
+      ...base, provider: 'tron', kind: 'crypto', label: 'USDT (TRC-20)', test: false, reference: hash, network: 'mainnet',
+      explorer_url: `https://tronscan.org/#/transaction/${hash}`,
+      received: { amount: (inv.total_fee - 0.02).toFixed(6), asset: 'USDT' },
+    }
+  }
+  if (n % 3 === 1) return { ...base, provider: 'stripe', kind: 'card', label: 'Card (Stripe)', test: false, reference: `cs_live_a1SAMPLE${n}xYzSampleSessionId0000` }
+  return { ...base, provider: 'manual', kind: 'manual', label: 'Marked paid by an admin', test: false, reference: null }
+}
+
+function invoiceView(path) {
+  const id = path.split('/')[3]
+  const inv = [...INVOICES, ...PROFILE.invoices].find((i) => i.id === id)
+  if (!inv) return undefined
+  return { success: true, invoice: { ...inv, payment: samplePayment(inv) } }
+}
+
 // ---------------------------------------------------------------- router
 /** Longest matching prefix wins; values may be functions (fresh dates per call). */
 const GET = {
   '/admin/users/': (_user, path) => userProfile(path),
+  '/admin/invoices/': (_user, path) => invoiceView(path),
   '/admin/affiliate/users/': { success: true, referrals: [] },
   '/auth/me': (user) => ({ success: true, user }),
   '/admin/invoices': INVOICES_BODY,

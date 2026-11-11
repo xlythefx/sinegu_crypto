@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
   BarChart3,
@@ -96,7 +96,21 @@ export default function AdminUserDetail() {
   const readOnly = isCollaborator(useSessionUser()?.type)
   const tabs = readOnly ? TABS.filter((t) => COLLABORATOR_TABS.includes(t.key)) : TABS
 
-  const [tab, setTab] = useState<Tab>('overview')
+  // The tab lives in the URL (?tab=invoices), so "Back" from an invoice's
+  // page lands on the tab it was opened from, not on Overview.
+  const [params, setParams] = useSearchParams()
+  const urlTab = params.get('tab')
+  const tab: Tab = tabs.find((t) => t.key === urlTab)?.key ?? 'overview'
+  const setTab = (next: Tab) =>
+    setParams(
+      (prev) => {
+        const p = new URLSearchParams(prev)
+        if (next === 'overview') p.delete('tab')
+        else p.set('tab', next)
+        return p
+      },
+      { replace: true },
+    )
   const [exchange, setExchange] = useState<ExchangePillValue>('all')
   const [cardOpen, setCardOpen] = useState(false)
   // Bumped by the header's Refresh / status actions: every fetcher below

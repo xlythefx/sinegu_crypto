@@ -361,6 +361,20 @@ payment is told exactly once. Rules:
   (`count_no_fee`). Customers still see their own.
 - **Never delete a $0 row.** The next bill's HWM is the latest month's
   `hwm_after`, and the monthly run skips a month that already has a row.
+- **One invoice = one PAGE, `/admin/invoices/:id` (owner, 2026-11-11 — it
+  was a pop-up).** `pages/admin/AdminInvoiceDetail.tsx` is opened from
+  Invoice History, a profile's Invoices tab and the analytics month table.
+  The callers pass `{ backLabel }` in router state; with none, Back goes to
+  Invoice History. Invoice History keeps its filters in the URL and user
+  detail keeps its tab in `?tab=`, so Back lands on the same view. Never
+  bring the modal back as a second view of the same row.
+- **The page says HOW it was paid**, card (Stripe) or crypto (USDT):
+  `GET /admin/invoices/{id}` → `payment` from `Billing\PaymentMethod`. That
+  class is the ONE definition, shared with `PaymentNotifier`, so the page,
+  the emails and Telegram name a payment the same way. It is built from
+  `payment_provider` + `payment_reference` (Stripe session id / tx hash),
+  plus the TronScan link and the USDT that actually arrived. Admin only:
+  the customer's payload carries `payment_provider` alone.
 
 **Direct USDT-TRC20 payments — THE rail customers pay on (2026-09-23).**
 Customers send USDT straight to a TRON wallet we control; a scheduled poller
@@ -2576,7 +2590,7 @@ own job). The rule per surface:
   (set only by `UserAnalyticsTab` on admin user detail) flips the KPIs,
   Total Return %, monthly / weekday bars and per-coin P&L to `*_net`, before
   fees in the hover; the monthly table carries each month's invoice (fee +
-  status, click → `AdminInvoiceDetailModal`). The equity curve and the ratio
+  status, click → the invoice's page `/admin/invoices/:id`). The equity curve and the ratio
   cards stay before fees and say so. The trader's own page is unchanged.
 - **Invoices store the month's closes before fees too** (`realized_pnl_gross`,
   `exchange_fees` = gross − `realized_pnl`, so a row always reconciles;

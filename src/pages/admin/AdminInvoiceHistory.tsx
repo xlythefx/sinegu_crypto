@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import {
   CheckCircle2,
   ChevronLeft,
@@ -15,10 +15,9 @@ import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import ExchangeBadge from '../../components/billing/ExchangeBadge'
-import InvoiceDocumentModal from '../../components/billing/InvoiceDocumentModal'
-import AdminInvoiceDetailModal from '../../components/admin/invoices/AdminInvoiceDetailModal'
 import { EXCHANGE_META, EXCHANGE_ORDER } from '../../components/exchanges/meta'
 import { useApiData } from '../../hooks/useApiData'
+import { useUrlFilters } from '../../hooks/useUrlFilters'
 import {
   deleteInvoice,
   getAdminInvoices,
@@ -39,6 +38,15 @@ import type { ExchangeKind } from '../../types/exchanges'
 type StatusFilter = 'all' | 'pending' | 'paid'
 type ExchangeFilter = 'all' | ExchangeKind
 const PER_PAGE = 10
+
+// Filters live in the URL (2026-11-11): an invoice now opens on its own page,
+// and Back must land on the same list — same tab, search and page.
+const FILTER_DEFAULTS = { status: 'pending', zero: '', exchange: 'all', q: '', page: '1' }
+const FILTER_ALLOWED = {
+  status: ['all', 'pending', 'paid'],
+  zero: ['', '1'],
+  exchange: ['all', ...EXCHANGE_ORDER],
+}
 
 // Outstanding first and by default (2026-11-11): the page opens on what is
 // still owed, the one list that needs someone to act.
@@ -69,18 +77,21 @@ interface PendingAction {
 export default function AdminInvoiceHistory() {
   const { data, loading, error, reload } = useApiData(getAdminInvoices)
 
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending')
+  const url = useUrlFilters(FILTER_DEFAULTS, { allowed: FILTER_ALLOWED })
+  const statusFilter = url.filters.status as StatusFilter
   // $0 months are hidden unless asked for (Dima, 2026-11-11) — hidden, never
   // deleted: the next bill reads its high-water mark from them.
-  const [showNoFee, setShowNoFee] = useState(false)
-  const [exchangeFilter, setExchangeFilter] = useState<ExchangeFilter>('all')
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
+  const showNoFee = url.filters.zero === '1'
+  const exchangeFilter = url.filters.exchange as ExchangeFilter
+  const search = url.filters.q
+  const page = Math.max(1, Number(url.filters.page) || 1)
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [viewing, setViewing] = useState<AdminInvoiceRow | null>(null)
-  const [docInvoice, setDocInvoice] = useState<AdminInvoiceRow | null>(null)
+  const navigate = useNavigate()
+  // Each invoice opens on its own page (2026-11-11 — it was a pop-up).
+  const view = (inv: AdminInvoiceRow) =>
+    navigate(`/admin/invoices/${inv.id}`, { state: { backLabel: 'Back to Invoice History' } })
 
   const invoices = useMemo(() => data?.invoices ?? [], [data])
 
@@ -114,10 +125,9 @@ export default function AdminInvoiceHistory() {
     return <Navigate to="/auth" replace />
   }
 
-  const setFilter = (fn: () => void) => {
-    fn()
-    setPage(1)
-  }
+  /** Any filter change goes back to page 1, in one history entry. */
+  const setFilter = (patch: Partial<typeof FILTER_DEFAULTS>) => url.setMany({ ...patch, page: '1' })
+  const setPage = (n: number) => url.set('page', String(n))
 
   const runAction = async () => {
     if (!pendingAction) return
@@ -130,7 +140,6 @@ export default function AdminInvoiceHistory() {
         await deleteInvoice(pendingAction.invoice.id)
       }
       setPendingAction(null)
-      setViewing(null)
       reload()
     } catch (err) {
       setActionError(getApiErrorMessage(err, 'Unable to update invoice.'))
@@ -209,7 +218,7 @@ export default function AdminInvoiceHistory() {
               type="search"
               placeholder="Search account, invoice #, user…"
               value={search}
-              onChange={(e) => setFilter(() => setSearch(e.target.value))}
+              onChange={(e) => setFilter({ q: e.target.value })}
               className="flex-1 h-10 border-none outline-none bg-transparent text-text text-[13px] font-body"
             />
           </label>
@@ -224,7 +233,7 @@ export default function AdminInvoiceHistory() {
                       ? 'bg-accent border-accent text-on-accent'
                       : 'border-border bg-surface2 text-muted hover:text-text hover:border-accent'
                   }`}
-                  onClick={() => setFilter(() => setStatusFilter(s.key))}
+                  onClick={() => setFilter({ status: s.key })}
                 >
                   {s.label}
                 </button>
@@ -239,7 +248,7 @@ export default function AdminInvoiceHistory() {
                       ? 'border-accent text-text'
                       : 'border-dashed border-border text-muted hover:text-text hover:border-accent'
                   }`}
-                  onClick={() => setFilter(() => setShowNoFee((v) => !v))}
+                  onClick={() => setFilter({ zero: showNoFee ? '' : '1' })}
                 >
                   {showNoFee ? <EyeOff size={13} /> : <Eye size={13} />}
                   {showNoFee ? 'Hide' : 'Show'} $0 months ({noFeeCount})
@@ -249,7 +258,7 @@ export default function AdminInvoiceHistory() {
             <select
               className="h-[38px] border border-border rounded-[12px] bg-surface2 text-text px-3 text-[12.5px] font-body cursor-pointer"
               value={exchangeFilter}
-              onChange={(e) => setFilter(() => setExchangeFilter(e.target.value as ExchangeFilter))}
+              onChange={(e) => setFilter({ exchange: e.target.value })}
               aria-label="Filter by exchange"
             >
               <option value="all">All exchanges</option>
@@ -278,7 +287,7 @@ export default function AdminInvoiceHistory() {
                   <button
                     type="button"
                     className="inline-flex items-center gap-[5px] rounded-[9px] py-[7px] px-3 text-[12px] font-semibold cursor-pointer border border-border bg-surface2 text-text transition-[border-color] duration-150 hover:border-accent"
-                    onClick={() => setFilter(() => setStatusFilter('paid'))}
+                    onClick={() => setFilter({ status: 'paid' })}
                   >
                     View paid invoices
                   </button>
@@ -305,7 +314,7 @@ export default function AdminInvoiceHistory() {
                 <tr
                   key={inv.id}
                   className="cursor-pointer transition-colors duration-150 hover:bg-surface2"
-                  onClick={() => setViewing(inv)}
+                  onClick={() => view(inv)}
                 >
                   <td className={`${TD} font-mono`}>{inv.formattedId}</td>
                   <td className={TD}>
@@ -332,7 +341,7 @@ export default function AdminInvoiceHistory() {
                       <button
                         type="button"
                         className="inline-flex items-center gap-[5px] rounded-[9px] py-[7px] px-3 text-[12px] font-semibold cursor-pointer border border-border bg-surface2 text-text transition-[border-color] duration-150 hover:border-accent"
-                        onClick={() => setViewing(inv)}
+                        onClick={() => view(inv)}
                       >
                         <Eye size={13} /> View
                       </button>
@@ -374,7 +383,7 @@ export default function AdminInvoiceHistory() {
               <button
                 type="button"
                 className={PAG_BTN}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => setPage(Math.max(1, safePage - 1))}
                 disabled={safePage <= 1}
                 aria-label="Previous page"
               >
@@ -384,7 +393,7 @@ export default function AdminInvoiceHistory() {
               <button
                 type="button"
                 className={PAG_BTN}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() => setPage(Math.min(totalPages, safePage + 1))}
                 disabled={safePage >= totalPages}
                 aria-label="Next page"
               >
@@ -394,25 +403,6 @@ export default function AdminInvoiceHistory() {
           </div>
         )}
       </section>
-
-      <AdminInvoiceDetailModal
-        invoice={viewing}
-        onClose={() => setViewing(null)}
-        onViewDocument={(inv) => setDocInvoice(inv)}
-        onMarkPaid={
-          viewing && viewing.status !== 'paid' && viewing.totalFee > 0
-            ? (inv) => setPendingAction({ invoice: inv, action: 'markPaid' })
-            : undefined
-        }
-        busy={actionLoading}
-      />
-
-      <InvoiceDocumentModal
-        open={docInvoice !== null}
-        invoice={docInvoice}
-        customer={docInvoice ? { name: docInvoice.userName, email: docInvoice.userEmail } : null}
-        onClose={() => setDocInvoice(null)}
-      />
 
       <ConfirmModal
         open={pendingAction !== null}

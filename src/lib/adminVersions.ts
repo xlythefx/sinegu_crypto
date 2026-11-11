@@ -15,6 +15,28 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-11-11 ───────────────────────────────────────────────────────────
   {
+    id: 'invoice-page-paid-via',
+    date: '2026-11-11',
+    kind: 'improved',
+    area: 'Billing',
+    title: 'Each invoice opens on its own page and says how it was paid',
+    summary:
+      'Clicking an invoice in Invoice History used to open a pop-up. It now opens its own page, which also shows how the invoice was paid: by card through Stripe, or in crypto (USDT). Alexandre Guyomard\'s October invoice ($24.04), for example, now reads "Paid on November 10, 2026 · Stripe".',
+    howItWorks: [
+      'Open Invoice History and click any invoice (or its View button). The page shows the customer, the amount, the status and, beside the paid date, a Stripe or Crypto badge.',
+      'A "How it was paid" card gives the details: the method, when it was paid, the amount, and the payment\'s reference with a Copy button. For a crypto payment it also shows how much USDT actually arrived (it can be a few cents short when the customer\'s exchange takes a withdrawal fee) and a link to the transaction on TronScan. For a card payment, paste the reference into Stripe\'s search to find it there.',
+      '"How this bill was worked out", the billing period, the high-water mark and the fee breakdown are all on the same page, with "Printable invoice" and "Mark paid" at the top.',
+      'A customer\'s profile opens the same page from its Invoices tab and from a month\'s fee on Performance Analytics. "Back" returns to where you were: the same list filter, or the same profile tab.',
+      'Each invoice has its own link (pixel-alpha.com/admin/invoices/15), so it can be sent to a colleague.',
+    ],
+    technical: [
+      'Route /admin/invoices/:id → pages/admin/AdminInvoiceDetail.tsx; AdminInvoiceDetailModal removed (its sections are components/admin/invoices/AdminInvoiceFacts.tsx; payment is InvoicePaymentCard.tsx).',
+      'GET /admin/invoices/{id} adds user_name, user_email and payment {provider, kind card|crypto|manual|unknown, label, test, reference, paid_amount, paid_at, network, explorer_url, received}. App\\Services\\Billing\\PaymentMethod is the one definition, shared with PaymentNotifier (emails + Telegram).',
+      'Invoice History filters are in the URL (?status=&zero=&exchange=&q=&page=, useUrlFilters); admin user detail keeps its tab in ?tab=. Callers pass { backLabel } in router state; with none, Back goes to Invoice History.',
+    ],
+    links: [{ label: 'Invoice History', href: '/admin/invoices' }],
+  },
+  {
     id: 'payment-received-notices',
     date: '2026-11-11',
     kind: 'new',

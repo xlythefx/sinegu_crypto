@@ -41,6 +41,9 @@ shaped like the TypeScript type the page reads (`src/types/*`), and rerun.
 
 ## Gotchas (all hit for real)
 
+- **From Git Bash, prefix `MSYS_NO_PATHCONV=1`.** Otherwise Git Bash
+  rewrites `/admin/invoices` into `C:/Program Files/Git/admin/invoices`
+  and every capture is a redirect. PowerShell needs nothing.
 - **Port 5173 is often ANOTHER project.** The script starts its own server
   on a free port from 5191 and checks the page title says "Pixel Alpha".
 - **Playwright's bundled Chromium does not match its version on this box**
@@ -66,6 +69,8 @@ shaped like the TypeScript type the page reads (`src/types/*`), and rerun.
 "Daniel Moreau", fixture `SAMPLE_USER_ID`): Overview, Performance Analytics
 (after-fees card, monthly table with each month's invoice) and Invoices, with
 three invoices worked out from the sample closes the way billing does it.
+`/admin/invoices/22` (card), `/admin/invoices/21` (crypto) and
+`/admin/invoices/20` (marked paid by hand) are those invoices on their page.
 
 ## Screenshots for ClickUp
 
