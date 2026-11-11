@@ -72,11 +72,13 @@ export default function VisitorChart({ summary }: { summary: VisitorSummary }) {
               aria-label={`${plural(summary.totals.visitors, 'visitor', 'visitors')} and ${plural(summary.totals.signups, 'sign-up', 'sign-ups')} over ${plural(series.length, weekly ? 'week' : 'day', weekly ? 'weeks' : 'days')}`}
             >
               <div className="relative h-full">
+                {/* 1px fills, not borders: the app loads no Tailwind preflight,
+                    so a dashed border drew 3px on every side (a zipper). */}
                 {ticks.map((t) => (
                   <div
                     key={t}
                     aria-hidden="true"
-                    className={`absolute inset-x-0 border-t ${t === 0 ? 'border-border' : 'border-dashed border-hair'}`}
+                    className={`absolute inset-x-0 h-px ${t === 0 ? 'bg-border' : 'bg-hair'}`}
                     style={{ bottom: `${(t / top) * 100}%` }}
                   />
                 ))}

@@ -265,6 +265,29 @@ export default function AdminInvoiceHistory() {
           key={`${statusFilter}-${exchangeFilter}-${showNoFee}`}
           className="overflow-x-auto animate-[fadeup_0.35s_ease-out]"
         >
+          {/* The empty state sits OUTSIDE the 720px-wide table: centred inside
+              it, the message landed off-screen on a phone. */}
+          {paginated.length === 0 ? (
+            <div className="flex flex-col items-center gap-2.5 border-t border-border py-[34px] px-4 text-center text-[13px] text-muted">
+              {invoices.length === 0 ? (
+                'No invoices yet. Generate one from the Sandbox.'
+              ) : statusFilter === 'pending' && exchangeFilter === 'all' && !search.trim() ? (
+                <>
+                  <CheckCircle2 size={22} className="text-green" aria-hidden="true" />
+                  <span className="text-text font-semibold">Nothing to collect — every invoice is paid.</span>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-[5px] rounded-[9px] py-[7px] px-3 text-[12px] font-semibold cursor-pointer border border-border bg-surface2 text-text transition-[border-color] duration-150 hover:border-accent"
+                    onClick={() => setFilter(() => setStatusFilter('paid'))}
+                  >
+                    View paid invoices
+                  </button>
+                </>
+              ) : (
+                'No invoices match your filters.'
+              )}
+            </div>
+          ) : (
           <table className="w-full border-collapse min-w-[720px]">
             <thead>
               <tr>
@@ -278,29 +301,6 @@ export default function AdminInvoiceHistory() {
               </tr>
             </thead>
             <tbody>
-              {paginated.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="text-center text-muted py-[34px] px-4 text-[13px]">
-                    {invoices.length === 0 ? (
-                      'No invoices yet. Generate one from the Sandbox.'
-                    ) : statusFilter === 'pending' && exchangeFilter === 'all' && !search.trim() ? (
-                      <span className="inline-flex flex-col items-center gap-2.5">
-                        <CheckCircle2 size={22} className="text-green" aria-hidden="true" />
-                        <span className="text-text font-semibold">Nothing to collect — every invoice is paid.</span>
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-[5px] rounded-[9px] py-[7px] px-3 text-[12px] font-semibold cursor-pointer border border-border bg-surface2 text-text transition-[border-color] duration-150 hover:border-accent"
-                          onClick={() => setFilter(() => setStatusFilter('paid'))}
-                        >
-                          View paid invoices
-                        </button>
-                      </span>
-                    ) : (
-                      'No invoices match your filters.'
-                    )}
-                  </td>
-                </tr>
-              )}
               {paginated.map((inv) => (
                 <tr
                   key={inv.id}
@@ -361,6 +361,7 @@ export default function AdminInvoiceHistory() {
               ))}
             </tbody>
           </table>
+          )}
         </div>
 
         {filtered.length > 0 && (

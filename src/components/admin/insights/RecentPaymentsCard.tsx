@@ -36,7 +36,8 @@ function detailLine(p: RecentPaymentRow): string {
 }
 
 const ROW = 'flex items-center justify-between gap-3 py-2.5 text-[13px]'
-const ROW_LINK = `${ROW} -mx-2 rounded-btn px-2 transition-colors hover:bg-surface2`
+// text-text: a link is accent-coloured app-wide; the name reads as text here.
+const ROW_LINK = `${ROW} -mx-2 rounded-btn px-2 text-text transition-colors hover:bg-surface2`
 
 /**
  * Overview → Needs attention: every invoice a customer paid in the last 7
@@ -74,7 +75,8 @@ export default function RecentPaymentsCard({
               {count > latest.length ? ` · newest ${latest.length} below` : ''}
             </span>
           </div>
-          <ul className="flex flex-col divide-y divide-hair">
+          {/* list-none: the app loads no Tailwind preflight, so a bare <ul> keeps its bullets. */}
+          <ul className="flex list-none flex-col divide-y divide-hair p-0">
             {latest.map((p) => {
               const to = `/admin/users/${p.uni_id}`
               const body = (
