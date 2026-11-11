@@ -15,6 +15,23 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-11-11 ───────────────────────────────────────────────────────────
   {
+    id: 'creatives-kling-price',
+    date: '2026-11-11',
+    kind: 'fixed',
+    area: 'Creatives',
+    title: 'Animated videos can be priced and started again',
+    summary:
+      'Any job that turned a still of Pixel into a video stopped at "Higgsfield did not give a price", so nothing was made. Higgsfield was working fine. It had started answering the price check for this one video model with a written rate ("$0.0525 per second of video") instead of a number, and the page only knew how to read a number.',
+    howItWorks: [
+      'The page now prices that video model itself from Higgsfield\'s published rate. Example: a 10-second clip is about $0.53, a 5-second one about $0.26. The monthly budget still checks the price before anything is spent.',
+      'Still images and the character video were never affected.',
+    ],
+    technical: [
+      'CreativeModels: kling-animate gains usd_per_second = 0.0525 (a single rate; fallbackUsd now takes a float or a per-resolution table). Its /estimate answers {type: description} since 2026-11-11.',
+    ],
+    links: [{ label: 'Creatives', href: '/admin/creatives' }],
+  },
+  {
     id: 'daily-pct-withdrawal-after-trades',
     date: '2026-11-11',
     kind: 'fixed',
