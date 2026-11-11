@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, Coins, CreditCard, FileText } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, FileText } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
 import ExchangeBadge from '../../components/billing/ExchangeBadge'
@@ -8,9 +8,11 @@ import InvoiceWorkings from '../../components/billing/InvoiceWorkings'
 import InvoiceDocumentModal from '../../components/billing/InvoiceDocumentModal'
 import AdminInvoiceFacts from '../../components/admin/invoices/AdminInvoiceFacts'
 import InvoicePaymentCard from '../../components/admin/invoices/InvoicePaymentCard'
-import ConfirmModal from '../../components/ui/ConfirmModal'
+import MarkPaidModal from '../../components/admin/invoices/MarkPaidModal'
+import PaidViaBadge from '../../components/admin/invoices/PaidViaBadge'
+import { paymentKind } from '../../lib/paymentKind'
 import { useApiData } from '../../hooks/useApiData'
-import { getAdminInvoice, updateInvoice, type AdminInvoicePayment } from '../../services/admin'
+import { getAdminInvoice, updateInvoice, type ManualPaymentMethod } from '../../services/admin'
 import { ApiError, getApiErrorMessage } from '../../services/api'
 import { fmtMoney, formatDate } from '../../lib/format'
 import { INVOICE_STATE_LABEL, INVOICE_STATE_PILL, invoiceState } from '../../lib/invoiceStatus'
@@ -26,25 +28,6 @@ const PILL = 'inline-block text-[10px] font-bold uppercase tracking-[0.05em] py-
 /** Where "Back" goes: the page that opened this one, else Invoice History. */
 export interface InvoiceBackState {
   backLabel: string
-}
-
-/** "via Stripe" / "via Crypto" beside the paid date, so the rail is read first. */
-function PaidVia({ payment }: { payment: AdminInvoicePayment | null }) {
-  if (payment?.kind === 'card')
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-pill bg-[#635BFF] text-white py-[3px] px-2.5 text-[11.5px] font-bold">
-        <CreditCard size={12} /> Stripe
-      </span>
-    )
-  if (payment?.kind === 'crypto')
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-pill bg-accent text-on-accent py-[3px] px-2.5 text-[11.5px] font-bold">
-        <Coins size={12} /> Crypto
-      </span>
-    )
-  if (payment?.kind === 'manual')
-    return <span className="text-[12px] font-semibold text-muted">marked paid by hand</span>
-  return null
 }
 
 /**
@@ -93,16 +76,16 @@ export default function AdminInvoiceDetail() {
   const state = invoiceState(invoice)
   const canMarkPaid = !paid && invoice.totalFee > 0
 
-  const markPaid = async () => {
+  // By hand only: says HOW the money came, with a note (2026-11-11).
+  const markPaid = async ({ method, note }: { method: ManualPaymentMethod; note: string }) => {
     setBusy(true)
     setActionError(null)
     try {
-      await updateInvoice(invoice.id, { status: 'paid' })
+      await updateInvoice(invoice.id, { status: 'paid', method, note })
       setConfirmPaid(false)
       reload()
     } catch (err) {
       setActionError(getApiErrorMessage(err, 'Unable to mark the invoice paid.'))
-      setConfirmPaid(false)
     } finally {
       setBusy(false)
     }
@@ -117,14 +100,22 @@ export default function AdminInvoiceDetail() {
             <FileText size={14} /> Printable invoice
           </button>
           {canMarkPaid && (
-            <button type="button" className={PRIMARY_BTN} onClick={() => setConfirmPaid(true)} disabled={busy}>
+            <button
+            type="button"
+            className={PRIMARY_BTN}
+            onClick={() => {
+              setActionError(null)
+              setConfirmPaid(true)
+            }}
+            disabled={busy}
+          >
               <CheckCircle2 size={14} /> Mark paid
             </button>
           )}
         </div>
       </div>
 
-      {actionError && (
+      {actionError && !confirmPaid && (
         <p className="mb-3.5 rounded-card border border-[color-mix(in_srgb,var(--red)_40%,transparent)] bg-[color-mix(in_srgb,var(--red)_10%,transparent)] px-4 py-3 text-[13px] text-red">
           {actionError}
         </p>
@@ -165,7 +156,11 @@ export default function AdminInvoiceDetail() {
               invoice.totalFee > 0 ? (
                 <>
                   Paid on {formatDate(invoice.paidDate)}
-                  <PaidVia payment={invoice.payment} />
+                  <PaidViaBadge
+                    kind={invoice.payment?.kind ?? paymentKind(invoice.paymentProvider)}
+                    title={invoice.payment?.label}
+                    size="md"
+                  />
                 </>
               ) : (
                 'No fee this month'
@@ -196,12 +191,10 @@ export default function AdminInvoiceDetail() {
         onClose={() => setDocOpen(false)}
       />
 
-      <ConfirmModal
-        open={confirmPaid}
-        title={`Mark ${invoice.formattedId} paid?`}
-        message={`This settles the invoice (${fmtMoney(invoice.totalFee)}), locks in the new high-water mark, and re-enables the account.`}
-        confirmLabel={busy ? 'Working…' : 'Yes, mark paid'}
-        cancelLabel="No"
+      <MarkPaidModal
+        invoice={confirmPaid ? invoice : null}
+        busy={busy}
+        error={actionError}
         onConfirm={markPaid}
         onCancel={() => setConfirmPaid(false)}
       />

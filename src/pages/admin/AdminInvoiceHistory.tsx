@@ -14,6 +14,9 @@ import {
 import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
 import ConfirmModal from '../../components/ui/ConfirmModal'
+import MarkPaidModal from '../../components/admin/invoices/MarkPaidModal'
+import PaidViaBadge from '../../components/admin/invoices/PaidViaBadge'
+import { paymentKind } from '../../lib/paymentKind'
 import ExchangeBadge from '../../components/billing/ExchangeBadge'
 import { EXCHANGE_META, EXCHANGE_ORDER } from '../../components/exchanges/meta'
 import { useApiData } from '../../hooks/useApiData'
@@ -23,6 +26,7 @@ import {
   getAdminInvoices,
   updateInvoice,
   type AdminInvoiceRow,
+  type ManualPaymentMethod,
 } from '../../services/admin'
 import { ApiError, getApiErrorMessage } from '../../services/api'
 import { fmtMoney } from '../../lib/format'
@@ -88,6 +92,7 @@ export default function AdminInvoiceHistory() {
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [markError, setMarkError] = useState<string | null>(null)
   const navigate = useNavigate()
   // Each invoice opens on its own page (2026-11-11 — it was a pop-up).
   const view = (inv: AdminInvoiceRow) =>
@@ -134,16 +139,28 @@ export default function AdminInvoiceHistory() {
     setActionLoading(true)
     setActionError(null)
     try {
-      if (pendingAction.action === 'markPaid') {
-        await updateInvoice(pendingAction.invoice.id, { status: 'paid' })
-      } else {
-        await deleteInvoice(pendingAction.invoice.id)
-      }
+      await deleteInvoice(pendingAction.invoice.id)
       setPendingAction(null)
       reload()
     } catch (err) {
       setActionError(getApiErrorMessage(err, 'Unable to update invoice.'))
       setPendingAction(null)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  // Marking paid by hand asks HOW the money came and a note (2026-11-11).
+  const markPaid = async ({ method, note }: { method: ManualPaymentMethod; note: string }) => {
+    if (pendingAction?.action !== 'markPaid') return
+    setActionLoading(true)
+    setMarkError(null)
+    try {
+      await updateInvoice(pendingAction.invoice.id, { status: 'paid', method, note })
+      setPendingAction(null)
+      reload()
+    } catch (err) {
+      setMarkError(getApiErrorMessage(err, 'Unable to mark the invoice paid.'))
     } finally {
       setActionLoading(false)
     }
@@ -330,10 +347,13 @@ export default function AdminInvoiceHistory() {
                   <td className={`${TD} text-muted`}>{inv.monthLabel}</td>
                   <td className={`${TD} text-right font-mono`}>{fmtMoney(inv.totalFee)}</td>
                   <td className={TD}>
-                    <span
-                      className={`inline-block text-[10px] font-bold uppercase tracking-[0.05em] py-[3px] px-[9px] rounded-pill ${INVOICE_STATE_PILL[invoiceState(inv)]}`}
-                    >
-                      {INVOICE_STATE_LABEL[invoiceState(inv)]}
+                    <span className="inline-flex items-center gap-1.5 flex-wrap">
+                      <span
+                        className={`inline-block text-[10px] font-bold uppercase tracking-[0.05em] py-[3px] px-[9px] rounded-pill ${INVOICE_STATE_PILL[invoiceState(inv)]}`}
+                      >
+                        {INVOICE_STATE_LABEL[invoiceState(inv)]}
+                      </span>
+                      {invoiceState(inv) === 'paid' && <PaidViaBadge kind={paymentKind(inv.paymentProvider)} />}
                     </span>
                   </td>
                   <td className={`${TD} text-right`}>
@@ -350,7 +370,10 @@ export default function AdminInvoiceHistory() {
                           type="button"
                           className="inline-flex items-center gap-[5px] rounded-[9px] py-[7px] px-3 text-[12px] font-semibold cursor-pointer border border-transparent bg-accent text-on-accent transition-[border-color,filter] duration-150 disabled:opacity-50 disabled:cursor-not-allowed enabled:hover:brightness-[1.06]"
                           disabled={actionLoading}
-                          onClick={() => setPendingAction({ invoice: inv, action: 'markPaid' })}
+                          onClick={() => {
+                            setMarkError(null)
+                            setPendingAction({ invoice: inv, action: 'markPaid' })
+                          }}
                         >
                           <CheckCircle2 size={13} /> Mark paid
                         </button>
@@ -404,27 +427,21 @@ export default function AdminInvoiceHistory() {
         )}
       </section>
 
+      <MarkPaidModal
+        invoice={pendingAction?.action === 'markPaid' ? pendingAction.invoice : null}
+        busy={actionLoading}
+        error={markError}
+        onConfirm={markPaid}
+        onCancel={() => setPendingAction(null)}
+      />
+
       <ConfirmModal
-        open={pendingAction !== null}
-        title={
-          pendingAction?.action === 'markPaid'
-            ? `Mark ${pendingAction?.invoice.formattedId} paid?`
-            : `Delete ${pendingAction?.invoice.formattedId}?`
-        }
-        message={
-          pendingAction?.action === 'markPaid'
-            ? `This settles the invoice (${fmtMoney(pendingAction?.invoice.totalFee ?? 0)}), locks in the new high-water mark, and re-enables the account.`
-            : 'This permanently removes the invoice. This cannot be undone.'
-        }
-        confirmLabel={
-          actionLoading
-            ? 'Working…'
-            : pendingAction?.action === 'markPaid'
-              ? 'Yes, mark paid'
-              : 'Yes, delete'
-        }
+        open={pendingAction?.action === 'delete'}
+        title={`Delete ${pendingAction?.invoice.formattedId}?`}
+        message="This permanently removes the invoice. This cannot be undone."
+        confirmLabel={actionLoading ? 'Working…' : 'Yes, delete'}
         cancelLabel="No"
-        danger={pendingAction?.action === 'delete'}
+        danger
         onConfirm={runAction}
         onCancel={() => setPendingAction(null)}
       />

@@ -35,7 +35,9 @@ import {
   updateAdminUser,
 } from '../../services/admin'
 import { ApiError, getApiErrorMessage } from '../../services/api'
-import { fmtMediumDate, fmtMoney } from '../../lib/format'
+import { fmtMediumDate, fmtMoney, fmtSignedMoney } from '../../lib/format'
+import TradingBadge from '../../components/admin/users/TradingBadge'
+import PaidViaBadge from '../../components/admin/invoices/PaidViaBadge'
 import type {
   AdminUser,
   AdminUserCreateInput,
@@ -132,6 +134,33 @@ function roleEffect({ user, role }: PendingRole): string {
   return `${ROLE_EFFECT[role]} ${feeds}`
 }
 
+/** "Who needs action" chips on the Users tab (the admin audit, 2026-11-11). */
+type ActionFilter = 'all' | 'owes' | 'key' | 'not_trading' | 'never_connected'
+
+const NOT_TRADING: readonly string[] = ['paused_unpaid', 'key_blocked', 'below_min', 'deposit_unknown', 'off']
+
+const ACTION_TEST: Record<Exclude<ActionFilter, 'all'>, (u: AdminUser) => boolean> & {
+  all: (u: AdminUser) => boolean
+} = {
+  all: () => true,
+  owes: (u) => (u.owes?.amount ?? 0) > 0,
+  key: (u) => u.key_problem === true,
+  not_trading: (u) => NOT_TRADING.includes(u.trading?.state ?? ''),
+  never_connected: (u) => u.trading?.state === 'no_exchange' && u.status === 'active',
+}
+
+const ACTION_FILTERS: { key: ActionFilter; label: string; hint: string }[] = [
+  { key: 'all', label: 'Everyone', hint: 'Every customer' },
+  { key: 'owes', label: 'Owes money', hint: 'Has an unpaid invoice (red = past its due date)' },
+  { key: 'key', label: 'Key problem', hint: 'An exchange refuses their API key' },
+  {
+    key: 'not_trading',
+    label: 'Not trading',
+    hint: 'Connected, but the bot is not trading for them: paused for an unpaid invoice, key refused, deposit below the minimum, or switched off',
+  },
+  { key: 'never_connected', label: 'Never connected', hint: 'Approved, but no exchange account yet' },
+]
+
 export default function AdminUsers() {
   const navigate = useNavigate()
   const sessionUser = useSessionUser()
@@ -141,6 +170,8 @@ export default function AdminUsers() {
   const { data, loading, error, reload } = useApiData(getAdminUsers)
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  // "Who needs action" (the admin audit, 2026-11-11) — customers only.
+  const [actionFilter, setActionFilter] = useState<ActionFilter>('all')
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -218,8 +249,22 @@ export default function AdminUsers() {
     if (group === 'staff' && roleFilter !== 'all') {
       list = list.filter((u) => u.type === roleFilter)
     }
+    if (group === 'users' && actionFilter !== 'all') {
+      list = list.filter(ACTION_TEST[actionFilter])
+    }
     return list
-  }, [inGroup, group, search, statusFilter, roleFilter])
+  }, [inGroup, group, search, statusFilter, roleFilter, actionFilter])
+
+  const actionCounts = useMemo(
+    () =>
+      Object.fromEntries(
+        ACTION_FILTERS.map((f) => [f.key, f.key === 'all' ? inGroup.length : inGroup.filter(ACTION_TEST[f.key]).length]),
+      ) as Record<ActionFilter, number>,
+    [inGroup],
+  )
+  // The billing columns exist only for full admins (the API sends them to no one else).
+  const showStanding = !readOnly && group === 'users'
+  const colCount = 6 + (readOnly ? 0 : 1) + (showStanding ? 4 : 0)
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / USERS_PER_PAGE))
   const safePage = Math.min(page, totalPages)
@@ -241,6 +286,7 @@ export default function AdminUsers() {
   const setGroup = (next: Group) =>
     setFilterAndResetPage(() => {
       setRoleFilter('all')
+      setActionFilter('all')
       setParams(next === 'staff' ? { group: 'staff' } : {}, { replace: true })
     })
 
@@ -530,9 +576,37 @@ export default function AdminUsers() {
           </div>
         </div>
 
+        {showStanding && (
+          <div className="flex flex-wrap items-center gap-1.5 border-b border-hair px-5 py-3">
+            <span className="mr-1 text-[11px] font-bold uppercase tracking-[0.08em] text-faint">Needs action</span>
+            {ACTION_FILTERS.map((f) => {
+              const active = actionFilter === f.key
+              const count = actionCounts[f.key]
+              return (
+                <button
+                  key={f.key}
+                  type="button"
+                  title={f.hint}
+                  onClick={() => setFilterAndResetPage(() => setActionFilter(f.key))}
+                  className={`inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 text-[12px] font-semibold cursor-pointer ${
+                    active
+                      ? 'bg-accent border-accent text-on-accent font-bold'
+                      : f.key !== 'all' && count > 0
+                        ? 'border-accent-line bg-surface2 text-text'
+                        : 'border-border bg-surface2 text-muted'
+                  }`}
+                >
+                  {f.label}
+                  <span className="font-mono text-[11px] opacity-80">{count}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
         {/* Users table — re-mounts on filter/page switch to replay the reveal */}
         <div
-          key={`${group}-${statusFilter}-${roleFilter}-${safePage}`}
+          key={`${group}-${statusFilter}-${roleFilter}-${actionFilter}-${safePage}`}
           className="overflow-x-auto animate-[fadeup_0.35s_ease-out]"
         >
           <table className="w-full border-collapse text-[13px]">
@@ -540,20 +614,36 @@ export default function AdminUsers() {
               <tr>
                 {/* Balance is for full admins only — a collaborator's table has
                     no such column (owner, 2026-10-19). */}
-                {['', 'Name', 'Email', 'Role', 'Status', ...(readOnly ? [] : ['Balance']), 'Joined'].map(
-                  (h, i) => (
-                    <th key={i} className={h === 'Balance' ? `${TH} text-right` : TH}>
-                      {h}
-                    </th>
-                  ),
-                )}
+                {[
+                  '',
+                  'Name',
+                  'Role',
+                  'Status',
+                  ...(showStanding ? ['Trading', 'Owes', 'Last payment', 'This month'] : []),
+                  ...(readOnly ? [] : ['Balance']),
+                  'Joined',
+                ].map((h, i) => (
+                  <th
+                    key={i}
+                    className={['Balance', 'Owes', 'This month'].includes(h) ? `${TH} text-right` : TH}
+                    title={
+                      h === 'This month'
+                        ? 'Closed profit after exchange fees since the 1st (UTC), real money only'
+                        : h === 'Trading'
+                          ? 'Is the bot trading for this customer, and if not, why'
+                          : undefined
+                    }
+                  >
+                    {h}
+                  </th>
+                ))}
                 <th className={`${TH} text-right`}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {paginated.length === 0 && (
                 <tr>
-                  <td colSpan={readOnly ? 7 : 8} className="py-10 text-center text-muted">
+                  <td colSpan={colCount} className="py-10 text-center text-muted">
                     {inGroup.length === 0
                       ? group === 'staff' ? 'No staff accounts yet.' : 'No users yet.'
                       : 'No accounts match your filters.'}
@@ -569,6 +659,8 @@ export default function AdminUsers() {
                     expanded={isExpanded}
                     actionLoading={actionLoading}
                     readOnly={readOnly}
+                    showStanding={showStanding}
+                    colCount={colCount}
                     isSelf={u.uni_id === sessionUser?.uni_id}
                     onToggle={() => toggleExpanded(u.uni_id)}
                     onAccept={() => setPendingAction({ user: u, action: 'accept' })}
@@ -674,6 +766,9 @@ interface UserRowsProps {
   actionLoading: boolean
   /** Collaborator view: role shown as a badge, no approve/reject, no API keys. */
   readOnly: boolean
+  /** Trading / owes / last payment / this month — full admins, Users tab. */
+  showStanding: boolean
+  colCount: number
   /** The signed-in admin's own row — self-demotion to `user` is refused. */
   isSelf: boolean
   onToggle: () => void
@@ -689,6 +784,8 @@ function UserRows({
   expanded,
   actionLoading,
   readOnly,
+  showStanding,
+  colCount,
   isSelf,
   onToggle,
   onAccept,
@@ -715,10 +812,21 @@ function UserRows({
             <ChevronDown size={14} />
           </button>
         </td>
-        <td className={`${TD} font-bold text-text whitespace-nowrap`}>
-          {user.name}
+        <td className={TD}>
+          <span className="block font-bold text-text whitespace-nowrap">{user.name}</span>
+          <span className="block text-[11.5px] text-muted">{user.email}</span>
+          {/* On a phone the standing columns are a swipe away — repeat the two that matter. */}
+          {showStanding && user.trading && (
+            <span className="mt-1.5 flex flex-wrap items-center gap-1.5 md:hidden">
+              <TradingBadge verdict={user.trading} />
+              {(user.owes?.amount ?? 0) > 0 && (
+                <span className={`font-mono text-[11px] font-bold ${user.owes?.overdue ? 'text-red' : 'text-accent'}`}>
+                  Owes {fmtMoney(user.owes?.amount ?? 0)}
+                </span>
+              )}
+            </span>
+          )}
         </td>
-        <td className={`${TD} text-muted`}>{user.email}</td>
         <td className={TD}>
           {readOnly ? (
             user.type === 'user' ? (
@@ -744,13 +852,22 @@ function UserRows({
             )}
           </div>
         </td>
+        {showStanding && <StandingCells user={user} />}
         {!readOnly && (
           <td className={`${TD} text-right`}>
             <UserBalanceCell accounts={accounts} />
           </td>
         )}
-        <td className={`${TD} font-mono text-[12px] text-muted whitespace-nowrap`}>
-          {user.created_at ? fmtMediumDate(user.created_at) : '—'}
+        <td className={`${TD} whitespace-nowrap`}>
+          <span className="block font-mono text-[12px] text-muted">
+            {user.created_at ? fmtMediumDate(user.created_at) : '—'}
+          </span>
+          {/* Set at sign-in only — someone who stays signed in shows the day they signed in. */}
+          {user.last_activity && (
+            <span className="block text-[11px] text-faint" title="Last sign-in">
+              Signed in {fmtMediumDate(user.last_activity)}
+            </span>
+          )}
         </td>
         <td className={`${TD} text-right`}>
           <div className="flex flex-wrap justify-end gap-2">
@@ -786,7 +903,7 @@ function UserRows({
       {expanded && (
         <tr>
           <td className="bg-surface2" />
-          <td className="bg-surface2 py-3 px-3.5" colSpan={readOnly ? 6 : 7}>
+          <td className="bg-surface2 py-3 px-3.5" colSpan={colCount - 1}>
             {accounts.length === 0 ? (
               <p className="py-1 text-[12.5px] text-muted">
                 No exchange accounts yet.
@@ -831,6 +948,14 @@ function UserRows({
                       <span className={`${BADGE} bg-surface2 border-border text-muted`}>
                         {a.enabled ? 'Enabled' : 'Disabled'}
                       </span>
+                      {a.key_status === 'blocked' && !a.deleted_at && (
+                        <span
+                          className={`${BADGE} border-transparent bg-[color-mix(in_srgb,var(--red)_16%,transparent)] text-red`}
+                          title={a.key_blocked_at ? `Refused since ${fmtMediumDate(a.key_blocked_at)}` : undefined}
+                        >
+                          Key blocked
+                        </span>
+                      )}
                     </span>
                     <span className="ml-auto font-mono font-bold text-text">
                       {fmtMoney(a.balance)} {a.currency_type ?? 'USDT'}
@@ -842,6 +967,58 @@ function UserRows({
           </td>
         </tr>
       )}
+    </>
+  )
+}
+
+/** Trading / Owes / Last payment / This month — one customer's standing (API `Admin\\CustomerStatus`). */
+function StandingCells({ user }: { user: AdminUser }) {
+  const owes = user.owes
+  const last = user.last_payment
+  const pnl = user.pnl_month ?? 0
+  return (
+    <>
+      <td className={TD}>
+        <span className="flex flex-wrap items-center gap-1">
+          {user.trading ? <TradingBadge verdict={user.trading} /> : <span className="text-faint">—</span>}
+          {user.key_problem && user.trading?.state !== 'key_blocked' && (
+            <span className="rounded-pill bg-[color-mix(in_srgb,var(--red)_16%,transparent)] px-[7px] py-[2px] text-[10px] font-bold text-red">
+              Key issue
+            </span>
+          )}
+        </span>
+      </td>
+      <td className={`${TD} text-right whitespace-nowrap`}>
+        {owes && owes.amount > 0 ? (
+          <span
+            className={`font-mono font-bold ${owes.overdue ? 'text-red' : 'text-accent'}`}
+            title={owes.overdue ? 'Past its due date' : 'Not due yet'}
+          >
+            {fmtMoney(owes.amount)}
+            {owes.overdue && <span className="block text-[10px] font-bold uppercase tracking-[0.05em]">Overdue</span>}
+          </span>
+        ) : (
+          <span className="text-faint">—</span>
+        )}
+      </td>
+      <td className={`${TD} whitespace-nowrap`}>
+        {last ? (
+          <span className="flex flex-col gap-1">
+            <span className="flex items-center gap-1.5">
+              <span className="font-mono text-[12px] font-bold text-text">{fmtMoney(last.amount)}</span>
+              <PaidViaBadge kind={last.kind} title={last.label} />
+            </span>
+            {last.paid_at && <span className="text-[11px] text-faint">{fmtMediumDate(last.paid_at)}</span>}
+          </span>
+        ) : (
+          <span className="text-faint">—</span>
+        )}
+      </td>
+      <td
+        className={`${TD} text-right font-mono whitespace-nowrap ${pnl > 0 ? 'text-green' : pnl < 0 ? 'text-red' : 'text-faint'}`}
+      >
+        {pnl === 0 ? '—' : fmtSignedMoney(pnl)}
+      </td>
     </>
   )
 }

@@ -9,6 +9,8 @@ import { getApiErrorMessage } from '../../../services/api'
 import { fmtMediumDate, fmtMoney, fmtSignedMoney } from '../../../lib/format'
 import type { Invoice } from '../../../lib/billing'
 import type { ExchangePillValue } from './ExchangeFilterPill'
+import PaidViaBadge from '../invoices/PaidViaBadge'
+import { paymentKind } from '../../../lib/paymentKind'
 
 const CARD = 'rounded-card border border-border bg-surface p-card'
 const TH =
@@ -191,7 +193,12 @@ export default function UserInvoicesTab({ uniId, exchange, user }: UserInvoicesT
                         </td>
                         <td className={`${TD} font-mono font-bold`}>{fmtMoney(inv.totalFee)}</td>
                         <td className={TD}>
-                          <span className={`${PILL} ${pill.cls}`}>{pill.label}</span>
+                          <span className="inline-flex items-center gap-1.5 flex-wrap">
+                        <span className={`${PILL} ${pill.cls}`}>{pill.label}</span>
+                        {inv.status === 'paid' && inv.totalFee > 0 && (
+                          <PaidViaBadge kind={paymentKind(inv.paymentProvider)} />
+                        )}
+                      </span>
                         </td>
                         <td className={`${TD} font-mono text-[12px] ${isOverdue(inv) ? 'text-red' : 'text-muted'}`}>
                           {inv.dueDate ? fmtMediumDate(inv.dueDate) : '—'}

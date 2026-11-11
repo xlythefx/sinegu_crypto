@@ -84,11 +84,21 @@ export default function UserBalanceCard({
             {/* Invoice figures — absent for a read-only collaborator. */}
             {summary.commissions && (
               <>
+                {/* Until 2026-11-11 this summed invoices FOR the running month,
+                    which only exist once it ends — so it always read $0.00. */}
                 <MetricTile
-                  label="Commission this month"
-                  value={fmtMoney(summary.commissions.this_month)}
+                  label="Fee this month so far"
+                  value={
+                    summary.commissions.month_estimate == null
+                      ? '—'
+                      : fmtMoney(summary.commissions.month_estimate)
+                  }
                   tone="accent"
-                  sub="Invoiced fees"
+                  sub={lastInvoiceLine(summary.commissions.last_invoice)}
+                  tooltip={
+                    summary.commissions.month_estimate_note ??
+                    'What would be billed if the month ended now.'
+                  }
                 />
                 <MetricTile
                   label="All-time commission"
@@ -103,4 +113,13 @@ export default function UserBalanceCard({
       )}
     </section>
   )
+}
+
+/** "Last: $24.04 Oct · paid (Stripe)" — the bill before this month's. */
+function lastInvoiceLine(last: NonNullable<AdminUserSummary['commissions']>['last_invoice']): string {
+  if (!last) return 'No invoice yet'
+  const month = new Date(`${last.month_year}-01T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })
+  const via = last.kind === 'card' ? ' (Stripe)' : last.kind === 'crypto' ? ' (crypto)' : last.kind === 'manual' ? ' (by hand)' : ''
+  const state = last.status === 'paid' ? `paid${via}` : last.status === 'overdue' ? 'OVERDUE' : 'unpaid'
+  return `Last: ${fmtMoney(last.total_fee)} ${month} · ${state}`
 }

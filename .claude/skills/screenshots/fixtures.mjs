@@ -30,6 +30,7 @@ function invoice(id, name, month, fee, paid = null) {
     performance_equity: 1900, realized_pnl_gross: fee * 5, exchange_fees: 0, is_first_invoice: false,
     reference_label: 'High-water mark', reference_value: 1800,
     user_name: name, user_email: `${name.split(' ')[0].toLowerCase()}@example.test`,
+    payment_provider: paid && fee > 0 ? ['tron', 'stripe', 'manual'][id % 3] : null,
   }
 }
 const INVOICES = [
@@ -40,15 +41,19 @@ const INVOICES = [
   invoice(12, 'Sofia Ramos', '2026-09', 2.44, '2026-10-02'), invoice(13, 'Noah Klein', '2026-09', 5.12, '2026-10-04'),
   invoice(14, 'Emma Duarte', '2026-09', 3.0, '2026-10-02'), invoice(6, 'Daniel Moreau', '2026-08', 3.5, '2026-09-30'),
   invoice(7, 'Liam Becker', '2026-08', 1.28, '2026-09-03'), invoice(8, 'Sofia Ramos', '2026-08', 0.88, '2026-09-02'),
+  // One overdue, so Outstanding and "Mark paid" have something to show.
+  { ...invoice(31, 'Liam Becker', '2026-10', 12.4), status: 'pending', is_overdue: true, paid_date: null, payment_provider: null },
 ]
 const charged = INVOICES.filter((i) => i.total_fee > 0)
+const unpaid = charged.filter((i) => i.status !== 'paid')
 const INVOICES_BODY = {
   success: true,
   invoices: INVOICES,
   summary: {
-    total_collected: Math.round(charged.reduce((s, i) => s + i.total_fee, 0) * 100) / 100,
-    count_total: INVOICES.length, count_paid: charged.length, count_pending: 0,
-    count_no_fee: INVOICES.length - charged.length, outstanding_amount: 0,
+    total_collected: Math.round(charged.filter((i) => i.status === 'paid').reduce((s, i) => s + i.total_fee, 0) * 100) / 100,
+    count_total: INVOICES.length, count_paid: charged.length - unpaid.length, count_pending: unpaid.length,
+    count_no_fee: INVOICES.length - charged.length,
+    outstanding_amount: Math.round(unpaid.reduce((s, i) => s + i.total_fee, 0) * 100) / 100,
   },
 }
 
@@ -288,7 +293,17 @@ function buildProfile() {
       id: 11, name: 'Main', exchange: 'binance', api_key: 'abc123…wxyz', demo: false, enabled: true,
       balance: r2(balance), unrealized_pnl: unrealized, currency_type: 'USDT', deleted_at: null,
       realized_pnl: net, initial_deposit: 0, hwm,
+      key_status: 'ok', key_error_reason: null, key_blocked_at: null,
+      trading: { state: 'trading', label: 'Trading', invoice_id: null, since: null },
     }],
+    standing: {
+      trading: { state: 'trading', label: 'Trading', exchange: 'binance', invoice_id: null, since: null },
+      key_problem: false, owes: { amount: 0, count: 0, overdue: false },
+      last_payment: { invoice_id: 22, amount: invoices[2].total_fee, paid_at: '2026-11-10T08:43:50Z', kind: 'card', label: 'Stripe' },
+      pnl_month: 41.25,
+    },
+    referred_by: { uni_id: 'u-liam', name: 'Liam Becker' },
+    contacts: { telegram: 'daniel_trades', discord: 'danielm', discord_linked: true },
   }
 
   const summary = {
@@ -309,6 +324,9 @@ function buildProfile() {
     commissions: {
       this_month: 0, all_time: r2(invoices.reduce((s, x) => s + x.total_fee, 0)),
       all_time_paid: r2(invoices.reduce((s, x) => s + x.total_fee, 0)),
+      month_estimate: 8.25,
+      month_estimate_note: 'If the month ended now: 20% of the profit after fees, only above the high-water mark.',
+      last_invoice: { id: 22, month_year: '2026-10', total_fee: invoices[2].total_fee, status: 'paid', paid_at: '2026-11-10T08:43:50Z', kind: 'card' },
     },
   }
 
@@ -326,6 +344,8 @@ function userProfile(path) {
     case 'analytics': return { success: true, analytics: PROFILE.analytics }
     case 'invoices': return { success: true, invoices: PROFILE.invoices }
     case 'positions': return { success: true, positions: [], trades: [] }
+    case 'timeline': return { success: true, events: sampleTimeline() }
+    case 'signals': return { success: true, ...sampleSignals() }
     default: return undefined
   }
 }
@@ -346,7 +366,78 @@ function samplePayment(inv) {
     }
   }
   if (n % 3 === 1) return { ...base, provider: 'stripe', kind: 'card', label: 'Card (Stripe)', test: false, reference: `cs_live_a1SAMPLE${n}xYzSampleSessionId0000` }
-  return { ...base, provider: 'manual', kind: 'manual', label: 'Marked paid by an admin', test: false, reference: null }
+  return {
+    ...base, provider: 'manual', kind: 'manual', label: 'Bank transfer (marked paid by an admin)', test: false, reference: null,
+    manual_method: 'bank_transfer', note: 'Wise transfer from the customer, ref 4471', marked_by: { uni_id: 'sample-admin', name: 'Sample Admin' },
+  }
+}
+
+// ---------------------------------------------------------------- the customer's timeline + signals
+const ago = (days, h = 10) => new Date(Date.now() - days * 86400000 - h * 3600000).toISOString()
+function sampleTimeline() {
+  const e = (at, kind, tone, title, detail = null, by = null, invoice_id = null, note_id = null) => ({ at, kind, tone, title, detail, by, invoice_id, note_id })
+  return [
+    e(ago(0, 2), 'note', 'note', 'Note', 'Asked about raising his deposit to $5,000 next month.', 'Sample Admin', null, 3),
+    e('2026-11-10T08:43:50Z', 'payment', 'good', 'Paid the October 2026 invoice: $34.70', 'Card (Stripe)', null, 22),
+    e('2026-11-01T09:00:00Z', 'invoice', 'info', 'October 2026 invoice issued: $34.70', 'Due Nov 4, 2026', null, 22),
+    e('2026-10-21T07:12:00Z', 'admin', 'neutral', 'Changed the fees: realized 25% → 20%', null, 'Sample Admin'),
+    e('2026-10-03T11:20:00Z', 'payment', 'good', 'Paid the September 2026 invoice: $6.96', 'USDT (TRC-20)', null, 21),
+    e('2026-09-02T15:05:00Z', 'payment', 'good', 'Paid the August 2026 invoice: $28.11', 'Bank transfer (marked paid by an admin) · "Wise transfer from the customer, ref 4471"', 'Sample Admin', 20),
+    e('2026-08-03T13:40:00Z', 'trade', 'good', 'First closed trade', 'On Binance'),
+    e('2026-07-28T06:10:00Z', 'account', 'good', 'Connected the Binance account "Main"'),
+    e('2026-07-21T04:00:00Z', 'admin', 'good', 'Approved Daniel Moreau', null, 'Sample Admin'),
+    e('2026-07-20T09:12:00Z', 'signup', 'info', 'Signed up', 'daniel@example.test'),
+  ]
+}
+function sampleSignals() {
+  const row = (i, action, ticker, status, reason) => ({
+    log_id: 900 - i, at: ago(i * 0.6, 3), exchange: 'binance', feed: 'main', action, ticker, account: 'Main', status, reason,
+  })
+  const normal = (key, label) => ({ key, label, severity: 'normal' })
+  return {
+    signals: [
+      row(0, 'EXIT_LONG', 'LTCUSDT', 'filled', null),
+      row(1, 'BUY', 'LTCUSDT', 'filled', null),
+      row(2, 'BUY', 'LTCUSDT', 'skipped', normal('maxed', 'Stack already full')),
+      row(3, 'SELL', 'RENDERUSDT', 'filled', null),
+      row(4, 'EXIT_SHORT', 'RENDERUSDT', 'filled', null),
+      row(5, 'SELL', 'SOLUSDT', 'skipped', normal('main_full', 'Main account already full')),
+    ],
+    last_7_days: { filled: 14, skipped: 3, failed: 0 },
+  }
+}
+
+// ---------------------------------------------------------------- User Management list
+function sampleUser(name, trading, extra = {}) {
+  const first = name.split(' ')[0].toLowerCase()
+  return {
+    uni_id: `u-${first}`, name, email: `${first}@example.test`, status: 'active', type: 'user', email_verified: true,
+    realized_percentage: 20, unrealized_percentage: 6, created_at: '2026-08-02T10:00:00Z', last_activity: ago(2),
+    accounts: [{
+      id: first.length, name: 'Main', exchange: 'binance', api_key: 'abcd •••• wxyz', demo: false,
+      enabled: trading.state !== 'paused_unpaid', balance: 2400, unrealized_pnl: 3.1, currency_type: 'USDT',
+      key_status: trading.state === 'key_blocked' ? 'blocked' : 'ok', key_blocked_at: null, deleted_at: null,
+    }],
+    trading, key_problem: trading.state === 'key_blocked', owes: { amount: 0, count: 0, overdue: false }, last_payment: null, pnl_month: 0,
+    ...extra,
+  }
+}
+const T = (state, label, invoice_id = null) => ({ state, label, exchange: 'binance', invoice_id, since: null })
+const pay = (invoice_id, amount, paid_at, kind, label) => ({ invoice_id, amount, paid_at, kind, label })
+const USERS_BODY = {
+  success: true,
+  users: [
+    sampleUser('Daniel Moreau', T('trading', 'Trading'), { last_payment: pay(22, 34.7, '2026-11-10T08:43:50Z', 'card', 'Stripe'), pnl_month: 41.25 }),
+    sampleUser('Liam Becker', T('paused_unpaid', 'Paused · unpaid invoice', 31), {
+      owes: { amount: 12.4, count: 1, overdue: true }, last_payment: pay(11, 12.4, '2026-10-03T11:20:00Z', 'crypto', 'USDT'), pnl_month: -6.1,
+    }),
+    sampleUser('Sofia Ramos', T('key_blocked', 'Key blocked'), { last_payment: pay(12, 2.44, '2026-10-02T09:00:00Z', 'manual', 'Bank transfer') }),
+    sampleUser('Noah Klein', T('trading', 'Trading'), {
+      owes: { amount: 5.12, count: 1, overdue: false }, last_payment: pay(13, 5.12, '2026-10-04T09:00:00Z', 'card', 'Stripe'), pnl_month: 18.9,
+    }),
+    sampleUser('Emma Duarte', T('below_min', 'Below the $1,000 minimum deposit')),
+    { ...sampleUser('Lucas Petit', T('no_exchange', 'No exchange')), accounts: [], last_activity: null },
+  ],
 }
 
 function invoiceView(path) {
@@ -362,6 +453,7 @@ const GET = {
   '/admin/users/': (_user, path) => userProfile(path),
   '/admin/invoices/': (_user, path) => invoiceView(path),
   '/admin/affiliate/users/': { success: true, referrals: [] },
+  '/admin/users': USERS_BODY,
   '/auth/me': (user) => ({ success: true, user }),
   '/admin/invoices': INVOICES_BODY,
   '/admin/tron-transfers': TRANSFERS_BODY,

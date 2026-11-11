@@ -65,6 +65,8 @@ import type {
   TableStructure,
   TestUserInput,
   UserReferralRow,
+  TimelineEvent,
+  CustomerSignals,
 } from '../types/admin'
 import type { AdminSignupInfo } from '../types/signupInfo'
 
@@ -589,6 +591,32 @@ export async function getAdminUserInvoices(
   return res.invoices.map(mapApiInvoice)
 }
 
+/** Everything that happened to this customer, newest first (admin only). */
+export async function getAdminUserTimeline(uniId: string): Promise<TimelineEvent[]> {
+  const res = await apiFetch<{ success: boolean; events: TimelineEvent[] }>(
+    `/admin/users/${uniId}/timeline`,
+    { auth: true },
+  )
+  return res.events
+}
+
+export async function addAdminUserNote(uniId: string, body: string): Promise<void> {
+  await apiFetch(`/admin/users/${uniId}/notes`, { method: 'POST', body: { body }, auth: true })
+}
+
+export async function deleteAdminUserNote(uniId: string, noteId: number): Promise<void> {
+  await apiFetch(`/admin/users/${uniId}/notes/${noteId}`, { method: 'DELETE', auth: true })
+}
+
+/** The bot's last signals for this customer and why it skipped (admin only). */
+export async function getAdminUserSignals(uniId: string, limit = 8): Promise<CustomerSignals> {
+  const res = await apiFetch<{ success: boolean } & CustomerSignals>(
+    `/admin/users/${uniId}/signals?limit=${limit}`,
+    { auth: true },
+  )
+  return { signals: res.signals, last_7_days: res.last_7_days }
+}
+
 export async function getAdminUserReferrals(
   uniId: string,
 ): Promise<UserReferralRow[]> {
@@ -667,7 +695,16 @@ export interface AdminInvoicePayment {
   explorer_url: string | null
   /** What actually arrived on chain (it can be short by an exchange's withdrawal fee). */
   received: { amount: string; asset: string } | null
+  /** Marked paid BY HAND: how the money came (absent on an older API). */
+  manual_method?: ManualPaymentMethod | null
+  /** The admin's note on a hand-marked payment, or on a transfer matched by hand. */
+  note?: string | null
+  /** Which admin marked it paid / matched the transfer. */
+  marked_by?: { uni_id: string; name: string } | null
 }
+
+/** How the money came, when an admin marks an invoice paid by hand (2026-11-11). */
+export type ManualPaymentMethod = 'bank_transfer' | 'crypto_wallet' | 'cash' | 'other'
 
 /** GET /admin/invoices/{id} — one invoice with its customer and its payment. */
 export interface AdminInvoiceView extends AdminInvoiceRow {
@@ -798,8 +835,18 @@ export async function createManualInvoice(input: ManualInvoiceInput): Promise<In
 
 export async function updateInvoice(
   id: string,
-  /** sandbox: a rehearsal — settling it is not announced to anyone. */
-  body: { total_fee?: number; status?: string; sandbox?: boolean },
+  /**
+   * sandbox: a rehearsal — settling it is not announced to anyone.
+   * method + note: REQUIRED to mark a real invoice paid by hand (how the
+   * money came, and a short note), so "how was it paid" always has an answer.
+   */
+  body: {
+    total_fee?: number
+    status?: string
+    sandbox?: boolean
+    method?: ManualPaymentMethod
+    note?: string
+  },
 ): Promise<Invoice> {
   const res = await apiFetch<{ success: boolean; invoice: ApiInvoice }>(
     `/admin/invoices/${id}`,

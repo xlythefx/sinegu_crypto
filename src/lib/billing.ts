@@ -68,6 +68,8 @@ export interface Invoice {
   isFirstInvoice: boolean
   referenceLabel: string
   referenceValue: number
+  /** How a paid invoice was paid: stripe | tron | coinsbuy | manual; null = not paid / not recorded. */
+  paymentProvider: string | null
 }
 
 /** Raw invoice row as returned by the API (`Invoice::toApiArray`). */
@@ -106,6 +108,7 @@ export interface ApiInvoice {
   is_first_invoice: boolean
   reference_label: string
   reference_value: number
+  payment_provider?: string | null
 }
 
 /** Map an API invoice row into the UI `Invoice` shape. */
@@ -149,6 +152,7 @@ export function mapApiInvoice(row: ApiInvoice): Invoice {
     isFirstInvoice: row.is_first_invoice,
     referenceLabel: row.reference_label,
     referenceValue: row.reference_value,
+    paymentProvider: row.payment_provider ?? null,
   }
 }
 

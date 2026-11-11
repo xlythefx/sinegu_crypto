@@ -6,6 +6,8 @@ import { getApiErrorMessage } from '../../../services/api'
 import { fmtMediumDate, fmtMoney } from '../../../lib/format'
 import type { Invoice } from '../../../lib/billing'
 import type { ExchangePillValue } from './ExchangeFilterPill'
+import PaidViaBadge from '../invoices/PaidViaBadge'
+import { paymentKind } from '../../../lib/paymentKind'
 
 const TH =
   'text-left text-[10.5px] uppercase tracking-[0.07em] text-faint font-semibold py-2.5 px-3 border-b border-hair whitespace-nowrap'
@@ -97,7 +99,12 @@ export default function UserInvoicesTable({
                       {fmtMoney(inv.totalFee)}
                     </td>
                     <td className={TD}>
-                      <span className={`${PILL} ${pill.cls}`}>{pill.label}</span>
+                      <span className="inline-flex items-center gap-1.5 flex-wrap">
+                        <span className={`${PILL} ${pill.cls}`}>{pill.label}</span>
+                        {inv.status === 'paid' && inv.totalFee > 0 && (
+                          <PaidViaBadge kind={paymentKind(inv.paymentProvider)} />
+                        )}
+                      </span>
                     </td>
                     <td className={`${TD} font-mono text-[12px] text-muted whitespace-nowrap`}>
                       {inv.dueDate ? fmtMediumDate(inv.dueDate) : '—'}

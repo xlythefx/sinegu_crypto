@@ -1,7 +1,9 @@
 import { Building2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { BADGE } from '../badges'
+import TradingBadge from '../users/TradingBadge'
 import { EXCHANGE_META } from '../../exchanges/meta'
-import { fmtMoney, fmtSignedMoney } from '../../../lib/format'
+import { fmtMediumDate, fmtMoney, fmtSignedMoney } from '../../../lib/format'
 import type { AdminUserDetailAccount } from '../../../types/admin'
 import type { ExchangeKind } from '../../../types/exchanges'
 import type { ExchangePillValue } from './ExchangeFilterPill'
@@ -96,6 +98,28 @@ export default function UserAccountCards({
               )}
             </div>
 
+            {/* Is the bot trading on it — and if not, why (the admin audit, 2026-11-11). */}
+            {a.trading && !a.deleted_at && (
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                <TradingBadge verdict={a.trading} full />
+                {a.trading.state === 'paused_unpaid' && a.trading.invoice_id && (
+                  <Link to={`/admin/invoices/${a.trading.invoice_id}`} className="text-[11.5px] font-semibold text-accent hover:underline">
+                    View invoice #{a.trading.invoice_id}
+                  </Link>
+                )}
+              </div>
+            )}
+            {a.key_status === 'blocked' && !a.deleted_at && (
+              <div className="mt-2.5 rounded-[10px] border border-[color-mix(in_srgb,var(--red)_35%,transparent)] bg-[color-mix(in_srgb,var(--red)_8%,transparent)] px-3 py-2 text-[12px] text-red">
+                <span className="font-bold">The exchange refuses this key</span>
+                {a.key_blocked_at && <> since {fmtMediumDate(a.key_blocked_at)}</>}
+                {a.key_error_reason && <span className="block text-[11.5px] opacity-90">{keyReason(a.key_error_reason)}</span>}
+                <Link to="/admin/api-keys" className="mt-1 inline-block text-[11.5px] font-semibold underline">
+                  Open API Keys to recheck
+                </Link>
+              </div>
+            )}
+
             <div className="mt-3.5 border-t border-hair pt-3.5">
               <div className="text-[10px] font-extrabold uppercase tracking-[0.5px] text-faint">
                 Balance
@@ -148,4 +172,32 @@ export default function UserAccountCards({
       </div>
     </section>
   )
+}
+
+/** The exchange's refusal in plain words (the engine's key_status reasons). */
+function keyReason(reason: string): string {
+  switch (reason) {
+    case 'IP_OR_PERMISSION':
+      return 'Our server IP is not allowed on the key, or a permission is missing.'
+    case 'IP_NOT_WHITELISTED':
+    case 'IP_BANNED':
+      return 'Our server IP is not on the key’s allowed list.'
+    case 'TRADE_PERMISSION':
+    case 'PERMISSION_TRADE_WRITE':
+    case 'PERMISSION_WRITE':
+      return 'The key can read but may not trade: futures trading is not enabled on it.'
+    case 'PERMISSION_DENIED':
+    case 'PERMISSION_READ':
+    case 'PERMISSION_TRADE_READ':
+      return 'A permission the bot needs is not enabled on the key.'
+    case 'KEY_EXPIRED':
+      return 'The key has expired: the customer needs to create a new one.'
+    case 'UNKNOWN_KEY':
+    case 'BAD_KEY_FORMAT':
+    case 'BAD_SIGNATURE':
+    case 'NOT_LOGGED_IN':
+      return 'The exchange does not recognise the key: the customer needs to replace it.'
+    default:
+      return reason.replace(/_/g, ' ').toLowerCase()
+  }
 }

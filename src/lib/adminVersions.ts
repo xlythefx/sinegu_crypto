@@ -15,6 +15,84 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-11-11 ───────────────────────────────────────────────────────────
   {
+    id: 'mark-paid-how-and-who',
+    date: '2026-11-11',
+    kind: 'improved',
+    area: 'Billing',
+    title: '"Mark paid" now says how the money came, and who marked it',
+    summary:
+      'An invoice marked paid by hand used to say only "Marked paid by an admin", so later nobody could tell how the customer actually paid. Now "Mark paid" asks how the money came (bank transfer, crypto to another wallet, cash or other) and for a short note, and saves the admin\'s name. Every admin action on a customer is now recorded too: approved, rejected, suspended, fee changes, deleted invoices, disconnected keys.',
+    howItWorks: [
+      'Click "Mark paid" on Invoice History or on an invoice\'s page. Pick how the money came and write a note, for example "Wise transfer, ref 4471". The button stays grey until both are filled in.',
+      'The invoice page then shows "Bank transfer (marked paid by an admin)", who marked it and the note. The customer\'s "payment received" email names the way the money came, never the admin.',
+      'Card and USDT payments still settle by themselves and never need this. A USDT payment matched by hand on Crypto Transfers also records who matched it.',
+      'Admin actions are recorded from 11 Nov 2026 on. They show on each customer\'s new Timeline tab.',
+    ],
+    technical: [
+      'PUT /admin/invoices/{id} {status: paid} requires method (bank_transfer | crypto_wallet | cash | other) and note (≥ 3 chars) unless sandbox: true. InvoiceService::settle(…, record: [paid_by, manual_method, payment_note]) writes them in the same transaction; new invoices columns paid_by / manual_method / payment_note.',
+      'App\\Services\\Admin\\AdminAudit → admin_audit_logs (actor, subject, action, summary, details JSON), best-effort, written from AdminUserController (status / role / fees / create / delete), AdminController accept / reject, AdminInvoiceController (marked paid / fee changed / deleted), AdminApiKeyController (switched on/off, renamed, disconnected, purged) and Crypto Transfers attribution.',
+    ],
+    links: [{ label: 'Invoice History', href: '/admin/invoices' }],
+  },
+  {
+    id: 'users-list-standing',
+    date: '2026-11-11',
+    kind: 'new',
+    area: 'User Management',
+    title: 'User Management shows who is trading, who owes us, and how they last paid',
+    summary:
+      'The customer list used to show only whether someone could sign in and their balance. Each row now says whether the bot is trading for them and, if not, why; how much they owe; their last payment and whether it was Stripe, crypto or by hand; and their profit this month. Filters find the customers who need something.',
+    howItWorks: [
+      'The Trading column reads Trading, Paused (unpaid invoice), Key blocked, Below minimum (deposit under $1,000), Waiting for balance, Switched off, Demo only or No exchange. Hover it for the full sentence.',
+      'Owes shows the unpaid amount, in red with "Overdue" once it is past its due date. Last payment shows the amount, a Stripe / Crypto / By hand badge and the date. This month is the closed profit after exchange fees since the 1st.',
+      'The "Needs action" chips filter the list: Owes money, Key problem, Not trading (connected, but the bot is not trading for them) and Never connected (approved, but no exchange yet).',
+      'Opening a row shows each exchange account with a red "Key blocked" badge when the exchange refuses its key. On a phone, the trading status and the amount owed appear under the name.',
+    ],
+    technical: [
+      'GET /admin/users adds trading {state, label, invoice_id, since}, key_problem, owes, last_payment, pnl_month per user (full admins only; collaborators get none) and key_status / key_blocked_at per account. One service, App\\Services\\Admin\\CustomerStatus, batched (a few queries for the whole list), mirroring the engine\'s own gates: enabled, not sandbox, owner not suspended, key not blocked, deposit ≥ ENGINE_MIN_DEPOSIT.',
+    ],
+    links: [{ label: 'User Management', href: '/admin/users' }],
+  },
+  {
+    id: 'profile-standing',
+    date: '2026-11-11',
+    kind: 'improved',
+    area: 'User Management',
+    title: 'A customer\'s profile says why trading is off, shows key problems and the fee building up',
+    summary:
+      'A customer\'s profile now answers "is the bot trading for them, and if not why" at the top and on each exchange account, shows when the exchange refuses their key, and replaces the "Commission this month" tile, which always read $0.00, with the fee building up this month.',
+    howItWorks: [
+      'Under the name: the trading status (for example "Paused · invoice #31 unpaid" with a link to that invoice), the amount owed, who referred them, and their Telegram and Discord. "Last active" is renamed "Last sign-in", because that is what it records.',
+      'Each exchange account card shows its trading status and, when the exchange refuses the key, a red box with the reason in plain words and a link to API Keys.',
+      '"Fee this month so far" is what would be billed if the month ended now: for example $8.25 = 20% of this month\'s profit after fees above the high-water mark. Under it is the last invoice, for example "Last: $34.70 Oct · paid (Stripe)".',
+      'A new "Last signals" card shows the bot\'s last signals on the customer\'s accounts: filled, or skipped and why (for example "Stack already full"), with a 7-day count and a link to the Signal Log.',
+      'Every invoice table on the profile shows the Stripe / Crypto / By hand badge beside "Paid".',
+    ],
+    technical: [
+      'Bug: commissions.this_month summed invoices whose month_year is the running month, which are only created once it ends, so it was always 0. Summary now adds commissions.month_estimate (InvoiceService::computeForAccount for the running month, like the Money tab forecast; customers only, live real-money Binance accounts), month_estimate_note and last_invoice.',
+      'GET /admin/users/{uniId} adds standing, referred_by, contacts and per-account key_status / key_error_reason / key_blocked_at / trading. New GET /admin/users/{uniId}/signals (SignalHealth::classify over the last 600 trade_logs of the customer\'s venues). The profile tab now lives in ?tab=.',
+    ],
+    links: [{ label: 'User Management', href: '/admin/users' }],
+  },
+  {
+    id: 'customer-timeline-notes',
+    date: '2026-11-11',
+    kind: 'new',
+    area: 'User Management',
+    title: 'Each customer has a Timeline of everything that happened, and admin notes',
+    summary:
+      'A customer\'s story used to be spread over five tabs. The new Timeline tab lists it in one place, newest first: signed up, approved, connected an exchange, first trade, every invoice issued, overdue and paid (and how), key problems, fee changes and every other admin action. Admins can add notes, such as "paid October by bank, ref 4471" or "promised to top up on Friday".',
+    howItWorks: [
+      'Open a customer → Timeline. Each line has a date, a category (Billing, Payment, Exchange, Admin, Note…) and who did it. Click an invoice line to open that invoice.',
+      'Type a note at the top and click "Save note". Every admin sees it, with your name. Deleting a note asks first, and the deletion is recorded.',
+      'Admin actions are recorded from 11 Nov 2026. Invoices, exchange accounts and trades go back to the start.',
+    ],
+    technical: [
+      'GET /admin/users/{uniId}/timeline (App\\Services\\Admin\\CustomerTimeline: admin_audit_logs + {x}_accounts + first closed trade + invoices via PaymentMethod + user_notes), POST /admin/users/{uniId}/notes, DELETE /admin/users/{uniId}/notes/{id}. Full admins only (admin route group); hidden from collaborators.',
+    ],
+    links: [{ label: 'User Management', href: '/admin/users' }],
+  },
+  {
     id: 'invoice-page-paid-via',
     date: '2026-11-11',
     kind: 'improved',

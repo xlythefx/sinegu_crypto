@@ -1,7 +1,9 @@
-import { Users } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { MessageCircle, Send, UserPlus, Users } from 'lucide-react'
 import UserAvatar from '../../ui/UserAvatar'
 import { RoleBadge, StatusBadge } from '../badges'
-import { fmtMediumDate } from '../../../lib/format'
+import TradingBadge from '../users/TradingBadge'
+import { fmtMediumDate, fmtMoney } from '../../../lib/format'
 import type { AdminUserDetail } from '../../../types/admin'
 
 interface UserProfileHeaderProps {
@@ -57,12 +59,64 @@ export default function UserProfileHeader({
                       Joined {fmtMediumDate(user.created_at)}
                     </span>
                   )}
+                  {/* Written at sign-in only, so it is the last SIGN-IN, not activity. */}
                   {user.last_activity && (
-                    <span className="font-mono text-[11px] text-faint">
-                      · Last active {fmtMediumDate(user.last_activity)}
+                    <span className="font-mono text-[11px] text-faint" title="Updated when they sign in">
+                      · Last sign-in {fmtMediumDate(user.last_activity)}
                     </span>
                   )}
                 </div>
+                {/* Trading and money at a glance (full admins; the admin audit, 2026-11-11). */}
+                {user.standing && (
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                    <TradingBadge verdict={user.standing.trading} full />
+                    {user.standing.owes.amount > 0 && (
+                      <span
+                        className={`rounded-pill px-[9px] py-[3px] text-[10.5px] font-bold ${
+                          user.standing.owes.overdue
+                            ? 'bg-[color-mix(in_srgb,var(--red)_16%,transparent)] text-red'
+                            : 'bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-accent'
+                        }`}
+                      >
+                        Owes {fmtMoney(user.standing.owes.amount)}
+                        {user.standing.owes.overdue ? ' · overdue' : ''}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {(user.referred_by || user.contacts?.telegram || user.contacts?.discord) && (
+                  <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-muted">
+                    {user.referred_by && (
+                      <span className="inline-flex items-center gap-1.5">
+                        <UserPlus size={13} className="text-faint" />
+                        Referred by{' '}
+                        <Link to={`/admin/users/${user.referred_by.uni_id}`} className="font-semibold text-text hover:text-accent">
+                          {user.referred_by.name}
+                        </Link>
+                      </span>
+                    )}
+                    {user.contacts?.telegram && (
+                      <a
+                        href={`https://t.me/${user.contacts.telegram.replace(/^@/, '')}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 hover:text-accent"
+                        title="Telegram (typed by the customer)"
+                      >
+                        <Send size={13} className="text-faint" />@{user.contacts.telegram.replace(/^@/, '')}
+                      </a>
+                    )}
+                    {user.contacts?.discord && (
+                      <span
+                        className="inline-flex items-center gap-1.5"
+                        title={user.contacts.discord_linked ? 'Discord (confirmed through Discord sign-in)' : 'Discord (typed by the customer)'}
+                      >
+                        <MessageCircle size={13} className="text-faint" />
+                        {user.contacts.discord}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
               {referralsCount !== undefined && (
                 <div className="flex flex-none items-center gap-2.5 rounded-row border border-border bg-surface px-3.5 py-2.5">

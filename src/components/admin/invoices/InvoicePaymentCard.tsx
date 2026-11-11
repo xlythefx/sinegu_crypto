@@ -103,6 +103,15 @@ export default function InvoicePaymentCard({
           <Reference value={ref} />
         </FactRow>
       )}
+      {payment?.marked_by && (
+        <FactRow k={kind === 'manual' ? 'Marked paid by' : 'Matched by hand by'}>{payment.marked_by.name}</FactRow>
+      )}
+      {payment?.note && (
+        <div className="mt-3 rounded-[10px] border border-border bg-surface2 px-3 py-2.5 text-[12.5px] text-text">
+          <span className="block text-[10.5px] font-bold uppercase tracking-[0.08em] text-faint mb-1">Note</span>
+          {payment.note}
+        </div>
+      )}
 
       {payment?.explorer_url && (
         <a
@@ -117,6 +126,11 @@ export default function InvoicePaymentCard({
       {kind === 'card' && !payment?.test && (
         <p className="mt-3 text-[12px] text-faint">
           To find it in Stripe, paste the session id into the Stripe dashboard&apos;s search.
+        </p>
+      )}
+      {kind === 'manual' && !payment?.manual_method && (
+        <p className="mt-3 text-[12px] text-faint">
+          Marked paid before 2026-11-11, when the way the money came was not asked for yet.
         </p>
       )}
       {kind === 'unknown' && (

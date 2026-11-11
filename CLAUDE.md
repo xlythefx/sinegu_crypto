@@ -375,6 +375,43 @@ payment is told exactly once. Rules:
   `payment_provider` + `payment_reference` (Stripe session id / tx hash),
   plus the TronScan link and the USDT that actually arrived. Admin only:
   the customer's payload carries `payment_provider` alone.
+- **"Mark paid" by hand asks HOW and records WHO (2026-11-11 — "we don't
+  know how it was paid").** `PUT /admin/invoices/{id}` `{status: paid}`
+  needs `method` (bank_transfer | crypto_wallet | cash | other) and a `note`
+  (≥ 3 chars), except `sandbox: true`. `settle(…, record:)` writes
+  `paid_by` / `manual_method` / `payment_note` in the same transaction, so
+  the notices carry them. The customer's email names the way the money came,
+  never the admin. Website: `components/admin/invoices/MarkPaidModal.tsx`.
+  Every "Paid" anywhere carries `PaidViaBadge` (Stripe / Crypto / By hand,
+  `lib/paymentKind.ts`).
+
+## Customer standing, admin audit, timeline (2026-11-11)
+
+From the admin audit ("what would the boss want to see"):
+- **`App\Services\Admin\CustomerStatus` is the ONE answer to "is the bot
+  trading for this customer, and if not why"**, plus owes, last payment and
+  P&L this month. It feeds User Management (`GET /admin/users`) and the
+  profile (`standing`, per-account `trading`), so the two cannot disagree.
+  The verdict mirrors the engine's gates in order: enabled, not sandbox,
+  owner not suspended; then key blocked, then deposit < `ENGINE_MIN_DEPOSIT`.
+  "Paused · unpaid" = switched off with an unpaid invoice past due. A new
+  engine gate needs a state here too. Batched DB reads, never an exchange
+  call. Billing, so collaborators get none of it.
+- **`App\Services\Admin\AdminAudit` records every admin action on a
+  customer** (`admin_audit_logs`: who, on whom, what, a plain sentence).
+  Best-effort, never a credential in `details`. **A new admin write path on
+  a customer or an invoice records itself here** — it is the Timeline and
+  the answer to "who did that". Starts 2026-11-11.
+- **Timeline + notes** (`/admin/users/:id?tab=timeline`, full admins):
+  `CustomerTimeline` assembles it from the audit log, accounts, the first
+  closed trade, invoices (via `PaymentMethod`) and `user_notes`. Nothing but
+  the audit and the notes is recorded for it.
+- **The profile's "Fee this month so far"** is `computeForAccount` for the
+  running month (the Money tab forecast's math). The old "Commission this
+  month" summed invoices FOR the running month, which never exist until it
+  ends, so it always read $0.00. Don't bring that back.
+- `last_activity` is written at SIGN-IN only, so the screens say "Last
+  sign-in", never "Last active".
 
 **Direct USDT-TRC20 payments — THE rail customers pay on (2026-09-23).**
 Customers send USDT straight to a TRON wallet we control; a scheduled poller

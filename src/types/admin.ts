@@ -69,6 +69,48 @@ export interface AdminUserAccount {
   unrealized_pnl: number
   currency_type: string | null
   deleted_at: string | null
+  /** 'blocked' = the exchange refuses the key (API from 2026-11-11). */
+  key_status?: string | null
+  key_blocked_at?: string | null
+}
+
+/**
+ * Is the bot trading for this customer — and if not, why (API
+ * `Admin\CustomerStatus`, 2026-11-11). Same verdict on the list and the profile.
+ */
+export type TradingState =
+  | 'trading'
+  | 'paused_unpaid'
+  | 'key_blocked'
+  | 'below_min'
+  | 'deposit_unknown'
+  | 'off'
+  | 'suspended'
+  | 'demo'
+  | 'demo_only'
+  | 'disconnected'
+  | 'no_exchange'
+
+export interface TradingVerdict {
+  state: TradingState
+  label: string
+  exchange?: string | null
+  /** The unpaid invoice that paused it. */
+  invoice_id: number | null
+  /** When the key was refused. */
+  since: string | null
+}
+
+/** card = Stripe, crypto = USDT / Coinsbuy, manual = marked paid by an admin. */
+export type PaymentKind = 'card' | 'crypto' | 'manual' | 'unknown'
+
+export interface CustomerStanding {
+  trading: TradingVerdict
+  key_problem: boolean
+  owes: { amount: number; count: number; overdue: boolean }
+  last_payment: { invoice_id: number; amount: number; paid_at: string | null; kind: PaymentKind; label: string } | null
+  /** Closed P&L after fees this calendar month (UTC), real money only. */
+  pnl_month: number
 }
 
 /** One user_credentials row as returned by GET /admin/users. */
@@ -86,6 +128,12 @@ export interface AdminUser {
   last_activity: string | null
   /** Omitted for a read-only collaborator — read it as `accounts ?? []`. */
   accounts?: AdminUserAccount[]
+  /** Full admins only (billing) — absent for a collaborator and on an older API. */
+  trading?: TradingVerdict
+  key_problem?: boolean
+  owes?: CustomerStanding['owes']
+  last_payment?: CustomerStanding['last_payment']
+  pnl_month?: number
 }
 
 import type { StrategyTrade } from '../lib/strategyStats'
@@ -609,6 +657,10 @@ export interface AdminUserDetailAccount extends AdminUserAccount {
   initial_deposit: number
   /** Latest invoice high-water mark for the account (null = never invoiced). */
   hwm: number | null
+  /** The exchange's reason when it refused the key (e.g. IP_OR_PERMISSION). */
+  key_error_reason?: string | null
+  /** Why this account is or is not trading; null for a disconnected one. */
+  trading?: TradingVerdict | null
 }
 
 /**
@@ -634,6 +686,43 @@ export interface AdminUserDetail {
   accounts?: AdminUserDetailAccount[]
   /** Why this user may not be deleted; empty = deletable. Absent for a collaborator. */
   delete_blockers?: string[]
+  /** Trading / owes / last payment — full admins only. */
+  standing?: CustomerStanding | null
+  /** Who brought them in through a referral link. */
+  referred_by?: { uni_id: string; name: string } | null
+  /** Typed at sign-up or in Settings (unverified); `discord_linked` = confirmed through Discord sign-in. */
+  contacts?: { telegram: string | null; discord: string | null; discord_linked: boolean }
+}
+
+/** One line of a customer's Timeline (GET /admin/users/{uniId}/timeline). */
+export interface TimelineEvent {
+  at: string
+  kind: 'signup' | 'admin' | 'account' | 'key' | 'trade' | 'invoice' | 'payment' | 'note'
+  tone: 'good' | 'bad' | 'neutral' | 'info' | 'note'
+  title: string
+  detail: string | null
+  /** The admin (or "System") who did it, or a note's author. */
+  by: string | null
+  invoice_id: number | null
+  note_id: number | null
+}
+
+/** One signal that reached this customer (GET /admin/users/{uniId}/signals). */
+export interface CustomerSignal {
+  log_id: number
+  at: string | null
+  exchange: string
+  feed: string | null
+  action: string
+  ticker: string
+  account: string | null
+  status: 'filled' | 'skipped' | 'failed' | string
+  reason: { key: string; label: string; severity: 'normal' | 'problem' | string } | null
+}
+
+export interface CustomerSignals {
+  signals: CustomerSignal[]
+  last_7_days: { filled: number; skipped: number; failed: number }
 }
 
 /**
@@ -679,9 +768,21 @@ export interface AdminUserSummary {
   }
   /** Sums of `invoices.total_fee` for this user. Absent for a collaborator. */
   commissions?: {
+    /** Invoices FOR the running month — always 0 until it ends; kept for older screens. */
     this_month: number
     all_time: number
     all_time_paid: number
+    /** The fee building up this month if it ended now (null = not billed / not available). */
+    month_estimate?: number | null
+    month_estimate_note?: string
+    last_invoice?: {
+      id: number
+      month_year: string
+      total_fee: number
+      status: 'paid' | 'pending' | 'overdue'
+      paid_at: string | null
+      kind: PaymentKind
+    } | null
   }
 }
 

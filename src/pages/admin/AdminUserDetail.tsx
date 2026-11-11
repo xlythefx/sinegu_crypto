@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   BarChart3,
   Fingerprint,
+  History,
   ImageDown,
   LayoutDashboard,
   Receipt,
@@ -30,6 +31,8 @@ import UserHeaderActions from '../../components/admin/user-detail/UserHeaderActi
 import UserPositionsTab from '../../components/admin/user-detail/UserPositionsTab'
 import UserSignupTab from '../../components/admin/user-detail/UserSignupTab'
 import UserAnalyticsTab from '../../components/admin/user-detail/UserAnalyticsTab'
+import UserTimelineTab from '../../components/admin/user-detail/UserTimelineTab'
+import UserSignalsCard from '../../components/admin/user-detail/UserSignalsCard'
 import PnlCardModal from '../../components/admin/pnl-card/PnlCardModal'
 import { EXCHANGE_META } from '../../components/exchanges/meta'
 import { useApiData } from '../../hooks/useApiData'
@@ -50,13 +53,14 @@ const CARD_BTN =
 const TAB_BTN =
   'inline-flex items-center gap-1.5 text-[12.5px] font-semibold py-[7px] px-4 rounded-btn cursor-pointer transition-colors duration-150'
 
-type Tab = 'overview' | 'positions' | 'analytics' | 'invoices' | 'signup'
+type Tab = 'overview' | 'positions' | 'analytics' | 'invoices' | 'timeline' | 'signup'
 
 const TABS: { key: Tab; label: string; Icon: LucideIcon }[] = [
   { key: 'overview', label: 'Overview', Icon: LayoutDashboard },
   { key: 'positions', label: 'Positions', Icon: Wallet },
   { key: 'analytics', label: 'Performance Analytics', Icon: BarChart3 },
   { key: 'invoices', label: 'Invoices', Icon: Receipt },
+  { key: 'timeline', label: 'Timeline', Icon: History },
   { key: 'signup', label: 'Sign-up info', Icon: Fingerprint },
 ]
 
@@ -270,6 +274,13 @@ export default function AdminUserDetail() {
                   <UserCapitalFlow summary={summary} loading={summaryLoading} />
                 </div>
 
+                {/* Is the bot trading for them, and why it skipped (full admins). */}
+                {!readOnly && (
+                  <div className="mb-stack">
+                    <UserSignalsCard uniId={uniId} name={user.name || ''} />
+                  </div>
+                )}
+
                 <div className="mb-stack">
                   <UserPerformanceChart
                     days={days ?? {}}
@@ -299,6 +310,8 @@ export default function AdminUserDetail() {
             </>
           ) : tab === 'signup' ? (
             <UserSignupTab uniId={uniId} />
+          ) : tab === 'timeline' ? (
+            <UserTimelineTab uniId={uniId} name={user.name || ''} />
           ) : tab === 'analytics' ? (
             <UserAnalyticsTab
               uniId={uniId}
