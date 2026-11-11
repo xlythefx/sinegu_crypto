@@ -23,7 +23,7 @@ export const ADMIN_CHANGES: AdminChange[] = [
     summary:
       'When a customer withdrew money on a day a trade closed, the day\'s percentage was measured on what was LEFT after the withdrawal. One customer emptied about $16,000 a few hours before a losing close and that day read −47%, while the strategy lost −2%. The trade had been sized on the money still in the account, so a withdrawal now counts after that day\'s trades.',
     howItWorks: [
-      'Affects only days where a withdrawal and a closed trade fall on the same day: the P&L calendar cell, Period Return on Performance Analytics, and the Customer profit card. Example: that customer\'s 22 Oct goes from −47% to about −2%, and his October from −45.7% to about −0.2%.',
+      'Affects only days where a withdrawal and a closed trade fall on the same day: the P&L calendar cell, Period Return on Performance Analytics, and the Customer profit card. Example: that customer\'s 22 Oct goes from −47% to about −2%, and his October from −45.7% to −0.3%.',
       'Deposits are unchanged: they still count before the day\'s trades. Dollar figures, invoices and the public track record are unchanged.',
     ],
     technical: [
