@@ -323,6 +323,26 @@ def kill_switch():
     return jsonify({"success": True, "telegram": notify.telegram_enabled()})
 
 
+@admin_bp.route("/payment-received", methods=["POST"])
+def payment_received():
+    """The API settled an invoice — tell the admin Telegram group who paid.
+
+    Body: ``{"invoice_id", "name", "amount", "period", "method", "exchange",
+    "was_paused", "test"}`` (the API's Billing PaymentNotifier). The API
+    already settled it, re-enabled the account and emailed the customer and
+    the team; like the kill switch, the engine is only the messenger.
+    """
+    if not _authorized():
+        return jsonify({"error": "Unauthorized"}), 403
+    from binance_abcd import notify
+
+    body = request.get_json(silent=True) or {}
+    if body.get("invoice_id") in (None, ""):
+        return jsonify({"error": "invoice_id is required"}), 400
+    notify.notify_payment_received(body)
+    return jsonify({"success": True, "telegram": notify.telegram_enabled()})
+
+
 @admin_bp.route("/stats", methods=["GET"])
 def stats():
     if not _authorized():

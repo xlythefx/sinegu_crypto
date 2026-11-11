@@ -1225,6 +1225,42 @@ def render_kill_switch(exchange: str, ticker: str, losses: Any, reason: str) -> 
     return "\n".join(lines)
 
 
+def render_payment_received(payment: dict) -> str:
+    """One invoice paid — the admin chat's copy of the team's "Invoice paid" email."""
+    name = str(payment.get("name") or "A customer").strip() or "A customer"
+    try:
+        amount = f"${float(payment.get('amount')):,.2f}"
+    except (TypeError, ValueError):
+        amount = "an unknown amount"
+    period = str(payment.get("period") or "").strip()
+    method = str(payment.get("method") or "").strip()
+    exchange = str(payment.get("exchange") or "").strip().lower()
+    try:
+        venue = exchanges.label(exchange) if exchange else ""
+    except Exception:  # noqa: BLE001 - an unknown venue name must not lose the alert
+        venue = exchange
+    if payment.get("test"):
+        title = f"🧪 <b>Test payment — {_esc(name)}</b> (not real money)"
+    else:
+        title = f"💰 <b>Invoice paid — {_esc(name)}</b>"
+    detail = amount + (f" for {_esc(period)}" if period else "") + (f" · {_esc(method)}" if method else "")
+    tail = f"Invoice #{_esc(payment.get('invoice_id'))}" + (f" · {_esc(venue)}" if venue else "")
+    lines = [title, detail, tail]
+    if payment.get("was_paused"):
+        lines.append("Trading had been paused for this invoice and is switched back on.")
+    return "\n".join(lines)
+
+
+def notify_payment_received(payment: dict) -> None:
+    """An invoice was paid (the API's Billing PaymentNotifier).
+
+    ADMIN chat only, through `_send_private` — never the public channel: who
+    paid and how much is business information, the same rule that keeps
+    account counts out of the channel.
+    """
+    _send_private(render_payment_received(payment))
+
+
 def notify_kill_switch(exchange: str, ticker: str, losses: Any, reason: str) -> None:
     """The API's kill switch turned a coin off (App\\Services\\Assets\\KillSwitch).
 
