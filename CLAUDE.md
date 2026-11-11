@@ -2426,6 +2426,11 @@ When it grows into a full dashboard, migrate to `features/<domain>/` folders
 - **Two agents live in `.claude/agents/`** — one for frontend, one for backend:
   - `.claude/agents/frontend.md` — frontend specialist for this repo (React conventions above).
   - `.claude/agents/backend.md` — backend specialist pointing at `C:\wamp64\www\sinegutrade-api` (Laravel), using `sinegu-api` as read-only reference.
+- `.claude/skills/screenshots/SKILL.md` — `node .claude/skills/screenshots/shots.mjs [route ...]`
+  captures pages at desktop + phone width on SAMPLE data (`fixtures.mjs`; every `/api/`
+  call is answered locally and nothing reaches pixel-alpha.com, which the dev build may
+  point at) and opens a gallery in the user's browser. Use it whenever the user asks
+  to see a page, and before calling a UI change done; look at the PNGs yourself.
 - `.claude/skills/deploy/SKILL.md` — deployment procedure (`/deploy`), driving `.claude/deploy_sinegualcrypto.py`. **Live at https://pixel-alpha.com** (Ubuntu 24.04, origin `2.24.139.176`); the skill holds the flow (backup → build → upload → verify). Credentials live in gitignored `.claude/deploy.creds.json` only; never in committed files, and never use the mother project's servers from this repo.
 
 ## Notes
