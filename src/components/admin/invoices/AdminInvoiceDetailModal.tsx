@@ -4,6 +4,7 @@ import { ArrowRight, CheckCircle2, FileText, Receipt, X } from 'lucide-react'
 import ExchangeBadge from '../../billing/ExchangeBadge'
 import InvoiceWorkings from '../../billing/InvoiceWorkings'
 import { fmtMoney, fmtSignedMoney, fmtSignedPct, formatDate } from '../../../lib/format'
+import { INVOICE_STATE_LABEL, INVOICE_STATE_PILL, invoiceState } from '../../../lib/invoiceStatus'
 import type { AdminInvoiceRow } from '../../../services/admin'
 
 interface AdminInvoiceDetailModalProps {
@@ -56,14 +57,10 @@ export default function AdminInvoiceDetailModal({
   if (!invoice) return null
 
   const paid = invoice.status === 'paid'
-  const overdue = !paid && invoice.isOverdue && invoice.totalFee > 0
   const manual = invoice.feeSource === 'manual'
-  const statusLabel = paid ? 'Paid' : overdue ? 'Overdue' : 'Outstanding'
-  const statusPill = paid
-    ? 'bg-[color-mix(in_srgb,var(--green)_16%,transparent)] text-green'
-    : overdue
-      ? 'bg-[color-mix(in_srgb,var(--red)_16%,transparent)] text-red'
-      : 'bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-accent'
+  const state = invoiceState(invoice)
+  const statusLabel = INVOICE_STATE_LABEL[state]
+  const statusPill = INVOICE_STATE_PILL[state]
 
   return createPortal(
     <div
@@ -126,7 +123,7 @@ export default function AdminInvoiceDetailModal({
             <p className={LABEL}>Billing period</p>
             <Row k="Period">{invoice.monthLabel}</Row>
             <Row k="Invoice date">{formatDate(invoice.invoiceDate)}</Row>
-            <Row k="Due date" tone={overdue ? 'neg' : undefined}>{formatDate(invoice.dueDate)}</Row>
+            <Row k="Due date" tone={state === 'overdue' ? 'neg' : undefined}>{formatDate(invoice.dueDate)}</Row>
             {paid && <Row k="Paid date" tone="pos">{formatDate(invoice.paidDate)}</Row>}
             <Row k={invoice.referenceLabel}>{fmtMoney(invoice.referenceValue)}</Row>
             {invoice.isFirstInvoice && (invoice.depositAmount ?? 0) > 0 && (

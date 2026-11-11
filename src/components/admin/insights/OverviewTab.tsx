@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowRight, Globe, Power, ShieldAlert, UserPlus } from '
 import Tabs, { type TabItem } from '../../ui/Tabs'
 import AttentionPane from './AttentionPane'
 import PlatformPane from './PlatformPane'
+import { RecentPaymentStrip } from './RecentPaymentsCard'
 import { useApiData } from '../../../hooks/useApiData'
 import { useSessionUser } from '../../../hooks/useSessionUser'
 import { displaySymbol } from '../../../lib/chart'
@@ -164,6 +165,13 @@ export default function OverviewTab({ toolbarSlot }: { toolbarSlot?: HTMLElement
                   Review <ArrowRight size={14} />
                 </span>
               </button>
+            )}
+            {/* A payment in the last day, on the view the Overview opens on. */}
+            {overview.data?.attention.recent_payments && (
+              <RecentPaymentStrip
+                payments={overview.data.attention.recent_payments}
+                onOpen={() => select('attention')}
+              />
             )}
             <PlatformPane />
           </>

@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from 'react'
-import { Navigate, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowDownToLine,
   ChevronLeft,
@@ -120,10 +120,13 @@ const STRIP_RED = `${STRIP} text-red border-[color-mix(in_srgb,var(--red)_40%,tr
 export default function AdminTronTransfers() {
   const { data, loading, error, reload } = useApiData(getAdminTronTransfers)
   const [params] = useSearchParams()
-  const [filter, setFilter] = useState<TransferFilter>(() =>
+  // null = not chosen yet: open on "Needs attention" only when something is
+  // waiting there, otherwise on All — an empty first view read as "no
+  // payments ever arrived" (2026-11-11).
+  const [picked, setFilter] = useState<TransferFilter | null>(() =>
     FILTERS.some((f) => f.key === params.get('status'))
       ? (params.get('status') as TransferFilter)
-      : 'unmatched',
+      : null,
   )
   const [resolveTarget, setResolveTarget] = useState<AdminTronClaim | null>(null)
   const [resolveNote, setResolveNote] = useState('')
@@ -139,6 +142,8 @@ export default function AdminTronTransfers() {
   const [mismatch, setMismatch] = useState<PendingMismatch | null>(null)
 
   const transfers = useMemo(() => data?.transfers ?? [], [data])
+  const filter: TransferFilter =
+    picked ?? (transfers.some((t) => t.status === 'unmatched') ? 'unmatched' : 'all')
 
   const visible = useMemo(() => {
     const predicate = FILTERS.find((f) => f.key === filter)?.match ?? (() => true)
@@ -253,6 +258,18 @@ export default function AdminTronTransfers() {
 
   return (
     <AdminLayout title="Crypto Transfers" subtitle="Incoming USDT-TRC20 payments">
+      {/* What the page is (Dima asked, 2026-11-11). */}
+      <p className="mb-stack max-w-[860px] text-[13px] leading-[1.6] text-muted" data-aos="fade-up">
+        Every USDT (TRC-20) payment that reaches our wallet. A payment that matches an invoice pays it by
+        itself and moves to <strong className="font-semibold text-text">Settled</strong>.{' '}
+        <strong className="font-semibold text-text">Needs attention</strong> is money we could not match
+        to an invoice: give it to the right one with Attribute, or Ignore it. Card payments never show
+        here; every paid invoice is in{' '}
+        <Link to="/admin/invoices" className="font-semibold text-accent hover:underline">
+          Invoice History
+        </Link>
+        .
+      </p>
       {/* Network health. Polling is the ONLY way one of these payments is
           noticed, so a stopped watcher has to be impossible to miss. */}
       <section className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3 mb-stack" data-aos="fade-up">

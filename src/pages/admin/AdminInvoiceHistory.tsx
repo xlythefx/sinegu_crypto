@@ -7,6 +7,7 @@ import {
   Clock,
   DollarSign,
   Eye,
+  EyeOff,
   Search,
   Trash2,
 } from 'lucide-react'
@@ -26,16 +27,25 @@ import {
 } from '../../services/admin'
 import { ApiError, getApiErrorMessage } from '../../services/api'
 import { fmtMoney } from '../../lib/format'
+import {
+  INVOICE_STATE_LABEL,
+  INVOICE_STATE_PILL,
+  invoiceState,
+  isNoFee,
+  type InvoiceState,
+} from '../../lib/invoiceStatus'
 import type { ExchangeKind } from '../../types/exchanges'
 
 type StatusFilter = 'all' | 'pending' | 'paid'
 type ExchangeFilter = 'all' | ExchangeKind
 const PER_PAGE = 10
 
+// Outstanding first and by default (2026-11-11): the page opens on what is
+// still owed, the one list that needs someone to act.
 const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
-  { key: 'all', label: 'All' },
   { key: 'pending', label: 'Outstanding' },
   { key: 'paid', label: 'Paid' },
+  { key: 'all', label: 'All' },
 ]
 
 const STAT_ICON =
@@ -48,17 +58,8 @@ const CHIP_BASE =
 const PAG_BTN =
   'grid place-items-center w-8 h-8 border border-border bg-surface2 text-text rounded-[9px] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed'
 
-// paid → green tint, pending/overdue → accent tint (preserves original color-mix)
-const STATUS_PILL: Record<AdminInvoiceRow['status'], string> = {
-  paid: 'bg-[color-mix(in_srgb,var(--green)_16%,transparent)] text-green',
-  pending: 'bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-accent',
-}
-
-/** Sort key: overdue, then outstanding, then paid. */
-function urgency(i: AdminInvoiceRow): number {
-  if (i.status === 'paid') return 2
-  return i.isOverdue && i.totalFee > 0 ? 0 : 1
-}
+/** Sort key: overdue, then outstanding, then paid, then $0 months. */
+const URGENCY: Record<InvoiceState, number> = { overdue: 0, outstanding: 1, paid: 2, noFee: 3 }
 
 interface PendingAction {
   invoice: AdminInvoiceRow
@@ -68,7 +69,10 @@ interface PendingAction {
 export default function AdminInvoiceHistory() {
   const { data, loading, error, reload } = useApiData(getAdminInvoices)
 
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending')
+  // $0 months are hidden unless asked for (Dima, 2026-11-11) — hidden, never
+  // deleted: the next bill reads its high-water mark from them.
+  const [showNoFee, setShowNoFee] = useState(false)
   const [exchangeFilter, setExchangeFilter] = useState<ExchangeFilter>('all')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -80,9 +84,13 @@ export default function AdminInvoiceHistory() {
 
   const invoices = useMemo(() => data?.invoices ?? [], [data])
 
+  const noFeeCount = useMemo(() => invoices.filter(isNoFee).length, [invoices])
+
   const filtered = useMemo(() => {
-    let list = invoices
-    if (statusFilter !== 'all') list = list.filter((i) => i.status === statusFilter)
+    let list = showNoFee ? invoices : invoices.filter((i) => !isNoFee(i))
+    // A $0 month owes nothing, so it is never "outstanding" whatever its status.
+    if (statusFilter === 'pending') list = list.filter((i) => i.status !== 'paid' && !isNoFee(i))
+    if (statusFilter === 'paid') list = list.filter((i) => i.status === 'paid')
     if (exchangeFilter !== 'all') list = list.filter((i) => i.exchange === exchangeFilter)
     const q = search.trim().toLowerCase()
     if (q) {
@@ -95,8 +103,8 @@ export default function AdminInvoiceHistory() {
     // Outstanding first (overdue at the very top) — the rows that need an
     // action. A stable sort, so the API's newest-first order holds within
     // each group.
-    return [...list].sort((a, b) => urgency(a) - urgency(b))
-  }, [invoices, statusFilter, exchangeFilter, search])
+    return [...list].sort((a, b) => URGENCY[invoiceState(a)] - URGENCY[invoiceState(b)])
+  }, [invoices, showNoFee, statusFilter, exchangeFilter, search])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
   const safePage = Math.min(page, totalPages)
@@ -161,6 +169,11 @@ export default function AdminInvoiceHistory() {
           <div>
             <p className="text-[10.5px] uppercase tracking-[0.07em] text-faint mb-[3px]">Paid Invoices</p>
             <p className="text-[19px] font-bold text-text leading-[1.1] font-mono">{summary.countPaid}</p>
+            {summary.countNoFee > 0 && (
+              <p className="text-[11px] text-faint mt-1">
+                + {summary.countNoFee} {summary.countNoFee === 1 ? 'month' : 'months'} with no fee
+              </p>
+            )}
           </div>
         </div>
         <div className="rounded-card border border-border bg-surface p-card flex items-center gap-[13px]">
@@ -216,6 +229,22 @@ export default function AdminInvoiceHistory() {
                   {s.label}
                 </button>
               ))}
+              {noFeeCount > 0 && (
+                <button
+                  type="button"
+                  aria-pressed={showNoFee}
+                  title="Months where the customer owed nothing (a loss, or still under their high-water mark). Kept for the record — next month's bill is worked out from them."
+                  className={`${CHIP_BASE} inline-flex items-center gap-1.5 bg-surface2 ${
+                    showNoFee
+                      ? 'border-accent text-text'
+                      : 'border-dashed border-border text-muted hover:text-text hover:border-accent'
+                  }`}
+                  onClick={() => setFilter(() => setShowNoFee((v) => !v))}
+                >
+                  {showNoFee ? <EyeOff size={13} /> : <Eye size={13} />}
+                  {showNoFee ? 'Hide' : 'Show'} $0 months ({noFeeCount})
+                </button>
+              )}
             </div>
             <select
               className="h-[38px] border border-border rounded-[12px] bg-surface2 text-text px-3 text-[12.5px] font-body cursor-pointer"
@@ -233,7 +262,7 @@ export default function AdminInvoiceHistory() {
 
         {/* table — key excludes search so typing doesn't replay the reveal */}
         <div
-          key={`${statusFilter}-${exchangeFilter}`}
+          key={`${statusFilter}-${exchangeFilter}-${showNoFee}`}
           className="overflow-x-auto animate-[fadeup_0.35s_ease-out]"
         >
           <table className="w-full border-collapse min-w-[720px]">
@@ -251,10 +280,24 @@ export default function AdminInvoiceHistory() {
             <tbody>
               {paginated.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="text-center text-muted py-[34px] text-[13px]">
-                    {invoices.length === 0
-                      ? 'No invoices yet. Generate one from the Sandbox.'
-                      : 'No invoices match your filters.'}
+                  <td colSpan={7} className="text-center text-muted py-[34px] px-4 text-[13px]">
+                    {invoices.length === 0 ? (
+                      'No invoices yet. Generate one from the Sandbox.'
+                    ) : statusFilter === 'pending' && exchangeFilter === 'all' && !search.trim() ? (
+                      <span className="inline-flex flex-col items-center gap-2.5">
+                        <CheckCircle2 size={22} className="text-green" aria-hidden="true" />
+                        <span className="text-text font-semibold">Nothing to collect — every invoice is paid.</span>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-[5px] rounded-[9px] py-[7px] px-3 text-[12px] font-semibold cursor-pointer border border-border bg-surface2 text-text transition-[border-color] duration-150 hover:border-accent"
+                          onClick={() => setFilter(() => setStatusFilter('paid'))}
+                        >
+                          View paid invoices
+                        </button>
+                      </span>
+                    ) : (
+                      'No invoices match your filters.'
+                    )}
                   </td>
                 </tr>
               )}
@@ -279,9 +322,9 @@ export default function AdminInvoiceHistory() {
                   <td className={`${TD} text-right font-mono`}>{fmtMoney(inv.totalFee)}</td>
                   <td className={TD}>
                     <span
-                      className={`inline-block text-[10px] font-bold uppercase tracking-[0.05em] py-[3px] px-[9px] rounded-pill ${STATUS_PILL[inv.status]}`}
+                      className={`inline-block text-[10px] font-bold uppercase tracking-[0.05em] py-[3px] px-[9px] rounded-pill ${INVOICE_STATE_PILL[invoiceState(inv)]}`}
                     >
-                      {inv.status === 'paid' ? 'Paid' : inv.isOverdue && inv.totalFee > 0 ? 'Overdue' : 'Outstanding'}
+                      {INVOICE_STATE_LABEL[invoiceState(inv)]}
                     </span>
                   </td>
                   <td className={`${TD} text-right`}>

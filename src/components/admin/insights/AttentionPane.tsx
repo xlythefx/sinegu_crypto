@@ -17,6 +17,7 @@ import { EXCHANGE_META } from '../../exchanges/meta'
 import { BarRow, EmptyNote, GRID_2, InsightCard, TILES } from './parts'
 import PendingApprovalsCard from './PendingApprovalsCard'
 import OutsideClosesCard from './OutsideClosesCard'
+import RecentPaymentsCard from './RecentPaymentsCard'
 import type { ApiDataState } from '../../../hooks/useApiData'
 import { fmtMoney, fmtSignedMoney } from '../../../lib/format'
 import { reasonLabel } from '../../../lib/insightLabels'
@@ -239,6 +240,9 @@ export default function AttentionPane({
           </ul>
         )}
       </InsightCard>
+
+      {/* Absent for a collaborator: billing. */}
+      {a.recent_payments && <RecentPaymentsCard payments={a.recent_payments} mayOpen={mayOpen} />}
 
       <div className={a.blocked_keys ? GRID_2 : 'flex flex-col gap-stack'}>
         <InsightCard

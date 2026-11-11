@@ -29,6 +29,19 @@ migration (move directories, rewrite the unit, re-point nginx, re-run certbot's
 webroot), not a find-and-replace — and there is no benefit to justify it.
 The domain is already `pixel-alpha.com`.
 
+## Suggestions and fixes are welcome (the user's request, 2026-11-11)
+
+The user loves suggestions. Whenever you work on something, also say what you
+would improve and which bugs you noticed on the way:
+- **End the reply with them**: short, plain words, each with the reason and
+  which ones you recommend. A bug spotted in passing is reported, never
+  silently left.
+- **Ask before building anything beyond the request.** A suggestion is an
+  offer, not extra scope; the user picks.
+- **Only ones you would stand behind.** No padding to fill a list. If a
+  suggestion needs the owner (a product decision, a third-party account), say
+  so and offer an Admin → To be Done item.
+
 ## Support contacts (the only ones — 2026-09-16)
 
 | Channel | Value |
@@ -74,13 +87,16 @@ trigger, `live` flag and a Mailable built from sample data. It feeds both
 email in an iframe at phone/desktop width and mails `[Preview]` copies to a
 reviewer (one or all; sample data only). Every Mailable extends
 `App\Mail\PixelMail` (scalars, never models; subject through `subjectLine()` so
-the preview prefix survives Laravel re-applying the envelope). **Only three are
-LIVE** — sign-up notice, approval, password reset. The rest (welcome, weekly
-summary with $ P&L, invoice, reminders day 2/3/5, thank-you, and team notices
-for exchange connected / invoice issued / unpaid / paid) are DRAFTS awaiting
-the owner's wording approval (to-do `email-templates-approval`); wiring one
-means sending it best-effort like `AccountMail` and flipping its `live` in the
-same change. `MAIL_ADMIN_ADDRESS` is a comma-separated team list
+the preview prefix survives Laravel re-applying the envelope). **Live (2026-11-11):**
+sign-up notice, approval, password reset, email-verification code, the monthly
+billing four (invoice, reminders 2nd / 3rd, trading paused), the team's
+disputed-payment and kill-switch notices, and the customer's "payment
+received" + the team's "invoice paid" (see "A paid invoice is announced").
+Still DRAFTS awaiting the owner's wording approval (to-do
+`email-templates-approval`): welcome, weekly summary with $ P&L, and team
+notices for exchange connected / invoice issued / unpaid. Wiring one means
+sending it best-effort like `AccountMail` and flipping its `live` in the same
+change. `MAIL_ADMIN_ADDRESS` is a comma-separated team list
 (`AccountMail::teamRecipients()`) — support@ plus Dmitri
 (dmitri@feature-digital.com; asked for sign-ups, exchange connections and
 payments) and Christian (christian@feature-digital.com; asked for sign-ups).
@@ -324,6 +340,28 @@ wrong); invoice/pause 72 h. Rules:
 - Due date is the 4th of the following month (`computeForAccount`), and
   the 4th's enforce step pauses unpaid accounts at the billing hour.
 
+**A paid invoice is ANNOUNCED, and a $0 month reads "No fee" (2026-11-11).**
+Alexandre Guyomard paid by card on 10 Nov; it settled and nobody heard.
+`InvoiceService::settle` → `Billing\PaymentNotifier`, after the commit and only
+from the call that did the settling, sends three things: the customer's
+`payment-received`, the team's `team-invoice-paid`, and an admin-Telegram line
+(engine `POST /admin/payment-received` → `_send_private`). Every rail settles
+through it (card, USDT, Coinsbuy, manual attribution, "Mark paid"), so each
+payment is told exactly once. Rules:
+- **Never announced:** a $0 invoice, an `SBXINV-` row, or `notify: false`.
+  The scenario runner passes `notify: false`; Admin → Sandbox → Invoice
+  Testing sends `sandbox: true` on `PUT /admin/invoices/{id}`. A new
+  rehearsal path that settles a REAL user's invoice must opt out the same way.
+- **Overview:** `attention.recent_payments` (customers, fee > 0, 7 days;
+  hidden from collaborators) feeds Needs attention's "Payments received" card
+  and the Platform view's green line. Settling forgets the overview cache.
+- **$0 months:** they are stored `paid` but are neither paid nor outstanding.
+  Invoice History opens on Outstanding, hides them behind "Show $0 months",
+  labels them "No fee" (`lib/invoiceStatus.ts`) and counts them apart
+  (`count_no_fee`). Customers still see their own.
+- **Never delete a $0 row.** The next bill's HWM is the latest month's
+  `hwm_after`, and the monthly run skips a month that already has a row.
+
 **Direct USDT-TRC20 payments — THE rail customers pay on (2026-09-23).**
 Customers send USDT straight to a TRON wallet we control; a scheduled poller
 reads the public chain and settles the invoice. Built 2026-08-16 as a second
@@ -424,6 +462,11 @@ only method a trader is offered.**
   `PaymentMethodModal`, and **Admin → Crypto Transfers** (`/admin/tron-transfers`)
   for the manual attribution a matcher can never do — late payments, wrong
   amounts, duplicates. That screen is permanent, not a stopgap.
+- **Crypto Transfers lists only the network customers pay on (2026-11-11):**
+  `tronNetworkFor(false)`, which is mainnet on prod and Nile on a sandbox box.
+  Developers see every network. Never hardcode "hide Nile": on a sandbox box,
+  Nile IS the customers' network. The Overview's unmatched and disputed
+  counts follow the same network. Card payments never appear on that page.
 - **Still to do:** create a Nile wallet + look up the Nile USDT contract, run the
   end-to-end rehearsal, then set `TRON_MAINNET_ADDRESS`. **Before `TRON_PUBLIC=true`,
   measure a real withdrawal from each exchange customers use** and record how many

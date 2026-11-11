@@ -648,8 +648,12 @@ export interface AdminInvoiceRow extends Invoice {
 export interface AdminInvoicesSummary {
   totalCollected: number
   countTotal: number
+  /** Paid invoices with a fee — a $0 month is not a payment. */
   countPaid: number
+  /** Unpaid invoices with a fee. */
   countPending: number
+  /** $0 months (stored paid, collected nothing). */
+  countNoFee: number
   outstandingAmount: number
 }
 
@@ -686,6 +690,8 @@ export async function getAdminInvoices(
       count_total: number
       count_paid: number
       count_pending: number
+      /** Absent on an API older than 2026-11-11. */
+      count_no_fee?: number
       outstanding_amount: number
     }
   }>(`/admin/invoices${query}`, { auth: true })
@@ -701,6 +707,7 @@ export async function getAdminInvoices(
       countTotal: res.summary.count_total,
       countPaid: res.summary.count_paid,
       countPending: res.summary.count_pending,
+      countNoFee: res.summary.count_no_fee ?? 0,
       outstandingAmount: res.summary.outstanding_amount,
     },
   }
@@ -746,7 +753,8 @@ export async function createManualInvoice(input: ManualInvoiceInput): Promise<In
 
 export async function updateInvoice(
   id: string,
-  body: { total_fee?: number; status?: string },
+  /** sandbox: a rehearsal — settling it is not announced to anyone. */
+  body: { total_fee?: number; status?: string; sandbox?: boolean },
 ): Promise<Invoice> {
   const res = await apiFetch<{ success: boolean; invoice: ApiInvoice }>(
     `/admin/invoices/${id}`,

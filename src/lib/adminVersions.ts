@@ -13,6 +13,88 @@ import type { AdminChange } from '../types/adminVersions'
  *    later change to the same feature gets its own entry.
  */
 export const ADMIN_CHANGES: AdminChange[] = [
+  // ── 2026-11-11 ───────────────────────────────────────────────────────────
+  {
+    id: 'payment-received-notices',
+    date: '2026-11-11',
+    kind: 'new',
+    area: 'Billing',
+    title: 'Everyone hears about it when an invoice is paid',
+    summary:
+      'When a customer pays an invoice, the customer gets a thank-you email, the team gets an "Invoice paid" email, and the admin Telegram group gets a message. A new "Payments received" card on the Admin Overview lists the last 7 days. Built after Alexandre Guyomard paid his October invoice ($24.04) by card on 10 Nov: it was paid correctly, but nobody was told and there was no page that showed a card payment.',
+    howItWorks: [
+      'Any invoice with a fee counts, however it was paid: by card, by USDT, or marked paid by an admin. Each payment is told once, the moment it lands.',
+      'The customer\'s email thanks them, shows the amount, method and invoice number, and says trading is back on if it had been paused for that invoice.',
+      'The team email goes to support@, Dima and Christian. The Telegram message reads, for example: "💰 Invoice paid — Alexandre Guyomard · $24.04 for October 2026 · Card (Stripe) · Invoice #15 · Binance".',
+      'Admin Overview → Needs attention has a "Payments received · last 7 days" card with the total and each payment. A payment in the last 24 hours also shows as a green line on the Platform view; click it to see the list.',
+      'Nothing is sent for a $0 month (no money moved) or for test runs in Admin → Sandbox. A developer\'s test payment is labelled "Test payment (not real money)" in Telegram.',
+    ],
+    technical: [
+      'App\\Services\\Billing\\PaymentNotifier, called once by InvoiceService::settle after the commit (only when that call settled). settle() gained `notify` (false = rehearsal) and computes wasPaused (status overdue/failed and the account was disabled). Skips feeCents() = 0 and SBXINV- rows. Best-effort: nothing can throw into a settlement.',
+      'EmailCatalogue: payment-received and team-invoice-paid are now live. Telegram via EngineCache::paymentReceived → engine POST /admin/payment-received → notify.notify_payment_received (_send_private, admin chat only). Needs deploy-engine before the Telegram line appears; until then the API logs the refused ping.',
+      'PUT /admin/invoices/{id} takes sandbox: true (Sandbox → Invoice Testing sends it). Overview attention.recent_payments (customers only, fee > 0, 7 days, hidden from collaborators); the overview cache is forgotten on every settlement.',
+    ],
+    links: [
+      { label: 'Admin Overview', href: '/admin?view=attention' },
+      { label: 'Preview the emails', href: '/admin/sandbox/emails/payment-received' },
+    ],
+  },
+  {
+    id: 'invoice-history-outstanding-first',
+    date: '2026-11-11',
+    kind: 'improved',
+    area: 'Billing',
+    title: 'Invoice History opens on unpaid invoices and hides $0 months',
+    summary:
+      'Invoice History now opens on Outstanding, the invoices still waiting to be paid. Months where a customer owed nothing are labelled "No fee" instead of "Paid" and are hidden unless you ask for them. Asked by Dima: the list was mostly $0 lines.',
+    howItWorks: [
+      'The page opens on Outstanding. When nothing is owed it says "Nothing to collect — every invoice is paid", with a button to see the paid ones.',
+      'A $0 month (a losing month, or one still under the customer\'s high point) shows a grey "No fee" badge. A "Show $0 months (4)" button brings them back into the list.',
+      'The "Paid Invoices" card counts only invoices that collected money (9 today instead of 13), with "+ 4 months with no fee" under it.',
+      'The $0 months are hidden, never deleted: the next month\'s bill is worked out from them. Customers still see their own $0 months on their Billing page.',
+    ],
+    technical: [
+      'GET /admin/invoices summary: count_paid / count_pending / outstanding_amount now cover fee > 0 rows only; new count_no_fee. lib/invoiceStatus.ts (invoiceState: noFee | paid | overdue | outstanding) is shared by the page and AdminInvoiceDetailModal.',
+    ],
+    links: [{ label: 'Invoice History', href: '/admin/invoices' }],
+  },
+  {
+    id: 'crypto-transfers-real-money-only',
+    date: '2026-11-11',
+    kind: 'improved',
+    area: 'Crypto Transfers',
+    title: 'Crypto Transfers shows only real payments and explains itself',
+    summary:
+      'Crypto Transfers no longer shows test payments made with play money, except to developer accounts. The page now says what it is for, and it opens on "Needs attention" only when something real is waiting there. Two test payments from 18 August had been sitting in "Needs attention" and looked like customer money.',
+    howItWorks: [
+      'Only the real wallet (TRON) and its payments are shown. The test wallet (TRON Nile testnet) and its payments are visible to developer accounts only.',
+      'A short explanation at the top: every USDT payment that reaches our wallet; a payment that matches an invoice pays it by itself; "Needs attention" is money that could not be matched, so give it to the right invoice or ignore it; card payments are in Invoice History.',
+      'With nothing waiting, the page opens on All instead of an empty "Needs attention" list.',
+      'The Admin Overview\'s "transfers need attention" count and the "claimed by two customers" warning count real payments only.',
+    ],
+    technical: [
+      'AdminTronTransferController::visibleNetworks: developers get every configured network; everyone else gets PaymentEnvironment::tronNetworkFor(false), the network customers pay on here (mainnet on prod, Nile on a sandbox box). Rows, counts, disputes and wallet cards all follow it. AdminInsights unmatched_transfers / disputed_payments use the same network.',
+    ],
+    links: [{ label: 'Crypto Transfers', href: '/admin/tron-transfers' }],
+  },
+  {
+    id: 'visitors-chart-scale',
+    date: '2026-11-11',
+    kind: 'improved',
+    area: 'Visitors',
+    title: 'The visitors chart has a scale and shows each day\'s numbers',
+    summary:
+      'The "Visitors per day" chart now has a scale on the left, and tapping or hovering a bar shows that day\'s visitors, page views and sign-ups under the chart, on phones too. It starts on the day visitor counting began (28 Oct), so there are no more sign-ups floating over empty days. Asked by Dima: the bars did not make sense without numbers.',
+    howItWorks: [
+      'The scale on the left, for example 0 / 10 / 20 / 30 / 40, with faint lines across the chart, so a short bar beside a tall one can be read at a glance.',
+      'Tap or hover a bar: "Nov 5: 14 visitors · 22 page views · 1 sign-up". With nothing selected, the line names the busiest day.',
+      'A period that reaches back before 28 Oct starts the chart on 28 Oct and says so. Sign-ups from before then still count in the totals at the top of the page.',
+    ],
+    technical: [
+      'lib/visitorChart.ts: niceScale (steps of 1/2/5 × 10^n, at most four) and fromTrackingStart (drops buckets that end before summary.since). VisitorChart bars are buttons (hover / focus / tap).',
+    ],
+    links: [{ label: 'Visitors', href: '/admin/visitors' }],
+  },
   // ── 2026-11-10 ───────────────────────────────────────────────────────────
   {
     id: 'after-fees-first-and-invoice-workings',

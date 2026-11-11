@@ -29,6 +29,31 @@ export interface KilledAssetRow {
   reason: string | null
 }
 
+/** One invoice a CUSTOMER paid (card or crypto) — Overview → "Payments received". */
+export interface RecentPaymentRow {
+  invoice_id: number
+  uni_id: string
+  name: string | null
+  exchange: ExchangeKind
+  /** Billing month, YYYY-MM. */
+  month_year: string
+  /** What was received (falls back to the fee). */
+  amount: number
+  /** stripe | tron | coinsbuy | manual. */
+  provider: string | null
+  /** UTC ISO. */
+  paid_at: string | null
+}
+
+export interface RecentPayments {
+  count: number
+  amount: number
+  /** The window, in days (7). */
+  days: number
+  /** Newest first, at most 8. */
+  latest: RecentPaymentRow[]
+}
+
 /** A trade closed on the exchange WITHOUT the bot (API CloseSource) in the last 7 days. */
 export interface OutsideCloseRow {
   id: number
@@ -57,7 +82,13 @@ export interface OverviewInsights {
     pending_users_count: number
     overdue_invoices?: { count: number; amount: number }
     unpaid_invoices?: { count: number; amount: number }
+    /** On the network customers pay on only (a testnet rehearsal is never counted). */
     unmatched_transfers?: number
+    /**
+     * Invoices customers paid in the last 7 days, card and crypto alike.
+     * Absent for a collaborator (billing) and on an API before 2026-11-11.
+     */
+    recent_payments?: RecentPayments
     /** Crypto payments two customers both say are theirs, not yet resolved. */
     disputed_payments?: number
     /**

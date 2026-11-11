@@ -146,7 +146,8 @@ export default function SandboxInvoiceCard({ users }: { users: AdminUser[] }) {
     setPayingId(id)
     setErr(null)
     try {
-      const updated = await updateInvoice(id, { status: 'paid' })
+      // sandbox: a rehearsal — the API sends no thank-you, team email or Telegram line.
+      const updated = await updateInvoice(id, { status: 'paid', sandbox: true })
       setPreview((prev) => (prev ? prev.map((i) => (i.id === id ? updated : i)) : prev))
     } catch (e) {
       setErr(getApiErrorMessage(e, 'Could not mark the invoice paid.'))
