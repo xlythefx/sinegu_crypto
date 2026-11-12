@@ -26,7 +26,18 @@ const MODES: Array<{ value: CreativeAgentMode; label: string; Icon: LucideIcon }
 ]
 
 /** Ask | Generate as one radio group; Generate is the gold one, because it is the one that can spend. */
-function ModeSwitch({ mode, onMode, locked }: { mode: CreativeAgentMode; onMode: (m: CreativeAgentMode) => void; locked: boolean }) {
+export function ModeSwitch({
+  mode,
+  onMode,
+  locked,
+  size = 'md',
+}: {
+  mode: CreativeAgentMode
+  onMode: (m: CreativeAgentMode) => void
+  locked: boolean
+  /** 'sm' = the editor's chat panel header. */
+  size?: 'sm' | 'md'
+}) {
   const refs = useRef<(HTMLButtonElement | null)[]>([])
   const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) return
@@ -39,8 +50,8 @@ function ModeSwitch({ mode, onMode, locked }: { mode: CreativeAgentMode; onMode:
     <div
       role="radiogroup"
       aria-label="Mode"
-      className="inline-flex flex-none gap-1 rounded-[13px] border border-border bg-surface p-1"
-      title={locked ? 'The mode can change once the agent has answered' : undefined}
+      className={`inline-flex flex-none gap-1 border border-border bg-surface p-1 ${size === 'sm' ? 'rounded-[11px]' : 'rounded-[13px]'}`}
+      title={locked ? 'The mode can change once the agent has answered' : MODE_HINT[mode]}
     >
       {MODES.map(({ value, label, Icon }, i) => {
         const on = value === mode
@@ -62,9 +73,11 @@ function ModeSwitch({ mode, onMode, locked }: { mode: CreativeAgentMode; onMode:
             disabled={locked && !on}
             onClick={() => onMode(value)}
             onKeyDown={(e) => onKeyDown(e, i)}
-            className={`inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-[9px] border px-2.5 text-[13px] font-bold sm:px-3.5 transition-[color,background-color,border-color,box-shadow] duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${tone}`}
+            className={`inline-flex cursor-pointer items-center gap-1.5 border font-bold transition-[color,background-color,border-color,box-shadow] duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
+              size === 'sm' ? 'min-h-7 rounded-[8px] px-2.5 text-[12px]' : 'min-h-9 rounded-[9px] px-2.5 text-[13px] sm:px-3.5'
+            } ${tone}`}
           >
-            <Icon size={14} aria-hidden="true" className="max-[420px]:hidden" />
+            <Icon size={size === 'sm' ? 12 : 14} aria-hidden="true" className="max-[420px]:hidden" />
             {label}
           </button>
         )

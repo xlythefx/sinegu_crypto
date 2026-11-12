@@ -1010,6 +1010,22 @@ instead of stitching single clips in outside apps. Plan: `~/.claude/plans/here-s
   all-required schema shape; PHP validates every input. `TOOLS_VERSION` bumps
   open a fresh chat (`notice: new_tools`) because the tool list must stay
   byte-identical within a chat.
+- **v2.1 (same day, owner after using it):** the editor has its own chat
+  (`creative_agent_sessions.video_id`; `GET /agent/session?video_id=`), docked
+  right / drawer / bottom sheet by width. Clicking, Ctrl/Shift-clicking or
+  dragging across clips sends `focus_scene_ids` with the turn; the [Context]
+  carries `editing_video` + `focus`, and "improve the visuals" =
+  `add_scenes` with `replace_scene_id` (priced, Go). Free edits by chat:
+  `edit_video` (lengths, order, captions, card text, music, look). Before
+  building 2+ scenes the agent ALWAYS shows `show_storyboard` (per scene:
+  length, engine, Pixel, what, why, local price estimate — never a Higgsfield
+  call), then asks "Build it?". A scene's `seconds` in any draft is its TIMELINE
+  length (2–15): Kling makes 5 or 10 and the rest is trimmed (`trim_out_ms`), so
+  a stored scene's `seconds` is the GENERATED length. ClaudeAgent sends
+  `thinking: {adaptive, display: summarized}`; assistant messages carry
+  `thinking` (shown folded). Both new tools are NON-strict; TOOLS_VERSION 3.
+  The editor flushes its autosave before every chat message and re-reads the
+  video after create_video / add_scenes / edit_video.
 - **Provider-unavailable errors are 503, never 502** (AI_UNAVAILABLE,
   HIGGSFIELD_UNAVAILABLE, ESTIMATE_UNAVAILABLE, SUBMIT_UNCONFIRMED,
   AI_BAD_OUTPUT): Cloudflare replaces an origin 502 with its own page, so the

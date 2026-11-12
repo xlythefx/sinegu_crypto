@@ -11,8 +11,10 @@ import {
   Film,
   Images,
   ListChecks,
+  ListVideo,
   Palette,
   PenLine,
+  Scissors,
   SquareKanban,
   Wallet,
   Wrench,
@@ -56,6 +58,8 @@ const TOOL_ICON: Record<string, LucideIcon> = {
   add_scenes: Film,
   get_video: Film,
   list_videos: Film,
+  show_storyboard: ListVideo,
+  edit_video: Scissors,
 }
 
 export function toolIcon(tool: string): LucideIcon {

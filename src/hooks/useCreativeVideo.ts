@@ -68,6 +68,8 @@ export interface CreativeVideoState {
   loading: boolean
   error: unknown
   reload: () => void
+  /** Re-read the project quietly (the agent changed it); unsaved edits stay laid over it. */
+  refresh: () => void
   /** When the video (so its clips' signed paths) was last read. */
   readAt: number
   dirty: boolean
@@ -80,7 +82,11 @@ export interface CreativeVideoState {
   updateTimeline: (fn: (tl: TimelineDoc) => TimelineDoc) => void
   updateScene: (id: number, patch: ScenePatch) => void
   moveScene: (id: number, delta: number) => void
-  /** Save now (before an action that re-reads the project). Resolves false when it failed. */
+  /**
+   * Save now (before an action that re-reads the project, or before a chat
+   * message, so the agent sees the latest edits). Waits for a save already
+   * on its way. Resolves false when it failed.
+   */
   flush: () => Promise<boolean>
   /** An action that writes at once (add, remove, propose…) — its error sentence, or null. */
   busy: string | null
@@ -128,6 +134,8 @@ export function useCreativeVideo(id: number, onBudget: (b: CreativeBudget) => vo
   const versionRef = useRef(0)
   const savingRef = useRef(false)
   const againRef = useRef(false)
+  /** The save on its way, so a flush can wait for it. */
+  const inflight = useRef<Promise<unknown> | null>(null)
   const readAt = useRef(0)
   const polling = useRef(false)
   const serverRef = useRef<CreativeVideo | null>(null)
@@ -237,11 +245,13 @@ export function useCreativeVideo(id: number, onBudget: (b: CreativeBudget) => vo
     savingRef.current = true
     setSaving(true)
     try {
-      const next = await updateCreativeVideo(id, {
+      const request = updateCreativeVideo(id, {
         ...(snap.title !== undefined ? { title: snap.title } : {}),
         ...(snap.timeline !== undefined ? { timeline: snap.timeline } : {}),
         ...(scenes.length > 0 ? { scenes } : {}),
       })
+      inflight.current = request.catch(() => undefined)
+      const next = await request
       if (!mounted.current) return true
       putServer(next)
       // Only what was sent is now on the server; anything typed since stays laid over it.
@@ -257,6 +267,7 @@ export function useCreativeVideo(id: number, onBudget: (b: CreativeBudget) => vo
       return false
     } finally {
       savingRef.current = false
+      inflight.current = null
       if (mounted.current) setSaving(false)
       if (againRef.current) {
         againRef.current = false
@@ -284,8 +295,14 @@ export function useCreativeVideo(id: number, onBudget: (b: CreativeBudget) => vo
   }, [dirty])
 
   const flush = useCallback(async () => {
-    if (isEmpty(overridesRef.current)) return true
-    return saveRef.current()
+    // A save already on its way first; then whatever is still unsaved (twice at most — edits made meanwhile).
+    for (let i = 0; i < 3; i++) {
+      if (inflight.current) await inflight.current
+      if (isEmpty(overridesRef.current)) return true
+      if (savingRef.current) continue
+      if (!(await saveRef.current())) return false
+    }
+    return isEmpty(overridesRef.current)
   }, [])
 
   /* ---------- polling while clips are being made ---------- */
@@ -295,10 +312,15 @@ export function useCreativeVideo(id: number, onBudget: (b: CreativeBudget) => vo
     (server.scenes.some((s) => s.status === 'planned' || s.status === 'generating') ||
       server.jobs.some((j) => j.status === 'running'))
 
-  usePoll(
-    () => {
-      if (polling.current) return
-      polling.current = true
+  // A read asked for while one is on its way runs again after it: that one may predate the change.
+  const readAgain = useRef(false)
+  const refresh = useCallback(() => {
+    if (polling.current) {
+      readAgain.current = true
+      return
+    }
+    polling.current = true
+    const run = () =>
       getCreativeVideo(id)
         .then((v) => {
           if (mounted.current) putServer(v)
@@ -307,12 +329,17 @@ export function useCreativeVideo(id: number, onBudget: (b: CreativeBudget) => vo
           // Keep what is on screen; the next tick tries again.
         })
         .finally(() => {
+          if (readAgain.current && mounted.current) {
+            readAgain.current = false
+            void run()
+            return
+          }
           polling.current = false
         })
-    },
-    POLL_MS,
-    { paused: !needsPoll },
-  )
+    void run()
+  }, [id, putServer])
+
+  usePoll(refresh, POLL_MS, { paused: !needsPoll })
 
   /* ---------- actions that write at once ---------- */
 
@@ -474,6 +501,7 @@ export function useCreativeVideo(id: number, onBudget: (b: CreativeBudget) => vo
     loading,
     error,
     reload,
+    refresh,
     readAt: readAt.current,
     dirty,
     saving,

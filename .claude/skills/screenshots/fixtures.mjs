@@ -683,6 +683,46 @@ const AGENT_SESSION = () => ({
   ],
 })
 
+// The editor's own chat (Creatives v2.1): GET /agent/session?video_id=1.
+const EDITOR_STORYBOARD = {
+  title: 'Week 46 recap — tighter cut', video_id: 1, platform: 'tiktok', aspect: '9:16', style: 'pixel-arcade',
+  total_seconds: 15, est_total_usd: 1.92,
+  notes: 'Four scenes in 15 seconds: each one under 5 s keeps TikTok viewers watching. Only scene 3 needs its own sound, so it is the only Seedance scene; the stat card is free.',
+  scenes: [
+    { n: 1, kind: 'clip', label: 'Hook — trading screen', seconds: 3, generated_seconds: 5, engine: 'kling', engine_label: 'Kling · silent', with_pixel: false, shows: 'Slow push-in on a glowing trading screen, neon reflections.', why: 'A hook under 3 s: TikTok decides in the first seconds. Kling is silent and cheap; the chiptune carries it.', est_usd: 0.27 },
+    { n: 2, kind: 'template', label: 'High score', seconds: 4, generated_seconds: 4, engine: 'none', engine_label: 'Template card · free', with_pixel: false, shows: 'HIGH SCORE card with this week’s figure and the trade count.', why: 'The exact figure goes on a card, never inside a generated clip.', est_usd: 0 },
+    { n: 3, kind: 'clip', label: 'The city at night', seconds: 5, generated_seconds: 5, engine: 'seedance', engine_label: 'Seedance · with sound', with_pixel: false, shows: 'Neon pixel city at night, coins flying past, 8-bit chiptune and arcade sounds.', why: 'The one scene with its own sound: Seedance makes the arcade effects. 5 s is enough; longer drags.', est_usd: 1.32 },
+    { n: 4, kind: 'clip', label: 'Pixel waves goodbye', seconds: 3, generated_seconds: 5, engine: 'kling', engine_label: 'Kling · silent', with_pixel: true, shows: 'Pixel waves at the camera from an arcade cabinet.', why: 'Pixel as a one-scene cameo at the end, as the style asks.', est_usd: 0.33 },
+  ],
+}
+
+const EDITOR_SESSION = () => ({
+  success: true,
+  session: { id: 'sample-editor-session', mode: 'generate', video_id: 1 },
+  budget: CREATIVE_BUDGET,
+  jobs: [VIDEO_JOB],
+  messages: [
+    { id: 21, kind: 'user', text: 'Make scene 3 more exciting, and are the lengths right for TikTok?', mode: 'generate', created_at: ago(0, 0.4) },
+    {
+      id: 22, kind: 'assistant', created_at: ago(0, 0.4),
+      thinking: 'The person picked scene 3 and asks about lengths. On TikTok people swipe in the first seconds, so the hook should be **under 3 s** and no scene should run long.\n\n- Scene 1 is 5 s: trim it to 3 s (Kling makes 5 s; we trim).\n- Scene 3 is the only one that needs its own sound, so keep it on Seedance.\n- Pixel stays a cameo in the last scene.\n\nShow the storyboard first, then ask before building.',
+      text: 'Here is how I would rework it. Shorter scenes keep TikTok viewers watching. Have a look before I build anything:',
+    },
+    { id: 23, kind: 'activity', activity: { tool: 'show_storyboard', label: 'Showed a storyboard: 4 scenes, about $1.92', ok: true }, created_at: ago(0, 0.4) },
+    { id: 24, kind: 'storyboard', storyboard: EDITOR_STORYBOARD, created_at: ago(0, 0.4) },
+    { id: 25, kind: 'choices', choices: { question: 'Build it?', options: [{ label: 'Yes, build it', value: 'Yes, build it' }, { label: 'Change something', value: 'I want to change something first' }], allow_other: false }, created_at: ago(0, 0.4) },
+    { id: 26, kind: 'user', text: 'Yes, build it', mode: 'generate', created_at: ago(0, 0.3) },
+    {
+      id: 27, kind: 'assistant', created_at: ago(0, 0.3),
+      thinking: 'Approved. Only scene 3 changes, so one add_scenes call with replace_scene_id; trim scene 1 for free with edit_video.',
+      text: 'Scene 1 is trimmed to 3 s (free), and scene 3 is being remade. It lands in its slot when it is ready.',
+    },
+    { id: 28, kind: 'activity', activity: { tool: 'edit_video', label: 'Edited the video', ok: true }, created_at: ago(0, 0.3) },
+    { id: 29, kind: 'activity', activity: { tool: 'add_scenes', label: 'Re-planned scene 3 of Week 46 recap', ok: true }, created_at: ago(0, 0.3) },
+    { id: 30, kind: 'job', job_id: 41, created_at: ago(0, 0.3) },
+  ],
+})
+
 
 // Admin → Trading Assets editor (SAMPLE figures): one Binance coin, its
 // Binance check and the position-limit check (POST, answered in answer()).
@@ -730,7 +770,7 @@ const ASSET_GET = {
 const CREATIVE_GET = {
   '/admin/creatives': CREATIVES_META,
   '/admin/creatives/budget': { success: true, budget: CREATIVE_BUDGET },
-  '/admin/creatives/agent/session': AGENT_SESSION,
+  '/admin/creatives/agent/session': (_user, _path, query) => (query?.get('video_id') ? EDITOR_SESSION() : AGENT_SESSION()),
   '/admin/creatives/agent/context': CREATIVE_CONTEXT,
   '/admin/creatives/playbook': { success: true, playbook: { markdown: PLAYBOOK_MD, updated_by_name: 'Sample Admin', updated_at: ago(2) } },
   '/admin/creatives/brief': { success: true, brief: { markdown: '# Who we are\nPixel Alpha runs a trading bot.', updated_by_name: null, updated_at: null } },

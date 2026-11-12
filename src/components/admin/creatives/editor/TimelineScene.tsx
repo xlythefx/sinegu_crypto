@@ -2,6 +2,7 @@ import { useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import { Clock, ImageOff, LoaderCircle, TriangleAlert } from 'lucide-react'
 import { EXPIRY_WARN_MS, fmtTimeLeft, msUntilExpiry } from '../../../../lib/creatives'
 import { clipUrl, fmtSeconds, isSceneExpired } from '../../../../lib/creativeVideos'
+import type { ClickModifiers } from '../../../../lib/videoEditor/selection'
 import type { SceneSpan } from '../../../../lib/videoEditor/timeline'
 import type { CreativeVideoScene, VideoAspect } from '../../../../types/creativeVideos'
 import TemplateCanvas from './TemplateCanvas'
@@ -13,8 +14,10 @@ interface TimelineSceneProps {
   scale: number
   aspect: VideoAspect
   now: number
+  /** Picked for the chat: a gold ring. */
   selected: boolean
-  onSelect: () => void
+  /** A click, with Ctrl/Cmd (toggle) and Shift (range). */
+  onSelect: (mods: ClickModifiers) => void
   /** A trim handle dragged to `ms` (inside the clip). Absent = the block cannot be trimmed. */
   onTrim?: (edge: 'in' | 'out', ms: number) => void
 }
@@ -62,14 +65,14 @@ export default function TimelineScene({ scene, span, scale, aspect, now, selecte
 
   return (
     <div
-      className={`group absolute inset-y-1 overflow-hidden rounded-[10px] border transition-[box-shadow,border-color] duration-150 animate-[fadeup_0.3s_ease-out] ${tone} ${
-        selected ? 'shadow-[0_0_0_2px_var(--accent)]' : 'hover:border-accent-line'
+      className={`group absolute inset-y-[3px] overflow-hidden rounded-[8px] border transition-[box-shadow,border-color] duration-150 animate-[fadeup_0.3s_ease-out] ${tone} ${
+        selected ? 'z-[2] border-accent shadow-[0_0_0_2px_var(--accent),0_0_14px_var(--glow)]' : 'hover:border-accent-line'
       }`}
       style={{ left: span.start_ms * scale, width }}
     >
       <button
         type="button"
-        onClick={onSelect}
+        onClick={(e) => onSelect({ toggle: e.ctrlKey || e.metaKey, range: e.shiftKey })}
         aria-pressed={selected}
         aria-label={`Scene ${span.index + 1}: ${scene.label}`}
         className="absolute inset-0 flex cursor-pointer flex-col justify-end overflow-hidden bg-transparent p-0 text-left"
@@ -88,22 +91,25 @@ export default function TimelineScene({ scene, span, scale, aspect, now, selecte
             aria-hidden="true"
           />
         ) : null}
-        <span className="relative z-[1] flex min-w-0 flex-col gap-0.5 bg-[linear-gradient(transparent,rgba(0,0,0,0.78))] px-2 pb-1.5 pt-4">
-          <span className="flex min-w-0 items-center gap-1 text-[11px] font-bold leading-[1.25] text-white">
-            {waiting && <LoaderCircle size={11} aria-hidden="true" className="flex-none animate-spin text-accent" />}
-            {(failed || expired) && (expired ? <ImageOff size={11} aria-hidden="true" className="flex-none text-[#ff8a8a]" /> : <TriangleAlert size={11} aria-hidden="true" className="flex-none text-[#ff8a8a]" />)}
-            <span className="truncate">
-              {span.index + 1}. {scene.label}
-            </span>
+        <span className="relative z-[1] flex min-w-0 items-center gap-1 bg-[linear-gradient(transparent,rgba(0,0,0,0.8)_55%)] px-1.5 pb-[3px] pt-2.5 text-[10.5px] font-bold leading-[1.2] text-white">
+          {waiting && <LoaderCircle size={10} aria-hidden="true" className="flex-none animate-spin text-accent" />}
+          {(failed || expired) &&
+            (expired ? (
+              <ImageOff size={10} aria-hidden="true" className="flex-none text-[#ff8a8a]" />
+            ) : (
+              <TriangleAlert size={10} aria-hidden="true" className="flex-none text-[#ff8a8a]" />
+            ))}
+          <span className="min-w-0 flex-1 truncate">
+            {span.index + 1}. {scene.label}
           </span>
-          {width > 64 && (
-            <span className="truncate font-mono text-[10px] text-[#d6d9e0]">
+          {width > 92 && (
+            <span className="flex-none font-mono text-[9.5px] font-medium text-[#d6d9e0]">
               {expired
-                ? 'Deleted by Higgsfield'
+                ? 'Deleted'
                 : waiting
                   ? scene.status === 'planned'
-                    ? 'Waiting for Go'
-                    : 'Being made…'
+                    ? 'Needs Go'
+                    : 'Making…'
                   : failed
                     ? 'Failed'
                     : fmtSeconds(span.end_ms - span.start_ms)}
@@ -111,8 +117,8 @@ export default function TimelineScene({ scene, span, scale, aspect, now, selecte
           )}
         </span>
         {!expired && left !== null && left < EXPIRY_WARN_MS && width > 50 && (
-          <span className="absolute right-1.5 top-1.5 z-[1] inline-flex items-center gap-1 rounded-pill bg-[rgba(0,0,0,0.65)] px-1.5 py-[1px] font-mono text-[9.5px] font-semibold text-[#ff8a8a]">
-            <Clock size={9} aria-hidden="true" />
+          <span className="absolute right-1 top-0.5 z-[1] inline-flex items-center gap-0.5 rounded-pill bg-[rgba(0,0,0,0.65)] px-1 py-[1px] font-mono text-[9px] font-semibold leading-none text-[#ff8a8a]">
+            <Clock size={8} aria-hidden="true" />
             {fmtTimeLeft(left)}
           </span>
         )}

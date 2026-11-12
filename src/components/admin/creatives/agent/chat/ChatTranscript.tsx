@@ -8,12 +8,14 @@ import type {
   CreativeAgentMode,
   CreativeBudget,
   CreativeGeneration,
+  CreativeStoryboard,
 } from '../../../../../types/creatives'
 import { choiceAnswers } from '../../../../../lib/creativesAgent'
 import { editorPath } from '../../../../../lib/creativeVideos'
 import JobCard from '../job/JobCard'
 import { ActivityLines, AgentProgress, AGENT_INDENT, AssistantMessage, ChatNotice, PlanChip, UserBubble, VideoChip } from './ChatParts'
 import ChoiceCard from './ChoiceCard'
+import StoryboardCard from './StoryboardCard'
 
 interface ChatTranscriptProps {
   messages: CreativeAgentMessage[]
@@ -41,23 +43,27 @@ interface ChatTranscriptProps {
   onChoose: (value: string) => void
   /** Open a video project's editor (a website path). */
   onOpenEditor: (path: string) => void
+  /** Inside a video's editor: that video — its chip and job cards don't offer to open the editor again. */
+  currentVideoId?: number
 }
 
 type Block =
   | { kind: 'user'; key: string; text: string; mode?: CreativeAgentMode }
-  | { kind: 'assistant'; key: string; text: string }
+  | { kind: 'assistant'; key: string; text: string; thinking: string | null }
   | { kind: 'activity'; key: string; items: Array<{ id: number; activity: CreativeAgentActivity }> }
   | { kind: 'plan'; key: string; title: string; planId: number }
   | { kind: 'job'; key: string; jobId: number }
   | { kind: 'notice'; key: string; text: string; tone: 'error' | 'info' | 'warn'; canContinue?: boolean }
   | { kind: 'choices'; key: string; choices: CreativeAgentChoices; answer: string | null }
   | { kind: 'video'; key: string; title: string; videoId: number }
+  | { kind: 'storyboard'; key: string; storyboard: CreativeStoryboard }
 
 /**
  * Server messages in id order, with the page's own notices slotted in after
  * the message each was raised beside, and a run of tool calls folded into
- * one quiet list. Thinking and raw tool blocks never reach this — the API
- * sends only what a person should read.
+ * one quiet list. Raw tool blocks never reach this — the API sends only what
+ * a person should read; a step's thinking arrives as its SUMMARY, folded
+ * above that step ("How it's thinking"), even a step that said nothing.
  */
 function buildBlocks(messages: CreativeAgentMessage[], notices: AgentNotice[]): Block[] {
   const blocks: Block[] = []
@@ -78,9 +84,11 @@ function buildBlocks(messages: CreativeAgentMessage[], notices: AgentNotice[]): 
       case 'user':
         if (m.text) blocks.push({ kind: 'user', key, text: m.text, mode: m.mode })
         break
-      case 'assistant':
-        if (m.text?.trim()) blocks.push({ kind: 'assistant', key, text: m.text })
+      case 'assistant': {
+        const thinking = m.thinking?.trim() ? m.thinking : null
+        if (m.text?.trim() || thinking) blocks.push({ kind: 'assistant', key, text: m.text ?? '', thinking })
         break
+      }
       case 'activity': {
         if (!m.activity) break
         const last = blocks[blocks.length - 1]
@@ -104,6 +112,9 @@ function buildBlocks(messages: CreativeAgentMessage[], notices: AgentNotice[]): 
         break
       case 'video':
         if (m.video_id) blocks.push({ kind: 'video', key, title: m.text?.trim() || `Video #${m.video_id}`, videoId: m.video_id })
+        break
+      case 'storyboard':
+        if (m.storyboard && m.storyboard.scenes?.length) blocks.push({ kind: 'storyboard', key, storyboard: m.storyboard })
         break
     }
   }
@@ -134,6 +145,7 @@ export default function ChatTranscript({
   onCarryOn,
   onChoose,
   onOpenEditor,
+  currentVideoId,
 }: ChatTranscriptProps) {
   const blocks = useMemo(() => buildBlocks(messages, notices), [messages, notices])
 
@@ -144,13 +156,21 @@ export default function ChatTranscript({
           case 'user':
             return <UserBubble key={b.key} text={b.text} mode={b.mode} />
           case 'assistant':
-            return <AssistantMessage key={b.key} text={b.text} />
+            return <AssistantMessage key={b.key} text={b.text} thinking={b.thinking} />
           case 'activity':
             return <ActivityLines key={b.key} items={b.items} />
           case 'plan':
             return <PlanChip key={b.key} title={b.title} onOpen={() => onOpenPlan(b.planId)} />
+          case 'storyboard':
+            return <StoryboardCard key={b.key} storyboard={b.storyboard} />
           case 'video':
-            return <VideoChip key={b.key} title={b.title} onOpen={() => onOpenEditor(editorPath(b.videoId))} />
+            return (
+              <VideoChip
+                key={b.key}
+                title={b.title}
+                onOpen={b.videoId === currentVideoId ? undefined : () => onOpenEditor(editorPath(b.videoId))}
+              />
+            )
           case 'choices':
             return (
               <ChoiceCard
@@ -189,7 +209,8 @@ export default function ChatTranscript({
                   onOpenPlan={onOpenPlan}
                   onOpenGallery={onOpenGallery}
                   onDownload={(g, i) => onDownload(job.id, g, i)}
-                  onOpenEditor={onOpenEditor}
+                  onOpenEditor={job.video_id && job.video_id === currentVideoId ? undefined : onOpenEditor}
+                  hideGallery={!!job.video_id && job.video_id === currentVideoId}
                 />
               </div>
             )

@@ -339,6 +339,7 @@ export type CreativeAgentMessageKind =
   | 'notice'
   | 'choices'
   | 'video'
+  | 'storyboard'
 
 /** One button of an `ask_choices` question; a click sends `value` as the next message. */
 export interface CreativeAgentChoiceOption {
@@ -352,6 +353,44 @@ export interface CreativeAgentChoices {
   options: CreativeAgentChoiceOption[]
   /** Offer an "Other…" box beside the buttons. */
   allow_other: boolean
+}
+
+/** One scene of a storyboard: what it shows, how long, which engine, and why. */
+export interface CreativeStoryboardScene {
+  /** 1-based, in timeline order. */
+  n: number
+  kind: 'clip' | 'template'
+  label: string
+  /** Its length ON THE TIMELINE. */
+  seconds: number
+  /** What Higgsfield would make (a 3 s Kling scene is made 5 s and trimmed); equals `seconds` when nothing is trimmed. */
+  generated_seconds: number
+  engine: 'kling' | 'seedance' | 'none'
+  /** "Kling · silent", "Seedance · with sound", "Template · free". */
+  engine_label: string
+  with_pixel: boolean
+  /** What we see (≤ 300). */
+  shows: string
+  /** The insight: why this length, model, Pixel (≤ 300). */
+  why: string
+  /** Estimated price, from local rates (no Higgsfield call); 0 for a template. */
+  est_usd: number
+}
+
+/** The plan the agent shows BEFORE it builds a video (`show_storyboard`). No money, no actions on it. */
+export interface CreativeStoryboard {
+  title: string
+  /** The video it would change; null = a new video. */
+  video_id: number | null
+  platform: 'x' | 'tiktok'
+  aspect: '9:16' | '16:9' | '1:1'
+  /** "" = no style. */
+  style: string
+  total_seconds: number
+  est_total_usd: number
+  /** The overall insight ("" none). */
+  notes: string
+  scenes: CreativeStoryboardScene[]
 }
 
 /** One tool the agent ran, as one plain line ("Read the planner", "Saved to memory: …"). */
@@ -379,6 +418,13 @@ export interface CreativeAgentMessage {
   choices?: CreativeAgentChoices
   /** kind 'video' — the video project it made (text = its title). */
   video_id?: number
+  /** kind 'storyboard' — the scene plan, before anything is built. */
+  storyboard?: CreativeStoryboard
+  /**
+   * kind 'assistant' — the model's thinking SUMMARY for this step (Markdown),
+   * null when it had none. Shown folded as "How it's thinking".
+   */
+  thinking?: string | null
   mode?: CreativeAgentMode
   /** ISO. */
   created_at: string
@@ -437,6 +483,8 @@ export interface CreativeAgentSession {
   id: string
   /** The mode the last turn ran in. */
   mode: CreativeAgentMode
+  /** Set = this is that video's editor chat (Creatives v2.1). */
+  video_id?: number | null
 }
 
 /** GET /agent/session and POST /agent/sessions. */
@@ -459,6 +507,12 @@ export interface CreativeAgentTurnInput {
   mode: CreativeAgentMode
   /** 1–4000. Left out for the next step of the same answer (`continue`). */
   text?: string
+  /**
+   * Editor chat only: the scenes this message is about (≤ 12, all of the
+   * session's video). Goes into THIS message's [Context]; empty / absent =
+   * the whole video.
+   */
+  focus_scene_ids?: number[]
 }
 
 /** One model call. `continue` = call again (no text) for the next step. */

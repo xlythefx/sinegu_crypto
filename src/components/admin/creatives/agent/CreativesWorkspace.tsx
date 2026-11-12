@@ -287,7 +287,7 @@ export default function CreativesWorkspace({ meta, budget, onBudget, ai, onAi }:
             higgsfield={meta.configured}
           />
 
-          <div className="mx-auto w-full max-w-[760px] flex-1 pb-4 pt-4">
+          <div className="@container mx-auto w-full max-w-[760px] flex-1 pb-4 pt-4">
             {agent.freshChatNotice && (
               <div className="mb-5">
                 <ChatNotice tone="info" text={agent.freshChatNotice} onDismiss={agent.dismissFreshChatNotice} />

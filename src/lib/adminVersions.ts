@@ -13,6 +13,63 @@ import type { AdminChange } from '../types/adminVersions'
  *    later change to the same feature gets its own entry.
  */
 export const ADMIN_CHANGES: AdminChange[] = [
+  // ── 2026-11-12 ───────────────────────────────────────────────────────────
+  {
+    id: 'creatives-editor-chat',
+    date: '2026-11-12',
+    kind: 'new',
+    area: 'Creatives',
+    title: 'A chat inside the video editor that works on the scenes you pick',
+    summary:
+      'The video editor now has the Creatives assistant on its right side. Click a clip and the chat works on that clip; pick several and it works on those; pick none and it works on the whole video. It can improve one scene with AI, or make free changes (shorter scenes, a new order, captions, music) straight from a sentence.',
+    howItWorks: [
+      'Open a video project. The chat sits on the right; hide it to a slim bar with the arrow button (the editor remembers this on your computer). On a smaller screen it opens from the Chat button.',
+      'Click a clip on the timeline or in the scene list to target it: it gets a gold ring and the message box shows "Scene 3 · The city at night". Ctrl (Cmd on a Mac) adds more, Shift picks a run, and dragging across the scene track picks every clip the drag crosses. Esc or "All scenes" goes back to the whole video.',
+      'Each scene has "Improve with AI": it targets that scene, opens the chat and starts the sentence "Improve the visuals of scene 3: " for you to finish. The assistant rewrites that scene\'s prompt and proposes a priced job; nothing is made or spent until someone presses Go.',
+      'Free changes need no Go: "make scene 1 three seconds", "move the score card first", "remove the music" are applied at once and the timeline updates.',
+      'Your own unsaved edits are saved before each message, so the assistant always sees, and never overwrites, what you just changed.',
+    ],
+    technical: [
+      'GET /admin/creatives/agent/session?video_id=N (the video\'s own session per person), POST /agent/sessions {video_id}; /agent/turn takes focus_scene_ids (≤ 12, sent with that message only). The editor flushes its autosave before a message and re-reads the video after any create_video / add_scenes / edit_video activity, or when one of its jobs moves.',
+      'Selection rules are pure and unit-tested (lib/videoEditor/selection.ts). New agent tool edit_video (free edits, non-strict).',
+    ],
+    links: [{ label: 'Creatives → Videos', href: '/admin/creatives?panel=videos' }],
+  },
+  {
+    id: 'creatives-storyboard',
+    date: '2026-11-12',
+    kind: 'new',
+    area: 'Creatives',
+    title: 'The assistant shows a storyboard, and its reasoning, before it builds',
+    summary:
+      'Before the assistant builds a video of two or more scenes it now shows a storyboard: every scene with its length, which AI makes it, whether Pixel is in it, what we will see, why, and an estimated price. Its reasoning can be read too, under "How it\'s thinking". Scenes can be any length, for example 3 seconds.',
+    howItWorks: [
+      'Ask for a video in Generate mode. The assistant answers with a storyboard card, for example: 4 scenes, 15 seconds, about $1.92 — "Hook, 3 s, Kling (silent), made 5 s and trimmed to 3 s, about $0.27: a hook under 3 s because TikTok decides in the first seconds".',
+      'Below it, it asks "Build it?" with buttons. Only after "Yes" does it build, and the clips still wait for Go on the priced job. Storyboard prices are estimates; the job card shows the exact price.',
+      'Any scene length from 2 to 15 seconds: Kling makes 5 or 10 seconds and the editor trims to the length asked; Seedance makes the length asked (4 seconds at least).',
+      'Above the assistant\'s answers, "How it\'s thinking" opens a short summary of its reasoning (closed by default). It costs nothing extra.',
+    ],
+    technical: [
+      'New non-strict tool show_storyboard (no money, a display row kind "storyboard" priced from local rates without calling Higgsfield). Assistant messages carry thinking (the summarized thinking blocks, display "summarized"). TOOLS_VERSION 3: chats open before this start fresh once.',
+    ],
+    links: [{ label: 'Creatives', href: '/admin/creatives' }],
+  },
+  {
+    id: 'creatives-editor-compact',
+    date: '2026-11-12',
+    kind: 'improved',
+    area: 'Creatives',
+    title: 'A compact video editor that fits the screen',
+    summary:
+      'The video editor took too much room. It now fits one laptop screen (1366×768) without scrolling: one header line, the preview beside the scene list, a slimmer timeline below, and the chat on the right.',
+    howItWorks: [
+      'Header: back, the title, the platform, shape and style, the length, "Saved", Export MP4, and "⋯" for Delete (which still asks first).',
+      'The preview sizes itself to the screen\'s height; the scene list and the Captions / Sound / Look tabs scroll on their own; the timeline rows are about half as tall. "Add scenes with AI", "From the Gallery" and "Card · free" are at the top of the Scenes tab.',
+      'A running or priced job is one slim line; "Review and Go" opens the full job card with its price.',
+      'Between 1024 and 1279 pixels wide the chat opens as a drawer from the right; on a tablet or phone the page stacks and the chat is a sheet from the bottom. Exporting still needs a computer.',
+    ],
+    links: [{ label: 'Creatives → Videos', href: '/admin/creatives?panel=videos' }],
+  },
   {
     id: 'assets-binance-position-limit',
     date: '2026-11-12',
@@ -33,7 +90,6 @@ export const ADMIN_CHANGES: AdminChange[] = [
     ],
     links: [{ label: 'Trading Assets', href: '/admin/assets' }],
   },
-  // ── 2026-11-12 ───────────────────────────────────────────────────────────
   {
     id: 'creatives-v2-assistant-502',
     date: '2026-11-12',

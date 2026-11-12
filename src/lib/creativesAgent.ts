@@ -241,9 +241,25 @@ export function touchedPanels(messages: CreativeAgentMessage[]): { plans: boolea
     const tool = m.kind === 'activity' ? (m.activity?.tool ?? '') : ''
     if (tool === 'create_plan' || tool === 'update_plan') plans = true
     if (tool === 'remember' || tool === 'forget' || tool === 'update_memory') memory = true
-    if (tool === 'create_video' || tool === 'add_scenes') videos = true
+    if (VIDEO_TOOLS.has(tool)) videos = true
   }
   return { plans, memory, videos }
+}
+
+/** The tools that change a video project (its scenes, captions, music). */
+const VIDEO_TOOLS = new Set(['create_video', 'add_scenes', 'edit_video'])
+
+/**
+ * Did these (new) messages change a video? In the editor's chat that means
+ * the open video, which is then re-read so the timeline shows what the
+ * agent did. A failed tool changed nothing.
+ */
+export function changesVideo(messages: CreativeAgentMessage[]): boolean {
+  return messages.some(
+    (m) =>
+      m.kind === 'video' ||
+      (m.kind === 'activity' && !!m.activity && m.activity.ok && VIDEO_TOOLS.has(m.activity.tool)),
+  )
 }
 
 /** Told once when the server closed an old chat because the agent's tools changed. */

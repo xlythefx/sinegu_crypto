@@ -78,8 +78,14 @@ export interface CreativeAgentState {
   elapsed: number
   /** What the last answer cost in Claude calls, all its steps together; null before the first. */
   lastCost: number | null
-  /** Send a message. Resolves false when it was NOT stored (the composer gets the text back). */
-  send: (text: string, mode?: CreativeAgentMode) => Promise<boolean>
+  /**
+   * Send a message. Resolves false when it was NOT stored (the composer gets
+   * the text back). `focusSceneIds` (editor chat) = the scenes this message
+   * is about; it rides on this message only, never on the steps after it.
+   */
+  send: (text: string, mode?: CreativeAgentMode, opts?: SendOptions) => Promise<boolean>
+  /** Re-read the chat quietly (another screen moved one of its jobs). */
+  refresh: () => void
   /** Ask for the next step of an answer that was stopped. */
   carryOn: () => void
   stop: () => void
@@ -102,11 +108,22 @@ export interface CreativeAgentState {
   dismissFreshChatNotice: () => void
 }
 
+export interface SendOptions {
+  /** Editor chat: the picked scenes (≤ 12); empty / absent = the whole video. */
+  focusSceneIds?: number[]
+}
+
 interface Options {
   /** Claude is connected on this server (`ai.configured`). Off = nothing is ever sent. */
   enabled: boolean
   /** Every answer carries the month's budget — hand it to the page. */
   onBudget: (budget: CreativeBudget) => void
+  /** A video's editor chat (Creatives v2.1): the session bound to that video. Absent = the main workspace chat. */
+  videoId?: number
+  /** The mode an EMPTY chat opens in (a chat with history keeps the mode it last ran in). Default Ask. */
+  initialMode?: CreativeAgentMode
+  /** Called with every batch of NEW messages (a step, or a poll) — e.g. the editor re-reads its video. */
+  onMessages?: (added: CreativeAgentMessage[]) => void
 }
 
 /**
@@ -123,7 +140,7 @@ interface Options {
  * chat shows exactly what the server kept — and a message that was never
  * stored goes back into the composer instead of being lost.
  */
-export function useCreativeAgent({ enabled, onBudget }: Options): CreativeAgentState {
+export function useCreativeAgent({ enabled, onBudget, videoId, initialMode = 'ask', onMessages }: Options): CreativeAgentState {
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [loadError, setLoadError] = useState<unknown>(null)
   const [mode, setModeState] = useState<CreativeAgentMode>('ask')
@@ -157,6 +174,13 @@ export function useCreativeAgent({ enabled, onBudget }: Options): CreativeAgentS
   const startedAt = useRef(0)
   const budgetRef = useRef(onBudget)
   budgetRef.current = onBudget
+  const messagesCb = useRef(onMessages)
+  messagesCb.current = onMessages
+  const initialModeRef = useRef(initialMode)
+  initialModeRef.current = initialMode
+  /** The mode a freshly read session should show. */
+  const modeOf = (state: CreativeAgentSessionState): CreativeAgentMode =>
+    state.messages.length === 0 ? initialModeRef.current : state.session.mode === 'generate' ? 'generate' : 'ask'
 
   useEffect(() => {
     messagesRef.current = messages
@@ -210,11 +234,11 @@ export function useCreativeAgent({ enabled, onBudget }: Options): CreativeAgentS
     let cancelled = false
     setStatus('loading')
     setLoadError(null)
-    getAgentSession(sessionRef.current ?? undefined)
+    getAgentSession({ id: sessionRef.current ?? undefined, videoId })
       .then((state) => {
         if (cancelled) return
         replaceWith(state)
-        setModeState(state.session.mode === 'generate' ? 'generate' : 'ask')
+        setModeState(modeOf(state))
         setStatus('ready')
       })
       .catch((err) => {
@@ -225,7 +249,9 @@ export function useCreativeAgent({ enabled, onBudget }: Options): CreativeAgentS
     return () => {
       cancelled = true
     }
-  }, [tick, replaceWith])
+    // modeOf only reads refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick, replaceWith, videoId])
 
   const reload = useCallback(() => setTick((t) => t + 1), [])
 
@@ -259,6 +285,7 @@ export function useCreativeAgent({ enabled, onBudget }: Options): CreativeAgentS
         const p = pendingRef.current
         if (p && added.some((m) => m.kind === 'user' && m.text === p.text)) putPending(null)
         bump(touchedPanels(added))
+        messagesCb.current?.(added)
       }
       if (changedJobs.length > 0) {
         stampJobs(changedJobs)
@@ -273,14 +300,14 @@ export function useCreativeAgent({ enabled, onBudget }: Options): CreativeAgentS
     const id = sessionRef.current
     if (!id) return null
     try {
-      const state = await getAgentSession(id)
+      const state = await getAgentSession({ id, videoId })
       if (!mounted.current || sessionRef.current !== id) return null
       replaceWith(state)
       return state
     } catch {
       return null
     }
-  }, [replaceWith])
+  }, [replaceWith, videoId])
 
   const runTurn = useCallback(
     async (first: CreativeAgentTurnInput): Promise<boolean> => {
@@ -343,6 +370,7 @@ export function useCreativeAgent({ enabled, onBudget }: Options): CreativeAgentS
             addNotice('The agent has taken a lot of steps on this one, so it paused here.', 'info', true)
             break
           }
+          // The next step carries no text and no focus: the focus belonged to the message.
           input = { session_id: input.session_id, mode: input.mode }
         }
         // A stand-in the server never echoed is replaced by the server's copy.
@@ -363,7 +391,7 @@ export function useCreativeAgent({ enabled, onBudget }: Options): CreativeAgentS
   )
 
   const send = useCallback(
-    async (text: string, asMode?: CreativeAgentMode): Promise<boolean> => {
+    async (text: string, asMode?: CreativeAgentMode, opts?: SendOptions): Promise<boolean> => {
       const clean = text.trim()
       const id = sessionRef.current
       if (!enabled || !id || clean === '' || busy.current) return false
@@ -371,7 +399,8 @@ export function useCreativeAgent({ enabled, onBudget }: Options): CreativeAgentS
       stopRef.current = false
       const m = asMode ?? mode
       putPending({ text: clean, mode: m })
-      return runTurn({ session_id: id, mode: m, text: clean })
+      const focus = opts?.focusSceneIds ?? []
+      return runTurn({ session_id: id, mode: m, text: clean, ...(focus.length > 0 ? { focus_scene_ids: focus } : {}) })
     },
     [enabled, mode, runTurn, putPending],
   )
@@ -401,10 +430,10 @@ export function useCreativeAgent({ enabled, onBudget }: Options): CreativeAgentS
     busy.current = true
     setStartingNew(true)
     try {
-      const state = await createAgentSession()
+      const state = await createAgentSession({ videoId })
       if (!mounted.current) return false
       replaceWith(state)
-      setModeState(state.session.mode === 'generate' ? 'generate' : 'ask')
+      setModeState(modeOf(state))
       setNotices([])
       setFreshChatNotice(null)
       setJobErrors({})
@@ -420,7 +449,9 @@ export function useCreativeAgent({ enabled, onBudget }: Options): CreativeAgentS
       busy.current = false
       if (mounted.current) setStartingNew(false)
     }
-  }, [replaceWith, addNotice])
+    // modeOf only reads refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [replaceWith, addNotice, videoId])
 
   const jobAction = useCallback(
     async (job: CreativeAgentJob, action: AgentJobAction) => {
@@ -462,27 +493,25 @@ export function useCreativeAgent({ enabled, onBudget }: Options): CreativeAgentS
 
   // While a job generates, the session read is what moves it on — every 5 s, visible tab only.
   const anyRunning = useMemo(() => hasRunningJob(Object.values(jobs)), [jobs])
-  usePoll(
-    () => {
-      const id = sessionRef.current
-      if (!id || polling.current) return
-      polling.current = true
-      getAgentSession(id)
-        .then((state) => {
-          if (!mounted.current || sessionRef.current !== id) return
-          absorb(state.messages, state.jobs)
-          if (state.budget) budgetRef.current(state.budget)
-        })
-        .catch(() => {
-          // A failed background read keeps what is on screen; the next tick retries.
-        })
-        .finally(() => {
-          polling.current = false
-        })
-    },
-    POLL_MS,
-    { paused: !anyRunning || status !== 'ready' },
-  )
+  /** A quiet re-read of the chat — the 5-s poll while a job runs, and `refresh`. */
+  const quietRead = useCallback(() => {
+    const id = sessionRef.current
+    if (!id || polling.current) return
+    polling.current = true
+    getAgentSession({ id, videoId })
+      .then((state) => {
+        if (!mounted.current || sessionRef.current !== id) return
+        absorb(state.messages, state.jobs)
+        if (state.budget) budgetRef.current(state.budget)
+      })
+      .catch(() => {
+        // A failed background read keeps what is on screen; the next tick retries.
+      })
+      .finally(() => {
+        polling.current = false
+      })
+  }, [absorb, videoId])
+  usePoll(quietRead, POLL_MS, { paused: !anyRunning || status !== 'ready' })
 
   // A step finished or started: the Gallery has something new.
   const fingerprint = useMemo(() => jobsFingerprint(Object.values(jobs)), [jobs])
@@ -511,6 +540,7 @@ export function useCreativeAgent({ enabled, onBudget }: Options): CreativeAgentS
     elapsed,
     lastCost,
     send,
+    refresh: quietRead,
     carryOn,
     stop,
     newChat,

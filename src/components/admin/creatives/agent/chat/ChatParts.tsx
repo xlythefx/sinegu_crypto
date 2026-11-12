@@ -1,11 +1,19 @@
-import { ChevronRight, CircleAlert, Clapperboard, Film, Info, LoaderCircle, RotateCw, SquareKanban, Sparkles, TriangleAlert, X } from 'lucide-react'
+import { useId, useState } from 'react'
+import { Brain, ChevronDown, ChevronRight, CircleAlert, Clapperboard, Film, Info, LoaderCircle, RotateCw, SquareKanban, Sparkles, TriangleAlert, X } from 'lucide-react'
 import Markdown from '../../../../ui/Markdown'
 import type { CreativeAgentActivity, CreativeAgentMode } from '../../../../../types/creatives'
 import { NOTICE } from '../../creativeClasses'
 import { toolIcon } from '../agentIcons'
 
-/** Everything the agent says sits right of its avatar; the indent lines its activity up with its words. */
-export const AGENT_INDENT = 'pl-0 sm:pl-10'
+/**
+ * Everything the agent says sits right of its avatar; the indent lines its
+ * activity up with its words. Measured on the CHAT's width (a container
+ * query on the nearest `@container`), not the screen's: the editor's chat
+ * panel is 380 px on a wide screen and has no room for the avatar gutter.
+ */
+export const AGENT_INDENT = 'pl-0 @[560px]:pl-10'
+/** The avatar shows only where the indent does. */
+const AVATAR_SHOWN = 'hidden @[560px]:grid'
 
 /** The small Generate tag — on a user message sent in Generate mode, and on Generate starters. */
 export function GenerateTag() {
@@ -36,7 +44,7 @@ export function UserBubble({ text, mode, sending = false }: { text: string; mode
 function AgentAvatar() {
   return (
     <span
-      className="mt-0.5 hidden h-7 w-7 flex-none place-items-center rounded-full border border-accent-line bg-accent-soft text-accent sm:grid"
+      className={`mt-0.5 ${AVATAR_SHOWN} h-7 w-7 flex-none place-items-center rounded-full border border-accent-line bg-accent-soft text-accent`}
       aria-hidden="true"
     >
       <Sparkles size={14} />
@@ -44,13 +52,51 @@ function AgentAvatar() {
   )
 }
 
-/** The agent's answer, rendered from Markdown (raw HTML never). */
-export function AssistantMessage({ text }: { text: string }) {
+/**
+ * "How it's thinking": the model's thinking summary for one step, folded
+ * by default and muted when open — the reasoning behind what it says and
+ * plans, for whoever wants to read it.
+ */
+export function ThinkingLine({ text }: { text: string }) {
+  const [open, setOpen] = useState(false)
+  const id = useId()
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-controls={id}
+        className="inline-flex w-fit max-w-full cursor-pointer items-center gap-1.5 rounded-pill border border-transparent bg-transparent py-0.5 pr-1.5 text-[12px] font-semibold text-faint transition-colors duration-150 hover:text-muted"
+      >
+        <Brain size={13} aria-hidden="true" className="flex-none" />
+        How it’s thinking
+        <ChevronDown size={13} aria-hidden="true" className={`flex-none transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div
+          id={id}
+          className="min-w-0 border-l-2 border-hair pl-3 animate-[fadeup_0.25s_ease-out] [&_h3]:text-muted [&_h4]:text-muted [&_h5]:text-muted [&_strong]:text-muted"
+        >
+          <Markdown size="sm" className="text-[12.5px]! leading-[1.6]! text-muted!">
+            {text}
+          </Markdown>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The agent's answer, rendered from Markdown (raw HTML never), with its thinking folded above it. */
+export function AssistantMessage({ text, thinking }: { text: string; thinking?: string | null }) {
+  const hasText = text.trim() !== ''
+  const hasThinking = !!thinking && thinking.trim() !== ''
   return (
     <div className="flex min-w-0 gap-3 animate-[fadeup_0.3s_ease-out]">
-      <AgentAvatar />
-      <div className="min-w-0 flex-1">
-        <Markdown>{text}</Markdown>
+      {hasText ? <AgentAvatar /> : <span className={`${AVATAR_SHOWN} w-7 flex-none`} aria-hidden="true" />}
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        {hasThinking && <ThinkingLine text={thinking as string} />}
+        {hasText && <Markdown>{text}</Markdown>}
       </div>
     </div>
   )
@@ -98,8 +144,23 @@ export function PlanChip({ title, onOpen }: { title: string; onOpen: () => void 
   )
 }
 
-/** "Video: <title> — Open the editor": a video project the agent made. */
-export function VideoChip({ title, onOpen }: { title: string; onOpen: () => void }) {
+/** "Video: <title> — Open the editor": a video project the agent made. Without `onOpen` it is the video already open. */
+export function VideoChip({ title, onOpen }: { title: string; onOpen?: () => void }) {
+  if (!onOpen) {
+    return (
+      <div className={`${AGENT_INDENT} animate-[fadeup_0.3s_ease-out]`}>
+        <span className="inline-flex max-w-full items-center gap-2.5 rounded-pill border border-accent-line bg-accent-soft py-1.5 pl-2 pr-3">
+          <span className="grid h-6 w-6 flex-none place-items-center rounded-full bg-surface text-accent" aria-hidden="true">
+            <Film size={13} />
+          </span>
+          <span className="min-w-0 truncate text-[12.5px] text-muted">
+            Video: <strong className="font-bold text-text">{title}</strong>
+            <span className="text-accent"> — this one</span>
+          </span>
+        </span>
+      </div>
+    )
+  }
   return (
     <div className={`${AGENT_INDENT} animate-[fadeup_0.3s_ease-out]`}>
       <button
@@ -176,12 +237,12 @@ export function AgentProgress({ label, elapsed, stopping }: { label: string | nu
   return (
     <div className="flex min-w-0 items-center gap-3 animate-[fadeup_0.3s_ease-out]">
       <span
-        className="hidden h-7 w-7 flex-none place-items-center rounded-full border border-accent-line bg-accent-soft text-accent sm:grid"
+        className={`${AVATAR_SHOWN} h-7 w-7 flex-none place-items-center rounded-full border border-accent-line bg-accent-soft text-accent`}
         aria-hidden="true"
       >
         <LoaderCircle size={14} className="animate-spin" />
       </span>
-      <LoaderCircle size={15} aria-hidden="true" className="flex-none animate-spin text-accent sm:hidden" />
+      <LoaderCircle size={15} aria-hidden="true" className="flex-none animate-spin text-accent @[560px]:hidden" />
       <p className="min-w-0 flex-1 text-[13px] font-semibold text-muted" role="status">
         {text}
       </p>

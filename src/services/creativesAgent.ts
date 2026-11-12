@@ -47,31 +47,78 @@ export function normaliseJob(job: CreativeAgentJob): CreativeAgentJob {
   }
 }
 
+/** A storyboard's prices and lengths as numbers (decimals can arrive as strings). */
+function normaliseMessage(m: CreativeAgentMessage): CreativeAgentMessage {
+  if (m.kind !== 'storyboard' || !m.storyboard) return m
+  const b = m.storyboard
+  return {
+    ...m,
+    storyboard: {
+      ...b,
+      video_id: b.video_id ? Number(b.video_id) : null,
+      style: b.style ?? '',
+      notes: b.notes ?? '',
+      total_seconds: num(b.total_seconds),
+      est_total_usd: num(b.est_total_usd),
+      scenes: (b.scenes ?? []).map((s, i) => ({
+        ...s,
+        n: num(s.n) || i + 1,
+        seconds: num(s.seconds),
+        generated_seconds: num(s.generated_seconds) || num(s.seconds),
+        est_usd: num(s.est_usd),
+        shows: s.shows ?? '',
+        why: s.why ?? '',
+        engine_label: s.engine_label ?? '',
+      })),
+    },
+  }
+}
+
 function normaliseSession(res: Ok<CreativeAgentSessionState>): CreativeAgentSessionState {
   return {
     session: res.session,
-    messages: res.messages ?? [],
+    messages: (res.messages ?? []).map(normaliseMessage),
     jobs: (res.jobs ?? []).map(normaliseJob),
     budget: res.budget,
     notice: res.notice ?? null,
   }
 }
 
+export interface AgentSessionQuery {
+  /** The chat on screen, when there is one. */
+  id?: string
+  /** A video's editor chat (Creatives v2.1): that video's newest session for the caller, else a new one bound to it. */
+  videoId?: number
+}
+
 /**
  * The caller's chat: the given id when it is theirs and under 7 days old,
- * else their newest, else a new one. Running jobs are moved on first.
+ * else their newest, else a new one. With `videoId` it is that video's
+ * editor chat instead (404 when the video does not exist); without it the
+ * main workspace chat, which never picks a video's session. Running jobs are
+ * moved on first.
  */
-export async function getAgentSession(id?: string): Promise<CreativeAgentSessionState> {
-  const qs = id ? `?id=${encodeURIComponent(id)}` : ''
+export async function getAgentSession({ id, videoId }: AgentSessionQuery = {}): Promise<CreativeAgentSessionState> {
+  const params = new URLSearchParams()
+  if (id) params.set('id', id)
+  if (videoId) params.set('video_id', String(videoId))
+  const qs = params.toString()
   return normaliseSession(
-    await apiFetch<Ok<CreativeAgentSessionState>>(`/admin/creatives/agent/session${qs}`, { auth: true }),
+    await apiFetch<Ok<CreativeAgentSessionState>>(`/admin/creatives/agent/session${qs ? `?${qs}` : ''}`, { auth: true }),
   )
 }
 
-/** "New chat": a fresh, empty session. The old transcript is not kept; memory, brief and plans are. */
-export async function createAgentSession(): Promise<CreativeAgentSessionState> {
+/**
+ * "New chat": a fresh, empty session (bound to the video when given). The
+ * old transcript is not kept; memory, brief and plans are.
+ */
+export async function createAgentSession({ videoId }: { videoId?: number } = {}): Promise<CreativeAgentSessionState> {
   return normaliseSession(
-    await apiFetch<Ok<CreativeAgentSessionState>>('/admin/creatives/agent/sessions', { method: 'POST', auth: true }),
+    await apiFetch<Ok<CreativeAgentSessionState>>('/admin/creatives/agent/sessions', {
+      method: 'POST',
+      auth: true,
+      ...(videoId ? { body: { video_id: videoId } } : {}),
+    }),
   )
 }
 
@@ -84,7 +131,7 @@ export async function agentTurn(input: CreativeAgentTurnInput): Promise<Creative
   })
   return {
     status: res.status,
-    messages: (res.messages ?? []) as CreativeAgentMessage[],
+    messages: ((res.messages ?? []) as CreativeAgentMessage[]).map(normaliseMessage),
     jobs: (res.jobs ?? []).map(normaliseJob),
     budget: res.budget,
     cost_usd: num(res.cost_usd),

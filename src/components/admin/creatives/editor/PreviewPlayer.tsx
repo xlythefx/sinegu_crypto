@@ -18,7 +18,18 @@ interface PreviewPlayerProps {
   now: number
   onToggle: () => void
   onSeek: (ms: number) => void
+  /**
+   * The fitted desktop editor: the screen's height (a CSS length) the
+   * picture may use, and its widest in px. The picture is then exactly as
+   * wide as that height allows for the video's shape, capped — a tall 9:16
+   * is narrow, a wide 16:9 hits the cap. Absent = fill the width, up to 58 %
+   * of the screen's height (the stacked phone / tablet layout).
+   */
+  fit?: { height: string; maxWidth: number }
 }
+
+/** The fitted preview's column never gets narrower than this, so the play bar keeps room. */
+const FIT_MIN_W = 236
 
 /** What the screen shows when a scene has nothing to play yet. */
 function placeholderFor(scene: CreativeVideoScene, now: number): { icon: 'wait' | 'gone' | 'fail'; text: string } | null {
@@ -38,7 +49,7 @@ function placeholderFor(scene: CreativeVideoScene, now: number): { icon: 'wait' 
  * seen is what is exported). Drawing a video onto a canvas for DISPLAY is
  * fine across origins — nothing is ever read back.
  */
-export default function PreviewPlayer({ video, spans, totalMs, timeRef, timeMs, playing, now, onToggle, onSeek }: PreviewPlayerProps) {
+export default function PreviewPlayer({ video, spans, totalMs, timeRef, timeMs, playing, now, onToggle, onSeek, fit }: PreviewPlayerProps) {
   const boxRef = useRef<HTMLDivElement>(null)
   const layerRef = useRef<HTMLCanvasElement>(null)
   const capRef = useRef<HTMLCanvasElement>(null)
@@ -155,12 +166,16 @@ export default function PreviewPlayer({ video, spans, totalMs, timeRef, timeMs, 
   const ratio = ew / eh
   const clips = video.scenes.filter((s) => clipUrl(s, now))
 
+  const boxWidth = fit
+    ? `min(${fit.maxWidth}px, calc(${fit.height} * ${ratio.toFixed(4)}))`
+    : `min(100%, calc(min(58dvh, 600px) * ${ratio}))`
+
   return (
-    <div className="flex min-w-0 flex-col items-center gap-3">
+    <div className={`flex min-w-0 flex-col items-center ${fit ? 'gap-2' : 'gap-3'}`} style={fit ? { width: `max(${FIT_MIN_W}px, ${boxWidth})` } : undefined}>
       <div
         ref={boxRef}
-        className="relative overflow-hidden rounded-[14px] border border-border bg-black shadow-[0_18px_44px_rgba(0,0,0,0.25)]"
-        style={{ aspectRatio: `${ew} / ${eh}`, width: `min(100%, calc(min(58dvh, 600px) * ${ratio}))` }}
+        className={`relative overflow-hidden border border-border bg-black ${fit ? 'rounded-[12px] shadow-[0_12px_30px_rgba(0,0,0,0.25)]' : 'rounded-[14px] shadow-[0_18px_44px_rgba(0,0,0,0.25)]'}`}
+        style={{ aspectRatio: `${ew} / ${eh}`, width: boxWidth }}
       >
         {clips.map((s) => (
           <video
@@ -199,15 +214,15 @@ export default function PreviewPlayer({ video, spans, totalMs, timeRef, timeMs, 
         )}
       </div>
 
-      <div className="flex w-full max-w-[640px] items-center gap-3">
+      <div className={`flex w-full max-w-[640px] items-center ${fit ? 'gap-2' : 'gap-3'}`}>
         <button
           type="button"
           onClick={onToggle}
           disabled={totalMs <= 0}
           aria-label={playing ? 'Pause' : 'Play'}
-          className="inline-flex h-11 w-11 flex-none cursor-pointer items-center justify-center rounded-full border border-transparent bg-accent text-on-accent shadow-[0_8px_20px_var(--glow)] disabled:cursor-not-allowed disabled:opacity-50"
+          className={`inline-flex ${fit ? 'h-9 w-9' : 'h-11 w-11'} flex-none cursor-pointer items-center justify-center rounded-full border border-transparent bg-accent text-on-accent shadow-[0_8px_20px_var(--glow)] disabled:cursor-not-allowed disabled:opacity-50`}
         >
-          {playing ? <Pause size={18} aria-hidden="true" /> : <Play size={18} aria-hidden="true" className="ml-0.5 fill-current" />}
+          {playing ? <Pause size={fit ? 16 : 18} aria-hidden="true" /> : <Play size={fit ? 16 : 18} aria-hidden="true" className="ml-0.5 fill-current" />}
         </button>
         <input
           type="range"
@@ -220,7 +235,7 @@ export default function PreviewPlayer({ video, spans, totalMs, timeRef, timeMs, 
           aria-label="Playhead"
           disabled={totalMs <= 0}
         />
-        <span className="flex-none font-mono text-[12px] tabular-nums text-muted">
+        <span className={`flex-none font-mono tabular-nums text-muted ${fit ? 'text-[11px]' : 'text-[12px]'}`}>
           {fmtClock(timeMs)} / {fmtClock(totalMs)}
         </span>
       </div>

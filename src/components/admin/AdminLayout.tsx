@@ -28,44 +28,63 @@ import {
 interface AdminLayoutProps {
   title: string
   subtitle?: string
+  /**
+   * The page draws its own one-line header (the video editor), using
+   * AdminMenuButton + AdminTopBarEnd so the menu, theme and avatar stay; the
+   * title is then only announced to screen readers.
+   */
+  ownHeader?: boolean
   children: ReactNode
+}
+
+/** The burger that opens the admin menu on a narrow screen (hidden from 900px). */
+export function AdminMenuButton() {
+  const { openDrawer } = useContext(ShellContext)
+  return (
+    <button
+      type="button"
+      className={BURGER}
+      onClick={openDrawer}
+      aria-label="Open menu"
+    >
+      <Menu size={20} strokeWidth={2.2} />
+    </button>
+  )
+}
+
+/** The top bar's right end: the theme toggle and the avatar. */
+export function AdminTopBarEnd({ className = TOPBAR_RIGHT }: { className?: string }) {
+  const { theme, toggleTheme } = useTheme()
+  const user = useSessionUser()
+  return (
+    <div className={className}>
+      <button
+        className={THEME_TOGGLE}
+        title="Toggle theme"
+        onClick={toggleTheme}
+      >
+        <span className={THEME_TOGGLE_ICON}>
+          {theme === 'dark' ? '☀' : '☾'}
+        </span>
+        {theme === 'dark' ? 'Light' : 'Dark'}
+      </button>
+      <UserAvatar user={user} size={34} />
+    </div>
+  )
 }
 
 /** Admin top bar: burger + title/subtitle left; theme toggle + avatar right. */
 function AdminTopBar({ title, subtitle }: { title: string; subtitle?: string }) {
-  const { theme, toggleTheme } = useTheme()
-  const { openDrawer } = useContext(ShellContext)
-  const user = useSessionUser()
-
   return (
     <div className={TOPBAR}>
-      <button
-        type="button"
-        className={BURGER}
-        onClick={openDrawer}
-        aria-label="Open menu"
-      >
-        <Menu size={20} strokeWidth={2.2} />
-      </button>
+      <AdminMenuButton />
       <div>
         <div className="font-display text-[18px] font-bold">{title}</div>
         {subtitle && (
           <div className="text-[12px] text-muted mt-px">{subtitle}</div>
         )}
       </div>
-      <div className={TOPBAR_RIGHT}>
-        <button
-          className={THEME_TOGGLE}
-          title="Toggle theme"
-          onClick={toggleTheme}
-        >
-          <span className={THEME_TOGGLE_ICON}>
-            {theme === 'dark' ? '☀' : '☾'}
-          </span>
-          {theme === 'dark' ? 'Light' : 'Dark'}
-        </button>
-        <UserAvatar user={user} size={34} />
-      </div>
+      <AdminTopBarEnd />
     </div>
   )
 }
@@ -80,6 +99,7 @@ function AdminTopBar({ title, subtitle }: { title: string; subtitle?: string }) 
 export default function AdminLayout({
   title,
   subtitle,
+  ownHeader = false,
   children,
 }: AdminLayoutProps) {
   const navigate = useNavigate()
@@ -108,7 +128,7 @@ export default function AdminLayout({
     <DashboardShell
       sidebar={<AdminSidebar onLogout={() => setConfirmLogout(true)} />}
     >
-      <AdminTopBar title={title} subtitle={subtitle} />
+      {ownHeader ? <h1 className="sr-only">{title}</h1> : <AdminTopBar title={title} subtitle={subtitle} />}
       {children}
       <ConfirmModal
         open={confirmLogout}
