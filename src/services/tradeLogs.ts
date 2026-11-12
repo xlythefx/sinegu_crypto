@@ -60,6 +60,13 @@ interface ApiDetail {
   } | null
   increment?: number | null
   max_increments?: number | null
+  limit?: {
+    shrunk: boolean
+    cap_usd: number | null
+    leverage: number | null
+    requested_qty: number | null
+    open_usd: number | null
+  } | null
   sizing: ApiSizing | null
   reason_key?: string | null
   reason_label?: string | null
@@ -183,6 +190,15 @@ function mapDetail(d: ApiDetail): TradeLogDetail {
     close: mapClose(d.close),
     increment: d.increment ?? null,
     maxIncrements: d.max_increments ?? null,
+    limit: d.limit
+      ? {
+          shrunk: d.limit.shrunk,
+          capUsd: d.limit.cap_usd,
+          leverage: d.limit.leverage,
+          requestedQty: d.limit.requested_qty,
+          openUsd: d.limit.open_usd,
+        }
+      : null,
     sizing: mapSizing(d.sizing),
     reasonKey: d.reason_key ?? null,
     reasonLabel: d.reason_label ?? null,

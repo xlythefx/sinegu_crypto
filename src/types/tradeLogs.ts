@@ -94,6 +94,17 @@ export interface TradeLogDetail {
   /** Entries: stack depth after this fill. Exits: increments taken off. */
   increment: number | null
   maxIncrements: number | null
+  /**
+   * Binance's position limit at the coin's leverage (engine, 2026-11-12): set
+   * when an entry was shrunk to fit it (`shrunk`) or skipped at it.
+   */
+  limit: {
+    shrunk: boolean
+    capUsd: number | null
+    leverage: number | null
+    requestedQty: number | null
+    openUsd: number | null
+  } | null
   sizing: SizingDecision | null
   /** Stable reason key (`key_blocked`, `nothing_to_close`, …); null for a fill. */
   reasonKey: string | null

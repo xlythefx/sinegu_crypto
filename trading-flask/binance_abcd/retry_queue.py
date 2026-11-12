@@ -28,7 +28,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Iterable, Optional
 
-from binance_abcd import notify
+from binance_abcd import notify, stuck_exits
 from binance_abcd.exchanges import enabled as enabled_exchanges
 from binance_abcd.exchanges import label
 from binance_abcd.hooks import MAIN_FEED, RETRY_ENABLED, RETRY_INTERVAL_SECONDS, RETRY_MAX_ATTEMPTS, TEST_FEED
@@ -136,6 +136,11 @@ def _requeue(job: RetryJob) -> None:
         # to say so out loud rather than in the journal.
         notify.notify_retry_abandoned(job.action, job.ticker, _describe(job.targets), job.attempts,
                                       test_feed=job.feed == TEST_FEED)
+        if job.feed != TEST_FEED:
+            stuck_exits.report(job.action, job.ticker, [
+                {"exchange": exchange, "uni_id": uni_id}
+                for exchange, ids in job.targets.items() for uni_id in ids
+            ], why="abandoned", attempts=job.attempts)
         with _LOCK:
             _ACTIVE_KEYS.discard(job.key)
         return
@@ -175,6 +180,14 @@ def _run_due_job(job: RetryJob) -> None:
             job.action, job.ticker, _describe(_normalize_targets(rejected)), job.attempts + 1,
             test_feed=job.feed == TEST_FEED,
         )
+        if job.feed != TEST_FEED:
+            errors = {(r.get("exchange", "binance"), r.get("uni_id")): r for r in details}
+            stuck_exits.report(job.action, job.ticker, [
+                {"exchange": exchange, "uni_id": uni_id,
+                 "name": (errors.get((exchange, uni_id)) or {}).get("account"),
+                 "error": (errors.get((exchange, uni_id)) or {}).get("error")}
+                for exchange, ids in rejected.items() for uni_id in ids
+            ], why="rejected", attempts=job.attempts + 1)
 
     # Something filled: this run published the signal, so a later attempt must
     # not publish it again.

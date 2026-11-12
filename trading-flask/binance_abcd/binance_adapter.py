@@ -15,6 +15,7 @@ from typing import Any, Dict, Optional
 
 from binance_abcd.binance_api import (
     BinanceAPI,
+    _quantize_to_step,
     invalidate_position_mode,
     mark_position_mode_verified,
 )
@@ -232,6 +233,15 @@ class BinanceAdapter:
 
     def mark_price(self, ticker: str) -> Optional[float]:
         return self.api.get_mark_price(ticker.upper())
+
+    def floor_qty(self, ticker: str, coins: float) -> Optional[float]:
+        """`coins` floored to the coin's step size (what the order would send);
+        None when the step is unknown, 0.0 when below one step."""
+        step = self.api.get_step_size(ticker.upper())
+        if not step:
+            return None
+        rounded = _quantize_to_step(coins, step)
+        return float(rounded) if rounded is not None else 0.0
 
     def open_positions_rows(self) -> Optional[list[dict]]:
         positions = self.api.get_positions_v3()

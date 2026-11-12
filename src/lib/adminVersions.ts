@@ -13,6 +13,44 @@ import type { AdminChange } from '../types/adminVersions'
  *    later change to the same feature gets its own entry.
  */
 export const ADMIN_CHANGES: AdminChange[] = [
+  {
+    id: 'trade-failure-emails',
+    date: '2026-11-12',
+    kind: 'new',
+    area: 'Signal Log',
+    title: 'Failed trades are emailed: an hourly summary, and at once when a close fails',
+    summary:
+      'Problems with trades used to reach only the private Telegram group. They now also come by email, without flooding the inbox: one summary per hour, sent only when something needs a look, and an immediate email when the bot cannot close a position.',
+    howItWorks: [
+      'Every hour, at two minutes past, the bot looks at the hour that just ended. If any account had an order refused, an entry shrunk or skipped at Binance’s position limit, or a signal was rejected, one email lists them per signal, with the customer’s name and the exchange’s own error. A clean hour sends nothing.',
+      'A failure the bot fixed by itself on a retry is shown in green as fixed, and does not trigger an email alone. Blocked API keys and similar problems that repeat on every signal are only counted, since they have their own screens.',
+      'When Binance refuses a close, or the bot gives up after all its retries, an email goes out straight away: the position may still be open, and that cannot wait an hour. It names each account and links to Open positions, where it can be closed.',
+      'Example: at 09:14 SANTOS SHORT, one customer’s entry was shrunk from 10,000 to 4,250 coins to fit Binance’s $10,000 limit, and another had “Margin is insufficient”. Both appear in the 10:02 email.',
+    ],
+    technical: [
+      'TRADE_ALERT_EMAILS (comma list, box-local, empty = off). `trade-alerts:digest` hourlyAt(2) → App\\Services\\Admin\\TradeFailureDigest over trade_logs (main feed, SignalHealth classes, retries folded within 60 min), once per hour (Cache::add). Engine stuck_exits.report → POST /api/engine/{x}/alerts/exit-stuck from the two red "EXIT FAILED — MANUAL ACTION" paths (live-run rejection, retry queue give-up), exits and main feed only. Both templates in EmailCatalogue (trade-failure-summary, trade-exit-stuck).',
+    ],
+    links: [{ label: 'Signal Log', href: '/admin/trade-logs?view=issues' }],
+  },
+  {
+    id: 'engine-shrinks-to-binance-limit',
+    date: '2026-11-12',
+    kind: 'new',
+    area: 'Trading engine',
+    title: 'The bot shrinks an entry that would pass Binance’s position limit',
+    summary:
+      'Binance refuses any order that would make a position bigger than it allows at the coin’s leverage. Trade sizes grow with each account’s balance, so a customer who deposits enough would have had their later entries refused with nobody watching. The bot now cuts such an entry down to what fits, and skips it only when the position is already at the limit.',
+    howItWorks: [
+      'Before each entry on Binance, the bot checks the coin’s limit at its leverage and how much of the position is already open. If the new entry would go over, it is reduced to fit, keeping a 3% margin for price moves. If there is no room at all, the entry is skipped as “Binance position limit reached”.',
+      'Example: SANTOS at 10× allows $10,000. A 25,000 USDT customer’s third entry would take the position from $8,000 to $12,000, so it is cut to about $1,700. The other accounts trade as usual.',
+      'Exits are never touched: an open position can always be closed. If the limit cannot be read, the entry goes out exactly as before.',
+      'Shrunk entries carry a “Shrunk to fit Binance’s limit” tag in the Signal Log and appear in the hourly trade email, so the size can be lowered on purpose.',
+    ],
+    technical: [
+      'binance_abcd/exchange_limit.py: fit() before handle_entry in _run_account; brackets from /fapi/v1/leverageBracket cached per host+symbol 10 min (failed read 1 min), mark price 30 s; usable = cap × (1 − BINANCE_ABCD_LIMIT_SAFETY, default 0.03); shrink floored to step, skip below $6. Skip reason "exchange limit reached" → SignalHealth limit_reached (problem). Binance only; a refused leverage disables the check for that entry.',
+    ],
+    links: [{ label: 'Signal Log', href: '/admin/trade-logs' }],
+  },
   // ── 2026-11-12 ───────────────────────────────────────────────────────────
   {
     id: 'creatives-editor-chat',

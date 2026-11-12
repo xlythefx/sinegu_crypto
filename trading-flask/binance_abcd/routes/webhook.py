@@ -29,7 +29,7 @@ from typing import Any, Optional, Sequence
 
 from flask import Blueprint, jsonify, request
 
-from binance_abcd import daily_alerts, engine_client, hooks, notify, symbol_locks
+from binance_abcd import daily_alerts, engine_client, exchange_limit, hooks, notify, stuck_exits, symbol_locks
 from binance_abcd.accounts_api import fetch_accounts
 from binance_abcd.assets_api import get_asset
 from binance_abcd.assets_api import rejection as asset_rejection
@@ -965,6 +965,23 @@ def _run_account(
             lev = _effective_leverage(asset, leverage)
             base["leverage"] = lev
             leverage_refused = _maybe_set_leverage(api, symbol, lev)
+
+            # The exchange's position limit at this leverage (exchange_limit):
+            # shrink an entry that would pass it, skip one with no room left —
+            # instead of an order Binance refuses -2027. A refused leverage
+            # leaves the account's real leverage unknown, so no limit is assumed.
+            limit = exchange_limit.fit(
+                api, symbol, position_side, None if leverage_refused else lev, current, quantity, price,
+            )
+            if limit["action"] == "skip":
+                _bump("accounts_skipped")
+                sizing["limit"] = limit
+                return base | {"status": "skipped", "reason": exchange_limit.LIMIT_REACHED, "sizing": sizing}
+            if limit["action"] == "shrink":
+                sizing["limit"] = limit
+                quantity = limit["quantity"]
+                sizing["quantity"] = quantity
+
             result = handle_entry(api, symbol, "BUY" if action == "BUY" else "SELL", quantity, price)
 
             if result is not None and result.get("status") == NOT_LISTED:
@@ -1013,6 +1030,8 @@ def _run_account(
                 # the answer for.
                 "increment": int(round(stacks_now)) + 1 if stacks_now is not None else None,
                 "max_increments": int(max_increments) or None,
+                # Shrunk to fit the exchange's position limit (the hourly email lists these).
+                **({"shrunk_by_limit": True} if limit["action"] == "shrink" else {}),
             }
 
         # --- EXIT_LONG / EXIT_SHORT ------------------------------------------
@@ -1538,6 +1557,13 @@ def _notify_job(
                 [(_account_label(r, name_venues), r.get("error") or "unknown",
                   r.get("exchange", "binance")) for r in failures if not _queued(r)],
             )
+            # A close refused outright may leave a real position open: emailed
+            # NOW, not in the hourly summary (stuck_exits; exits only).
+            stuck_exits.report(action, symbol, [
+                {"exchange": r.get("exchange", "binance"), "uni_id": r.get("uni_id"),
+                 "name": r.get("account"), "error": r.get("error")}
+                for r in failures if not _queued(r)
+            ], why="rejected")
             notify.notify_account_failures(
                 action, symbol,
                 [(_account_label(r, name_venues), r.get("error") or "unknown",

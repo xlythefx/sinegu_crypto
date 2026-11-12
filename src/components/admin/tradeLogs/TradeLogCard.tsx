@@ -336,6 +336,16 @@ function AccountRow({
           {isEntry && detail.status === 'filled' && detail.quantity !== null && (
             <span className="font-mono text-[12px] text-muted">{fmtQty(detail.quantity, 0, 8)}</span>
           )}
+          {detail.limit?.shrunk && (
+            <span
+              className="rounded-pill bg-accent-soft px-2 py-0.5 text-[10.5px] font-bold text-accent"
+              title={`Asked for ${fmtQty(detail.limit.requestedQty ?? 0, 0, 8)}; Binance accepts at most ${
+                detail.limit.capUsd !== null ? fmtMoney(detail.limit.capUsd, 0) : '?'
+              } at ${detail.limit.leverage ?? '?'}×, so the entry was cut to fit.`}
+            >
+              Shrunk to fit Binance’s limit
+            </span>
+          )}
           {!isEntry && detail.closedQuantity !== null && (
             <span className="font-mono text-[12px] text-muted">
               closed {fmtQty(detail.closedQuantity, 0, 8)}
