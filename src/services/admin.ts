@@ -34,6 +34,7 @@ import type {
   AssetStreakSizingInput,
   AssetStreaks,
   BinanceSizingCheckData,
+  PositionLimitData,
   BulkKeyDeleteResult,
   CacheClearResult,
   ClearInvoicesResult,
@@ -201,6 +202,29 @@ export async function getBinanceSizingCheck(ticker: string): Promise<BinanceSizi
     `/admin/assets/binance-check?ticker=${encodeURIComponent(ticker)}`,
     { auth: true },
   )
+}
+
+/**
+ * POST /admin/assets/position-limit — a proposed base / max size and leverage
+ * against Binance's position limit, for every real-money account (the engine
+ * works it out with the same sizing the next signal uses).
+ */
+export async function checkPositionLimit(input: {
+  ticker: string
+  baseSize: number
+  maxPosition: number
+  leverage: number | null
+}): Promise<PositionLimitData> {
+  return apiFetch<PositionLimitData>('/admin/assets/position-limit', {
+    method: 'POST',
+    auth: true,
+    body: {
+      ticker: input.ticker,
+      base_size: input.baseSize,
+      max_increments: input.maxPosition,
+      leverage: input.leverage,
+    },
+  })
 }
 
 export async function getAdminAssets(): Promise<AdminAsset[]> {

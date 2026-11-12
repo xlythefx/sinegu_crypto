@@ -226,6 +226,13 @@ class BinanceAdapter:
             return None
         return bool(flags.get("enableFutures"))
 
+    def leverage_brackets(self, ticker: str) -> Optional[list]:
+        """Binance only (size_check.py checks for the method)."""
+        return self.api.get_leverage_brackets(ticker.upper())
+
+    def mark_price(self, ticker: str) -> Optional[float]:
+        return self.api.get_mark_price(ticker.upper())
+
     def open_positions_rows(self) -> Optional[list[dict]]:
         positions = self.api.get_positions_v3()
         if positions is None:

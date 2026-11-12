@@ -569,6 +569,29 @@ class BinanceAPI:
 
     # --- trading --------------------------------------------------------------
 
+    def get_leverage_brackets(self, symbol: str) -> Optional[list]:
+        """The symbol's notional brackets for THIS account (GET
+        /fapi/v1/leverageBracket, weight 1): [{bracket, initialLeverage,
+        notionalFloor, notionalCap, ...}], or None when unreadable. At leverage
+        L the largest position Binance accepts is the biggest notionalCap among
+        brackets whose initialLeverage >= L — the limit behind -2027."""
+        data = self._request_get("/fapi/v1/leverageBracket", {"symbol": symbol.upper()})
+        if isinstance(data, list):
+            data = data[0] if data else None
+        if not isinstance(data, dict):
+            return None
+        brackets = data.get("brackets")
+        return brackets if isinstance(brackets, list) and brackets else None
+
+    def get_mark_price(self, symbol: str) -> Optional[float]:
+        """Public mark price (GET /fapi/v1/premiumIndex), None when unreadable."""
+        data = self._request_get("/fapi/v1/premiumIndex", {"symbol": symbol.upper()}, account_scoped=False)
+        try:
+            price = float((data or {}).get("markPrice"))
+        except (TypeError, ValueError):
+            return None
+        return price if price > 0 else None
+
     def set_leverage(self, symbol: str, leverage: int) -> Optional[Dict[str, Any]]:
         """POST /fapi/v1/leverage (clamped 1-125)."""
         lev = max(1, min(125, int(leverage)))

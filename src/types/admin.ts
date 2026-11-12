@@ -1392,3 +1392,42 @@ export interface BinanceSizingCheckData {
   min_deposit: number
   checked_at: string
 }
+
+/** One real-money account's full stack under a proposed size (POST /admin/assets/position-limit). */
+export interface PositionLimitAccount {
+  name: string | null
+  is_master: boolean
+  balance: number
+  entry_qty: number
+  entry_usd: number | null
+  full_qty: number
+  full_usd: number | null
+  /** The full stack is above Binance's limit at this leverage: later entries are refused (-2027). */
+  over: boolean
+  /** full_usd ÷ the limit, in %. */
+  used_pct: number | null
+}
+
+/** POST /admin/assets/position-limit — a proposed size vs Binance's position limit, from the engine. */
+export interface PositionLimitData {
+  ticker: string
+  mark_price: number | null
+  leverage: number | null
+  /** No leverage was proposed; the engine's default was assumed. */
+  leverage_assumed: boolean
+  /** The highest leverage Binance allows on the coin at all. */
+  max_leverage: number | null
+  /** The largest position Binance accepts at `leverage`; null when the leverage is not allowed. */
+  cap_usd: number | null
+  /** false = Binance refuses this leverage on the coin (every entry fails). */
+  leverage_allowed: boolean | null
+  brackets: { leverage: number; floor_usd: number; cap_usd: number }[]
+  entries: number
+  /** Biggest balance first. */
+  accounts: PositionLimitAccount[]
+  over_count: number
+  /** The balance at which a full stack reaches the limit at today's price (0 = even the smallest account is over). */
+  safe_balance: number | null
+  /** How far the price can rise before the biggest account's full stack reaches the limit, in %. */
+  price_headroom_pct: number | null
+}

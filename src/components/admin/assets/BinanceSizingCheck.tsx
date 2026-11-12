@@ -44,7 +44,7 @@ const CHIP: Record<CheckStatus, string> = {
   bad: 'bg-red/10 text-red',
 }
 
-function Row({
+export function CheckRow({
   status,
   chip,
   label,
@@ -144,7 +144,7 @@ export default function BinanceSizingCheck({ ticker, baseSize, maxPosition, chec
     )
   } else if (!data.binance.listed) {
     body = (
-      <Row
+      <CheckRow
         status="bad"
         chip="Not on Binance"
         label="Binance futures"
@@ -181,7 +181,7 @@ export default function BinanceSizingCheck({ ticker, baseSize, maxPosition, chec
           </p>
         )}
         <div className="divide-y divide-hair">
-          <Row
+          <CheckRow
             status="info"
             label="Binance minimum order"
             value={
@@ -193,7 +193,7 @@ export default function BinanceSizingCheck({ ticker, baseSize, maxPosition, chec
           />
 
           {sizing ? (
-            <Row
+            <CheckRow
               status={sizing.base.status}
               chip={sizing.base.status === 'ok' ? 'OK' : sizing.base.status === 'warn' ? 'Close to minimum' : 'Too small'}
               label="Base size (one entry)"
@@ -213,11 +213,11 @@ export default function BinanceSizingCheck({ ticker, baseSize, maxPosition, chec
               }
             />
           ) : (
-            <Row status="info" label="Base size (one entry)" value={baseSize > 0 ? `${qty(baseSize)} ${coin}` : 'Set a base size'} />
+            <CheckRow status="info" label="Base size (one entry)" value={baseSize > 0 ? `${qty(baseSize)} ${coin}` : 'Set a base size'} />
           )}
 
           {sizing?.stack && (
-            <Row
+            <CheckRow
               status="info"
               label={`Full position (${sizing.stack.entries} ${sizing.stack.entries === 1 ? 'entry' : 'entries'})`}
               value={`${qty(sizing.stack.fullQty)} ${coin} ≈ ${usd(sizing.stack.fullUsd)}`}
@@ -228,14 +228,14 @@ export default function BinanceSizingCheck({ ticker, baseSize, maxPosition, chec
           )}
 
           {accounts.count === 0 || accounts.smallest_balance === null ? (
-            <Row
+            <CheckRow
               status="info"
               label="Smallest trading account"
               value="None yet"
               note={`No account has passed the ${fmtQty(data.min_deposit, 0, 0)} USDT deposit minimum with a working key, so there is nothing to compare against.`}
             />
           ) : (
-            <Row
+            <CheckRow
               status={sizing?.stack?.status ?? 'info'}
               chip={
                 !sizing?.stack

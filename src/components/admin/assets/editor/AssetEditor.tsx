@@ -7,10 +7,12 @@ import SizingSection from './SizingSection'
 import StreakSection from './StreakSection'
 import TradingSection from './TradingSection'
 import BinanceSizingCheck from '../BinanceSizingCheck'
+import PositionLimitCheck from '../PositionLimitCheck'
 import ConfirmModal from '../../../ui/ConfirmModal'
 import { useAssetDraft } from '../../../../hooks/useAssetDraft'
 import { useAssetImage } from '../../../../hooks/useAssetImage'
 import { useBinanceSizingCheck } from '../../../../hooks/useBinanceSizingCheck'
+import { usePositionLimit } from '../../../../hooks/usePositionLimit'
 import {
   changesSizing,
   draftBase,
@@ -20,6 +22,7 @@ import {
   isBinanceDraft,
   type DraftProblem,
 } from '../../../../lib/assetDraft'
+import { baseCoin } from '../../../../lib/assetSizing'
 import { displaySymbol } from '../../../../lib/chart'
 import { isKilled } from '../../../../lib/killSwitch'
 import { getApiErrorMessage } from '../../../../services/api'
@@ -59,6 +62,17 @@ export default function AssetEditor({ asset, defaultBroker, onSave, onLeave }: A
   const changed = draftChanged || image.changed
   const binance = isBinanceDraft(draft)
   const check = useBinanceSizingCheck(binance ? draft.ticker : null)
+  const proposedBase = draftBase(draft)
+  const proposedMax = draftMax(draft)
+  // The leverage the engine would ask for: the coin's own, else the signals'
+  // (the Binance check reads it); null lets the engine assume its default.
+  const proposedLeverage = draftLeverage(draft) ?? check.data?.leverage.value ?? null
+  const limit = usePositionLimit({
+    ticker: binance && check.data?.binance?.listed ? draft.ticker : null,
+    baseSize: Number.isFinite(proposedBase) ? proposedBase : 0,
+    maxPosition: Number.isFinite(proposedMax) ? proposedMax : 0,
+    leverage: proposedLeverage,
+  })
 
   const [showProblems, setShowProblems] = useState(false)
   const [streakOpen, setStreakOpen] = useState(
@@ -118,6 +132,16 @@ export default function AssetEditor({ asset, defaultBroker, onSave, onLeave }: A
   const name = draft.ticker.trim() ? displaySymbol(draft.ticker.trim()) : 'New coin'
   const where = draft.broker ? ` on ${draft.broker}` : ''
 
+  // Said in the confirmation too, so a size Binance will refuse is never saved unseen.
+  const limitWarning =
+    pending === null || !limit.data
+      ? ''
+      : limit.data.leverage_allowed === false
+        ? ` Warning: Binance allows at most ${limit.data.max_leverage}× on this coin, so every entry at ${limit.data.leverage}× would be refused.`
+        : limit.data.over_count > 0
+          ? ` Warning: ${limit.data.over_count} ${limit.data.over_count === 1 ? 'account would' : 'accounts would'} go over Binance’s position limit at this size, and their later entries would be refused.`
+          : ''
+
   const confirmMessage = creating
     ? `This adds ${pending?.ticker || 'the coin'}${where}. ${
         pending?.enabled ? 'Its signals start trading straight away.' : 'It stays off until you switch it on.'
@@ -130,7 +154,7 @@ export default function AssetEditor({ asset, defaultBroker, onSave, onLeave }: A
         revives
           ? ' It also turns the coin back on: new trades start on the next signal, and the kill switch counts the master’s losses again from now.'
           : ''
-      }`
+      }${limitWarning}`
 
   return (
     <form onSubmit={submit} noValidate>
@@ -173,6 +197,9 @@ export default function AssetEditor({ asset, defaultBroker, onSave, onLeave }: A
                 coinLeverage={draftLeverage(draft)}
               />
             )}
+            {binance && check.data?.binance?.listed && proposedBase > 0 && (
+              <PositionLimitCheck coin={baseCoin(check.data.ticker)} limit={limit} />
+            )}
           </aside>
 
           <div className="flex min-w-0 flex-col gap-stack [grid-area:bottom]">
@@ -214,6 +241,7 @@ export default function AssetEditor({ asset, defaultBroker, onSave, onLeave }: A
         message={confirmMessage}
         confirmLabel={creating ? 'Yes, create' : 'Yes, save'}
         cancelLabel="No"
+        danger={limitWarning !== ''}
         onConfirm={confirmSave}
         onCancel={() => setPending(null)}
       />

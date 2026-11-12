@@ -159,7 +159,7 @@ async function capture(browser, base, route, vp) {
       if (el.textContent.trim() === 'LIVE PROD DATA' && getComputedStyle(el).position === 'fixed') el.style.display = 'none'
     }
   })
-  await page.waitForTimeout(700)
+  await page.waitForTimeout(2000)
 
   const landed = new URL(page.url()).pathname
   if (!route.startsWith(landed)) problems.push(`${route} (${vp.name}) redirected to ${landed}`)

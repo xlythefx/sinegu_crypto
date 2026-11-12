@@ -683,6 +683,50 @@ const AGENT_SESSION = () => ({
   ],
 })
 
+
+// Admin → Trading Assets editor (SAMPLE figures): one Binance coin, its
+// Binance check and the position-limit check (POST, answered in answer()).
+const SAMPLE_ASSET = {
+  asset_id: 11, ticker: 'SANTOSUSDT', type: 'Cryptocurrency', broker: 'Binance', side: 'ALL', asset_image: null,
+  max_increments: 1200, base_size: 400, leverage: 10, enabled: true, streak_sizing_enabled: false, streak_sizes: [],
+  kill_switch_losses: 4, killed_at: null, killed_reason: null, kill_switch_armed_at: ago(3),
+  created_at: ago(16), updated_at: ago(0, 0.5), pending_sizing: null,
+}
+const BINANCE_CHECK = {
+  success: true, ticker: 'SANTOSUSDT', symbol: 'SANTOSUSDT',
+  binance: { listed: true, status: 'TRADING', price: 0.38, step_size: '1', min_qty: 1, min_notional: 5 },
+  binance_error: null,
+  accounts: { count: 6, smallest_balance: 1020, smallest_name: 'Sample Customer F', demo_only: false },
+  leverage: { value: 25, source: 'coin' }, min_deposit: 1000, checked_at: new Date().toISOString(),
+}
+const limitRow = (name, balance, isMaster = false) => {
+  const entry = balance < 1000 ? 400 : Math.floor((400 * balance) / 1000 / 40) * 40
+  const full = entry * 3
+  return {
+    name, is_master: isMaster, balance, entry_qty: entry, entry_usd: +(entry * 0.38).toFixed(2), full_qty: full,
+    full_usd: +(full * 0.38).toFixed(2), over: full * 0.38 > 10000, used_pct: +((full * 0.38) / 100).toFixed(1),
+  }
+}
+const POSITION_LIMIT = {
+  success: true, exchange: 'binance', ticker: 'SANTOSUSDT', mark_price: 0.38, leverage: 10, leverage_assumed: false,
+  max_leverage: 10, cap_usd: 10000, leverage_allowed: true,
+  brackets: [
+    { leverage: 10, floor_usd: 0, cap_usd: 10000 }, { leverage: 5, floor_usd: 10000, cap_usd: 60000 },
+    { leverage: 4, floor_usd: 60000, cap_usd: 70000 },
+  ],
+  entries: 3,
+  accounts: [
+    limitRow('Sample Master', 17028, true), limitRow('Sample Customer A', 10146), limitRow('Sample Customer B', 6213),
+    limitRow('Sample Customer C', 2027), limitRow('Sample Customer D', 1026), limitRow('Sample Customer F', 1020),
+  ],
+  over_count: 0, safe_balance: 21929.82, price_headroom_pct: 29,
+}
+const ASSET_GET = {
+  '/admin/assets/binance-check': BINANCE_CHECK,
+  '/admin/assets/history': { success: true, changes: [], has_more: false },
+  '/admin/assets': { success: true, assets: [SAMPLE_ASSET] },
+}
+
 const CREATIVE_GET = {
   '/admin/creatives': CREATIVES_META,
   '/admin/creatives/budget': { success: true, budget: CREATIVE_BUDGET },
@@ -715,10 +759,12 @@ const GET = {
   '/admin/insights/customers': customerInsights,
   '/admin/visitors/log': VISITOR_LOG_BODY,
   ...CREATIVE_GET,
+  ...ASSET_GET,
 }
 
 export function answer(method, path, user, query = new URLSearchParams()) {
   if (path.startsWith('/public/visits')) return null
+  if (method === 'POST' && path === '/admin/assets/position-limit') return POSITION_LIMIT
   if (method !== 'GET') return undefined
   const key = Object.keys(GET).filter((k) => path.startsWith(k)).sort((a, b) => b.length - a.length)[0]
   if (!key) return undefined

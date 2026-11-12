@@ -13,6 +13,26 @@ import type { AdminChange } from '../types/adminVersions'
  *    later change to the same feature gets its own entry.
  */
 export const ADMIN_CHANGES: AdminChange[] = [
+  {
+    id: 'assets-binance-position-limit',
+    date: '2026-11-12',
+    kind: 'new',
+    area: 'Trading assets',
+    title: 'The coin editor shows Binance’s position limit for every account',
+    summary:
+      'Binance only accepts a position up to a certain size at each leverage, and refuses every entry above it. SANTOS at 10× tops out at $10,000. Because trade sizes grow with each account’s balance, a size that fits today can stop fitting once a customer deposits more. The coin editor now checks the size you are typing against that limit for every real-money account before you save.',
+    howItWorks: [
+      'Open a Binance coin under Trading Assets. Below the Binance check, a new "Binance position limit" card shows the most Binance accepts at the coin’s leverage, the biggest account’s full position against it, and how far the price can rise before it reaches the limit.',
+      'Example: SANTOS at 400 per entry, 3 entries, 10×. The master (about 17,000 USDT) builds a full position of about $7,750, which is 78% of the $10,000 limit. The card says it is safe up to an account balance of about 21,900 USDT.',
+      'If any account would go over, the card names it in red and the save confirmation warns that its later entries would be refused. If Binance does not allow the leverage at all (the 9 Nov SANTOS problem), it says so and names the highest leverage allowed.',
+      '"Every account" opens the full list: each account’s balance, its full position in coins and dollars, and the share of the limit it uses.',
+    ],
+    technical: [
+      'POST /api/admin/assets/position-limit (admin, throttle 30/min) → EngineCache::sizeCheck → engine POST /admin/size-check (X-Admin-Secret). binance_abcd/size_check.py: GET /fapi/v1/leverageBracket with the master’s key (weight 1) + public premiumIndex mark price; projects each non-demo account with the engine’s own _scale_qty / _increment_cap; cap at leverage L = max notionalCap over brackets with initialLeverage ≥ L.',
+      'Read-only: nothing is stored and no order is placed. Engine 5xx is answered 503 (never 502).',
+    ],
+    links: [{ label: 'Trading Assets', href: '/admin/assets' }],
+  },
   // ── 2026-11-12 ───────────────────────────────────────────────────────────
   {
     id: 'creatives-v2-assistant-502',

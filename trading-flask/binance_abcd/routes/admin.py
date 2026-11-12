@@ -129,6 +129,39 @@ def account_ledger():
     return jsonify({"success": True, "exchange": exchange_of(account), "ledger": payload})
 
 
+@admin_bp.route("/size-check", methods=["POST"])
+def size_check():
+    """Proposed sizing vs the exchange's position limit (size_check.py).
+    Body: {exchange, ticker, base_size, max_size, leverage?}. Read-only."""
+    if not _authorized():
+        return jsonify({"error": "Unauthorized"}), 403
+    from binance_abcd import size_check as sc  # deferred: pulls in the http client
+
+    body = request.get_json(silent=True) or {}
+    exchange = str(body.get("exchange") or "").lower()
+    ticker = str(body.get("ticker") or "").upper()
+    if exchange not in hooks.WEBHOOK_PATHS or not re.fullmatch(r"[A-Z0-9_]{2,20}", ticker):
+        return jsonify({"error": "BAD_REQUEST", "message": "exchange and ticker are required"}), 400
+    try:
+        base_size = float(body.get("base_size"))
+        max_size = float(body.get("max_size") or 0)
+    except (TypeError, ValueError):
+        return jsonify({"error": "BAD_REQUEST", "message": "base_size must be a number"}), 400
+    if not (base_size > 0) or max_size < 0 or not (base_size < 1e12 and max_size < 1e12):
+        return jsonify({"error": "BAD_REQUEST", "message": "base_size must be above 0"}), 400
+    raw_lev = body.get("leverage")
+    leverage = None
+    if raw_lev not in (None, ""):
+        try:
+            leverage = int(raw_lev)
+        except (TypeError, ValueError):
+            return jsonify({"error": "BAD_REQUEST", "message": "leverage must be 1-125"}), 400
+        if not 1 <= leverage <= 125:
+            return jsonify({"error": "BAD_REQUEST", "message": "leverage must be 1-125"}), 400
+    payload, status = sc.check(exchange, ticker, base_size, max_size, leverage)
+    return jsonify(payload), status
+
+
 # Manual closes run on their own small pool, never the webhook's dispatch pool:
 # an admin closing twenty positions must not delay the next TradingView signal.
 _CLOSE_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="manual-close")
