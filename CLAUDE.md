@@ -1354,7 +1354,7 @@ everyone else was full, which read as "the bot reopened it").
   account waits until no account there holds it. On/off, side, kill switch,
   name and image are NEVER delayed. Goes live from `EngineSyncController`
   (positions upsert-delete, positions sync, past-positions sync) and
-  `assets:apply-pending` every minute; the engine only ever reads the live
+  `assets:apply-pending` every 2 minutes (even minutes, see the SPREAD note in the API's routes/console.php); the engine only ever reads the live
   columns. Rules that keep it from being undone by accident:
   - **An absent sizing field is UNCHANGED** — `PUT /admin/assets/{id}` takes
     base/max as optional, and `setAssetEnabled` sends neither. Re-posting the
@@ -1375,7 +1375,7 @@ everyone else was full, which read as "the bot reopened it").
   NULL). Best-effort writes. Admin → Trading Assets → **Change history** tab
   and a History button on each card. Starts 2026-10-14; nothing earlier exists.
 - **Closed by** (`{x}_pastpositions.close_source`: `bot` | `outside` | NULL,
-  `App\Services\Positions\CloseSource`, `positions:classify-closes` every 5
+  `App\Services\Positions\CloseSource`, `positions:classify-closes` every 5 (:03, :08, …)
   min, `--days`, `--dry-run`). `bot` = `increments_closed` set (the engine's
   close path) OR an `EXIT_*` trade_logs row within ±15 min naming the owner
   as filled; anything else = `outside` (by hand, own TP/SL, liquidation).
@@ -2750,7 +2750,7 @@ Strategy math is client-side (`lib/strategyStats.ts`: `tradePnl` /
 function behind both, 2 dp), saved in `daily_returns` (uni_id, scope =
 'all'|exchange, day). `GET /analytics` syncs its scope from the data it
 already loaded and presents the stored rows as `daily_returns`;
-`pnl:daily-returns` (every 15 min) covers users who never open the page. A
+`pnl:daily-returns` (every 15 min, at :07 / :22 / :37 / :52) covers users who never open the page. A
 row is rewritten when its day's trades change and dropped when they are gone
 — never frozen. The card sums them (`lib/periodReturn.ts`); with a ticker /
 strategy chip active it measures the filtered trades with the same formula
