@@ -15,6 +15,25 @@ import type { AdminChange } from '../types/adminVersions'
 export const ADMIN_CHANGES: AdminChange[] = [
   // ── 2026-11-12 ───────────────────────────────────────────────────────────
   {
+    id: 'creatives-v2-assistant-502',
+    date: '2026-11-12',
+    kind: 'fixed',
+    area: 'Creatives',
+    title: 'The Creatives assistant answers again after the video-editor release',
+    summary:
+      'Right after the video editor went live, every message to the Creatives assistant failed with "Request failed (502)". Anthropic refused the assistant\'s new list of abilities as too complex to check strictly, so nothing was answered and nothing was charged.',
+    howItWorks: [
+      'The four abilities where a mistake would cost money or show the wrong buttons (proposing a job, building a video, adding scenes, asking with buttons) are still checked strictly. The others are checked by our own server instead, which tells the assistant what to fix when an answer is malformed.',
+      'When the AI or Higgsfield cannot be reached, the page now shows a clear sentence instead of "Request failed (502)".',
+      'Messages sent while it was failing are answered when the person tries again; no chat had to be restarted.',
+    ],
+    technical: [
+      'Anthropic 400 "The compiled grammar is too large" with all 20 tools strict; strict is now limited to CreativeAgentPrompt::STRICT_TOOLS (ask_choices, propose_job, create_video, add_scenes), measured live. New `php artisan creatives:check-agent-tools` (one minimal live call) because count_tokens does not compile the grammar.',
+      'Creatives provider-unavailable errors are 503 instead of 502: Cloudflare replaces an origin 502 with its own error page, which hid the JSON message.',
+    ],
+    links: [{ label: 'Creatives', href: '/admin/creatives' }],
+  },
+  {
     id: 'creatives-v2-editor',
     date: '2026-11-12',
     kind: 'new',

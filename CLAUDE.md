@@ -998,10 +998,23 @@ instead of stitching single clips in outside apps. Plan: `~/.claude/plans/here-s
   may not CARRY it**: `create_plan` / `update_plan` / `create_video` /
   `add_scenes` refuse `PRIVATE_IN_POST` on a money amount or a customer's FULL
   name (`CreativeAiOutput::privateIn`). Only `get_week_results` figures go in posts.
-- **The agent has exactly 20 strict tools — Anthropic's per-request maximum**
-  (24 optional params, 16 unions are the other caps). A 21st tool must merge
-  into an existing one or be non-strict. `TOOLS_VERSION` bumps open a fresh
-  chat (`notice: new_tools`) because the tool list must stay byte-identical.
+- **Only 4 of the agent's 20 tools are strict** (`CreativeAgentPrompt::STRICT_TOOLS`:
+  ask_choices, propose_job, create_video, add_scenes). v2 shipped all-strict
+  and Anthropic refused EVERY call with 400 "The compiled grammar is too
+  large" — an undocumented limit on the combined grammar, under the documented
+  20 strict tools / 24 optional params / 16 unions; adding create_plan to the
+  four already fails it. `count_tokens` does NOT catch it, and the suite fakes
+  the model, so **after any change to `tools()` run `php artisan
+  creatives:check-agent-tools` on the box** (one minimal live call, ~0.04 USD
+  on the Creatives budget; a refusal is free). Non-strict tools keep the
+  all-required schema shape; PHP validates every input. `TOOLS_VERSION` bumps
+  open a fresh chat (`notice: new_tools`) because the tool list must stay
+  byte-identical within a chat.
+- **Provider-unavailable errors are 503, never 502** (AI_UNAVAILABLE,
+  HIGGSFIELD_UNAVAILABLE, ESTIMATE_UNAVAILABLE, SUBMIT_UNCONFIRMED,
+  AI_BAD_OUTPUT): Cloudflare replaces an origin 502 with its own page, so the
+  JSON message never reached the page ("Request failed (502)"); its error
+  pages skip 500/501/503/505.
 
 ## Collaborator role — read-only staff (2026-09-28)
 
