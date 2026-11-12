@@ -1,4 +1,4 @@
-import { ChevronRight, CircleAlert, Clapperboard, Info, LoaderCircle, RotateCw, SquareKanban, Sparkles, TriangleAlert } from 'lucide-react'
+import { ChevronRight, CircleAlert, Clapperboard, Film, Info, LoaderCircle, RotateCw, SquareKanban, Sparkles, TriangleAlert, X } from 'lucide-react'
 import Markdown from '../../../../ui/Markdown'
 import type { CreativeAgentActivity, CreativeAgentMode } from '../../../../../types/creatives'
 import { NOTICE } from '../../creativeClasses'
@@ -98,17 +98,41 @@ export function PlanChip({ title, onOpen }: { title: string; onOpen: () => void 
   )
 }
 
+/** "Video: <title> — Open the editor": a video project the agent made. */
+export function VideoChip({ title, onOpen }: { title: string; onOpen: () => void }) {
+  return (
+    <div className={`${AGENT_INDENT} animate-[fadeup_0.3s_ease-out]`}>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="inline-flex max-w-full cursor-pointer items-center gap-2.5 rounded-pill border border-accent-line bg-accent-soft py-1.5 pl-2 pr-3 text-left transition-[border-color,background] duration-150 hover:bg-surface"
+      >
+        <span className="grid h-6 w-6 flex-none place-items-center rounded-full bg-surface text-accent" aria-hidden="true">
+          <Film size={13} />
+        </span>
+        <span className="min-w-0 truncate text-[12.5px] text-muted">
+          Video: <strong className="font-bold text-text">{title}</strong>
+          <span className="text-accent"> — Open the editor</span>
+        </span>
+        <ChevronRight size={14} aria-hidden="true" className="flex-none text-accent" />
+      </button>
+    </div>
+  )
+}
+
 /** A notice in the chat: from the server (amber), or one the page raised (an error, "Stopped"). */
 export function ChatNotice({
   text,
   tone,
   onContinue,
   continueDisabled,
+  onDismiss,
 }: {
   text: string
   tone: 'error' | 'info' | 'warn'
   onContinue?: () => void
   continueDisabled?: boolean
+  onDismiss?: () => void
 }) {
   const Icon = tone === 'error' ? CircleAlert : tone === 'info' ? Info : TriangleAlert
   return (
@@ -128,6 +152,16 @@ export function ChatNotice({
           </button>
         )}
       </div>
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Dismiss"
+          className="-my-1 -mr-1 inline-flex h-8 w-8 flex-none cursor-pointer items-center justify-center rounded-btn text-muted transition-colors duration-150 hover:bg-surface hover:text-text"
+        >
+          <X size={14} aria-hidden="true" />
+        </button>
+      )}
     </div>
   )
 }

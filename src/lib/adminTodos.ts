@@ -18,6 +18,88 @@ import type { AdminTodo } from '../types/adminTodos'
  *    the note and the date it was settled stay readable.
  */
 export const ADMIN_TODOS: AdminTodo[] = [
+  // ── Creatives v2: the video editor (2026-11-12) ──────────────────────────
+  {
+    id: 'creatives-cdn-cors',
+    feature: 'Creatives',
+    kind: 'action',
+    title: 'Check that a video clip downloads straight from Higgsfield on the live site',
+    added: '2026-11-12',
+    why: 'The video editor fetches each clip straight from Higgsfield\'s file server when it exports. That server is expected to allow it, but it has not been seen on a real clip yet. If it does not, the export still works through our own server, which then carries every clip file and is slower.',
+    steps: [
+      'On https://pixel-alpha.com open Admin → Creatives → Videos, open a project with at least one finished clip and press Export MP4 in Chrome.',
+      'While it runs, open the browser\'s developer tools (F12) → Network and look at the clip requests. A request to Higgsfield\'s file address answering 200 means the direct route works; requests to /api/creatives/generations/…/download mean it fell back to our server.',
+      'Write which one you saw in the note below.',
+    ],
+    links: [{ label: 'Admin → Creatives → Videos', href: '/admin/creatives?panel=videos' }],
+  },
+  {
+    id: 'creatives-editor-browser',
+    feature: 'Creatives',
+    kind: 'decision',
+    title: 'Know that video export needs Chrome, Edge or Safari 26+',
+    added: '2026-11-12',
+    why: 'The MP4 is made inside the browser so the server that runs the trading bot is never slowed down. Firefox and older Safari cannot encode it reliably, so they show a message instead of exporting; phones can view and reorder but not export.',
+    steps: [
+      'Tell the marketing team to export from Chrome, Edge or Safari 26 or newer, on a computer.',
+      'If the team must export from another browser, say so in the note below: making the video on the server instead would be a separate project and would need a stronger server.',
+    ],
+    links: [{ label: 'Admin → Creatives → Videos', href: '/admin/creatives?panel=videos' }],
+  },
+  {
+    id: 'creatives-tts-provider',
+    feature: 'Creatives',
+    kind: 'decision',
+    title: 'Decide whether videos should get an AI voiceover',
+    added: '2026-11-12',
+    why: 'Today a voiceover is recorded in the editor or uploaded. An AI voice service could read the script aloud instead. It has its own monthly cost (roughly $6 to $22 a month for the common services) and its own key.',
+    steps: [
+      'Decide whether the team wants AI voiceovers, or prefers recording their own.',
+      'If yes: say which service to use and how much it may spend each month. Its key then goes into the API settings on the server, never into a chat or a task.',
+      'Write the choice in the note below.',
+    ],
+    links: [{ label: 'Admin → Creatives → Videos', href: '/admin/creatives?panel=videos' }],
+  },
+  {
+    id: 'creatives-music-source',
+    feature: 'Creatives',
+    kind: 'decision',
+    title: 'Agree that only music we hold the rights to is uploaded',
+    added: '2026-11-12',
+    why: 'The editor\'s audio library takes any music file the team uploads, and a posted video with music we have no licence for can be muted or taken down by TikTok or X. The built-in chiptune is made by the editor itself and needs no licence.',
+    steps: [
+      'Decide where the team\'s music comes from: the built-in chiptune, a paid music library the company subscribes to, or tracks made for us.',
+      'Tell the team to upload only that music, and write the source in the note below.',
+    ],
+    links: [{ label: 'Admin → Creatives → Videos', href: '/admin/creatives?panel=videos' }],
+  },
+  {
+    id: 'creatives-parallel-limit',
+    feature: 'Creatives',
+    kind: 'action',
+    title: 'Raise the number of clips made at once, once Higgsfield\'s limit is known',
+    added: '2026-11-12',
+    why: 'A video\'s clips are made 4 at a time, a safe guess because Higgsfield has not published how many requests one account may run together. If Higgsfield allows more, a 6-scene video is ready sooner.',
+    steps: [
+      'After the first few full videos, check in Higgsfield\'s dashboard (or ask their support) how many generations one account may run at the same time.',
+      'Write that number in the note below; a developer then raises the limit to match.',
+    ],
+    links: [{ label: 'Higgsfield', href: 'https://higgsfield.ai' }],
+  },
+  {
+    id: 'creatives-seedance-text-price',
+    feature: 'Creatives',
+    kind: 'action',
+    title: 'Confirm the price of Seedance text-to-video on the first real run',
+    added: '2026-11-12',
+    why: 'Seedance text-to-video (Seedance with sound, no Pixel) is priced at the same per-second rate as the Seedance character video until Higgsfield shows its own figure. If it differs, the monthly budget reserves the wrong amount for those scenes.',
+    steps: [
+      'Make one Seedance scene without Pixel (Add scenes with AI → Seedance, Pixel off) and press Go.',
+      'Compare the price the job card showed with what Higgsfield\'s usage page charged for it.',
+      'Write both figures in the note below; a developer corrects the rate if they differ.',
+    ],
+    links: [{ label: 'Admin → Creatives → Budget', href: '/admin/creatives?panel=budget' }],
+  },
   // ── Creatives (2026-11-10) ──────────────────────────────────────────────
   {
     id: 'creatives-caption-writer',

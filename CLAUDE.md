@@ -951,6 +951,58 @@ Planner / Studio / Character / Budget. API `/admin/creatives*`,
   - Every model call is an AI call of kind `agent` under the same cap.
 - No auto-posting. Posting is download → post by hand.
 
+### Creatives v2 — the video editor (2026-11-12)
+
+Owner's request: make the whole 0–30 s marketing video inside Pixel Alpha
+instead of stitching single clips in outside apps. Plan: `~/.claude/plans/here-s-the-outmost-objectives-fuzzy-deer.md`.
+- **A video = `creative_videos` + `creative_video_scenes`.** Scenes are `clip`
+  (a Higgsfield generation) or `template` (a card drawn in the browser, free:
+  `pixel-title`, `pixel-scoreboard`, `pixel-levelup`, `clean-title`,
+  `clean-stat`, `disclaimer`). The SERVER owns a scene's generation_id /
+  output_index / agent_job_id / step_index / status / error; the CLIENT owns
+  position, label, trims and template. `PUT` ignores server-owned keys.
+  `timeline` (captions, look, music, voiceover, sfx, ducking) is client-owned
+  JSON. Shape (9:16 / 16:9 / 1:1) locks once a clip is planned (`ASPECT_LOCKED`).
+- **Export happens in the browser, never on the box** (2 vCPUs + the bot):
+  `src/lib/videoEditor/export.ts` → `src/workers/videoExport.worker.ts`,
+  Mediabunny + WebCodecs, H.264 + AAC (`@mediabunny/aac-encoder` loads only
+  when the browser has no AAC encoder — headless Chrome hasn't). Chrome / Edge
+  / Safari 26+; Firefox gets preview only. Preview and export share ONE draw
+  code (`templates.ts`, `look.ts`, captions), so they cannot disagree. The
+  disclaimer card always carries the sentence (`videoEditor/disclaimer.ts`
+  = `CreativeAi::DISCLAIMER`). Videos are still never stored server-side; only
+  export metadata (`/exported`).
+- **A scene picks an ENGINE, not a preset** (`CreativeVideos::scenesToSteps`):
+  kling = silent, cheaper (no Pixel: `soul-image` still → `kling-animate`,
+  because Kling's text-to-video has NO aspect_ratio; with Pixel: `grok-image` →
+  `kling-animate`); seedance = with sound (`seedance-text-video` or
+  `seedance-reference`). Pixel is OFF by default. Seedance is priced at
+  Higgsfield's live rate (480p 0.1177, 720p 0.2647 USD/s).
+- **Bulk generation**: `CreativeAgentJobs::advance` starts every unblocked
+  step (≤ `MAX_IN_FLIGHT` 4), a still's animation after it; each clip lands
+  in its scene slot as it finishes; one failed scene ends the job
+  `completed_with_failures`, not the others. `MAX_STEPS` 12. Editor-born jobs
+  have no chat (`session_id` NULL, `owner_uni_id`), any staff member may Go.
+- **Styles library** (`creative_styles`, seeded: data-recap, pixel-arcade,
+  pixel-storytime, cinematic-broll, fast-cut) + the **Playbook**
+  (`creative_settings.playbook_markdown`), both editable on the page, both
+  in the agent's [Context] (playbook versioned like the BRIEF). The agent asks
+  platform → shape → style with **`ask_choices` buttons**, shows the scene
+  list, asks "Build it?", then `create_video`.
+- **Arcade audio**: chiptune music (`videoEditor/chiptune.ts`, procedural from
+  preset + seed — no file, no licence) and SFX (`sfx.ts`); a shared audio
+  library on the private disk (`creative_audio_assets`, ≤ 15 MB each, ≤ 40;
+  the ONE exception to "nothing on disk" — audio only).
+- **The agent may READ everything** (owner, 2026-11-12: `query_data` runs the
+  Grok connector's `AiTools`, redacted of credentials/contacts) **but a post
+  may not CARRY it**: `create_plan` / `update_plan` / `create_video` /
+  `add_scenes` refuse `PRIVATE_IN_POST` on a money amount or a customer's FULL
+  name (`CreativeAiOutput::privateIn`). Only `get_week_results` figures go in posts.
+- **The agent has exactly 20 strict tools — Anthropic's per-request maximum**
+  (24 optional params, 16 unions are the other caps). A 21st tool must merge
+  into an existing one or be non-strict. `TOOLS_VERSION` bumps open a fresh
+  chat (`notice: new_tools`) because the tool list must stay byte-identical.
+
 ## Collaborator role — read-only staff (2026-09-28)
 
 `user_credentials.type = 'collaborator'` opens the admin portal READ-ONLY:

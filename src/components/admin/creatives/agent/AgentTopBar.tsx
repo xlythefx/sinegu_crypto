@@ -79,7 +79,7 @@ const TOGGLE =
 /**
  * The workspace's slim bar, sticky above the chat: the mode (with one line
  * saying what it means), the budget, a toggle per panel and New chat. On a
- * phone the panel toggles take a row of their own, spread across it.
+ * phone the panel toggles take two rows of their own (five a row).
  */
 export default function AgentTopBar({
   mode,
@@ -110,7 +110,7 @@ export default function AgentTopBar({
         <div
           role="toolbar"
           aria-label="Panels"
-          className="order-last flex w-full items-center justify-between gap-1 sm:order-none sm:ml-auto sm:w-auto sm:justify-start"
+          className="order-last grid w-full grid-cols-5 justify-items-center gap-1 sm:order-none sm:ml-auto sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end"
         >
           {PANELS.map((p) => {
             const Icon = PANEL_ICON[p.key]

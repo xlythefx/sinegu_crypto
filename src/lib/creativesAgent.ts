@@ -23,6 +23,9 @@ import type {
 export const AGENT_TEXT_MAX = 4000
 /** The brief: up to 20,000 characters of Markdown. */
 export const BRIEF_MAX = 20_000
+/** The video playbook, and each style's rules: the same 20,000. */
+export const PLAYBOOK_MAX = 20_000
+export const STYLE_MARKDOWN_MAX = 20_000
 /** One memory note: up to 500 characters. */
 export const MEMORY_TEXT_MAX = 500
 /**
@@ -33,7 +36,20 @@ export const CLIENT_MAX_STEPS = 12
 
 /* ---------- panels ---------- */
 
-export type CreativesPanelKey = 'plans' | 'gallery' | 'pixel' | 'brief' | 'memory' | 'budget'
+export type CreativesPanelKey =
+  | 'plans'
+  | 'gallery'
+  | 'videos'
+  | 'pixel'
+  | 'styles'
+  | 'playbook'
+  | 'brief'
+  | 'memory'
+  | 'context'
+  | 'budget'
+
+/** The panels holding a Markdown document with unsaved-edit protection. */
+export type CreativesDocPanel = 'brief' | 'playbook'
 
 export interface PanelMeta {
   key: CreativesPanelKey
@@ -47,9 +63,13 @@ export interface PanelMeta {
 export const PANELS: readonly PanelMeta[] = [
   { key: 'plans', label: 'Plans', hint: 'The content plan — every X and TikTok post' },
   { key: 'gallery', label: 'Gallery', hint: 'Everything made with Higgsfield, and “Make it yourself”' },
+  { key: 'videos', label: 'Videos', hint: 'Video projects — scenes on a timeline, one MP4 to download' },
   { key: 'pixel', label: 'Pixel', hint: 'The character in every image and video' },
+  { key: 'styles', label: 'Styles', hint: 'The marketing styles a video can come out in' },
+  { key: 'playbook', label: 'Playbook', hint: 'The video playbook every video follows' },
   { key: 'brief', label: 'Brief', hint: 'The brand brief the agent always follows' },
   { key: 'memory', label: 'Memory', hint: 'Notes the agent remembers in every chat' },
+  { key: 'context', label: 'Context', hint: 'Exactly what the agent reads before it answers' },
   { key: 'budget', label: 'Budget', hint: 'This month’s spend against the cap' },
 ]
 
@@ -106,6 +126,7 @@ export const JOB_STATUS: Record<CreativeAgentJobStatus, { label: string; tone: C
   proposed: { label: 'Waiting for your Go', tone: 'accent' },
   running: { label: 'Running', tone: 'accent' },
   completed: { label: 'Done', tone: 'green' },
+  completed_with_failures: { label: 'Done · some failed', tone: 'accent' },
   failed: { label: 'Failed', tone: 'red' },
   canceled: { label: 'Cancelled', tone: 'muted' },
   expired: { label: 'Expired', tone: 'muted' },
@@ -210,16 +231,40 @@ export function latestActivityLabel(messages: CreativeAgentMessage[]): string | 
 }
 
 /** Which panels an answer touched, so an open panel can re-read itself. */
-export function touchedPanels(messages: CreativeAgentMessage[]): { plans: boolean; memory: boolean } {
+export function touchedPanels(messages: CreativeAgentMessage[]): { plans: boolean; memory: boolean; videos: boolean } {
   let plans = false
   let memory = false
+  let videos = false
   for (const m of messages) {
     if (m.kind === 'plan') plans = true
+    if (m.kind === 'video') videos = true
     const tool = m.kind === 'activity' ? (m.activity?.tool ?? '') : ''
     if (tool === 'create_plan' || tool === 'update_plan') plans = true
     if (tool === 'remember' || tool === 'forget' || tool === 'update_memory') memory = true
+    if (tool === 'create_video' || tool === 'add_scenes') videos = true
   }
-  return { plans, memory }
+  return { plans, memory, videos }
+}
+
+/** Told once when the server closed an old chat because the agent's tools changed. */
+export const NEW_TOOLS_NOTICE = 'The assistant learned new tools, so this is a fresh chat. Memory, the brief, the playbook and your plans are all still here.'
+
+/**
+ * For each `choices` message, whether a person has answered it (a user
+ * message came after it) and with what — the card greys out once answered.
+ */
+export function choiceAnswers(messages: CreativeAgentMessage[]): Map<number, string | null> {
+  const out = new Map<number, string | null>()
+  let open: number[] = []
+  for (const m of messages) {
+    if (m.kind === 'choices') open.push(m.id)
+    else if (m.kind === 'user' && open.length > 0) {
+      for (const id of open) out.set(id, m.text ?? '')
+      open = []
+    }
+  }
+  for (const id of open) out.set(id, null)
+  return out
 }
 
 export function lastMessageId(messages: CreativeAgentMessage[]): number {

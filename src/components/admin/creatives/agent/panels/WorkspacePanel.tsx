@@ -1,8 +1,13 @@
+import { useCallback } from 'react'
 import { Maximize2, Minimize2 } from 'lucide-react'
-import { panelMeta, type CreativesPanelKey } from '../../../../../lib/creativesAgent'
+import { panelMeta, type CreativesDocPanel, type CreativesPanelKey } from '../../../../../lib/creativesAgent'
 import type { CreativeAiMeta, CreativeBudget, CreativesMeta } from '../../../../../types/creatives'
 import NotConfiguredNotice from '../../NotConfiguredNotice'
 import BriefPanel from '../../brief/BriefPanel'
+import ContextPanel from '../../context/ContextPanel'
+import PlaybookPanel from '../../playbook/PlaybookPanel'
+import StylesPanel from '../../styles/StylesPanel'
+import VideosPanel from '../../videos/VideosPanel'
 import BudgetTab from '../../budget/BudgetTab'
 import CharacterTab from '../../character/CharacterTab'
 import MemoryPanel from '../../memory/MemoryPanel'
@@ -29,8 +34,11 @@ interface WorkspacePanelProps {
   planId: number | null
   onPlanHandled: () => void
   makeOpen: boolean
-  signals: { plans: number; memory: number; gallery: number }
-  onBriefDirty: (dirty: boolean) => void
+  signals: { plans: number; memory: number; gallery: number; videos: number }
+  /** Unsaved edits in a Markdown document panel (brief, playbook). */
+  onDocDirty: (doc: CreativesDocPanel, dirty: boolean) => void
+  /** The open chat, for the Context panel. */
+  sessionId: string | null
 }
 
 const EXPAND_BTN =
@@ -40,7 +48,8 @@ const EXPAND_BTN =
  * One panel of the chat workspace, in its frame. The panels are the page's
  * former tabs, reused as they are — Plans (the Planner, a list here and the
  * whole board in "Expand"), Gallery (the gallery plus "Make it yourself"),
- * Pixel, Budget — plus Brief and Memory. Only the cap and the weekly-recap
+ * Pixel, Budget — plus Brief, Memory and (Creatives v2) Videos, Styles,
+ * Playbook and Context. Only the cap and the weekly-recap
  * switch stay full-admin (`can_edit_budget`), as before.
  */
 export default function WorkspacePanel({
@@ -59,9 +68,13 @@ export default function WorkspacePanel({
   onPlanHandled,
   makeOpen,
   signals,
-  onBriefDirty,
+  onDocDirty,
+  sessionId,
 }: WorkspacePanelProps) {
   const { label } = panelMeta(panel)
+  // Stable, or the document panel's dirty effect would re-run on every render.
+  const onPlaybookDirty = useCallback((d: boolean) => onDocDirty('playbook', d), [onDocDirty])
+  const onBriefDirty = useCallback((d: boolean) => onDocDirty('brief', d), [onDocDirty])
 
   const actions =
     panel === 'plans' ? (
@@ -116,6 +129,10 @@ export default function WorkspacePanel({
       {panel === 'pixel' && (
         <CharacterTab maxReferences={meta.max_references} onOpenStudio={() => onOpen('gallery', { make: true })} />
       )}
+      {panel === 'videos' && <VideosPanel reloadSignal={signals.videos} />}
+      {panel === 'styles' && <StylesPanel />}
+      {panel === 'playbook' && <PlaybookPanel onDirtyChange={onPlaybookDirty} />}
+      {panel === 'context' && <ContextPanel sessionId={sessionId} />}
       {panel === 'brief' && <BriefPanel onDirtyChange={onBriefDirty} />}
       {panel === 'memory' && <MemoryPanel reloadSignal={signals.memory} />}
       {panel === 'budget' && <BudgetTab budget={budget} onBudget={onBudget} canEdit={meta.can_edit_budget} />}

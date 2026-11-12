@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import ConfirmModal from '../../../ui/ConfirmModal'
 import { useCreativeAgent } from '../../../../hooks/useCreativeAgent'
 import { useCreativesPanel } from '../../../../hooks/useCreativesPanel'
@@ -11,6 +12,7 @@ import {
   agentErrorMessage,
   jobsFingerprint,
   type AgentStarter,
+  type CreativesDocPanel,
   type CreativesPanelKey,
 } from '../../../../lib/creativesAgent'
 import { getCreativeGeneration } from '../../../../services/creatives'
@@ -61,32 +63,38 @@ export default function CreativesWorkspace({ meta, budget, onBudget, ai, onAi }:
   const now = useNow(30_000)
   const [draft, setDraft] = useState('')
   const [confirmNew, setConfirmNew] = useState(false)
-  const [briefDirty, setBriefDirty] = useState(false)
+  const [dirtyDocs, setDirtyDocs] = useState<Record<CreativesDocPanel, boolean>>({ brief: false, playbook: false })
+  const navigate = useNavigate()
   const [leaving, setLeaving] = useState<PanelTarget | null>(null)
   const [starting, setStarting] = useState(false)
   const starterTimer = useRef<number | undefined>(undefined)
 
   useEffect(() => () => window.clearTimeout(starterTimer.current), [])
 
-  /* ---------- panels (unsaved brief edits are asked about first) ---------- */
+  /* ---------- panels (unsaved brief / playbook edits are asked about first) ---------- */
 
+  const openDoc: CreativesDocPanel | null =
+    panels.panel === 'brief' || panels.panel === 'playbook' ? panels.panel : null
   const goTo = useCallback(
     (target: PanelTarget) => {
-      if (briefDirty && panels.panel === 'brief' && target.panel !== 'brief') {
+      if (openDoc && dirtyDocs[openDoc] && target.panel !== openDoc) {
         setLeaving(target)
         return
       }
       if (target.panel === null) panels.close()
       else panels.open(target.panel, target.extra)
     },
-    [briefDirty, panels],
+    [dirtyDocs, openDoc, panels],
   )
   const openPanel = useCallback(
     (panel: CreativesPanelKey, extra?: PanelTarget['extra']) => goTo({ panel, extra }),
     [goTo],
   )
   const togglePanel = (key: CreativesPanelKey) => goTo({ panel: panels.panel === key ? null : key })
-  const onBriefDirty = useCallback((dirty: boolean) => setBriefDirty(dirty), [])
+  const onDocDirty = useCallback(
+    (doc: CreativesDocPanel, dirty: boolean) => setDirtyDocs((d) => (d[doc] === dirty ? d : { ...d, [doc]: dirty })),
+    [],
+  )
 
   /* ---------- keeping the newest message in view ---------- */
 
@@ -248,6 +256,8 @@ export default function CreativesWorkspace({ meta, budget, onBudget, ai, onAi }:
           onOpenGallery={() => openPanel('gallery')}
           onDownload={download}
           onCarryOn={agent.carryOn}
+          onChoose={(value) => void sendText(value)}
+          onOpenEditor={(path) => navigate(path)}
         />
         {!ai.configured && (
           <div className="mt-5">
@@ -277,7 +287,14 @@ export default function CreativesWorkspace({ meta, budget, onBudget, ai, onAi }:
             higgsfield={meta.configured}
           />
 
-          <div className="mx-auto w-full max-w-[760px] flex-1 pb-4 pt-4">{body}</div>
+          <div className="mx-auto w-full max-w-[760px] flex-1 pb-4 pt-4">
+            {agent.freshChatNotice && (
+              <div className="mb-5">
+                <ChatNotice tone="info" text={agent.freshChatNotice} onDismiss={agent.dismissFreshChatNotice} />
+              </div>
+            )}
+            {body}
+          </div>
 
           <ChatComposer
             value={draft}
@@ -316,7 +333,8 @@ export default function CreativesWorkspace({ meta, budget, onBudget, ai, onAi }:
             onPlanHandled={panels.clearPlan}
             makeOpen={panels.makeOpen}
             signals={agent.signals}
-            onBriefDirty={onBriefDirty}
+            onDocDirty={onDocDirty}
+            sessionId={agent.sessionId}
           />
         )}
       </div>
@@ -338,7 +356,8 @@ export default function CreativesWorkspace({ meta, budget, onBudget, ai, onAi }:
           onPlanHandled={panels.clearPlan}
           makeOpen={panels.makeOpen}
           signals={agent.signals}
-          onBriefDirty={onBriefDirty}
+          onDocDirty={onDocDirty}
+          sessionId={agent.sessionId}
         />
       )}
 
@@ -354,15 +373,15 @@ export default function CreativesWorkspace({ meta, budget, onBudget, ai, onAi }:
 
       <ConfirmModal
         open={leaving !== null}
-        title="Leave the brief without saving?"
-        message="Your changes to the brief are not saved yet. Leave now and they are lost."
+        title={`Leave the ${openDoc ?? 'brief'} without saving?`}
+        message={`Your changes to the ${openDoc ?? 'brief'} are not saved yet. Leave now and they are lost.`}
         confirmLabel="Discard"
         cancelLabel="Keep editing"
         danger
         onConfirm={() => {
           const target = leaving
           setLeaving(null)
-          setBriefDirty(false)
+          if (openDoc) onDocDirty(openDoc, false)
           if (!target) return
           if (target.panel === null) panels.close()
           else panels.open(target.panel, target.extra)

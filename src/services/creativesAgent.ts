@@ -1,5 +1,6 @@
 import { apiFetch } from './api'
 import type {
+  CreativeAgentContextView,
   CreativeAgentJob,
   CreativeAgentJobResult,
   CreativeAgentMessage,
@@ -9,6 +10,9 @@ import type {
   CreativeBrief,
   CreativeMemory,
   CreativeMemoryInput,
+  CreativePlaybook,
+  CreativeStyle,
+  CreativeStyleInput,
 } from '../types/creatives'
 
 /**
@@ -29,7 +33,8 @@ const num = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0
 }
 
-function normaliseJob(job: CreativeAgentJob): CreativeAgentJob {
+/** Prices as numbers and a step list that is always there (also used by the video editor's jobs). */
+export function normaliseJob(job: CreativeAgentJob): CreativeAgentJob {
   return {
     ...job,
     estimated_usd: num(job.estimated_usd),
@@ -48,6 +53,7 @@ function normaliseSession(res: Ok<CreativeAgentSessionState>): CreativeAgentSess
     messages: res.messages ?? [],
     jobs: (res.jobs ?? []).map(normaliseJob),
     budget: res.budget,
+    notice: res.notice ?? null,
   }
 }
 
@@ -149,4 +155,80 @@ export async function updateCreativeMemory(id: number, patch: Partial<CreativeMe
 
 export async function deleteCreativeMemory(id: number): Promise<void> {
   await apiFetch<Ok<object>>(`/admin/creatives/memory/${id}`, { method: 'DELETE', auth: true })
+}
+
+/* ---------- the video playbook ---------- */
+
+export async function getCreativePlaybook(): Promise<CreativePlaybook> {
+  const { playbook } = await apiFetch<Ok<{ playbook: CreativePlaybook }>>('/admin/creatives/playbook', { auth: true })
+  return { ...playbook, markdown: playbook.markdown ?? '' }
+}
+
+/** ≤ 20,000 characters. */
+export async function updateCreativePlaybook(markdown: string): Promise<CreativePlaybook> {
+  const { playbook } = await apiFetch<Ok<{ playbook: CreativePlaybook }>>('/admin/creatives/playbook', {
+    method: 'PUT',
+    auth: true,
+    body: { markdown },
+  })
+  return { ...playbook, markdown: playbook.markdown ?? '' }
+}
+
+/* ---------- marketing styles ---------- */
+
+const normaliseStyle = (s: CreativeStyle): CreativeStyle => ({
+  ...s,
+  markdown: s.markdown ?? '',
+  summary: s.summary ?? '',
+  sort: Number(s.sort) || 0,
+})
+
+/** Every style, disabled ones included, in the API's order (sort, then name). */
+export async function getCreativeStyles(): Promise<CreativeStyle[]> {
+  const { styles } = await apiFetch<Ok<{ styles: CreativeStyle[] }>>('/admin/creatives/styles', { auth: true })
+  return (styles ?? []).map(normaliseStyle)
+}
+
+export async function createCreativeStyle(input: CreativeStyleInput): Promise<CreativeStyle> {
+  const { style } = await apiFetch<Ok<{ style: CreativeStyle }>>('/admin/creatives/styles', {
+    method: 'POST',
+    auth: true,
+    body: input,
+  })
+  return normaliseStyle(style)
+}
+
+/** Partial: a key left out stays as it is. */
+export async function updateCreativeStyle(id: number, patch: Partial<CreativeStyleInput>): Promise<CreativeStyle> {
+  const { style } = await apiFetch<Ok<{ style: CreativeStyle }>>(`/admin/creatives/styles/${id}`, {
+    method: 'PUT',
+    auth: true,
+    body: patch,
+  })
+  return normaliseStyle(style)
+}
+
+/** 409 STYLE_IN_USE while a video project uses it. */
+export async function deleteCreativeStyle(id: number): Promise<void> {
+  await apiFetch<Ok<object>>(`/admin/creatives/styles/${id}`, { method: 'DELETE', auth: true })
+}
+
+/* ---------- the Context view ---------- */
+
+/** What the agent reads before the next message, read-only (nothing is marked as sent). */
+export async function getAgentContext(sessionId?: string): Promise<CreativeAgentContextView> {
+  const qs = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ''
+  const { context } = await apiFetch<Ok<{ context: CreativeAgentContextView }>>(
+    `/admin/creatives/agent/context${qs}`,
+    { auth: true },
+  )
+  return {
+    system: context.system ?? '',
+    tools: context.tools ?? [],
+    playbook: context.playbook ?? { version: null, markdown: '' },
+    brief: context.brief ?? { version: null, markdown: '' },
+    memory: context.memory ?? { version: null, text: '' },
+    styles: context.styles ?? [],
+    context_block: context.context_block ?? '',
+  }
 }

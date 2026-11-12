@@ -2,14 +2,18 @@ import { useMemo } from 'react'
 import type { AgentJobAction, AgentNotice, PendingMessage } from '../../../../../hooks/useCreativeAgent'
 import type {
   CreativeAgentActivity,
+  CreativeAgentChoices,
   CreativeAgentJob,
   CreativeAgentMessage,
   CreativeAgentMode,
   CreativeBudget,
   CreativeGeneration,
 } from '../../../../../types/creatives'
+import { choiceAnswers } from '../../../../../lib/creativesAgent'
+import { editorPath } from '../../../../../lib/creativeVideos'
 import JobCard from '../job/JobCard'
-import { ActivityLines, AgentProgress, AGENT_INDENT, AssistantMessage, ChatNotice, PlanChip, UserBubble } from './ChatParts'
+import { ActivityLines, AgentProgress, AGENT_INDENT, AssistantMessage, ChatNotice, PlanChip, UserBubble, VideoChip } from './ChatParts'
+import ChoiceCard from './ChoiceCard'
 
 interface ChatTranscriptProps {
   messages: CreativeAgentMessage[]
@@ -33,6 +37,10 @@ interface ChatTranscriptProps {
   onOpenGallery: () => void
   onDownload: (jobId: number, generation: CreativeGeneration, index: number) => Promise<string | null>
   onCarryOn: () => void
+  /** A choice button: send its value as the next message. */
+  onChoose: (value: string) => void
+  /** Open a video project's editor (a website path). */
+  onOpenEditor: (path: string) => void
 }
 
 type Block =
@@ -42,6 +50,8 @@ type Block =
   | { kind: 'plan'; key: string; title: string; planId: number }
   | { kind: 'job'; key: string; jobId: number }
   | { kind: 'notice'; key: string; text: string; tone: 'error' | 'info' | 'warn'; canContinue?: boolean }
+  | { kind: 'choices'; key: string; choices: CreativeAgentChoices; answer: string | null }
+  | { kind: 'video'; key: string; title: string; videoId: number }
 
 /**
  * Server messages in id order, with the page's own notices slotted in after
@@ -51,6 +61,7 @@ type Block =
  */
 function buildBlocks(messages: CreativeAgentMessage[], notices: AgentNotice[]): Block[] {
   const blocks: Block[] = []
+  const answers = choiceAnswers(messages)
   const queue = [...notices].sort((a, b) => a.afterId - b.afterId)
   let q = 0
   const flushNotices = (beforeId: number) => {
@@ -86,6 +97,14 @@ function buildBlocks(messages: CreativeAgentMessage[], notices: AgentNotice[]): 
       case 'notice':
         if (m.text) blocks.push({ kind: 'notice', key, text: m.text, tone: 'warn' })
         break
+      case 'choices':
+        if (m.choices && m.choices.options?.length) {
+          blocks.push({ kind: 'choices', key, choices: m.choices, answer: answers.get(m.id) ?? null })
+        }
+        break
+      case 'video':
+        if (m.video_id) blocks.push({ kind: 'video', key, title: m.text?.trim() || `Video #${m.video_id}`, videoId: m.video_id })
+        break
     }
   }
   flushNotices(Number.POSITIVE_INFINITY)
@@ -113,6 +132,8 @@ export default function ChatTranscript({
   onOpenGallery,
   onDownload,
   onCarryOn,
+  onChoose,
+  onOpenEditor,
 }: ChatTranscriptProps) {
   const blocks = useMemo(() => buildBlocks(messages, notices), [messages, notices])
 
@@ -128,6 +149,18 @@ export default function ChatTranscript({
             return <ActivityLines key={b.key} items={b.items} />
           case 'plan':
             return <PlanChip key={b.key} title={b.title} onOpen={() => onOpenPlan(b.planId)} />
+          case 'video':
+            return <VideoChip key={b.key} title={b.title} onOpen={() => onOpenEditor(editorPath(b.videoId))} />
+          case 'choices':
+            return (
+              <ChoiceCard
+                key={b.key}
+                choices={b.choices}
+                answer={b.answer}
+                disabled={running || pending !== null}
+                onChoose={onChoose}
+              />
+            )
           case 'notice':
             return (
               <ChatNotice
@@ -156,6 +189,7 @@ export default function ChatTranscript({
                   onOpenPlan={onOpenPlan}
                   onOpenGallery={onOpenGallery}
                   onDownload={(g, i) => onDownload(job.id, g, i)}
+                  onOpenEditor={onOpenEditor}
                 />
               </div>
             )

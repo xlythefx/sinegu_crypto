@@ -13,6 +13,7 @@ import {
   latestActivityLabel,
   mergeJobs,
   mergeMessages,
+  NEW_TOOLS_NOTICE,
   touchedPanels,
 } from '../lib/creativesAgent'
 import {
@@ -92,8 +93,13 @@ export interface CreativeAgentState {
   jobErrors: Record<number, string | undefined>
   /** When this job was last read (its download paths are valid 30 min from then). */
   jobReadAt: (jobId: number) => number
-  /** Go up when an answer changed plans / memory, or a job made something new — open panels re-read. */
-  signals: { plans: number; memory: number; gallery: number }
+  /** Go up when an answer changed plans / memory / videos, or a job made something new — open panels re-read. */
+  signals: { plans: number; memory: number; gallery: number; videos: number }
+  /** The open chat's id (the Context panel reads what THIS chat would send). */
+  sessionId: string | null
+  /** Said once, above the chat: the server opened a fresh chat because the agent's tools changed. */
+  freshChatNotice: string | null
+  dismissFreshChatNotice: () => void
 }
 
 interface Options {
@@ -133,7 +139,9 @@ export function useCreativeAgent({ enabled, onBudget }: Options): CreativeAgentS
   const [startingNew, setStartingNew] = useState(false)
   const [jobBusy, setJobBusy] = useState<Record<number, AgentJobAction | undefined>>({})
   const [jobErrors, setJobErrors] = useState<Record<number, string | undefined>>({})
-  const [signals, setSignals] = useState({ plans: 0, memory: 0, gallery: 0 })
+  const [signals, setSignals] = useState({ plans: 0, memory: 0, gallery: 0, videos: 0 })
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [freshChatNotice, setFreshChatNotice] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
 
   const mounted = useRef(true)
@@ -173,18 +181,21 @@ export function useCreativeAgent({ enabled, onBudget }: Options): CreativeAgentS
     for (const j of list) readAt.current.set(j.id, t)
   }
 
-  const bump = useCallback((which: { plans?: boolean; memory?: boolean; gallery?: boolean }) => {
-    if (!which.plans && !which.memory && !which.gallery) return
+  const bump = useCallback((which: { plans?: boolean; memory?: boolean; gallery?: boolean; videos?: boolean }) => {
+    if (!which.plans && !which.memory && !which.gallery && !which.videos) return
     setSignals((s) => ({
       plans: s.plans + (which.plans ? 1 : 0),
       memory: s.memory + (which.memory ? 1 : 0),
       gallery: s.gallery + (which.gallery ? 1 : 0),
+      videos: s.videos + (which.videos ? 1 : 0),
     }))
   }, [])
 
   /** Server truth replaces what is on screen (a full session read). */
   const replaceWith = useCallback((state: CreativeAgentSessionState) => {
     sessionRef.current = state.session.id
+    setSessionId(state.session.id)
+    if (state.notice === 'new_tools') setFreshChatNotice(NEW_TOOLS_NOTICE)
     messagesRef.current = state.messages
     setMessages(state.messages)
     stampJobs(state.jobs)
@@ -395,6 +406,7 @@ export function useCreativeAgent({ enabled, onBudget }: Options): CreativeAgentS
       replaceWith(state)
       setModeState(state.session.mode === 'generate' ? 'generate' : 'ask')
       setNotices([])
+      setFreshChatNotice(null)
       setJobErrors({})
       setLastCost(null)
       setStatus('ready')
@@ -481,6 +493,7 @@ export function useCreativeAgent({ enabled, onBudget }: Options): CreativeAgentS
   }, [fingerprint, bump])
 
   const jobReadAt = useCallback((jobId: number) => readAt.current.get(jobId) ?? 0, [])
+  const dismissFreshChatNotice = useCallback(() => setFreshChatNotice(null), [])
 
   return {
     status,
@@ -508,5 +521,8 @@ export function useCreativeAgent({ enabled, onBudget }: Options): CreativeAgentS
     jobErrors,
     jobReadAt,
     signals,
+    sessionId,
+    freshChatNotice,
+    dismissFreshChatNotice,
   }
 }

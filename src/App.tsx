@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { ThemeProvider } from './theme'
 import { PortalSwitchProvider } from './components/ui/PortalSwitchOverlay'
@@ -50,6 +51,9 @@ import AdminTradeLogs from './pages/admin/AdminTradeLogs'
 import AdminWebhooks from './pages/admin/AdminWebhooks'
 import AdminAiAccess from './pages/admin/AdminAiAccess'
 import AdminCreatives from './pages/admin/AdminCreatives'
+// The video editor carries the timeline, the drawing code and (on Export) the
+// encoder — loaded only when someone opens it, so the rest of the app stays light.
+const AdminCreativeEditor = lazy(() => import('./pages/admin/AdminCreativeEditor'))
 import AdminInvoiceHistory from './pages/admin/AdminInvoiceHistory'
 import AdminInvoiceDetail from './pages/admin/AdminInvoiceDetail'
 import AdminResources from './pages/admin/AdminResources'
@@ -114,6 +118,14 @@ function App() {
               <Route path="/admin/webhooks" element={<AdminWebhooks />} />
               <Route path="/admin/ai-access" element={<AdminAiAccess />} />
               <Route path="/admin/creatives" element={<AdminCreatives />} />
+              <Route
+                path="/admin/creatives/editor/:id"
+                element={
+                  <Suspense fallback={null}>
+                    <AdminCreativeEditor />
+                  </Suspense>
+                }
+              />
               <Route path="/admin/invoices/:id" element={<AdminInvoiceDetail />} />
               <Route path="/admin/invoices" element={<AdminInvoiceHistory />} />
               <Route path="/admin/referrals/release/:referrerUniId" element={<AdminReleasePayment />} />

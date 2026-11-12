@@ -535,6 +535,171 @@ function invoiceView(path) {
   return { success: true, invoice: { ...inv, payment: samplePayment(inv) } }
 }
 
+// ---------------------------------------------------------------- Creatives (v2: videos, styles, context)
+// Sample clips are public CC0 test videos (MDN), never a Higgsfield file.
+const SAMPLE_CLIP_A = 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4'
+const SAMPLE_CLIP_B = 'https://interactive-examples.mdn.mozilla.net/media/examples/friday.mp4'
+const soon = (days) => new Date(Date.now() + days * 86400000).toISOString()
+
+const CREATIVE_BUDGET = {
+  month: new Date().toISOString().slice(0, 7), cap_usd: 100, spent_usd: 18.42, reserved_usd: 1.32, remaining_usd: 81.58,
+  generations: 23, ai_usd: 2.1, ai_calls: 31,
+  by_person: [{ uni_id: 'sample-admin', name: 'Sample Admin', spent_usd: 18.42, generations: 23, ai_calls: 31 }],
+  updated_by_name: 'Sample Admin', updated_at: ago(9),
+}
+
+const CREATIVES_META = {
+  success: true, configured: true, ai: { configured: true, model: 'claude-opus-5-5', weekly_recap: true },
+  retention_days: 7, max_references: 8, budget: CREATIVE_BUDGET, can_edit_budget: true,
+  models: [
+    { key: 'soul-image', label: 'Soul v2 image', kind: 'image', description: 'A still image.', uses_references: false, needs_source: false, price_hint: 'about $0.004', params: [] },
+    { key: 'kling-animate', label: 'Kling 2.5 Turbo Pro', kind: 'video', description: 'Animates one still.', uses_references: false, needs_source: true, price_hint: 'about $0.26 for 5 s', params: [] },
+    { key: 'seedance-text-video', label: 'Seedance 2.5 text-to-video', kind: 'video', description: 'A clip with its own sound, no character pictures.', uses_references: false, requires_character: false, needs_source: false, price_hint: 'about $1.32 for 5 s', params: [] },
+  ],
+}
+
+function sampleGeneration(id, url, daysLeft, label = 'Kling 2.5 Turbo Pro') {
+  return {
+    id, plan_id: null, plan_title: null, kind: 'video', model: 'kling-animate', model_label: label,
+    prompt: 'Slow push-in on a glowing trading screen in a dark room, neon reflections', params: { duration: 5 },
+    used_character: false, status: 'completed', error: null,
+    outputs: [{ type: 'video', url, download_path: `/api/creatives/generations/${id}/download/0?signature=sample` }],
+    estimated_usd: 0.27, charged_usd: 0.27, expires_at: soon(daysLeft), completed_at: ago(1), created_at: ago(1), created_by_name: 'Sample Admin',
+  }
+}
+
+const STEP = (label, model_label, usd, status, generation = null) => ({ label, model: 'kling-animate', model_label, usd, status, generation, error: null })
+
+const VIDEO_JOB = {
+  id: 41, title: 'Week 46 recap — 2 scenes', status: 'running', plan_id: null, plan_title: null, estimated_usd: 1.6,
+  steps: [
+    STEP('Hook — the still', 'Soul v2 image', 0.004, 'completed'),
+    STEP('Hook — the clip', 'Kling 2.5 Turbo Pro', 0.26, 'completed', sampleGeneration(301, SAMPLE_CLIP_A, 6)),
+    STEP('The city at night', 'Seedance 2.5 text-to-video', 1.32, 'running', { ...sampleGeneration(303, SAMPLE_CLIP_B, 7), status: 'in_progress', outputs: [], charged_usd: 1.32 }),
+  ],
+  approved_by_name: 'Sample Admin', created_at: ago(0, 0.2), expires_at: null, video_id: 1, editor_path: '/admin/creatives/editor/1',
+}
+
+function sampleScene(id, position, extra) {
+  return {
+    id, position, kind: 'clip', label: 'Scene', prompt: null, engine: 'kling', engine_label: 'Kling · silent', with_character: false,
+    seconds: 5, template: null, generation: null, output_index: 0, agent_job_id: 41, step_index: null,
+    trim_in_ms: null, trim_out_ms: null, duration_ms: 5000, status: 'ready', error: null, ...extra,
+  }
+}
+
+function sampleVideo() {
+  return {
+    id: 1, title: 'Week 46 recap', plan_id: null, plan_title: null, style: { id: 2, slug: 'pixel-arcade', name: 'Pixel arcade' },
+    platform: 'tiktok', aspect: '9:16', max_seconds: 30, fps: 30, status: 'draft', exported_at: null, exported_by_name: null,
+    export_seconds: null, export_bytes: null, created_by_name: 'Sample Admin', updated_by_name: 'Sample Admin',
+    created_at: ago(1), updated_at: ago(0, 0.1), duration_ms: 19000,
+    timeline: {
+      version: 1, caption_style: 'pixel',
+      captions: [
+        { id: 'cap1', text: 'This week: +3.1%', start_ms: 0, end_ms: 2600, style: 'hook', position: 'top' },
+        { id: 'cap2', text: '12 trades, LTC on top', start_ms: 5200, end_ms: 9000, style: 'body', position: 'bottom' },
+        { id: 'cap3', text: 'Past performance does not guarantee future results.', start_ms: 16000, end_ms: 19000, style: 'disclaimer', position: 'bottom' },
+      ],
+      look: { pixel_size: 0, scanlines: true },
+      music: { source: 'chiptune', preset: 'arcade-upbeat', seed: 4242, volume: 0.6, fade_out_ms: 1500 },
+      voiceover: null,
+      sfx: [{ id: 'sfx1', sound: 'coin', at_ms: 1200, volume: 0.8 }, { id: 'sfx2', sound: 'levelup', at_ms: 10200, volume: 0.8 }],
+      clip_audio_volume: 1, ducking: { enabled: true, music_under_voice: 0.25 },
+    },
+    scenes: [
+      sampleScene(11, 1, { label: 'Hook — trading screen', prompt: 'Slow push-in on a glowing trading screen', generation: sampleGeneration(301, SAMPLE_CLIP_A, 6), step_index: 1 }),
+      sampleScene(12, 2, { kind: 'template', label: 'High score', engine: null, engine_label: null, agent_job_id: null, seconds: 4, duration_ms: 4000, template: { key: 'pixel-scoreboard', title: 'HIGH SCORE', value: '+3.1%', subtitle: 'THIS WEEK · 12 TRADES' } }),
+      sampleScene(13, 3, { label: 'The city at night', engine: 'seedance', engine_label: 'Seedance · with sound', prompt: 'Neon city at night, 8-bit chiptune music', status: 'generating', step_index: 2 }),
+      sampleScene(14, 4, { label: 'Pixel waves goodbye', with_character: true, prompt: 'Pixel waves at the camera', generation: sampleGeneration(302, SAMPLE_CLIP_B, 0.6), trim_out_ms: 4000, duration_ms: 4000 }),
+    ],
+    jobs: [VIDEO_JOB],
+  }
+}
+
+const SAMPLE_STYLES = [
+  ['data-recap', 'Data recap', 'Clean charts and numbers, stat cards, calm confident b-roll.', 'tiktok', '9:16', 'none', 'kling', 'bold', 'clean', 'none', false],
+  ['pixel-arcade', 'Pixel arcade', '8-bit arcade world, HIGH SCORE card for the week’s %, chiptune and coin sounds.', 'tiktok', '9:16', 'cameo', 'seedance', 'pixel', 'pixel', 'arcade-upbeat', true],
+  ['pixel-storytime', 'Pixel storytime', 'Pixel tells a tiny story in 3–4 scenes.', 'tiktok', '9:16', 'lead', 'seedance', 'bold', 'pixel', 'arcade-chill', false],
+  ['cinematic-broll', 'Cinematic b-roll', 'Moody city and market b-roll, slow camera moves, one strong line per scene.', 'x', '16:9', 'cameo', 'seedance', 'clean', 'clean', 'none', false],
+  ['fast-cut', 'Fast cut', '5-second scenes, punchy captions, music-driven.', 'tiktok', '9:16', 'none', 'kling', 'bold', 'clean', 'arcade-boss', false],
+].map(([slug, name, summary, default_platform, default_aspect, pixel_default, default_engine, caption_style, template_family, music_default, pixel_look], i) => ({
+  id: i + 1, slug, name, summary, markdown: `## Look\n- ${summary}\n\n## Scenes\n- Open with a hook in the first two seconds.`,
+  default_platform, default_aspect, pixel_default, default_engine, caption_style, template_family, music_default, pixel_look,
+  enabled: i !== 4, sort: i, updated_by_name: i === 1 ? 'Sample Admin' : null, updated_at: ago(2),
+}))
+
+const PLAYBOOK_MD = '# Purpose\nShort videos that show what the bot did, honestly.\n\n## Anatomy\n- A hook in the first 2 seconds\n- 3–6 scenes, 30 seconds at most\n- Numbers go on template cards, never inside a generated clip\n- End with the disclaimer card when a % is cited\n\n## Pixel is a guest\n- Off by default; a cameo is one scene\n\n## Engines\n- Kling: silent and cheaper — the music carries it\n- Seedance: comes with its own sound'
+
+const CREATIVE_CONTEXT = {
+  success: true,
+  context: {
+    system: 'You are the Pixel Alpha content agent.\n\nTwo kinds of figures: query_data is for understanding; only get_week_results figures go into anything posted.\nFollow the PLAYBOOK and the chosen STYLE. Pixel is off by default.',
+    tools: [
+      { name: 'ask_choices', description: 'Ask a question with buttons. The turn ends after it.', input_schema: { type: 'object', properties: { question: { type: 'string' } } } },
+      { name: 'get_week_results', description: 'The public results for a window, per exchange and coin.', input_schema: { type: 'object', properties: { days: { type: 'integer' } } } },
+      { name: 'create_video', description: 'Create a video project and its scenes.', input_schema: { type: 'object', properties: { title: { type: 'string' } } } },
+    ],
+    playbook: { version: 3, markdown: PLAYBOOK_MD },
+    brief: { version: 5, markdown: '# Who we are\nPixel Alpha runs a trading bot. Plain, friendly, never hype.' },
+    memory: { version: 2, text: '- TikTok hooks with a number do best.\n- Keep captions to six words.' },
+    styles: SAMPLE_STYLES.filter((s) => s.enabled).map(({ slug, name, summary }) => ({ slug, name, summary })),
+    context_block: '[Context]\n{"today":"2026-11-12","mode":"generate","styles":[{"slug":"pixel-arcade","name":"Pixel arcade"}],"videos_in_progress":[{"id":1,"title":"Week 46 recap","scenes_ready":2,"scenes_total":4}]}\n\nPLAYBOOK (version 3, in full)\n…',
+  },
+}
+
+const VIDEO_LIST = {
+  success: true,
+  videos: [
+    { id: 1, title: 'Week 46 recap', platform: 'tiktok', aspect: '9:16', style_name: 'Pixel arcade', status: 'draft', scenes_total: 4, scenes_ready: 3, scenes_generating: 1, duration_ms: 19000, created_by_name: 'Sample Admin', updated_at: ago(0, 0.1) },
+    { id: 2, title: 'How the bot trades', platform: 'x', aspect: '16:9', style_name: 'Cinematic b-roll', status: 'exported', scenes_total: 5, scenes_ready: 5, scenes_generating: 0, duration_ms: 27500, created_by_name: 'Sample Admin', updated_at: ago(3) },
+    { id: 3, title: 'LTC spotlight', platform: 'tiktok', aspect: '9:16', style_name: null, status: 'draft', scenes_total: 0, scenes_ready: 0, scenes_generating: 0, duration_ms: 0, created_by_name: 'Sample Admin', updated_at: ago(5) },
+  ],
+}
+
+const AUDIO_LIST = {
+  success: true,
+  audio: [
+    { id: 1, kind: 'music', label: 'Upbeat synth loop', mime: 'audio/mpeg', bytes: 2_400_000, duration_ms: 31000, url: '/api/creatives/audio/1/file?signature=sample', created_by_name: 'Sample Admin', created_at: ago(4) },
+    { id: 2, kind: 'voiceover', label: 'Week 46 voiceover', mime: 'audio/webm', bytes: 380_000, duration_ms: 14200, url: '/api/creatives/audio/2/file?signature=sample', created_by_name: 'Sample Admin', created_at: ago(1) },
+  ],
+}
+
+const AGENT_SESSION = () => ({
+  success: true,
+  session: { id: 'sample-session', mode: 'generate' },
+  budget: CREATIVE_BUDGET,
+  jobs: [VIDEO_JOB],
+  messages: [
+    { id: 1, kind: 'user', text: 'Make a 20-second video of this week’s results', mode: 'generate', created_at: ago(0, 0.5) },
+    { id: 2, kind: 'activity', activity: { tool: 'get_week_results', label: 'Read the public results', ok: true }, created_at: ago(0, 0.5) },
+    { id: 3, kind: 'choices', choices: { question: 'Which platform is it for?', options: [{ label: 'TikTok', value: 'TikTok' }, { label: 'X', value: 'X' }], allow_other: false }, created_at: ago(0, 0.5) },
+    { id: 4, kind: 'user', text: 'TikTok', mode: 'generate', created_at: ago(0, 0.45) },
+    { id: 5, kind: 'choices', choices: { question: 'Which style?', options: [{ label: 'Pixel arcade', value: 'pixel-arcade' }, { label: 'Data recap', value: 'data-recap' }, { label: 'Fast cut', value: 'fast-cut' }], allow_other: true }, created_at: ago(0, 0.4) },
+    { id: 6, kind: 'user', text: 'pixel-arcade', mode: 'generate', created_at: ago(0, 0.35) },
+    { id: 7, kind: 'assistant', text: 'Here is the plan — four scenes, 19 seconds, Pixel in the last one only.', created_at: ago(0, 0.3) },
+    { id: 8, kind: 'video', video_id: 1, text: 'Week 46 recap', created_at: ago(0, 0.3) },
+    { id: 9, kind: 'job', job_id: 41, created_at: ago(0, 0.3) },
+  ],
+})
+
+const CREATIVE_GET = {
+  '/admin/creatives': CREATIVES_META,
+  '/admin/creatives/budget': { success: true, budget: CREATIVE_BUDGET },
+  '/admin/creatives/agent/session': AGENT_SESSION,
+  '/admin/creatives/agent/context': CREATIVE_CONTEXT,
+  '/admin/creatives/playbook': { success: true, playbook: { markdown: PLAYBOOK_MD, updated_by_name: 'Sample Admin', updated_at: ago(2) } },
+  '/admin/creatives/brief': { success: true, brief: { markdown: '# Who we are\nPixel Alpha runs a trading bot.', updated_by_name: null, updated_at: null } },
+  '/admin/creatives/styles': { success: true, styles: SAMPLE_STYLES },
+  '/admin/creatives/videos': VIDEO_LIST,
+  '/admin/creatives/videos/': () => ({ success: true, video: sampleVideo() }),
+  '/admin/creatives/audio': AUDIO_LIST,
+  '/admin/creatives/memory': { success: true, memories: [] },
+  '/admin/creatives/plans': { success: true, plans: [] },
+  '/admin/creatives/generations': () => ({ success: true, generations: [sampleGeneration(301, SAMPLE_CLIP_A, 6), sampleGeneration(302, SAMPLE_CLIP_B, 0.6)], has_more: false }),
+  '/admin/creatives/character': { success: true, character: { id: 1, name: 'Pixel', look: null, style_prompt: null, rules: null, refs: [], updated_by_name: null, updated_at: null } },
+}
+
 // ---------------------------------------------------------------- router
 /** Longest matching prefix wins; values may be functions (fresh dates per call). */
 const GET = {
@@ -549,6 +714,7 @@ const GET = {
   '/admin/visitors/summary': visitorSummary,
   '/admin/insights/customers': customerInsights,
   '/admin/visitors/log': VISITOR_LOG_BODY,
+  ...CREATIVE_GET,
 }
 
 export function answer(method, path, user, query = new URLSearchParams()) {

@@ -13,6 +13,89 @@ import type { AdminChange } from '../types/adminVersions'
  *    later change to the same feature gets its own entry.
  */
 export const ADMIN_CHANGES: AdminChange[] = [
+  // ── 2026-11-12 ───────────────────────────────────────────────────────────
+  {
+    id: 'creatives-v2-editor',
+    date: '2026-11-12',
+    kind: 'new',
+    area: 'Creatives',
+    title: 'A video editor that makes the whole marketing video, as one MP4',
+    summary:
+      'Creatives can now finish a video instead of only making single clips. A video project holds up to 30 seconds of scenes on a timeline. The AI makes all of its clips at once, each one lands in its place as soon as it is ready, and the team adds captions, music, a voiceover and arcade sound effects, then downloads one MP4 ready for TikTok or X.',
+    howItWorks: [
+      'Admin → Creatives → Videos → New project: pick the platform (X or TikTok), the shape (tall 9:16, wide 16:9 or square 1:1) and a style. The editor opens. The assistant can also start a project from the chat ("make a 20-second video of this week").',
+      '"Add scenes with AI": describe up to six scenes. For each one choose Kling (silent and cheaper: about $0.27 for 5 seconds) or Seedance (comes with its own sound: about $1.32 for 5 seconds), and whether Pixel appears in it (off unless you switch it on). Nothing is spent until you press Go on the priced job; then every clip is made at the same time, about 3 to 8 minutes for a whole video.',
+      'Free "template cards" are drawn in the browser and cost nothing: a title card, a HIGH SCORE board, a LEVEL UP card, a stat card and the disclaimer card, in a clean look or an 8-bit pixel look. Put exact figures on these cards rather than inside an AI clip.',
+      'On the timeline: drag a scene\'s edges to trim it, move scenes left or right, add captions (with "Add the disclaimer"), pick music, record or upload a voiceover (the music dips under the voice by itself), and place arcade sounds (coin, power-up, level-up and more). The built-in chiptune makes a new melody at a click and needs no licence. An optional "Pixel look" turns the clips into 8-bit blocks with scanlines.',
+      'Export MP4 makes the file in your own browser (Chrome, Edge or Safari 26+), so the server that runs the bot is never slowed down. Higgsfield deletes clips after 7 days, so export within a week of making them; the editor counts down and says which clip is gone.',
+      'On a phone the editor shows the video and lets you reorder scenes; exporting needs a computer.',
+    ],
+    technical: [
+      'Route /admin/creatives/editor/:id (lazy chunk). API: /admin/creatives/videos* (CreativeVideos), scenes/propose (prices only; Go = the existing agent-job approve, by any staff member), /exported (metadata only — no video is stored). The timeline document is client-owned JSON (captions, look, music, voiceover, sfx, clip audio volume, ducking), autosaved 1.5 s after an edit; the project is re-read every 5 s while a scene is planned or generating.',
+      'Export: mediabunny over WebCodecs in a Web Worker (H.264 + AAC, 30 fps, 1080×1920 / 1920×1080 / 1080×1080, fast-start MP4); @mediabunny/aac-encoder is loaded only when the browser has no AAC encoder. Clips come from the CDN, falling back to our signed download. The soundtrack is mixed in an OfflineAudioContext on the main thread. Preview and export share the drawing code (lib/videoEditor/templates.ts, look.ts).',
+      'Chiptune and sound effects are procedural and deterministic (preset + seed; lib/videoEditor/chiptune.ts, sfx.ts). Audio library: /admin/creatives/audio (15 MB each, 40 files at most, signed file links).',
+    ],
+    links: [{ label: 'Creatives → Videos', href: '/admin/creatives?panel=videos' }],
+  },
+  {
+    id: 'creatives-v2-styles',
+    date: '2026-11-12',
+    kind: 'new',
+    area: 'Creatives',
+    title: 'Marketing styles, buttons in the chat, and Pixel only where he is wanted',
+    summary:
+      'Videos can now come out in different looks. A library of marketing styles (Data recap, Pixel arcade, Pixel storytime, Cinematic b-roll, Fast cut) tells the assistant how a video should look and sound, and a video playbook says how every video is built. Before it builds a video the assistant asks the platform, the shape and the style with buttons in the chat, then shows the scene list and asks "Build it?".',
+    howItWorks: [
+      'Admin → Creatives → Styles: each style has a one-line summary, its rules in plain text and the defaults a new video gets (platform, shape, how much Pixel, Kling or Seedance, the caption look, the card look, the music, the Pixel look). Anyone on the team can edit one, switch it off or add a new one.',
+      '"Pixel arcade" is the 8-bit style: a pixel-art world, a HIGH SCORE card for the week\'s result, a LEVEL UP card, chiptune music and coin and power-up sounds.',
+      'Pixel is now OFF by default: he appears only in the scenes a style or a plan asks for (usually one scene, or none). The rest is b-roll, charts and text.',
+      'For each scene the assistant picks Kling (silent and cheaper, the music carries it) or Seedance (with its own sound, for dialogue or effects).',
+      'Admin → Creatives → Playbook is the base every video follows. Admin → Creatives → Context shows exactly what the assistant reads before it answers, with a Copy button for each part.',
+      'Because the assistant learned new tools, open chats were closed once and a fresh chat opened. Memory, the brief and the plans are unchanged.',
+    ],
+    technical: [
+      'creative_styles (/admin/creatives/styles; delete refused while a video uses it), creative_settings.playbook_markdown (/admin/creatives/playbook), GET /admin/creatives/agent/context (read-only). Agent tools v2: ask_choices (a "choices" chat row; a button sends its value as the next message), get_style, create_video, add_scenes, get_video, list_videos. creative_agent_sessions.tools_version: an older chat is not resumed (notice "new_tools").',
+      'Seedance text-to-video is a new Studio model ("seedance-text-video"): Seedance with sound and no character pictures.',
+    ],
+    links: [
+      { label: 'Creatives → Styles', href: '/admin/creatives?panel=styles' },
+      { label: 'Creatives → Context', href: '/admin/creatives?panel=context' },
+    ],
+  },
+  {
+    id: 'creatives-v2-data',
+    date: '2026-11-12',
+    kind: 'new',
+    area: 'Creatives',
+    title: 'The assistant can look up our trading data; posts stay public figures only',
+    summary:
+      'In the Creatives chat the assistant can now answer questions about our own data, the same way the Grok connector does: signals, trades, coins, customers and billing. Anything meant to be POSTED still uses only the public results (the same percentages and trade counts the Telegram recaps show), and the server refuses a plan or a video that contains a dollar amount or a customer\'s name.',
+    howItWorks: [
+      'Ask, for example, "how did RENDER do on Binance this week?" or "which coin traded most this month?". The chat shows a quiet "Looked up" line while it reads.',
+      'Results for a post can now be asked per exchange and per coin, day by day ("last 7 days on Binance, LTC only").',
+      'If the assistant tries to put a dollar figure or a customer\'s name into a plan, a caption, a scene or a card, the save is refused and it is told why. What people type by hand is not checked.',
+    ],
+    technical: [
+      'Agent tools query_data (the AI Access toolsets, redacted, answers capped at 60 KB) and get_week_results (+ days, exchange, coin, daily). Post guard PRIVATE_IN_POST on create_plan / update_plan / create_video / add_scenes: money amounts and the names of customer accounts.',
+    ],
+    links: [{ label: 'Creatives', href: '/admin/creatives' }],
+  },
+  {
+    id: 'creatives-seedance-rate',
+    date: '2026-11-12',
+    kind: 'fixed',
+    area: 'Creatives',
+    title: 'Seedance videos are priced at Higgsfield\'s current rate',
+    summary:
+      'A Seedance video reserved more of the monthly budget than it really cost: a 5-second clip at 720p held about $2.31 while Higgsfield charges about $1.32. It is now priced at Higgsfield\'s own current rate, so the budget is no longer used up early.',
+    howItWorks: [
+      'Seedance now costs about $0.26 a second at 720p and about $0.12 a second at 480p, for the character video and the new text-to-video alike. The budget still checks the price before anything is spent.',
+    ],
+    technical: [
+      'CreativeModels: seedance-reference and seedance-text-video usd_per_second 480p 0.1177, 720p 0.2647 (Higgsfield\'s own answer of 2026-11-11, "without video input"); it was 0.2056 / 0.4622.',
+    ],
+    links: [{ label: 'Creatives → Budget', href: '/admin/creatives?panel=budget' }],
+  },
   // ── 2026-11-11 ───────────────────────────────────────────────────────────
   {
     id: 'creatives-kling-price',

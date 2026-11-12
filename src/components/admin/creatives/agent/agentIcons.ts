@@ -1,11 +1,17 @@
 import {
+  BookOpen,
   Bot,
   Boxes,
+  Braces,
   Brain,
   ChartLine,
   Clapperboard,
+  Database,
   FileText,
+  Film,
   Images,
+  ListChecks,
+  Palette,
   PenLine,
   SquareKanban,
   Wallet,
@@ -18,9 +24,13 @@ import type { CreativesPanelKey } from '../../../../lib/creativesAgent'
 export const PANEL_ICON: Record<CreativesPanelKey, LucideIcon> = {
   plans: SquareKanban,
   gallery: Images,
+  videos: Film,
   pixel: Bot,
+  styles: Palette,
+  playbook: BookOpen,
   brief: FileText,
   memory: Brain,
+  context: Braces,
   budget: Wallet,
 }
 
@@ -39,6 +49,13 @@ const TOOL_ICON: Record<string, LucideIcon> = {
   forget: Brain,
   update_memory: Brain,
   propose_job: Clapperboard,
+  query_data: Database,
+  ask_choices: ListChecks,
+  get_style: Palette,
+  create_video: Film,
+  add_scenes: Film,
+  get_video: Film,
+  list_videos: Film,
 }
 
 export function toolIcon(tool: string): LucideIcon {

@@ -5,7 +5,12 @@
  * exactly; nothing here is derived.
  */
 
-export type CreativeModelKey = 'soul-image' | 'grok-image' | 'kling-animate' | 'seedance-reference'
+export type CreativeModelKey =
+  | 'soul-image'
+  | 'grok-image'
+  | 'kling-animate'
+  | 'seedance-reference'
+  | 'seedance-text-video'
 
 export type CreativeKind = 'image' | 'video'
 
@@ -325,7 +330,29 @@ export interface CreativeEstimate {
 /** Ask = talk it through (reads, saves memory, never spends). Generate = it may propose paid jobs. */
 export type CreativeAgentMode = 'ask' | 'generate'
 
-export type CreativeAgentMessageKind = 'user' | 'assistant' | 'activity' | 'job' | 'plan' | 'notice'
+export type CreativeAgentMessageKind =
+  | 'user'
+  | 'assistant'
+  | 'activity'
+  | 'job'
+  | 'plan'
+  | 'notice'
+  | 'choices'
+  | 'video'
+
+/** One button of an `ask_choices` question; a click sends `value` as the next message. */
+export interface CreativeAgentChoiceOption {
+  label: string
+  value: string
+}
+
+/** The agent asked a question with buttons ("X or TikTok?"). The turn ended with it. */
+export interface CreativeAgentChoices {
+  question: string
+  options: CreativeAgentChoiceOption[]
+  /** Offer an "Other…" box beside the buttons. */
+  allow_other: boolean
+}
 
 /** One tool the agent ran, as one plain line ("Read the planner", "Saved to memory: …"). */
 export interface CreativeAgentActivity {
@@ -348,12 +375,24 @@ export interface CreativeAgentMessage {
   job_id?: number
   /** kind 'plan' — "Created plan: …", opens the Plans panel at that plan. */
   plan_id?: number
+  /** kind 'choices' — the question and its buttons. */
+  choices?: CreativeAgentChoices
+  /** kind 'video' — the video project it made (text = its title). */
+  video_id?: number
   mode?: CreativeAgentMode
   /** ISO. */
   created_at: string
 }
 
-export type CreativeAgentJobStatus = 'proposed' | 'running' | 'completed' | 'failed' | 'canceled' | 'expired'
+export type CreativeAgentJobStatus =
+  | 'proposed'
+  | 'running'
+  | 'completed'
+  /** Every step finished, but some scenes failed (the others landed). */
+  | 'completed_with_failures'
+  | 'failed'
+  | 'canceled'
+  | 'expired'
 
 export type CreativeAgentStepStatus = 'waiting' | 'running' | 'completed' | 'failed' | 'canceled'
 
@@ -387,6 +426,10 @@ export interface CreativeAgentJob {
   created_at: string
   /** ISO — a proposed job must get its Go before this (60 min), else it expires. */
   expires_at: string | null
+  /** The video project this job fills (Creatives v2); absent on a single-clip job. */
+  video_id?: number | null
+  /** The website path of that project's editor ("/admin/creatives/editor/12"). */
+  editor_path?: string | null
 }
 
 export interface CreativeAgentSession {
@@ -402,6 +445,11 @@ export interface CreativeAgentSessionState {
   messages: CreativeAgentMessage[]
   jobs: CreativeAgentJob[]
   budget: CreativeBudget
+  /**
+   * Said once: 'new_tools' = the agent learned new tools, so the old chat was
+   * closed and this is a fresh one.
+   */
+  notice?: 'new_tools' | null
 }
 
 export type CreativeAgentTurnStatus = 'continue' | 'done' | 'awaiting_approval' | 'error'
@@ -459,4 +507,62 @@ export interface CreativeMemory {
 export interface CreativeMemoryInput {
   text: string
   category?: CreativeMemoryCategory
+}
+
+/** The video playbook: the base every video follows. Same shape as the brief. */
+export type CreativePlaybook = CreativeBrief
+
+/* ---------- marketing styles ---------- */
+
+export type CreativeStylePlatform = 'x' | 'tiktok' | 'any'
+
+/** One look a video can come out in ("Pixel arcade", "Data recap"). Team-edited. */
+export interface CreativeStyle {
+  id: number
+  /** `^[a-z0-9-]{3,40}$` — what the agent names it by. */
+  slug: string
+  name: string
+  /** One line the agent reads when choosing (≤ 200). */
+  summary: string
+  /** The style's rules, Markdown (≤ 20,000). */
+  markdown: string
+  default_platform: CreativeStylePlatform
+  default_aspect: '9:16' | '16:9' | '1:1'
+  /** How much mascot it wants. */
+  pixel_default: 'none' | 'cameo' | 'lead'
+  default_engine: 'kling' | 'seedance'
+  caption_style: 'clean' | 'bold' | 'pixel'
+  template_family: 'clean' | 'pixel'
+  /** 'none' or a chiptune preset. */
+  music_default: 'none' | 'arcade-upbeat' | 'arcade-chill' | 'arcade-boss' | 'arcade-victory'
+  /** Pixelate + scanlines on by default. */
+  pixel_look: boolean
+  enabled: boolean
+  sort: number
+  updated_by_name: string | null
+  /** ISO. */
+  updated_at: string | null
+}
+
+/** POST body (all but id and the stamps); PUT takes any subset. */
+export type CreativeStyleInput = Omit<CreativeStyle, 'id' | 'updated_by_name' | 'updated_at'>
+
+/* ---------- the Context view ---------- */
+
+export interface CreativeAgentToolView {
+  name: string
+  description: string
+  input_schema: unknown
+}
+
+/** Exactly what the agent reads, read-only (GET /admin/creatives/agent/context). */
+export interface CreativeAgentContextView {
+  system: string
+  tools: CreativeAgentToolView[]
+  playbook: { version: string | number | null; markdown: string }
+  brief: { version: string | number | null; markdown: string }
+  memory: { version: string | number | null; text: string }
+  styles: Array<{ slug: string; name: string; summary: string }>
+  /** The [Context] block the next message would carry. */
+  context_block: string
 }

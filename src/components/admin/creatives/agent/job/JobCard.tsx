@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CircleAlert, Clapperboard, Clock, Images, OctagonX, Play, SquareKanban, TriangleAlert } from 'lucide-react'
+import { CircleAlert, Clapperboard, Clock, Film, Images, OctagonX, Play, SquareKanban, TriangleAlert } from 'lucide-react'
 import ConfirmModal from '../../../../ui/ConfirmModal'
 import { BTN_GHOST } from '../../../../settings/formClasses'
 import { fmtBudget, fmtTimeLeft } from '../../../../../lib/creatives'
@@ -24,6 +24,10 @@ interface JobCardProps {
   onOpenPlan: (planId: number) => void
   onOpenGallery: () => void
   onDownload: (generation: CreativeGeneration, index: number) => Promise<string | null>
+  /** Shown as "Open in the editor" when the job fills a video project (left out inside the editor itself). */
+  onOpenEditor?: (path: string) => void
+  /** Inside the editor: the Gallery button is not offered. */
+  hideGallery?: boolean
 }
 
 /** The one button in the chat that spends money — big, gold, and it says the price. */
@@ -51,6 +55,8 @@ export default function JobCard({
   onOpenPlan,
   onOpenGallery,
   onDownload,
+  onOpenEditor,
+  hideGallery = false,
 }: JobCardProps) {
   const [confirmStop, setConfirmStop] = useState(false)
   const status = effectiveJobStatus(job, now)
@@ -64,11 +70,20 @@ export default function JobCard({
   const currentStep = job.steps.findIndex((s) => s.status === 'running')
   const hasResult = job.steps.some((s) => s.generation && s.generation.outputs.length > 0)
 
+  const forVideo = !!job.video_id
+  const runningSteps = job.steps.filter((s) => s.status === 'running').length
+  const by = job.approved_by_name ? ` · started by ${job.approved_by_name}` : ''
   const footer: string | null =
     status === 'running'
-      ? `Step ${currentStep >= 0 ? currentStep + 1 : Math.min(doneSteps + 1, job.steps.length)} of ${job.steps.length}${job.approved_by_name ? ` · started by ${job.approved_by_name}` : ''}. This chat checks every 5 seconds.`
+      ? forVideo
+        ? `${doneSteps} of ${job.steps.length} steps done, ${runningSteps} being made at once${by}. Clips land in the editor in their place as they finish.`
+        : `Step ${currentStep >= 0 ? currentStep + 1 : Math.min(doneSteps + 1, job.steps.length)} of ${job.steps.length}${by}. This chat checks every 5 seconds.`
       : status === 'completed'
-        ? `Done${job.approved_by_name ? ` · started by ${job.approved_by_name}` : ''}. Everything is in the Gallery too — download what you want to keep.`
+        ? forVideo
+          ? `Done${by}. Every clip is on the video’s timeline, and in the Gallery too.`
+          : `Done${by}. Everything is in the Gallery too — download what you want to keep.`
+        : status === 'completed_with_failures'
+          ? 'Finished, but some scenes failed — they cost nothing. The others landed; regenerate the failed ones in the editor.'
         : status === 'failed'
           ? 'It stopped at the step that failed. The steps after it never started, so they cost nothing.'
           : status === 'canceled'
@@ -204,9 +219,15 @@ export default function JobCard({
               {error}
             </p>
           )}
-          {(status === 'running' || hasResult) && (
+          {(status === 'running' || hasResult || (onOpenEditor && job.editor_path)) && (
             <div className="flex flex-wrap gap-2">
-              {hasResult && (
+              {onOpenEditor && job.editor_path && (
+                <button type="button" className={BTN_SOFT} onClick={() => onOpenEditor(job.editor_path as string)}>
+                  <Film size={14} aria-hidden="true" />
+                  Open in the editor
+                </button>
+              )}
+              {hasResult && !hideGallery && (
                 <button type="button" className={BTN_SOFT} onClick={onOpenGallery}>
                   <Images size={14} aria-hidden="true" />
                   Open the Gallery
