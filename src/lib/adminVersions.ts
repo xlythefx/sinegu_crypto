@@ -14,6 +14,25 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'creatives-friendly-endings',
+    date: '2026-11-12',
+    kind: 'improved',
+    area: 'Creatives',
+    title: 'Videos end with a friendly goodbye, not a risk warning',
+    summary:
+      'The video assistant used to close every video that showed a figure with a "Crypto trading is risky" card, and when asked to make that card friendlier it only changed the title to something vague. Videos now end on a warm sign-off that fits the story, and the assistant reads the whole video before it changes a scene.',
+    howItWorks: [
+      'When the assistant plans a video, the last scene is a friendly sign-off: Pixel waving, "See you next week" and the site name. It no longer adds a risk-warning card or words like "risky" or "warning" on screen. You can still ask for the disclaimer card if you want one.',
+      'The post caption still ends with "Past performance does not guarantee future results." whenever the video shows a figure. That line is added automatically, as before.',
+      'When you ask it to change one scene, it first reads every scene, card and caption, so the new text continues the story. Example: asked to make the last card of the RENDER weekly recap friendlier, it should write a real goodbye such as "That\'s RENDER\'s week. See you next Friday!" instead of "A friendly note from Pixel".',
+      'The playbook and the style guides on the Creatives page were updated the same way. Lines the team had already rewritten were left as they were.',
+    ],
+    technical: [
+      'CreativeAgentPrompt::SYSTEM (videos rule, editor-chat rules, hard rule 2), CreativeAiPrompt::SYSTEM rule 2, CreativeFacts brand.risk → brand.disclaimer. Migration 2026_11_12_000006 rewrites only the exact seeded lines in creative_settings.playbook_markdown and creative_styles.markdown (reversible). The caption disclaimer stays enforced in PHP (CreativeAiOutput::ensureDisclaimer). Test: CreativesFriendlyEndingTest.',
+    ],
+    links: [{ label: 'Creatives', href: '/admin/creatives' }],
+  },
+  {
     id: 'trade-failure-emails',
     date: '2026-11-12',
     kind: 'new',
