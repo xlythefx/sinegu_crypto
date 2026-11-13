@@ -33,7 +33,7 @@ const BALANCE_ROWS: { label: string; size: number }[] = [
 ]
 
 const GOOD_TO_KNOW = [
-  'Each account counts its own trades on that coin, long and short together.',
+  'Customers follow the MASTER’s trades on that coin, long and short together: when the master wins, nobody is cut, even a customer whose own result was a small loss. Test accounts count their own trades. On an exchange with no real-money master, each account counts its own.',
   'A position that was added to several times and closes together counts as one trade.',
   'Any profit after fees is a win. Break-even or worse is a loss.',
   'A new account, or one with no closed trade on the coin yet, uses the normal size.',

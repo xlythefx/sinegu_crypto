@@ -49,6 +49,14 @@ interface StreakSizingCardProps {
   onAssetChanged: (asset: AdminAsset) => void
 }
 
+/** "2 losses in a row" / "1 win" / "no closed trade yet" — the master's run in words. */
+function describeMasterRun(run: number): string {
+  if (run === 0) return 'no closed trade on this coin yet'
+  const n = Math.abs(run)
+  const word = run < 0 ? (n === 1 ? 'loss' : 'losses') : n === 1 ? 'win' : 'wins'
+  return n === 1 ? `last trade a ${word}` : `${n} ${word} in a row`
+}
+
 /**
  * "Right now: 3 accounts normal · 4 after 2+ losses · 1 after 3+ wins" —
  * every account's CURRENT run, placed on the ladder in the editor (so an
@@ -77,6 +85,12 @@ function RightNow({
   } else {
     text = `Right now: ${describeRuns(data, steps).join(' · ')}`
   }
+  const follows =
+    data && data.exchange !== null
+      ? data.masterRun === null
+        ? 'No real-money master on this exchange, so each account follows its own trades.'
+        : `Customers follow the master: ${describeMasterRun(data.masterRun)}.`
+      : null
   const counted = data !== null && data !== undefined && data.accounts > 0
 
   return (
@@ -88,6 +102,7 @@ function RightNow({
         {counted && enabled && unsaved && steps.length > 0 && (
           <span className="text-faint"> · with your unsaved changes</span>
         )}
+        {follows && <span className="block text-faint">{follows}</span>}
       </span>
     </p>
   )

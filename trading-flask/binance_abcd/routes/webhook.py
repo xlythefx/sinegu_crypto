@@ -315,9 +315,10 @@ def _fetch_open_amounts(symbol: str, position_side: str, exchange: str) -> Optio
 # (`asset["streak_sizes"]` = {"loss": {n: size}, "win": {n: size}}) instead of
 # base_size, and that size then scales with the balance exactly as base_size
 # does. The account's CURRENT run decides: a win ends a losing run and vice
-# versa, so with no win steps any win means base size. The run is the
-# account's OWN closes on the coin, long and short together, counted by the API
-# (`StreakSizing::runs`), which is the one definition of a win and a loss.
+# versa, so with no win steps any win means base size. The run is counted by
+# the API (`StreakSizing::followedRuns`), the one definition of a win and a
+# loss: customers and the master get the MASTER's run on the coin (2026-11-13),
+# testers their own closes. This file only reads one run per api_key.
 # Owner's rules, 2026-10-09; an asset with no ladder makes no read and sizes as
 # before.
 

@@ -258,15 +258,16 @@ export async function saveAssetStreakSizing(
  * signed (negative = losses in a row, positive = wins, 0 = no run yet).
  */
 export async function getAssetStreaks(assetId: number): Promise<AssetStreaks> {
-  const res = await apiFetch<{ success: boolean } & AssetStreaks>(
-    `/admin/assets/${assetId}/streaks`,
-    { auth: true },
-  )
+  const res = await apiFetch<
+    { success: boolean; master_run?: number | null } & Omit<AssetStreaks, 'masterRun'>
+  >(`/admin/assets/${assetId}/streaks`, { auth: true })
   const runs = Array.isArray(res.runs) ? res.runs : []
+  const masterRun = res.master_run === null || res.master_run === undefined ? null : Number(res.master_run)
   return {
     exchange: res.exchange ?? null,
     symbol: res.symbol,
     depth: Number(res.depth) || 0,
+    masterRun: masterRun !== null && Number.isFinite(masterRun) ? masterRun : null,
     accounts: res.accounts ?? 0,
     runs: runs
       .map((r) => ({ run: Number(r.run), accounts: Number(r.accounts) }))

@@ -2048,7 +2048,18 @@ for the overlay's `position: fixed` and trap it inside.
      (`?tab=streak-sizing`; the old `?tab=loss-sizing` still opens it) or in
      the asset form; both go through `App\Services\Assets\StreakSizing::replace`.
      Rules:
-     - **The run is the account's OWN closes on that coin**, long and short
+     - **Customers size on the MASTER's run, not their own (owner + Dima,
+       2026-11-13).** On SANTOS a customer's fill a few cents worse than the
+       master's turned a master WIN into a fee-sized loss of their own, and the
+       ladder cut them to ⅓ size for the week's best trade.
+       `StreakSizing::followedRuns` gives every account owned by a `user` or
+       the `master` the master's run (`masterRun`: its real-money accounts on
+       the venue, `KillSwitch::masterKeys`, read as ONE history); testers and
+       other staff keep their own (testers trade another feed); a venue with
+       no real-money master (Bybit's is demo) keeps everyone on their own run.
+       Both streak endpoints use it and also return `master_run`. The engine
+       is unchanged — it still reads one run per `api_key`.
+     - **A run is a series of closes on that coin**, long and short
        together, newest first while the result repeats, keyed by `api_key` (a
        new key starts at base). It is SIGNED: -3 = three losses in a row, +2 =
        two wins. The CURRENT run decides, so a win ends a losing run and vice
@@ -2057,7 +2068,8 @@ for the overlay's `position: fixed` and trap it inside.
        Win = `realized_pnl > 0`; 0 is a loss; a NULL P&L row is skipped;
        sandbox rows never count, nor does a close made OUTSIDE the bot
        (`close_source = outside`, 2026-10-14 — see "Asset safety rails").
-       `StreakSizing::runs` is the ONE definition,
+       `StreakSizing::runs` is the ONE definition (followedRuns layers the
+       master rule on it),
        served to the engine as `GET /engine/{x}/streaks?symbol=&depth=` (one
        window-function query on the `(api_key, symbol, closed_at)` index, once
        per signal, only for an asset with a ladder; depth = deepest step of

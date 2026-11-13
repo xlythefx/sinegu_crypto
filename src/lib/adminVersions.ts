@@ -14,6 +14,27 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'streak-sizing-follows-master',
+    date: '2026-11-13',
+    kind: 'improved',
+    area: 'Trading assets',
+    title: 'Smaller trades after losses follow the master, not each customer',
+    summary:
+      'After a run of losses on a coin, the bot trades smaller. Until now each customer counted their own wins and losses, so a customer could be cut even when the master won. Now every customer follows the master’s results on that coin: if the master wins, nobody is cut. SANTOS’s smaller sizes were also changed to 200, then 150, then 100.',
+    howItWorks: [
+      'Example from SANTOS on 12 Nov: the master closed +$6.82. Two customers got slightly worse prices and, after exchange fees, ended at −$0.28 and −$0.11. The bot counted that as a loss for them, so on the next trade (+1.5%, the best of the week) they traded about a third of their normal size. With this change they would have traded full size, like everyone else.',
+      'If the master loses several in a row, every customer is cut together, including one whose own last trade was a win.',
+      'Test accounts (the QuantLab signal line) still count their own trades, because they trade different signals.',
+      'On an exchange where the master has no real-money account (Bybit today), each account still counts its own trades, as before.',
+      'SANTOS: normal size 400; after 1 loss 200, after 2 losses 150, after 3 or more 100 (it was 125, 70 and 50).',
+      'Admin → Trading Assets → Streak Sizing now shows the master’s current run under “Right now”.',
+    ],
+    technical: [
+      'StreakSizing::followedRuns replaces the run of every account owned by a user or the master with StreakSizing::masterRun (the master’s real-money accounts on the venue, KillSwitch::masterKeys, read as one history). GET /engine/{x}/streaks and GET /admin/assets/{id}/streaks use it and also return master_run. No engine change. Tests in StreakSizingTest.',
+    ],
+    links: [{ label: 'Streak Sizing Settings', href: '/admin/assets?tab=streak-sizing' }],
+  },
+  {
     id: 'creatives-friendly-endings',
     date: '2026-11-12',
     kind: 'improved',

@@ -453,6 +453,12 @@ export interface AssetStreaks {
   exchange: string | null
   symbol: string
   depth: number
+  /**
+   * The master's run on the coin, which every customer (and the master)
+   * sizes on since 2026-11-13. null = no real-money master on this venue,
+   * so every account is on its own run.
+   */
+  masterRun: number | null
   /** Accounts counted across every bucket. */
   accounts: number
   runs: { run: number; accounts: number }[]
