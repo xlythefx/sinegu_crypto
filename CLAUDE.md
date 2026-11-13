@@ -1151,6 +1151,16 @@ sender or the Cloudflare hop. The Signal Log now proves each case:
   byte), `urt` (engine), `cf_ray` and `via` (`$realip_remote_addr` — a
   Cloudflare edge, or TradingView direct). Large `rt` with tiny `urt` = slow
   upload into nginx; small `rt` on a late arrival = lost before the box.
+- **QuantLab no longer posts here (2026-11-13).** Its 8 rules (VWMA LTC /
+  RENDER / QNT / SANTOS, ANN BTC / ETH / BNB / RUNE) now post to Nexa
+  staging's `/binance_quantlab_webhook` (Dannel 1, demo); the 8 rules that
+  posted to `/binance_test_webhook` are PAUSED on lab.nexafamily.com (kept as
+  the undo, not deleted). The QuantLab tester account `aaaaaaaa` (Binance #6)
+  was disconnected the same day after its open ANN shorts were closed; its
+  trades stay here and were COPIED to Dannel 1 (259 rows). Do not point a
+  QuantLab rule back at Pixel Alpha without the owner. The test feed itself
+  stays (manual console, other testers); the compare view below simply has
+  no new QuantLab rows from that day.
 - **TradingView vs QuantLab** (2026-10-26, Signal Log `?view=compare`,
   `App\Services\Admin\FeedComparison`): TradingView is the MAIN feed,
   QuantLab the TEST feed (its own webhook + secret, tester accounts only), so
