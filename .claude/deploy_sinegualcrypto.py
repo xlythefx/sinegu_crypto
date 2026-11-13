@@ -41,6 +41,8 @@ Subcommands:
   setup-tls     - issue/renew the Let's Encrypt cert for the domain, enable :443
   verify        - index.html chunk refs exist, .env intact, HTTP probe
   verify-tls    - :80/:443 listeners, origin probes, www redirect, edge probe
+  setup-logrotate - write /etc/logrotate.d rules for the scheduler log + laravel.log,
+                  dry-run, rotate once, re-run logrotate.service
   verify-engine - systemd state, /health, public webhook gate, engine->API auth
   full          - backup -> deploy-dash -> deploy-api -> verify  (one connection)
 
@@ -2465,6 +2467,47 @@ def do_sync_api_env(ssh):
     log("  " + body.replace("\n", "\n  ") + "\n")
 
 
+# Log rotation. `su` names who logrotate acts as in each log's directory:
+# /var/log is root:syslog 0775, so the scheduler log needs `su root syslog`
+# (a `su www-data` here failed every night from 2026-11 on: "error creating
+# output file ... Permission denied", which also marked logrotate.service
+# failed for the whole box). storage/logs is www-data's, hence `su www-data`.
+# copytruncate keeps the inode: cron and php-fpm hold these files open.
+LOGROTATE_RULES = {
+    "/etc/logrotate.d/sinegualerts-schedule": (
+        "/var/log/sinegualerts-schedule.log {\n"
+        "    su root syslog\n"
+        "    daily\n    rotate 7\n    compress\n    missingok\n    notifempty\n    copytruncate\n"
+        "}\n"
+    ),
+    "/etc/logrotate.d/sinegualerts-api": (
+        f"{REMOTE_API}/storage/logs/laravel.log {{\n"
+        "    su www-data www-data\n"
+        "    daily\n    rotate 14\n    compress\n    missingok\n    notifempty\n    copytruncate\n"
+        "}\n"
+    ),
+}
+
+
+def do_setup_logrotate(ssh) -> None:
+    """Write the logrotate rules, dry-run them, rotate once, re-run the unit."""
+    log("=== SETUP logrotate ===")
+    for path, text in LOGROTATE_RULES.items():
+        _write_remote_text(ssh, path, text, mode_if_new=0o644)
+        run(ssh, f"chown root:root {path} && chmod 644 {path}")
+        log(f"  wrote {path}")
+    paths = " ".join(LOGROTATE_RULES)
+    rc, out, err = sh(ssh, f"logrotate -d {paths} 2>&1 | grep -iE 'error|insecure|skipping' || true", check=False)
+    if (out + err).strip():
+        raise SystemExit("[abort] logrotate dry run complained:\n" + _scrub(out + err))
+    sh(ssh, f"logrotate -f {paths}")
+    sh(ssh, "systemctl reset-failed logrotate.service; systemctl start logrotate.service", check=False)
+    _, out, _ = sh(ssh, "systemctl is-active logrotate.service; systemctl show -p Result --value logrotate.service; "
+                       f"ls -la /var/log/sinegualerts-schedule.log* {REMOTE_API}/storage/logs/", check=False)
+    log("  " + out.strip().replace("\n", "\n  "))
+    log("=== SETUP logrotate DONE ===")
+
+
 def do_full(ssh):
     do_backup(ssh)
     ssh = do_deploy_dash(ssh)
@@ -2487,6 +2530,7 @@ def main() -> int:
             "deploy-nginx": do_deploy_nginx,
             "setup-tls": do_setup_tls,
             "verify-tls": do_verify_tls,
+            "setup-logrotate": do_setup_logrotate,
             "backup": do_backup,
             "backup-db": do_backup_db,
             "deploy-dash": do_deploy_dash,
