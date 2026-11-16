@@ -23,7 +23,8 @@ interface Props {
 
 /**
  * `/auth?mode=register` — the sign-up as four short screens in the owner's
- * order: name → login → Telegram / Discord → how you heard about us + Terms.
+ * order: name → login → contacts (Telegram + WhatsApp required, Discord
+ * optional) → how you heard about us + Terms.
  * Answers survive Back; a refusal from the API lands on the step that owns
  * the field (useSignupWizard). Nothing is sent until the last screen.
  */
@@ -36,6 +37,7 @@ export default function RegisterWizard({ refCode, onStepChange, discordEnabled }
     password: '',
     confirm: '',
     telegram: '',
+    whatsapp: '',
     discord: '',
     heardFrom: refCode ? ['friend'] : [],
     heardOther: '',
@@ -54,6 +56,7 @@ export default function RegisterWizard({ refCode, onStepChange, discordEnabled }
         heardFrom: v.heardFrom,
         heardFromOther: v.heardOther,
         telegram: v.telegram,
+        whatsapp: v.whatsapp,
         discord: v.discord ?? '',
       })
       // Registration mails a six-digit code; the account is unusable until
@@ -66,12 +69,7 @@ export default function RegisterWizard({ refCode, onStepChange, discordEnabled }
     }
   }
 
-  const socialsEmpty = !v.telegram.trim() && !(v.discord ?? '').trim()
-  const nextLabel = w.isLast
-    ? 'Create free account'
-    : w.step.key === 'socials' && socialsEmpty
-      ? 'Skip for now'
-      : 'Continue'
+  const nextLabel = w.isLast ? 'Create free account' : 'Continue'
 
   return (
     <>
@@ -117,6 +115,8 @@ export default function RegisterWizard({ refCode, onStepChange, discordEnabled }
             <SocialsStep
               telegram={v.telegram}
               onTelegram={w.set('telegram')}
+              whatsapp={v.whatsapp}
+              onWhatsapp={w.set('whatsapp')}
               discord={v.discord ?? ''}
               onDiscord={w.set('discord')}
             />

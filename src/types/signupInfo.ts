@@ -1,9 +1,20 @@
 import type { SignupSource } from '../lib/signupSources'
 
-/** The user's own optional usernames (Settings ↔ `GET|PUT /user/contacts`). Typed, never verified. */
+/** How the team reaches the user (Settings ↔ `GET|PUT /user/contacts`). Typed, never verified. */
 export interface ContactHandles {
   telegram: string | null
   discord: string | null
+  /** E.164, e.g. `+66812345678`. */
+  whatsapp: string | null
+}
+
+/** `GET|PUT /user/contacts` — the values plus what the API decided about them. */
+export interface ContactStatus {
+  contacts: ContactHandles
+  /** The required ones not given yet (`telegram`, `whatsapp`), in that order. */
+  missing: Array<'telegram' | 'whatsapp'>
+  /** A customer missing either may not connect an exchange (staff never are). */
+  connect_locked: boolean
 }
 
 export type AccessEventKind = 'register' | 'login'

@@ -10,6 +10,7 @@ import DailyPnlCalendar from '../components/dashboard/DailyPnlCalendar'
 import PnlBreakdownCard from '../components/dashboard/PnlBreakdownCard'
 import AssetStrip from '../components/dashboard/AssetStrip'
 import KeyBlockedGate from '../components/dashboard/KeyBlockedGate'
+import ContactsGate from '../components/dashboard/ContactsGate'
 import { useApiData } from '../hooks/useApiData'
 import { useSessionUser } from '../hooks/useSessionUser'
 import { useExchangeFilter } from '../context/ExchangeFilterContext'
@@ -57,6 +58,8 @@ export default function Dashboard() {
       {/* An account the exchange is refusing takes no trades — say so here,
           on the page people actually open, not only in settings. */}
       <KeyBlockedGate />
+      {/* No Telegram / WhatsApp yet: no new exchange (existing ones keep trading). */}
+      <ContactsGate />
       {data ? (
         // Re-keyed on the scope so a filter change replays the reveal rather
         // than hard-cutting the numbers (AOS re-inits the remounted cards).

@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom'
-import { MessageCircle, Send, UserPlus, Users } from 'lucide-react'
+import { MessageCircle, Phone, Send, UserPlus, Users } from 'lucide-react'
 import UserAvatar from '../../ui/UserAvatar'
 import { RoleBadge, StatusBadge } from '../badges'
 import TradingBadge from '../users/TradingBadge'
 import { fmtMediumDate, fmtMoney } from '../../../lib/format'
+import { formatWhatsapp, whatsappUrl } from '../../../lib/whatsapp'
 import type { AdminUserDetail } from '../../../types/admin'
 
 interface UserProfileHeaderProps {
@@ -84,7 +85,7 @@ export default function UserProfileHeader({
                     )}
                   </div>
                 )}
-                {(user.referred_by || user.contacts?.telegram || user.contacts?.discord) && (
+                {(user.referred_by || user.contacts?.telegram || user.contacts?.whatsapp || user.contacts?.discord) && (
                   <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-muted">
                     {user.referred_by && (
                       <span className="inline-flex items-center gap-1.5">
@@ -104,6 +105,18 @@ export default function UserProfileHeader({
                         title="Telegram (typed by the customer)"
                       >
                         <Send size={13} className="text-faint" />@{user.contacts.telegram.replace(/^@/, '')}
+                      </a>
+                    )}
+                    {user.contacts?.whatsapp && (
+                      <a
+                        href={whatsappUrl(user.contacts.whatsapp)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 hover:text-accent"
+                        title="WhatsApp (typed by the customer)"
+                      >
+                        <Phone size={13} className="text-faint" />
+                        {formatWhatsapp(user.contacts.whatsapp)}
                       </a>
                     )}
                     {user.contacts?.discord && (

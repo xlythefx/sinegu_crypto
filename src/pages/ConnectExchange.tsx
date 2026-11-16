@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
   ArrowRight,
+  AtSign,
   Hourglass,
   Link2,
   Loader2,
@@ -43,6 +44,8 @@ import {
 } from '../services/exchanges'
 import { ApiError, getApiErrorMessage } from '../services/api'
 import { canConnectExchanges } from '../lib/accountStatus'
+import { getContactStatus } from '../services/user'
+import { CONTACTS_SETTINGS_PATH } from '../lib/signupSources'
 import { SUPPORT_EMAIL } from '../lib/company'
 import { updateStoredUser } from '../lib/session'
 import type { ExchangeKind } from '../types/exchanges'
@@ -96,6 +99,9 @@ export default function ConnectExchange() {
   const navigate = useNavigate()
   const sessionUser = useSessionUser()
   const { data, loading, error, reload } = useApiData(getExchangeAccountsWithMeta)
+  // Telegram + WhatsApp first (2026-11-16). The API's verdict; a failed
+  // lookup leaves the wizard open and the API refuses at the end instead.
+  const contacts = useApiData(getContactStatus)
 
   const [stepIndex, setStepIndex] = useState(0)
   const [kind, setKind] = useState<ExchangeKind | null>(null)
@@ -169,6 +175,42 @@ export default function ConnectExchange() {
     )
   }
 
+  // Same reasoning as approval: say it before they create API keys, not after.
+  if (contacts.data?.connect_locked) {
+    const both = contacts.data.missing.length === 2
+    const what = both
+      ? 'Telegram username and WhatsApp number'
+      : contacts.data.missing[0] === 'telegram'
+        ? 'Telegram username'
+        : 'WhatsApp number'
+    return (
+      <DashboardLayout title="Connect an exchange">
+        <div
+          className={`${CARD} mx-auto max-w-[560px] text-center animate-[fadeup_0.35s_ease-out]`}
+        >
+          <span className="mx-auto grid h-[60px] w-[60px] place-items-center rounded-[18px] border border-accent-line bg-accent-soft text-accent">
+            <AtSign size={26} />
+          </span>
+          <h2 className="mt-4 font-display text-[19px] font-extrabold tracking-[-0.02em]">
+            Add your {what} first
+          </h2>
+          <p className="mx-auto mt-2 max-w-[420px] text-[13px] leading-[1.6] text-muted">
+            Our team needs a way to reach you about your trades, invoices and API keys. Add your{' '}
+            {what} in Settings, then come back here to connect your exchange.
+          </p>
+          <div className="mt-5 flex flex-wrap justify-center gap-2.5">
+            <Link className={PRIMARY_BTN} to={CONTACTS_SETTINGS_PATH}>
+              Go to Settings
+            </Link>
+            <Link className={GHOST_BTN} to="/dashboard">
+              Back to dashboard
+            </Link>
+          </div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
   const filled = {
     name: form.name.trim().length > 0,
     api_key: form.api_key.trim().length > 0,
@@ -226,9 +268,13 @@ export default function ConnectExchange() {
       // — so stay put and point at the invoice.
       const overdue = err instanceof ApiError && err.errorCode === 'INVOICE_OVERDUE'
       setOverdueInvoiceId(overdue ? invoiceIdOf(err.payload) : null)
+      // Missing Telegram / WhatsApp (the lookup above failed, or they were
+      // cleared meanwhile): re-ask, and the page swaps to the Settings prompt.
+      const noContacts = err instanceof ApiError && err.errorCode === 'CONTACTS_REQUIRED'
+      if (noContacts) contacts.reload()
       // A rejected key or a taken name is fixed on the credentials step, so
       // send them back to it rather than leaving the error on a read-only page.
-      if (err instanceof ApiError && err.status === 422 && !overdue) goTo('keys')
+      if (err instanceof ApiError && err.status === 422 && !overdue && !noContacts) goTo('keys')
     } finally {
       setSubmitting(false)
     }

@@ -798,6 +798,15 @@ const GET = {
   '/admin/visitors/summary': visitorSummary,
   '/admin/insights/customers': customerInsights,
   '/admin/visitors/log': VISITOR_LOG_BODY,
+  // A customer from before Telegram + WhatsApp were required (2026-11-16):
+  // the dashboard reminder shows, the connect page is locked.
+  '/user/contacts': {
+    success: true,
+    contacts: { telegram: null, discord: null, whatsapp: null },
+    missing: ['telegram', 'whatsapp'],
+    connect_locked: true,
+  },
+  '/exchange/accounts': { success: true, accounts: [], server_ip: null },
   ...CREATIVE_GET,
   ...ASSET_GET,
 }

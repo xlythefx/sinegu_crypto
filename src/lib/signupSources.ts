@@ -6,6 +6,8 @@
  * relabel instead. `other` is always last: ticking it opens a text box.
  */
 
+import { WHATSAPP_HINT, WHATSAPP_PATTERN, normaliseWhatsapp } from './whatsapp'
+
 export type SignupSource =
   | 'discord'
   | 'telegram'
@@ -64,7 +66,7 @@ export const DISCORD_PATTERN = /^[a-z0-9_.]{2,32}$/
 export const TELEGRAM_HINT = 'Telegram usernames are 4–32 letters, numbers or underscores, e.g. @pixel_alpha.'
 export const DISCORD_HINT = 'Discord usernames are 2–32 lowercase letters, numbers, dots or underscores.'
 
-/** First problem with the typed handles, or null. Empty fields are fine — both are optional. */
+/** First problem with the typed handles, or null. An empty field is not a problem here. */
 export function handleError(telegram: string, discord: string | null): string | null {
   const tg = normaliseTelegram(telegram)
   if (tg && !TELEGRAM_PATTERN.test(tg)) return TELEGRAM_HINT
@@ -75,11 +77,31 @@ export function handleError(telegram: string, discord: string | null): string | 
   return null
 }
 
-/** The optional answers the register form (and the Discord sign-up step) collects. */
+export const TELEGRAM_REQUIRED = 'Please add your Telegram username.'
+export const WHATSAPP_REQUIRED = 'Please add your WhatsApp number.'
+
+/**
+ * The sign-up's contacts step (2026-11-16): Telegram and WhatsApp REQUIRED,
+ * Discord optional (`null` = not asked). `whatsapp` is the composed number
+ * (lib/whatsapp `composeWhatsapp`). Same sentences as the API.
+ */
+export function contactsProblem(telegram: string, whatsapp: string, discord: string | null): string | null {
+  if (!normaliseTelegram(telegram)) return TELEGRAM_REQUIRED
+  const formatProblem = handleError(telegram, null)
+  if (formatProblem) return formatProblem
+  const wa = normaliseWhatsapp(whatsapp)
+  if (!wa) return WHATSAPP_REQUIRED
+  if (!WHATSAPP_PATTERN.test(wa)) return WHATSAPP_HINT
+  return discord === null ? null : handleError('', discord)
+}
+
+/** The answers the register form (and the Discord sign-up) collects. */
 export interface SignupExtras {
   heardFrom: SignupSource[]
   heardFromOther: string
   telegram: string
+  /** E.164, composed by the phone field. Required, like Telegram. */
+  whatsapp: string
   /** Absent on a Discord sign-up — the linked username is already known. */
   discord?: string
 }
@@ -95,6 +117,8 @@ export function signupExtrasPayload(extras: SignupExtras): Record<string, unknow
   }
   const telegram = normaliseTelegram(extras.telegram)
   if (telegram) body.telegram = telegram
+  const whatsapp = normaliseWhatsapp(extras.whatsapp)
+  if (whatsapp) body.whatsapp = whatsapp
   if (extras.discord !== undefined) {
     const discord = normaliseDiscord(extras.discord)
     if (discord) body.discord = discord
@@ -106,3 +130,7 @@ export function signupExtrasPayload(extras: SignupExtras): Record<string, unknow
 export function telegramUrl(handle: string): string {
   return `https://t.me/${handle}`
 }
+
+/** Settings → the contacts card's anchor; the dashboard reminder and the connect page link to it. */
+export const CONTACTS_ANCHOR = 'contacts'
+export const CONTACTS_SETTINGS_PATH = `/dashboard/settings#${CONTACTS_ANCHOR}`

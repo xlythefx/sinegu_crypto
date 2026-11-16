@@ -795,6 +795,25 @@ wants every admin role to see it, IP included). Rules:
   from then on. The owner still decides how existing customers hear about the
   policy update (to-do `privacy-policy-oct-2026-notice`).
 
+**Telegram + WhatsApp are REQUIRED (owner, 2026-11-16)** — at sign-up (both
+wizards; Discord stays optional) and before a CUSTOMER may connect an
+exchange. `App\Services\Signup\ContactHandles` holds the rule: `REQUIRED`,
+`rules(signup:)` (required at sign-up; `sometimes|required` in Settings —
+changed, never cleared), `missingFor` / `connectLocked` (`type = 'user'`
+only; staff never locked). `ExchangeAccountController::store` → 422
+`CONTACTS_REQUIRED`. Connecting only: existing accounts keep trading, and
+existing customers are ASKED (dashboard `ContactsGate`: once-per-session
+pop-up + caution strip; the connect page shows a Settings prompt instead of
+the wizard). The client reads the API's verdict (`missing`,
+`connect_locked` on `GET|PUT /user/contacts`), never a copy of the rule.
+WhatsApp is stored E.164 (`user_contact_handles.whatsapp`): the field is a
+country picker + the number as typed at home (`lib/whatsapp.ts`
+`composeWhatsapp`, `components/auth/WhatsAppInput`); typed, never verified.
+It is personal data: `AiRedactor` drops `contacts` / `whatsapp` / `phone*`
+by name, and the Privacy Policy lists it (owner to-do
+`privacy-policy-nov-2026-whatsapp-notice`). Test users from `makeUser()`
+carry both by default (`withContacts: false` for one that has not).
+
 ## Visitor counter — Admin → Visitors (2026-10-28)
 
 Owner's request: who opens the PUBLIC website, from where, and how many sign

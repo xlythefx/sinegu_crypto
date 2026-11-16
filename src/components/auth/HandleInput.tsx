@@ -14,19 +14,24 @@ interface HandleInputProps {
   onChange: (value: string) => void
   /** Field class override — Settings uses its own, shorter input style (keep `pl-11` for the icon). */
   fieldClass?: string
+  /** Telegram is required since 2026-11-16; Discord stays optional. */
+  required?: boolean
 }
 
 /**
- * One optional Telegram / Discord username field with the platform's mark
- * inside it — the sign-up wizards' socials step and Settings. Typed, not
- * verified: the API normalises (`@`, `t.me/` links, Discord's lowercase) and
- * refuses a shape no username can have; that is all it can check.
+ * One Telegram / Discord username field with the platform's mark inside it —
+ * the sign-up wizards' contacts step and Settings. Typed, not verified: the
+ * API normalises (`@`, `t.me/` links, Discord's lowercase) and refuses a
+ * shape no username can have; that is all it can check.
  */
-export default function HandleInput({ platform, value, onChange, fieldClass = FIELD }: HandleInputProps) {
+export default function HandleInput({ platform, value, onChange, fieldClass = FIELD, required = false }: HandleInputProps) {
   const { label, Icon, color } = PLATFORMS[platform]
   return (
     <label className="relative block min-w-0">
-      <span className="sr-only">{label} (optional)</span>
+      <span className="sr-only">
+        {label}
+        {required ? '' : ' (optional)'}
+      </span>
       <span className={`pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 ${color}`}>
         <Icon size={17} />
       </span>
@@ -38,6 +43,7 @@ export default function HandleInput({ platform, value, onChange, fieldClass = FI
         autoCapitalize="off"
         spellCheck={false}
         maxLength={64}
+        aria-required={required || undefined}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />

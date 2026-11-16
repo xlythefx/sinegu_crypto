@@ -1,9 +1,9 @@
-import { handleError, type SignupSource } from './signupSources'
+import { contactsProblem, type SignupSource } from './signupSources'
 
 /**
  * The sign-up wizard (owner, 2026-10-14): one question per screen, in the
- * owner's order — name → login → Telegram / Discord → where you heard about
- * us (+ Terms). The Discord sign-up runs the same screens minus the login,
+ * owner's order — name → login → contacts (Telegram + WhatsApp required
+ * since 2026-11-16, Discord optional) → where you heard about us (+ Terms). The Discord sign-up runs the same screens minus the login,
  * which Discord already answered. Everything here is pure: the steps' words,
  * what each step checks before "Continue", and which step a server error
  * belongs to.
@@ -46,9 +46,9 @@ export const REGISTER_STEPS: readonly WizardStep[] = [
   },
   {
     key: 'socials',
-    label: 'Socials',
+    label: 'Contacts',
     title: 'Where can we reach you?',
-    subtitle: 'Optional — add your Telegram or Discord so our team can message you about your account.',
+    subtitle: 'Your Telegram and WhatsApp, so our team can message you about your account. Discord is optional.',
     panel: {
       kicker: 'REAL PEOPLE',
       title: 'A team you can talk to.',
@@ -77,9 +77,8 @@ export const DISCORD_SIGNUP_STEPS: readonly WizardStep[] = [
   },
   {
     ...REGISTER_STEPS[2],
-    label: 'Telegram',
-    title: 'Your Telegram',
-    subtitle: 'Optional — add it so our team can message you about your account.',
+    title: 'Where can we reach you?',
+    subtitle: 'Your Telegram and WhatsApp, so our team can message you about your account.',
   },
   REGISTER_STEPS[3],
 ]
@@ -93,6 +92,8 @@ export interface RegisterValues {
   password: string
   confirm: string
   telegram: string
+  /** E.164 as the phone field composes it ('' until a number is typed). */
+  whatsapp: string
   /** null on the Discord sign-up — its Discord is the linked one. */
   discord: string | null
   heardFrom: SignupSource[]
@@ -112,7 +113,7 @@ export function stepProblem(key: RegisterStepKey, v: RegisterValues): string | n
       if (v.password !== v.confirm) return 'The two passwords do not match.'
       return null
     case 'socials':
-      return handleError(v.telegram, v.discord)
+      return contactsProblem(v.telegram, v.whatsapp, v.discord)
     case 'source':
       return v.terms ? null : 'Please accept the Terms to create your account.'
   }
@@ -122,7 +123,7 @@ export function stepProblem(key: RegisterStepKey, v: RegisterValues): string | n
 export function stepForField(field: string): RegisterStepKey | null {
   if (field === 'name') return 'name'
   if (field === 'email' || field.startsWith('password')) return 'login'
-  if (field === 'telegram' || field === 'discord') return 'socials'
+  if (field === 'telegram' || field === 'discord' || field === 'whatsapp') return 'socials'
   if (field.startsWith('heard_from') || field === 'terms') return 'source'
   return null
 }

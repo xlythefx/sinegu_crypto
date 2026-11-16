@@ -12,11 +12,12 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import DataState from '../../dashboard/DataState'
-import { DiscordMark, TelegramMark } from '../../ui/BrandIcons'
+import { DiscordMark, TelegramMark, WhatsAppMark } from '../../ui/BrandIcons'
 import { useApiData } from '../../../hooks/useApiData'
 import { getAdminUserSignupInfo } from '../../../services/admin'
 import { fmtDateTime, formatDate } from '../../../lib/format'
 import { SIGNUP_SOURCE_LABELS, telegramUrl } from '../../../lib/signupSources'
+import { formatWhatsapp, whatsappUrl } from '../../../lib/whatsapp'
 import {
   SIGNUP_INFO_SINCE,
   browserOs,
@@ -151,12 +152,12 @@ function SourcesCard({ info }: { info: AdminSignupInfo }) {
 }
 
 function ContactCard({ info }: { info: AdminSignupInfo }) {
-  const { telegram, discord, discord_linked } = info.signup.contacts
+  const { telegram, discord, discord_linked, whatsapp } = info.signup.contacts
   return (
     <section className={CARD}>
       <CardHead
         icon={<AtSign size={15} />}
-        title="Telegram & Discord"
+        title="Telegram, WhatsApp & Discord"
         sub="Typed by the user — only a linked Discord is confirmed"
       />
       <div className="flex flex-col gap-2.5">
@@ -175,6 +176,23 @@ function ContactCard({ info }: { info: AdminSignupInfo }) {
             </a>
           ) : (
             <span className="text-faint">No Telegram given</span>
+          )}
+        </div>
+        <div className="flex min-w-0 items-center gap-2.5 text-[13px]">
+          <span className="shrink-0 text-[#25D366]">
+            <WhatsAppMark size={17} />
+          </span>
+          {whatsapp ? (
+            <a
+              href={whatsappUrl(whatsapp)}
+              target="_blank"
+              rel="noreferrer"
+              className="truncate font-mono font-bold text-text hover:underline"
+            >
+              {formatWhatsapp(whatsapp)}
+            </a>
+          ) : (
+            <span className="text-faint">No WhatsApp given</span>
           )}
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2.5 text-[13px]">

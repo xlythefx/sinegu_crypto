@@ -14,7 +14,7 @@ import type { LegalDocumentContent } from '../types/legal'
  */
 export const PRIVACY: LegalDocumentContent = {
   title: 'Privacy Policy',
-  updatedAt: 'October 28, 2026',
+  updatedAt: 'November 16, 2026',
   lede: `This Privacy Policy explains what personal data ${COMPANY.name} collects when you use pixel-alpha.com and the Pixel Alpha platform, why we collect it, who we share it with, and the choices you have. Please read it together with our Terms and Conditions.`,
 
   sections: [
@@ -47,7 +47,8 @@ export const PRIVACY: LegalDocumentContent = {
             'Exchange API credentials: the API key and secret you generate at Binance, Bybit or MEXC and paste into the platform, the display name you give the connection, and whether it is a live or a demo (testnet) account.',
             'Payout details you add for the referral programme: a cryptocurrency wallet address or bank wire details.',
             'The Terms version you accepted and when you accepted it.',
-            'Optional answers at sign-up: where you heard about Pixel Alpha, and your Telegram and Discord usernames if you choose to give them. You can change or remove the usernames in Settings at any time.',
+            'Contact details at sign-up: your Telegram username and your WhatsApp number (required — our team uses them to reach you about your account), and your Discord username if you choose to give it. You can change them in Settings at any time and remove the Discord username.',
+            'Optional answers at sign-up: where you heard about Pixel Alpha.',
             'If you sign in with Discord: your Discord user ID and username, the email address on your Discord account and your Discord avatar.',
             'Anything you send us when you contact support by email or Telegram.',
           ],
@@ -94,7 +95,7 @@ export const PRIVACY: LegalDocumentContent = {
             'To operate the referral programme and pay referrers (performance of a contract).',
             'To keep the platform secure: detecting blocked or misconfigured API keys, rate-limiting abusive traffic, spotting automated visits and sign-ins from unusual places or devices, and investigating incidents (legitimate interests).',
             'To understand how people find us and who uses the service, reported as statistics: visits to our public website, your optional "where did you hear about us" answers (legitimate interests) and, if you chose "Accept all", your time zone, language and screen size (consent).',
-            'To reach you on Telegram or Discord about your account, if you gave us a username (consent — remove it in Settings at any time).',
+            'To reach you on Telegram or WhatsApp about your account — your trades, invoices and API keys (performance of a contract) — and on Discord if you gave us a username (consent — remove it in Settings at any time).',
             'To answer your support requests (legitimate interests; performance of a contract).',
             'To send you service emails such as password reset codes, invoice notices and important changes to the service. These are not marketing emails and you cannot opt out of them while you hold an account (performance of a contract).',
             'To publish an aggregated, anonymous track record of the strategy — percentages and trade counts only, never balances, amounts, names or account identifiers (legitimate interests).',
@@ -173,7 +174,7 @@ export const PRIVACY: LegalDocumentContent = {
           kind: 'list',
           items: [
             'Account data: for as long as your account exists. When you ask us to close it, we delete your profile and API credentials within 30 days.',
-            'Sign-up and sign-in records (IP address, country, device), your optional sign-up answers and your Telegram / Discord usernames: for as long as your account exists, and deleted with your profile.',
+            'Sign-up and sign-in records (IP address, country, device), your optional sign-up answers, your Telegram and Discord usernames and your WhatsApp number: for as long as your account exists, and deleted with your profile.',
             'Website visit records: the IP address and the full browser details are deleted after 90 days. The rest of the record (page, date, country, device type and the website that sent you) is kept for statistics.',
             'Trade history, invoices and payment records: for 7 years after the transaction, because tax and accounting law requires us to keep the records behind every fee we charged.',
             'Signal and engine logs: up to 12 months, then deleted or reduced to anonymous statistics.',

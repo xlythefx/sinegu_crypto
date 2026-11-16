@@ -1,7 +1,7 @@
 import { apiFetch, API_URL, ApiError } from './api'
 import { getToken } from '../lib/session'
 import type { AuthUser } from '../types/auth'
-import type { ContactHandles } from '../types/signupInfo'
+import type { ContactHandles, ContactStatus } from '../types/signupInfo'
 
 export interface MeResponse {
   success: boolean
@@ -143,26 +143,29 @@ export function updatePassword(
   })
 }
 
-/** The optional Telegram / Discord usernames (GET /user/contacts). */
-export async function getContactHandles(): Promise<ContactHandles> {
-  const res = await apiFetch<{ success: boolean; contacts: ContactHandles }>('/user/contacts', {
-    auth: true,
-  })
-  return res.contacts
+/**
+ * Telegram / Discord / WhatsApp, plus which required ones are missing and
+ * whether that locks connecting an exchange (GET /user/contacts). The
+ * dashboard reminder and the connect page read the API's verdict, never a
+ * client copy of the rule.
+ */
+export async function getContactStatus(): Promise<ContactStatus> {
+  const { contacts, missing, connect_locked } = await apiFetch<{ success: boolean } & ContactStatus>(
+    '/user/contacts',
+    { auth: true },
+  )
+  return { contacts, missing: missing ?? [], connect_locked: !!connect_locked }
 }
 
 /**
- * Save them (PUT /user/contacts). A key left out is unchanged; null clears it.
- * 422 with a field error under `telegram` / `discord` for a shape no
- * username can have.
+ * Save them (PUT /user/contacts). A key left out is unchanged; null clears
+ * Discord and is refused for Telegram / WhatsApp (required). 422 with a
+ * field error under the field for a value no username / number can be.
  */
-export async function updateContactHandles(
-  changes: Partial<ContactHandles>,
-): Promise<ContactHandles> {
-  const res = await apiFetch<{ success: boolean; contacts: ContactHandles }>('/user/contacts', {
-    method: 'PUT',
-    auth: true,
-    body: changes,
-  })
-  return res.contacts
+export async function updateContactHandles(changes: Partial<ContactHandles>): Promise<ContactStatus> {
+  const { contacts, missing, connect_locked } = await apiFetch<{ success: boolean } & ContactStatus>(
+    '/user/contacts',
+    { method: 'PUT', auth: true, body: changes },
+  )
+  return { contacts, missing: missing ?? [], connect_locked: !!connect_locked }
 }

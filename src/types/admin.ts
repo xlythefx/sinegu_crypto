@@ -697,7 +697,7 @@ export interface AdminUserDetail {
   /** Who brought them in through a referral link. */
   referred_by?: { uni_id: string; name: string } | null
   /** Typed at sign-up or in Settings (unverified); `discord_linked` = confirmed through Discord sign-in. */
-  contacts?: { telegram: string | null; discord: string | null; discord_linked: boolean }
+  contacts?: { telegram: string | null; discord: string | null; discord_linked: boolean; whatsapp?: string | null }
 }
 
 /** One line of a customer's Timeline (GET /admin/users/{uniId}/timeline). */

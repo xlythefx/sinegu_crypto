@@ -51,7 +51,7 @@ function readPending(state: unknown): PendingSignup | null {
 /**
  * `/auth/discord/terms` — between "Discord says who you are" and "you have an
  * account": the register wizard's screens minus the login Discord already
- * answered — name (Discord's suggestion, editable) → Telegram (optional) →
+ * answered — name (Discord's suggestion, editable) → Telegram + WhatsApp (required) →
  * how you heard about us + the Terms. The account row does not exist until
  * the last screen is accepted; the API holds the profile for 15 minutes.
  */
@@ -68,6 +68,7 @@ export default function DiscordTerms() {
     password: '',
     confirm: '',
     telegram: '',
+    whatsapp: '',
     discord: null,
     // An invite link means a friend sent them — pre-ticked; they can untick it.
     heardFrom: refCode ? ['friend'] : [],
@@ -109,6 +110,7 @@ export default function DiscordTerms() {
         heardFrom: v.heardFrom,
         heardFromOther: v.heardOther,
         telegram: v.telegram,
+        whatsapp: v.whatsapp,
       })
       try {
         sessionStorage.removeItem(DISCORD_SIGNUP_KEY)
@@ -129,11 +131,7 @@ export default function DiscordTerms() {
     }
   }
 
-  const nextLabel = w.isLast
-    ? 'Create my account'
-    : w.step.key === 'socials' && !v.telegram.trim()
-      ? 'Skip for now'
-      : 'Continue'
+  const nextLabel = w.isLast ? 'Create my account' : 'Continue'
 
   return (
     <AuthFrame back={{ to: '/auth', label: '← Sign in' }}>
@@ -181,7 +179,12 @@ export default function DiscordTerms() {
             </>
           )}
           {w.step.key === 'socials' && (
-            <SocialsStep telegram={v.telegram} onTelegram={w.set('telegram')} />
+            <SocialsStep
+              telegram={v.telegram}
+              onTelegram={w.set('telegram')}
+              whatsapp={v.whatsapp}
+              onWhatsapp={w.set('whatsapp')}
+            />
           )}
           {w.step.key === 'source' && (
             <SourceStep

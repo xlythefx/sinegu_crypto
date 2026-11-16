@@ -14,6 +14,31 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'telegram-whatsapp-required',
+    date: '2026-11-16',
+    kind: 'new',
+    area: 'Sign-up',
+    title: 'Telegram and WhatsApp are required to sign up and to connect an exchange',
+    summary:
+      'Every new customer now gives their Telegram username and WhatsApp number when signing up, so the team can always reach them. Customers who signed up before are reminded on their dashboard and cannot connect a new exchange until both are filled in. Exchanges they have already connected keep trading as normal.',
+    howItWorks: [
+      'Sign-up: the third screen ("Where can we reach you?") asks for Telegram and WhatsApp, and both must be filled before "Continue". WhatsApp has a country picker beside the number, so a customer in the Philippines picks Philippines (+63) and types 0917 123 4567 the way they write it at home; it is saved as +63 917 123 4567. Discord is still optional. The Discord sign-up asks for the same two.',
+      'Existing customers without them: a pop-up on the dashboard (once per visit, "Go to Settings" or "Later") and a caution strip that stays until both are saved. Settings → "Telegram, WhatsApp & Discord" is where they fill them in.',
+      'Connecting an exchange: the page says "Add your Telegram username and WhatsApp number first" with a button to Settings, instead of the wizard. Accounts already connected keep trading, and can still be renamed or disconnected.',
+      'Once saved, Telegram and WhatsApp can be changed in Settings but not emptied.',
+      'Staff accounts (admin, master, tester and the rest) are never locked out.',
+      'Admins see the WhatsApp number on the customer’s profile and on the Sign-up info tab; clicking it opens a WhatsApp chat.',
+      'Both are typed by the customer and not checked: we check that the number looks like a phone number with a country code, not that it belongs to them.',
+    ],
+    technical: [
+      'user_contact_handles.whatsapp (E.164) — migration 2026_11_16_000001. ContactHandles::REQUIRED = telegram + whatsapp: required on POST /auth/register and /auth/discord/complete, "sometimes|required" on PUT /user/contacts. GET|PUT /user/contacts also return missing[] and connect_locked (type = user only). ExchangeAccountController::store answers 422 CONTACTS_REQUIRED. AiRedactor now drops contacts / whatsapp / phone fields by name. Frontend: lib/whatsapp (calling codes, compose/split), components/auth/WhatsAppInput, dashboard/ContactsGate, the connect page lock. Privacy Policy updated (sections 2, 3, 9).',
+    ],
+    links: [
+      { label: 'Settings (as a customer)', href: '/dashboard/settings#contacts' },
+      { label: 'User Management', href: '/admin/users' },
+    ],
+  },
+  {
     id: 'streak-sizing-follows-master',
     date: '2026-11-13',
     kind: 'improved',
