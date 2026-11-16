@@ -810,8 +810,10 @@ WhatsApp is stored E.164 (`user_contact_handles.whatsapp`): the field is a
 country picker + the number as typed at home (`lib/whatsapp.ts`
 `composeWhatsapp`, `components/auth/WhatsAppInput`); typed, never verified.
 It is personal data: `AiRedactor` drops `contacts` / `whatsapp` / `phone*`
-by name, and the Privacy Policy lists it (owner to-do
-`privacy-policy-nov-2026-whatsapp-notice`). Test users from `makeUser()`
+by name, and the Privacy Policy lists it. The in-platform notice (the
+dashboard reminder) IS the policy-update notice to existing customers — no
+email (decided 2026-11-16: the customers are few and personally known).
+Test users from `makeUser()`
 carry both by default (`withContacts: false` for one that has not).
 
 ## Visitor counter — Admin → Visitors (2026-10-28)

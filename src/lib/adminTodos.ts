@@ -18,21 +18,6 @@ import type { AdminTodo } from '../types/adminTodos'
  *    the note and the date it was settled stay readable.
  */
 export const ADMIN_TODOS: AdminTodo[] = [
-  // ── Telegram + WhatsApp required (2026-11-16) ───────────────────────────
-  {
-    id: 'privacy-policy-nov-2026-whatsapp-notice',
-    feature: 'Sign-up',
-    kind: 'decision',
-    title: 'Decide how to tell existing customers that we now ask for their WhatsApp number',
-    added: '2026-11-16',
-    why: 'The Privacy Policy now lists the WhatsApp number, a new kind of data. The policy itself (section 12) promises that for a new category of data we tell existing users by email or by a notice in the platform before it takes effect. Existing customers are already asked for the number by the dashboard reminder; this decides whether that reminder is enough, or an email should go too.',
-    steps: [
-      'Read the updated policy at /privacy (sections 2, 3 and 9 changed on 16 Nov).',
-      'Choose: the dashboard reminder alone (it already names WhatsApp and links to Settings), a short email as well, or a line about the policy inside the reminder — and write the wording you want (or ask for a draft).',
-      'Write the choice in the note below so it can be built.',
-    ],
-    links: [{ label: 'Privacy Policy', href: '/privacy' }],
-  },
   // ── Creatives v2: the video editor (2026-11-12) ──────────────────────────
   {
     id: 'creatives-cdn-cors',
