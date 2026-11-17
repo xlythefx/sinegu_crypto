@@ -112,7 +112,9 @@ export default function KillSwitchField({
 
       <p id={`${id}-help`} className="text-[11.5px] leading-[1.55] text-faint">
         Counts the master’s trades only, from the moment you switch this on or turn the coin back
-        on. Open positions still close normally. You turn the coin back on yourself on the Assets
+        on. A loss counts only if the trade lost on price: one that made money on price and ended
+        slightly negative only because of the exchange fee counts as a win. Open positions still
+        close normally. You turn the coin back on yourself on the Assets
         tab. Works on its own, even while streak sizing is off.
       </p>
     </section>

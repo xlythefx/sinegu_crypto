@@ -2187,7 +2187,11 @@ for the overlay's `position: fixed` and trap it inside.
      - **Checked after every `past-positions/sync` that inserted or updated a
        master row** (a close's P&L can land a sync later), never throwing
        into the sync. Only closes after `kill_switch_armed_at` count; a NULL
-       P&L row is skipped; a win ends the run.
+       P&L row is skipped; a win ends the run. **A loss is judged BEFORE
+       fees (owner + Dima, 2026-11-17):** `realized_pnl + COALESCE(exchange_fee,
+       0) < 0`; a close that won on price and went negative only through the
+       fee (SANTOS 13 Nov: +1.94 → −0.35) ends the run like a win. Streak
+       sizing still judges after fees.
      - **Armed** when the count is set/changed and when the coin is turned
        back ON (`Asset::booted` saving hook — which also clears
        `killed_at`/`killed_reason`), so the run that tripped it cannot trip

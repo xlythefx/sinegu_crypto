@@ -14,6 +14,24 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'kill-switch-price-losses',
+    date: '2026-11-17',
+    kind: 'improved',
+    area: 'Trading assets',
+    title: 'The kill switch ignores losses caused only by the exchange fee',
+    summary:
+      'The kill switch now counts a loss only when the master’s trade lost money on price. A trade that went the right way but ended slightly negative because of the exchange fee no longer counts as a loss, and it ends the losing run like a win.',
+    howItWorks: [
+      'Example: SANTOS on 13 Nov made +$1.94 on price, and the $2.29 exchange fee turned it into −$0.35. Before, that counted as a loss toward the kill switch. Now it counts as a win, because the strategy called the direction right.',
+      'A real loss still counts as before: a trade that lost $8.38 on price and $13.11 after fees is one loss.',
+      'Nothing else changed: only the master’s trades count, the number you set per coin is the same, and turning the coin back on starts the count again.',
+    ],
+    technical: [
+      'KillSwitch::masterLossRun: a close is a loss when realized_pnl + COALESCE(exchange_fee, 0) < 0; a before-fees result ≥ 0 ends the run. Rows with no fee recorded are already gross. Streak sizing is unchanged (still after fees).',
+    ],
+    links: [{ label: 'Trading assets', href: '/admin/assets' }],
+  },
+  {
     id: 'grok-creatives',
     date: '2026-11-17',
     kind: 'new',
