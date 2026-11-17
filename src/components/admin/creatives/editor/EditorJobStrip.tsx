@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { CircleAlert, Clapperboard, LoaderCircle, OctagonX, TriangleAlert } from 'lucide-react'
 import ConfirmModal from '../../../ui/ConfirmModal'
+import { useSessionUser } from '../../../../hooks/useSessionUser'
 import { fmtJobUsd, stepCount } from '../../../../lib/creativesAgent'
 import type { CreativeAgentJob } from '../../../../types/creatives'
 import { NOTICE } from '../creativeClasses'
@@ -28,7 +29,8 @@ const STRIP_BTN =
  */
 export default function EditorJobStrip({ job, busy, error, onCancel, onReview }: EditorJobStripProps) {
   const [confirm, setConfirm] = useState(false)
-  const done = job.steps.filter((s) => s.status === 'completed').length
+  const me = useSessionUser()?.name ?? null
+  const done =job.steps.filter((s) => s.status === 'completed').length
   const running = job.steps.filter((s) => s.status === 'running').length
   const failed = job.steps.filter((s) => s.status === 'failed').length
 
@@ -68,7 +70,11 @@ export default function EditorJobStrip({ job, busy, error, onCancel, onReview }:
       <div className={`${STRIP} border-accent-line bg-accent-soft`}>
         <LoaderCircle size={15} aria-hidden="true" className="flex-none animate-spin text-accent" />
         <p className="min-w-[180px] flex-1 text-[12.5px] leading-[1.5] text-text">
-          <strong className="font-bold">Making the clips</strong> — {done} of {job.steps.length} steps done
+          {/* The editor is shared: everyone is told who is generating; nobody is blocked. */}
+          <strong className="font-bold">
+            {!job.approved_by_name ? 'Making the clips' : job.approved_by_name === me ? 'You are generating' : `${job.approved_by_name} is generating`}
+          </strong>{' '}
+          — {done} of {job.steps.length} steps done
           {running > 0 ? `, ${running} at once` : ''}. Each lands in its slot when ready.
         </p>
         <button

@@ -76,6 +76,9 @@ export default function VideosPanel({ reloadSignal }: VideosPanelProps) {
                   <p className="mt-0.5 text-[11.5px] text-faint">
                     {v.created_by_name ? `${v.created_by_name} · ` : ''}updated {fmtDateTime(v.updated_at)}
                   </p>
+                  {v.generating_by && v.scenes_generating > 0 && (
+                    <p className="mt-0.5 text-[11.5px] font-semibold text-accent">{v.generating_by} is generating</p>
+                  )}
                 </div>
                 <div className="flex flex-none flex-col items-end gap-1.5">
                   {v.status === 'exported' ? <TonePill tone="green">Exported</TonePill> : <TonePill tone="muted">Draft</TonePill>}

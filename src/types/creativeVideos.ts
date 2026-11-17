@@ -207,6 +207,8 @@ export interface CreativeVideoSummary {
   scenes_total: number
   scenes_ready: number
   scenes_generating: number
+  /** Who pressed Go on the job making clips right now (the team is told, never blocked). */
+  generating_by?: string | null
   duration_ms: number
   created_by_name: string | null
   updated_at: string

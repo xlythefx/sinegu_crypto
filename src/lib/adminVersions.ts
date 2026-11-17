@@ -47,6 +47,7 @@ export const ADMIN_CHANGES: AdminChange[] = [
       'In the video editor everyone lands in the same chat for that video. “New chat” starts the next one for everyone; the old one stays in the list.',
       'While the assistant is answering someone, the chat waits for that answer to finish. A teammate who types meanwhile sees “The assistant is still answering Dima in this chat. It’s yours in a moment.” This keeps two people’s requests from getting mixed up.',
       'A teammate’s new messages appear on your screen within about 10 seconds, without refreshing.',
+      'When someone is making clips, everyone sees it: the editor says “Dima is generating — 2 of 3 steps done” (“You are generating” for yourself), and the video list says “Dima is generating”. Nobody is blocked; a teammate can still add or remake other scenes.',
       'Anything the assistant makes or spends is recorded under the person it was answering.',
     ],
     technical: [
