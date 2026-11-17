@@ -15,6 +15,20 @@ export interface AiAccessKey {
   last_used_ip: string | null
   revoked_at: string | null
   revoked_by_name: string | null
+  /** May make images / clips and Idea plans in Creatives (off until a full admin switches it on). */
+  can_create: boolean
+  can_create_changed_by_name: string | null
+  can_create_changed_at: string | null
+}
+
+/** What a key switched on for Creatives may also do, its limits, and what each key spent. */
+export interface AiCreateAccess {
+  tools: AiToolInfo[]
+  max_per_generation_usd: number
+  max_per_key_day_usd: number
+  /** What everything it makes is labelled ("Grok"). */
+  label: string
+  spent: Array<{ key_id: number; today_usd: number; month_usd: number; generations: number }>
 }
 
 export interface AiConnectorSettings {
@@ -39,6 +53,7 @@ export interface AiAccessData {
   default_expiry_days: number
   max_active_keys: number
   tools: AiToolInfo[]
+  create: AiCreateAccess
 }
 
 export interface AiCreatedKey {

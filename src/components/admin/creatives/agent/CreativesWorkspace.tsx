@@ -27,6 +27,7 @@ import ChatComposer from './chat/ChatComposer'
 import ChatEmptyState from './chat/ChatEmptyState'
 import { ChatNotice } from './chat/ChatParts'
 import ChatTranscript from './chat/ChatTranscript'
+import TeamChatsModal from './chat/TeamChatsModal'
 import WorkspacePanel from './panels/WorkspacePanel'
 
 interface CreativesWorkspaceProps {
@@ -63,6 +64,7 @@ export default function CreativesWorkspace({ meta, budget, onBudget, ai, onAi }:
   const now = useNow(30_000)
   const [draft, setDraft] = useState('')
   const [confirmNew, setConfirmNew] = useState(false)
+  const [chatsOpen, setChatsOpen] = useState(false)
   const [dirtyDocs, setDirtyDocs] = useState<Record<CreativesDocPanel, boolean>>({ brief: false, playbook: false })
   const navigate = useNavigate()
   const [leaving, setLeaving] = useState<PanelTarget | null>(null)
@@ -197,8 +199,8 @@ export default function CreativesWorkspace({ meta, budget, onBudget, ai, onAi }:
   const proposedOpen = jobsList.some((j) => j.status === 'proposed')
   const runningOpen = jobsList.some((j) => j.status === 'running')
   const newChatMessage = [
-    'This conversation won’t be kept; memory, brief and plans stay.',
-    proposedOpen ? 'A job still waiting for its Go is dropped.' : '',
+    'The current chat stays in Chats for 7 days, so you or a teammate can go back to it. Memory, brief and plans stay.',
+    proposedOpen ? 'A job still waiting for its Go stays in that chat.' : '',
     runningOpen ? 'A job that is running keeps going — its results land in the Gallery.' : '',
   ]
     .filter(Boolean)
@@ -236,6 +238,8 @@ export default function CreativesWorkspace({ meta, budget, onBudget, ai, onAi }:
     body = (
       <>
         <ChatTranscript
+          startedBy={agent.startedBy}
+          answering={agent.answering}
           messages={agent.messages}
           jobs={agent.jobs}
           notices={agent.notices}
@@ -285,6 +289,7 @@ export default function CreativesWorkspace({ meta, budget, onBudget, ai, onAi }:
             onNewChat={() => setConfirmNew(true)}
             newChatDisabled={agent.running || agent.startingNew || agent.status === 'loading'}
             higgsfield={meta.configured}
+            onChats={() => setChatsOpen(true)}
           />
 
           <div className="@container mx-auto w-full max-w-[760px] flex-1 pb-4 pt-4">
@@ -360,6 +365,21 @@ export default function CreativesWorkspace({ meta, budget, onBudget, ai, onAi }:
           sessionId={agent.sessionId}
         />
       )}
+
+      <TeamChatsModal
+        open={chatsOpen}
+        onClose={() => setChatsOpen(false)}
+        currentId={agent.sessionId}
+        onOpen={(id) => {
+          setChatsOpen(false)
+          if (id === agent.sessionId) return
+          void agent.openSession(id).then((ok) => {
+            if (!ok) return
+            setDraft('')
+            firstScroll.current = true
+          })
+        }}
+      />
 
       <ConfirmModal
         open={confirmNew}

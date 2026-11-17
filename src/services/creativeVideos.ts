@@ -7,6 +7,7 @@ import type {
   CreativeVideoSceneInput,
   CreativeVideoSummary,
   ProposeScenesResult,
+  SceneAttempt,
   SceneDraft,
   TimelineDoc,
 } from '../types/creativeVideos'
@@ -105,6 +106,12 @@ export async function createCreativeVideo(input: CreativeVideoInput): Promise<Cr
 export async function getCreativeVideo(id: number): Promise<CreativeVideo> {
   const { video } = await apiFetch<Ok<{ video: CreativeVideo }>>(`/admin/creatives/videos/${id}`, { auth: true })
   return normaliseVideo(video)
+}
+
+/** Every attempt at this video's scenes, newest first (made / failed and why, how long, cost, who). */
+export async function getCreativeVideoHistory(id: number): Promise<SceneAttempt[]> {
+  const { history } = await apiFetch<Ok<{ history: SceneAttempt[] }>>(`/admin/creatives/videos/${id}/history`, { auth: true })
+  return history
 }
 
 /**

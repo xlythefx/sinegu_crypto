@@ -25,11 +25,38 @@ export function GenerateTag() {
   )
 }
 
-/** What a person wrote — right-aligned, plain text exactly as typed. */
-export function UserBubble({ text, mode, sending = false }: { text: string; mode?: CreativeAgentMode; sending?: boolean }) {
+/**
+ * What a person wrote — right-aligned, plain text exactly as typed. Chats are
+ * shared, so it says who wrote it and when ("Dima · 14:02").
+ */
+export function UserBubble({
+  text,
+  mode,
+  sending = false,
+  author,
+  at,
+}: {
+  text: string
+  mode?: CreativeAgentMode
+  sending?: boolean
+  author?: string | null
+  /** ISO. */
+  at?: string
+}) {
+  const time = at ? new Date(at) : null
+  const stamp = time && !Number.isNaN(time.getTime()) ? time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null
   return (
     <div className="flex flex-col items-end gap-1.5 animate-[fadeup_0.3s_ease-out]">
-      {mode === 'generate' && <GenerateTag />}
+      <div className="flex items-center gap-2">
+        {(author || stamp) && (
+          <span className="text-[11px] font-semibold leading-none text-muted">
+            {author ?? ''}
+            {author && stamp ? ' · ' : ''}
+            {stamp && <span className="font-mono font-normal text-faint">{stamp}</span>}
+          </span>
+        )}
+        {mode === 'generate' && <GenerateTag />}
+      </div>
       <div
         className={`max-w-[88%] whitespace-pre-wrap break-words rounded-[18px] rounded-br-[6px] border border-border bg-surface px-4 py-2.5 text-[14px] leading-[1.6] text-text shadow-[0_6px_18px_rgba(0,0,0,0.08)] sm:max-w-[80%] ${
           sending ? 'opacity-80' : ''

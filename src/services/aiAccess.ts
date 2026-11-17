@@ -31,6 +31,16 @@ export async function revokeAiKey(id: number): Promise<AiAccessKey> {
   return key
 }
 
+/** Switch on (or off) this key's right to make images / clips and Idea plans in Creatives. */
+export async function setAiKeyCanCreate(id: number, canCreate: boolean): Promise<AiAccessKey> {
+  const { key } = await apiFetch<{ success: boolean; key: AiAccessKey }>(`/admin/ai-access/keys/${id}`, {
+    method: 'PUT',
+    auth: true,
+    body: { can_create: canCreate },
+  })
+  return key
+}
+
 export async function getAiLog(params: { beforeId?: number; toolsOnly?: boolean } = {}): Promise<AiLogPage> {
   const q = new URLSearchParams({ limit: '50' })
   if (params.beforeId) q.set('before_id', String(params.beforeId))

@@ -17,6 +17,7 @@ import { creativeErrorMessage, startSignedDownload } from '../../../../lib/creat
 import { changesVideo, jobsFingerprint } from '../../../../lib/creativesAgent'
 import { getCreativeGeneration } from '../../../../services/creatives'
 import { getCreativeStyles } from '../../../../services/creativesAgent'
+import { getCreativeVideoHistory } from '../../../../services/creativeVideos'
 import { isSceneExpired } from '../../../../lib/creativeVideos'
 import {
   clickSelect,
@@ -42,6 +43,7 @@ import EditorChatPanel from './EditorChatPanel'
 import EditorHeader from './EditorHeader'
 import EditorJobStrip from './EditorJobStrip'
 import ExportDialog from './ExportDialog'
+import HistoryPanel from './HistoryPanel'
 import LookPanel from './LookPanel'
 import PreviewPlayer from './PreviewPlayer'
 import ProposeScenesModal from './ProposeScenesModal'
@@ -58,13 +60,14 @@ interface EditorWorkspaceProps {
   onBudget: (b: CreativeBudget) => void
 }
 
-type Tab = 'scenes' | 'captions' | 'audio' | 'look'
+type Tab = 'scenes' | 'captions' | 'audio' | 'look' | 'history'
 
 const TABS: Array<{ value: Tab; label: string }> = [
   { value: 'scenes', label: 'Scenes' },
   { value: 'captions', label: 'Captions' },
   { value: 'audio', label: 'Sound' },
   { value: 'look', label: 'Look' },
+  { value: 'history', label: 'History' },
 ]
 
 /** Whether the docked chat is open, remembered on this device. */
@@ -179,6 +182,10 @@ export default function EditorWorkspace({ videoId, meta, budget, onBudget }: Edi
     if (lastChatJobsKey.current !== null && lastChatJobsKey.current !== chatJobsKey) refreshVideo()
     lastChatJobsKey.current = chatJobsKey
   }, [chatJobsKey, refreshVideo])
+
+  // Every attempt at this video's scenes: re-read whenever one of its jobs moves.
+  const videoJobsKey = useMemo(() => (video ? jobsFingerprint(video.jobs) : ''), [video])
+  const history = useApiData(() => getCreativeVideoHistory(videoId), [videoId, videoJobsKey])
 
   const openChat = useCallback(() => {
     if (docked) setDockOpen(true)
@@ -513,6 +520,18 @@ export default function EditorWorkspace({ videoId, meta, budget, onBudget }: Edi
             onEditCard={(scene, fields) => setCardEditor({ scene, fields })}
             onRemove={(scene) => void v.removeScene(scene.id)}
             onSeek={play.seek}
+            history={history.data}
+            onShowHistory={() => setTab('history')}
+          />
+        )}
+        {tab === 'history' && (
+          <HistoryPanel
+            history={history.data}
+            loading={history.loading}
+            error={history.error}
+            onRetry={history.reload}
+            now={now}
+            onPickScene={(id) => pickScene(id, { toggle: false, range: false })}
           />
         )}
         {tab === 'captions' && (

@@ -39,7 +39,8 @@ export default function ConnectGrokCard({ connector }: ConnectGrokCardProps) {
           </h2>
           <p className="mt-0.5 text-[12.5px] leading-[1.55] text-muted">
             In the Grok app: <strong className="text-text">Connectors → New connector → Custom</strong>, then fill the
-            form like this. Grok can then read trades, assets, accounts and billing — it can never change anything.
+            form like this. Grok can then read trades, assets, accounts, billing and Creatives. It can never change a
+            trade, an account or an invoice; it makes images and post ideas only on a key you allow below.
           </p>
         </div>
       </header>

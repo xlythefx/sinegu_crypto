@@ -45,10 +45,14 @@ interface ChatTranscriptProps {
   onOpenEditor: (path: string) => void
   /** Inside a video's editor: that video — its chip and job cards don't offer to open the editor again. */
   currentVideoId?: number
+  /** Who started this shared chat (an old message with no author is theirs). */
+  startedBy?: string | null
+  /** A teammate the assistant is answering right now (shown at the end of the chat). */
+  answering?: string | null
 }
 
 type Block =
-  | { kind: 'user'; key: string; text: string; mode?: CreativeAgentMode }
+  | { kind: 'user'; key: string; text: string; mode?: CreativeAgentMode; author: string | null; at: string }
   | { kind: 'assistant'; key: string; text: string; thinking: string | null }
   | { kind: 'activity'; key: string; items: Array<{ id: number; activity: CreativeAgentActivity }> }
   | { kind: 'plan'; key: string; title: string; planId: number }
@@ -65,7 +69,7 @@ type Block =
  * a person should read; a step's thinking arrives as its SUMMARY, folded
  * above that step ("How it's thinking"), even a step that said nothing.
  */
-function buildBlocks(messages: CreativeAgentMessage[], notices: AgentNotice[]): Block[] {
+function buildBlocks(messages: CreativeAgentMessage[], notices: AgentNotice[], startedBy: string | null): Block[] {
   const blocks: Block[] = []
   const answers = choiceAnswers(messages)
   const queue = [...notices].sort((a, b) => a.afterId - b.afterId)
@@ -82,7 +86,8 @@ function buildBlocks(messages: CreativeAgentMessage[], notices: AgentNotice[]): 
     const key = `m${m.id}`
     switch (m.kind) {
       case 'user':
-        if (m.text) blocks.push({ kind: 'user', key, text: m.text, mode: m.mode })
+        // A message from before authors were recorded is the chat starter's.
+        if (m.text) blocks.push({ kind: 'user', key, text: m.text, mode: m.mode, author: m.author ?? startedBy, at: m.created_at })
         break
       case 'assistant': {
         const thinking = m.thinking?.trim() ? m.thinking : null
@@ -146,15 +151,17 @@ export default function ChatTranscript({
   onChoose,
   onOpenEditor,
   currentVideoId,
+  startedBy = null,
+  answering = null,
 }: ChatTranscriptProps) {
-  const blocks = useMemo(() => buildBlocks(messages, notices), [messages, notices])
+  const blocks = useMemo(() => buildBlocks(messages, notices, startedBy), [messages, notices, startedBy])
 
   return (
     <div className="flex flex-col gap-5" aria-live="polite" aria-relevant="additions">
       {blocks.map((b) => {
         switch (b.kind) {
           case 'user':
-            return <UserBubble key={b.key} text={b.text} mode={b.mode} />
+            return <UserBubble key={b.key} text={b.text} mode={b.mode} author={b.author} at={b.at} />
           case 'assistant':
             return <AssistantMessage key={b.key} text={b.text} thinking={b.thinking} />
           case 'activity':
@@ -221,6 +228,12 @@ export default function ChatTranscript({
 
       {pending && <UserBubble text={pending.text} mode={pending.mode} sending />}
       {running && <AgentProgress label={progress} elapsed={elapsed} stopping={stopping} />}
+      {!running && answering && (
+        <p className={`${AGENT_INDENT} inline-flex items-center gap-2 text-[12.5px] text-muted`} role="status">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" aria-hidden="true" />
+          The assistant is answering {answering}…
+        </p>
+      )}
     </div>
   )
 }

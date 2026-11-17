@@ -5,6 +5,7 @@ import { clipUrl, fmtSeconds, isSceneExpired } from '../../../../lib/creativeVid
 import type { ClickModifiers } from '../../../../lib/videoEditor/selection'
 import type { SceneSpan } from '../../../../lib/videoEditor/timeline'
 import type { CreativeVideoScene, VideoAspect } from '../../../../types/creativeVideos'
+import SceneTimer from './SceneTimer'
 import TemplateCanvas from './TemplateCanvas'
 
 interface TimelineSceneProps {
@@ -109,7 +110,9 @@ export default function TimelineScene({ scene, span, scale, aspect, now, selecte
                 : waiting
                   ? scene.status === 'planned'
                     ? 'Needs Go'
-                    : 'Making…'
+                    : scene.progress
+                      ? <SceneTimer progress={scene.progress} compact />
+                      : 'Making…'
                   : failed
                     ? 'Failed'
                     : fmtSeconds(span.end_ms - span.start_ms)}

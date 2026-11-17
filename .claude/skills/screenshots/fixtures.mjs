@@ -610,7 +610,7 @@ function sampleVideo() {
     scenes: [
       sampleScene(11, 1, { label: 'Hook — trading screen', prompt: 'Slow push-in on a glowing trading screen', generation: sampleGeneration(301, SAMPLE_CLIP_A, 6), step_index: 1 }),
       sampleScene(12, 2, { kind: 'template', label: 'High score', engine: null, engine_label: null, agent_job_id: null, seconds: 4, duration_ms: 4000, template: { key: 'pixel-scoreboard', title: 'HIGH SCORE', value: '+3.1%', subtitle: 'THIS WEEK · 12 TRADES' } }),
-      sampleScene(13, 3, { label: 'The city at night', engine: 'seedance', engine_label: 'Seedance · with sound', prompt: 'Neon city at night, 8-bit chiptune music', status: 'generating', step_index: 2 }),
+      sampleScene(13, 3, { label: 'The city at night', engine: 'seedance', engine_label: 'Seedance · with sound', prompt: 'Neon city at night, 8-bit chiptune music', status: 'generating', step_index: 2, progress: { started_at: ago(0, 0.035), step: 1, steps: 1, step_label: 'Clip', waiting: false, typical_seconds: 180 } }),
       sampleScene(14, 4, { label: 'Pixel waves goodbye', with_character: true, prompt: 'Pixel waves at the camera', generation: sampleGeneration(302, SAMPLE_CLIP_B, 0.6), trim_out_ms: 4000, duration_ms: 4000 }),
     ],
     jobs: [VIDEO_JOB],
@@ -667,14 +667,15 @@ const AUDIO_LIST = {
 
 const AGENT_SESSION = () => ({
   success: true,
-  session: { id: 'sample-session', mode: 'generate' },
+  session: { id: 'sample-session', mode: 'generate', started_by: 'Sample Admin' },
+  answering: null,
   budget: CREATIVE_BUDGET,
   jobs: [VIDEO_JOB],
   messages: [
     { id: 1, kind: 'user', text: 'Make a 20-second video of this week’s results', mode: 'generate', created_at: ago(0, 0.5) },
     { id: 2, kind: 'activity', activity: { tool: 'get_week_results', label: 'Read the public results', ok: true }, created_at: ago(0, 0.5) },
     { id: 3, kind: 'choices', choices: { question: 'Which platform is it for?', options: [{ label: 'TikTok', value: 'TikTok' }, { label: 'X', value: 'X' }], allow_other: false }, created_at: ago(0, 0.5) },
-    { id: 4, kind: 'user', text: 'TikTok', mode: 'generate', created_at: ago(0, 0.45) },
+    { id: 4, kind: 'user', text: 'TikTok', mode: 'generate', author: 'Sample Marketer', created_at: ago(0, 0.45) },
     { id: 5, kind: 'choices', choices: { question: 'Which style?', options: [{ label: 'Pixel arcade', value: 'pixel-arcade' }, { label: 'Data recap', value: 'data-recap' }, { label: 'Fast cut', value: 'fast-cut' }], allow_other: true }, created_at: ago(0, 0.4) },
     { id: 6, kind: 'user', text: 'pixel-arcade', mode: 'generate', created_at: ago(0, 0.35) },
     { id: 7, kind: 'assistant', text: 'Here is the plan — four scenes, 19 seconds, Pixel in the last one only.', created_at: ago(0, 0.3) },
@@ -698,7 +699,8 @@ const EDITOR_STORYBOARD = {
 
 const EDITOR_SESSION = () => ({
   success: true,
-  session: { id: 'sample-editor-session', mode: 'generate', video_id: 1 },
+  session: { id: 'sample-editor-session', mode: 'generate', video_id: 1, started_by: 'Sample Marketer' },
+  answering: null,
   budget: CREATIVE_BUDGET,
   jobs: [VIDEO_JOB],
   messages: [
@@ -711,7 +713,7 @@ const EDITOR_SESSION = () => ({
     { id: 23, kind: 'activity', activity: { tool: 'show_storyboard', label: 'Showed a storyboard: 4 scenes, about $1.92', ok: true }, created_at: ago(0, 0.4) },
     { id: 24, kind: 'storyboard', storyboard: EDITOR_STORYBOARD, created_at: ago(0, 0.4) },
     { id: 25, kind: 'choices', choices: { question: 'Build it?', options: [{ label: 'Yes, build it', value: 'Yes, build it' }, { label: 'Change something', value: 'I want to change something first' }], allow_other: false }, created_at: ago(0, 0.4) },
-    { id: 26, kind: 'user', text: 'Yes, build it', mode: 'generate', created_at: ago(0, 0.3) },
+    { id: 26, kind: 'user', text: 'Yes, build it', mode: 'generate', author: 'Sample Admin', created_at: ago(0, 0.3) },
     {
       id: 27, kind: 'assistant', created_at: ago(0, 0.3),
       thinking: 'Approved. Only scene 3 changes, so one add_scenes call with replace_scene_id; trim scene 1 for free with edit_video.',
@@ -767,6 +769,29 @@ const ASSET_GET = {
   '/admin/assets': { success: true, assets: [SAMPLE_ASSET] },
 }
 
+// Every attempt at the sample video's scenes (Creatives history, 2026-11-17).
+const VIDEO_HISTORY = () => {
+  const a = (id, scene_id, scene_position, scene_label, role, model_label, status, startedH, seconds, usd, by, error = null) => ({
+    id, job_id: Number(id.split(':')[0]), job_title: 'Week 46 recap', step_index: Number(id.split(':')[1]), scene_id, scene_label, scene_position,
+    role, model: 'x', model_label, status, error, started_at: ago(0, startedH), ended_at: seconds === null ? null : ago(0, startedH - seconds / 3600),
+    seconds, usd, started_by: by, approved_by: by, generation_id: status === 'skipped' ? null : 300 + Number(id.split(':')[1]),
+  })
+  return [
+    a('42:0', 13, 2, 'The city at night', 'Clip', 'Video from text, with sound (Seedance 2.5)', 'running', 0.035, null, 1.32, 'Sample Admin'),
+    a('41:5', 14, 3, 'Pixel waves goodbye', 'Animation', 'Animate an image (Kling 2.5 Turbo)', 'made', 0.6, 131, 0.26, 'Sample Marketer'),
+    a('41:4', 14, 3, 'Pixel waves goodbye', 'Still image', 'Character image (with references)', 'made', 0.64, 38, 0.07, 'Sample Marketer'),
+    a('41:2', 13, 2, 'The city at night', 'Clip', 'Video from text, with sound (Seedance 2.5)', 'failed', 0.7, 412, 0, 'Sample Marketer', 'Higgsfield could not make this. Nothing was charged.'),
+    a('41:1', 11, 0, 'Hook — trading screen', 'Animation', 'Animate an image (Kling 2.5 Turbo)', 'made', 0.68, 148, 0.26, 'Sample Marketer'),
+    a('41:0', 11, 0, 'Hook — trading screen', 'Still image', 'Image from text (Soul)', 'made', 0.7, 22, 0.004, 'Sample Marketer'),
+  ]
+}
+
+const TEAM_CHATS = () => [
+  { id: 'sample-session', video_id: null, started_by: 'Sample Admin', people: ['Sample Admin', 'Sample Marketer'], messages: 3, last_text: 'TikTok', last_author: 'Sample Marketer', answering: null, created_at: ago(0, 0.6), updated_at: ago(0, 0.3) },
+  { id: 'sample-older', video_id: null, started_by: 'Sample Marketer', people: ['Sample Marketer'], messages: 5, last_text: 'Write three hooks for the Friday recap, under six words each.', last_author: 'Sample Marketer', answering: null, created_at: ago(2), updated_at: ago(2, 4) },
+  { id: 'sample-grok-q', video_id: null, started_by: 'Sample Admin', people: ['Sample Admin'], messages: 1, last_text: 'Which style worked best last week?', last_author: 'Sample Admin', answering: 'Sample Admin', created_at: ago(0, 0.1), updated_at: ago(0, 0.05) },
+]
+
 const CREATIVE_GET = {
   '/admin/creatives': CREATIVES_META,
   '/admin/creatives/budget': { success: true, budget: CREATIVE_BUDGET },
@@ -777,11 +802,35 @@ const CREATIVE_GET = {
   '/admin/creatives/styles': { success: true, styles: SAMPLE_STYLES },
   '/admin/creatives/videos': VIDEO_LIST,
   '/admin/creatives/videos/': () => ({ success: true, video: sampleVideo() }),
+  '/admin/creatives/videos/1/history': () => ({ success: true, history: VIDEO_HISTORY() }),
+  '/admin/creatives/agent/sessions': () => ({ success: true, sessions: TEAM_CHATS() }),
   '/admin/creatives/audio': AUDIO_LIST,
   '/admin/creatives/memory': { success: true, memories: [] },
   '/admin/creatives/plans': { success: true, plans: [] },
   '/admin/creatives/generations': () => ({ success: true, generations: [sampleGeneration(301, SAMPLE_CLIP_A, 6), sampleGeneration(302, SAMPLE_CLIP_B, 0.6)], has_more: false }),
   '/admin/creatives/character': { success: true, character: { id: 1, name: 'Pixel', look: null, style_prompt: null, rules: null, refs: [], updated_by_name: null, updated_at: null } },
+}
+
+// Admin → AI Access: one key that may create in Creatives, one that only reads.
+const AI_ACCESS = () => {
+  const key = (id, name, can_create, extra = {}) => ({
+    id, name, prefix: `pxa_${id}a9c`, state: 'active', created_by_name: 'Sample Admin', created_at: ago(9), expires_at: ago(-81),
+    last_used_at: ago(0, 0.3), last_used_ip: '203.0.113.10', revoked_at: null, revoked_by_name: null,
+    can_create, can_create_changed_by_name: can_create ? 'Sample Admin' : null, can_create_changed_at: can_create ? ago(0, 2) : null, ...extra,
+  })
+  const tool = (name, title) => ({ name, title, description: `${title}, as the admin pages show it.` })
+  return {
+    success: true,
+    keys: [key(2, 'Boss’s Grok', true), key(1, 'Analyst laptop', false, { last_used_at: ago(3) })],
+    connector: { server_url: 'https://pixel-alpha.com/api/mcp', type: 'Remote HTTPS', header_name: 'X-Api-Key' },
+    expiry_days: [30, 90, 180, 365], default_expiry_days: 90, max_active_keys: 5,
+    tools: [tool('guide', 'Read me first'), tool('closed_trades', 'Closed trades and P&L'), tool('creative_plans', 'Marketing content plan'), tool('creative_generations', 'Images and clips generated'), tool('creative_budget', 'Creatives budget this month')],
+    create: {
+      tools: [tool('price_generation', 'Price an image or clip (free)'), tool('start_generation', 'Start a priced image or clip (spends)'), tool('save_plan_idea', 'Save a post idea (free)')],
+      max_per_generation_usd: 1, max_per_key_day_usd: 20, label: 'Grok',
+      spent: [{ key_id: 2, today_usd: 0.334, month_usd: 2.71, generations: 9 }],
+    },
+  }
 }
 
 // ---------------------------------------------------------------- router
@@ -807,6 +856,8 @@ const GET = {
     connect_locked: true,
   },
   '/exchange/accounts': { success: true, accounts: [], server_ip: null },
+  '/admin/ai-access/log': { success: true, entries: [], has_more: false, last_24h: { calls: 14, questions: 3, errors: 0 } },
+  '/admin/ai-access': () => AI_ACCESS(),
   ...CREATIVE_GET,
   ...ASSET_GET,
 }

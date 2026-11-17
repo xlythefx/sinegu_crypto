@@ -1,5 +1,5 @@
 import { useRef, type KeyboardEvent } from 'react'
-import { Clapperboard, Coins, MessageCircle, ShieldCheck, SquarePen } from 'lucide-react'
+import { Clapperboard, Coins, MessageCircle, MessagesSquare, ShieldCheck, SquarePen } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { MODE_HINT, PANELS, type CreativesPanelKey } from '../../../../lib/creativesAgent'
 import type { CreativeAgentMode, CreativeBudget } from '../../../../types/creatives'
@@ -16,6 +16,8 @@ interface AgentTopBarProps {
   onTogglePanel: (panel: CreativesPanelKey) => void
   onNewChat: () => void
   newChatDisabled: boolean
+  /** Chats are shared: open the team's chats. */
+  onChats?: () => void
   /** Higgsfield is connected — Generate says so when it is not. */
   higgsfield: boolean
 }
@@ -104,6 +106,7 @@ export default function AgentTopBar({
   onNewChat,
   newChatDisabled,
   higgsfield,
+  onChats,
 }: AgentTopBarProps) {
   const generate = mode === 'generate'
   const hint =
@@ -151,6 +154,18 @@ export default function AgentTopBar({
         <div className="ml-auto flex items-center gap-2 sm:ml-0">
           <span className="hidden h-6 w-px bg-hair sm:block" aria-hidden="true" />
           <BudgetPill budget={budget} active={panel === 'budget'} onOpen={() => onTogglePanel('budget')} />
+          {onChats && (
+            <button
+              type="button"
+              onClick={onChats}
+              disabled={newChatDisabled}
+              title="The team's chats: everyone sees every chat"
+              className="inline-flex min-h-9 flex-none cursor-pointer items-center gap-1.5 rounded-pill border border-border bg-surface px-3 text-[12.5px] font-bold text-text transition-[border-color,background] duration-150 hover:border-accent-line hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <MessagesSquare size={14} aria-hidden="true" />
+              <span className="max-[420px]:sr-only">Chats</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={onNewChat}

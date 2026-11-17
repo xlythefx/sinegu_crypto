@@ -6,8 +6,11 @@ import { EXPIRY_WARN_MS, fmtTimeLeft, msUntilExpiry } from '../../../../lib/crea
 import { fmtSeconds, isSceneExpired, sceneStatusMeta, templateMeta } from '../../../../lib/creativeVideos'
 import { isSelected, type ClickModifiers, type SceneSelection } from '../../../../lib/videoEditor/selection'
 import { effectiveTrim, fullMs, type SceneSpan } from '../../../../lib/videoEditor/timeline'
-import type { CreativeVideoScene, TemplateFields } from '../../../../types/creativeVideos'
+import { attemptsFor } from '../../../../lib/videoEditor/history'
+import type { CreativeVideoScene, SceneAttempt, TemplateFields } from '../../../../types/creativeVideos'
 import TonePill from '../TonePill'
+import AttemptList from './AttemptList'
+import SceneTimer from './SceneTimer'
 import { BTN_SOFT, BTN_SOFT_DANGER, FACT_LABEL } from '../creativeClasses'
 import { ICON_SQ_SM, PANE_TITLE, ROW } from './editorClasses'
 import SecondsInput from './SecondsInput'
@@ -37,7 +40,14 @@ interface SceneInspectorProps {
   onEditCard: (scene: CreativeVideoScene, fields: TemplateFields) => void
   onRemove: (scene: CreativeVideoScene) => void
   onSeek: (ms: number) => void
+  /** Every attempt at this video's scenes (the History tab's list); null while loading. */
+  history?: SceneAttempt[] | null
+  /** "See every attempt": open the History tab. */
+  onShowHistory?: () => void
 }
+
+/** Attempts shown under a scene before "See all". */
+const SCENE_ATTEMPTS = 3
 
 /**
  * The Scenes tab: every scene in order — the one place a phone reorders them
@@ -65,6 +75,8 @@ export default function SceneInspector({
   onEditCard,
   onRemove,
   onSeek,
+  history = null,
+  onShowHistory,
 }: SceneInspectorProps) {
   const [removing, setRemoving] = useState<CreativeVideoScene | null>(null)
   const ordered = spans.map((sp) => ({ sp, scene: scenes.find((s) => s.id === sp.id) })).filter((x): x is { sp: SceneSpan; scene: CreativeVideoScene } => !!x.scene)
@@ -185,6 +197,8 @@ export default function SceneInspector({
           onRegenerate={onRegenerate}
           onEditCard={onEditCard}
           onRemove={() => setRemoving(selected.scene)}
+          attempts={attemptsFor(history, selected.scene.id)}
+          onShowHistory={onShowHistory}
         />
       )}
 
@@ -222,11 +236,15 @@ function SceneDetails({
   onEditCard,
   onRemove,
   onImprove,
+  attempts,
+  onShowHistory,
 }: {
   scene: CreativeVideoScene
   span: SceneSpan
   now: number
   busy: boolean
+  attempts: SceneAttempt[]
+  onShowHistory?: () => void
   onImprove: () => void
   onLabel: (id: number, label: string) => void
   onTrim: (id: number, patch: { trim_in_ms: number | null; trim_out_ms: number | null }) => void
@@ -269,6 +287,7 @@ function SceneDetails({
             {scene.with_character ? ' · with Pixel' : ''}
           </span>
           {scene.prompt && <span className="break-words">“{scene.prompt}”</span>}
+          {scene.progress && <SceneTimer progress={scene.progress} />}
           {scene.status === 'failed' && scene.error && <span className="font-semibold text-red">{scene.error}</span>}
           {expired ? (
             <span className="font-semibold text-red">Deleted by Higgsfield — replace or regenerate it before exporting.</span>
@@ -288,6 +307,23 @@ function SceneDetails({
             <span className="text-text">{templateMeta(scene.template.key).label} · free</span>
           </div>
         )
+      )}
+
+      {scene.kind === 'clip' && attempts.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <span className={`${FACT_LABEL} flex-1`}>
+              Attempts ({attempts.length}
+              {attempts.some((a) => a.status === 'failed') ? `, ${attempts.filter((a) => a.status === 'failed').length} failed` : ''})
+            </span>
+            {onShowHistory && attempts.length > SCENE_ATTEMPTS && (
+              <button type="button" onClick={onShowHistory} className="cursor-pointer bg-transparent text-[11.5px] font-bold text-accent hover:underline">
+                See all
+              </button>
+            )}
+          </div>
+          <AttemptList attempts={attempts.slice(0, SCENE_ATTEMPTS)} now={now} />
+        </div>
       )}
 
       {canTrim && (

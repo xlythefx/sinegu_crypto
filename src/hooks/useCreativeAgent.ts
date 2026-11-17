@@ -35,6 +35,9 @@ import type {
 /** How often the chat re-reads itself while a job is generating (visible tab only). */
 const POLL_MS = 5000
 
+/** Otherwise: chats are shared, so a teammate's new message shows within this long (visible tab only). */
+const IDLE_POLL_MS = 10_000
+
 /**
  * A line the CLIENT adds to the chat (a failed send, "Stopped"). Never stored:
  * it sits after the server message it was raised beside, and is gone on New chat.
@@ -106,6 +109,12 @@ export interface CreativeAgentState {
   /** Said once, above the chat: the server opened a fresh chat because the agent's tools changed. */
   freshChatNotice: string | null
   dismissFreshChatNotice: () => void
+  /** Chats are shared: the teammate the assistant is answering in this chat right now, else null. */
+  answering: string | null
+  /** Who started the chat on screen (an old message with no author is theirs). */
+  startedBy: string | null
+  /** Open another of the team's chats (the Chats list). Resolves false when it could not be opened. */
+  openSession: (id: string) => Promise<boolean>
 }
 
 export interface SendOptions {
@@ -159,6 +168,8 @@ export function useCreativeAgent({ enabled, onBudget, videoId, initialMode = 'as
   const [signals, setSignals] = useState({ plans: 0, memory: 0, gallery: 0, videos: 0 })
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [freshChatNotice, setFreshChatNotice] = useState<string | null>(null)
+  const [answering, setAnswering] = useState<string | null>(null)
+  const [startedBy, setStartedBy] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
 
   const mounted = useRef(true)
@@ -219,6 +230,8 @@ export function useCreativeAgent({ enabled, onBudget, videoId, initialMode = 'as
   const replaceWith = useCallback((state: CreativeAgentSessionState) => {
     sessionRef.current = state.session.id
     setSessionId(state.session.id)
+    setStartedBy(state.session.started_by ?? null)
+    setAnswering(state.answering ?? null)
     if (state.notice === 'new_tools') setFreshChatNotice(NEW_TOOLS_NOTICE)
     messagesRef.current = state.messages
     setMessages(state.messages)
@@ -502,6 +515,7 @@ export function useCreativeAgent({ enabled, onBudget, videoId, initialMode = 'as
       .then((state) => {
         if (!mounted.current || sessionRef.current !== id) return
         absorb(state.messages, state.jobs)
+        setAnswering(state.answering ?? null)
         if (state.budget) budgetRef.current(state.budget)
       })
       .catch(() => {
@@ -511,7 +525,8 @@ export function useCreativeAgent({ enabled, onBudget, videoId, initialMode = 'as
         polling.current = false
       })
   }, [absorb, videoId])
-  usePoll(quietRead, POLL_MS, { paused: !anyRunning || status !== 'ready' })
+  // Faster while a job runs; otherwise slower, so a teammate's messages still arrive. Never while this tab is answering.
+  usePoll(quietRead, anyRunning ? POLL_MS : IDLE_POLL_MS, { paused: status !== 'ready' || running })
 
   // A step finished or started: the Gallery has something new.
   const fingerprint = useMemo(() => jobsFingerprint(Object.values(jobs)), [jobs])
@@ -520,6 +535,35 @@ export function useCreativeAgent({ enabled, onBudget, videoId, initialMode = 'as
     if (lastFingerprint.current !== null && lastFingerprint.current !== fingerprint) bump({ gallery: true })
     lastFingerprint.current = fingerprint
   }, [fingerprint, bump])
+
+  const openSession = useCallback(
+    async (id: string): Promise<boolean> => {
+      if (busy.current) return false
+      busy.current = true
+      setStartingNew(true)
+      try {
+        const state = await getAgentSession({ id, videoId })
+        if (!mounted.current) return false
+        replaceWith(state)
+        setModeState(modeOf(state))
+        setNotices([])
+        setFreshChatNotice(null)
+        setJobErrors({})
+        setLastCost(null)
+        setStatus('ready')
+        return true
+      } catch (err) {
+        if (mounted.current) addNotice(agentErrorMessage(err, { kind: 'turn' }, 'Could not open that chat.'), 'error')
+        return false
+      } finally {
+        busy.current = false
+        if (mounted.current) setStartingNew(false)
+      }
+    },
+    // modeOf only reads refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [replaceWith, addNotice, videoId],
+  )
 
   const jobReadAt = useCallback((jobId: number) => readAt.current.get(jobId) ?? 0, [])
   const dismissFreshChatNotice = useCallback(() => setFreshChatNotice(null), [])
@@ -554,5 +598,8 @@ export function useCreativeAgent({ enabled, onBudget, videoId, initialMode = 'as
     sessionId,
     freshChatNotice,
     dismissFreshChatNotice,
+    answering,
+    startedBy,
+    openSession,
   }
 }

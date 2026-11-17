@@ -4,7 +4,7 @@ import ConfirmModal from '../../ui/ConfirmModal'
 import KeyRow from './KeyRow'
 import NewKeyReveal from './NewKeyReveal'
 import { BTN_PRIMARY, FIELD, HINT, INPUT, LABEL, SELECT, notice } from '../../settings/formClasses'
-import { createAiKey, revokeAiKey } from '../../../services/aiAccess'
+import { createAiKey, revokeAiKey, setAiKeyCanCreate } from '../../../services/aiAccess'
 import { getApiErrorMessage } from '../../../services/api'
 import type { AiAccessData, AiAccessKey } from '../../../types/aiAccess'
 
@@ -28,6 +28,9 @@ export default function KeysCard({ data, onChanged, delay }: KeysCardProps) {
   const [days, setDays] = useState<number | null>(data.default_expiry_days)
   const [confirmCreate, setConfirmCreate] = useState(false)
   const [revoking, setRevoking] = useState<AiAccessKey | null>(null)
+  /** A key's "May create in Creatives" switch, waiting for its confirmation. */
+  const [creating, setCreating] = useState<{ key: AiAccessKey; on: boolean } | null>(null)
+  const limits = data.create
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [created, setCreated] = useState<{ name: string; plain: string } | null>(null)
@@ -55,6 +58,22 @@ export default function KeysCard({ data, onChanged, delay }: KeysCardProps) {
       onChanged()
     } catch (err) {
       setError(getApiErrorMessage(err, 'Could not create the key.'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const toggleCreate = async () => {
+    if (!creating) return
+    const { key: target, on } = creating
+    setCreating(null)
+    setBusy(true)
+    setError(null)
+    try {
+      await setAiKeyCanCreate(target.id, on)
+      onChanged()
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not change what this key may do.'))
     } finally {
       setBusy(false)
     }
@@ -96,7 +115,8 @@ export default function KeysCard({ data, onChanged, delay }: KeysCardProps) {
           </h2>
           <p className="mt-0.5 text-[12.5px] leading-[1.55] text-muted">
             One key per person or device. It expires after the time you pick (or never), can be revoked at any moment,
-            and only opens read-only questions. {active} of {data.max_active_keys} active.
+            and only opens read-only questions — unless you switch on “May create in Creatives” for it. {active} of{' '}
+            {data.max_active_keys} active.
           </p>
         </div>
       </header>
@@ -151,7 +171,14 @@ export default function KeysCard({ data, onChanged, delay }: KeysCardProps) {
       ) : (
         <ul className="flex flex-col gap-2.5">
           {data.keys.map((k) => (
-            <KeyRow key={k.id} aiKey={k} onRevoke={setRevoking} busy={busy} />
+            <KeyRow
+              key={k.id}
+              aiKey={k}
+              onRevoke={setRevoking}
+              onCreate={(key, on) => setCreating({ key, on })}
+              spent={limits.spent.find((s) => s.key_id === k.id) ?? null}
+              busy={busy}
+            />
           ))}
         </ul>
       )}
@@ -168,6 +195,24 @@ export default function KeysCard({ data, onChanged, delay }: KeysCardProps) {
         cancelLabel="Cancel"
         onConfirm={create}
         onCancel={() => setConfirmCreate(false)}
+      />
+      <ConfirmModal
+        open={creating !== null}
+        title={
+          creating?.on
+            ? `Let “${creating.key.name}” create in Creatives?`
+            : `Stop “${creating?.key.name ?? ''}” creating in Creatives?`
+        }
+        message={
+          creating?.on
+            ? `Its AI can then make images and clips on Higgsfield, which SPENDS the team’s Creatives budget, and save post ideas. It always tells the price and asks first; it can never spend more than $${limits.max_per_generation_usd.toFixed(2)} on one generation or $${limits.max_per_key_day_usd.toFixed(0)} a day, and never past the monthly cap. Everything it makes is labelled “${limits.label}”. Reading stays as it is.`
+            : 'It goes back to reading only. Anything it already started finishes and stays in the Gallery.'
+        }
+        confirmLabel={creating?.on ? 'Allow' : 'Stop it'}
+        cancelLabel="Cancel"
+        danger={!creating?.on}
+        onConfirm={toggleCreate}
+        onCancel={() => setCreating(null)}
       />
       <ConfirmModal
         open={revoking !== null}

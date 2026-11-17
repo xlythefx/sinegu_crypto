@@ -13,6 +13,7 @@ import type {
   CreativePlaybook,
   CreativeStyle,
   CreativeStyleInput,
+  CreativeTeamChat,
 } from '../types/creatives'
 
 /**
@@ -81,6 +82,7 @@ function normaliseSession(res: Ok<CreativeAgentSessionState>): CreativeAgentSess
     jobs: (res.jobs ?? []).map(normaliseJob),
     budget: res.budget,
     notice: res.notice ?? null,
+    answering: res.answering ?? null,
   }
 }
 
@@ -92,11 +94,11 @@ export interface AgentSessionQuery {
 }
 
 /**
- * The caller's chat: the given id when it is theirs and under 7 days old,
- * else their newest, else a new one. With `videoId` it is that video's
- * editor chat instead (404 when the video does not exist); without it the
- * main workspace chat, which never picks a video's session. Running jobs are
- * moved on first.
+ * A chat (shared by the team): the given id when it is under 7 days old,
+ * whoever started it, else the caller's newest, else a new one. With
+ * `videoId` it is that video's ONE editor chat for everyone instead (404 when
+ * the video does not exist); without it the main workspace chat, which never
+ * picks a video's session. Running jobs are moved on first.
  */
 export async function getAgentSession({ id, videoId }: AgentSessionQuery = {}): Promise<CreativeAgentSessionState> {
   const params = new URLSearchParams()
@@ -112,6 +114,15 @@ export async function getAgentSession({ id, videoId }: AgentSessionQuery = {}): 
  * "New chat": a fresh, empty session (bound to the video when given). The
  * old transcript is not kept; memory, brief and plans are.
  */
+/** The team's live chats, newest first (chats are shared); with `videoId`, that video's editor chats. */
+export async function getTeamChats({ videoId }: { videoId?: number } = {}): Promise<CreativeTeamChat[]> {
+  const { sessions } = await apiFetch<Ok<{ sessions: CreativeTeamChat[] }>>(
+    `/admin/creatives/agent/sessions${videoId ? `?video_id=${videoId}` : ''}`,
+    { auth: true },
+  )
+  return sessions
+}
+
 export async function createAgentSession({ videoId }: { videoId?: number } = {}): Promise<CreativeAgentSessionState> {
   return normaliseSession(
     await apiFetch<Ok<CreativeAgentSessionState>>('/admin/creatives/agent/sessions', {

@@ -316,8 +316,13 @@ export function agentErrorMessage(err: unknown, context: AgentErrorContext, fall
         return 'Claude declined to answer that one. Try putting it another way. What it used still counts toward this month’s budget (a few cents).'
       case 'AI_UNAVAILABLE':
         return 'Claude didn’t answer just now — it may be busy. Nothing was charged for this step. Try again in a minute.'
-      case 'SESSION_BUSY':
-        return 'The agent is still working on this chat — perhaps in another tab. Wait for it to finish, then try again.'
+      case 'SESSION_BUSY': {
+        // Chats are shared: the server names the teammate it is answering.
+        const who = (err.payload as { answering?: unknown } | undefined)?.answering
+        return typeof who === 'string' && who !== ''
+          ? `The assistant is still answering ${who} in this chat. It’s yours in a moment.`
+          : 'The agent is still working on this chat — perhaps in another tab. Wait for it to finish, then try again.'
+      }
       case 'JOB_EXPIRED':
         return 'This job waited more than an hour for its Go, so it expired and nothing was spent. Ask the agent to propose it again.'
       case 'JOB_NOT_PROPOSED':

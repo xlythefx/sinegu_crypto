@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Crosshair, Film, LoaderCircle, MessageSquare, PanelRightClose, SquarePen, X } from 'lucide-react'
+import { Crosshair, Film, LoaderCircle, MessageSquare, MessagesSquare, PanelRightClose, SquarePen, X } from 'lucide-react'
 import ConfirmModal from '../../../ui/ConfirmModal'
 import type { CreativeAgentState } from '../../../../hooks/useCreativeAgent'
 import { AI_NOT_CONNECTED } from '../../../../lib/creativesAi'
@@ -10,6 +10,7 @@ import { ModeSwitch } from '../agent/AgentTopBar'
 import ChatComposer from '../agent/chat/ChatComposer'
 import { ChatNotice } from '../agent/chat/ChatParts'
 import ChatTranscript from '../agent/chat/ChatTranscript'
+import TeamChatsModal from '../agent/chat/TeamChatsModal'
 
 export type ChatPlacement = 'dock' | 'drawer' | 'sheet'
 
@@ -131,6 +132,7 @@ export default function EditorChatPanel({
   onNavigate,
 }: EditorChatPanelProps) {
   const [confirmNew, setConfirmNew] = useState(false)
+  const [chatsOpen, setChatsOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
   const firstScroll = useRef(true)
@@ -208,6 +210,8 @@ export default function EditorChatPanel({
   } else {
     body = (
       <ChatTranscript
+        startedBy={agent.startedBy}
+        answering={agent.answering}
         messages={agent.messages}
         jobs={agent.jobs}
         notices={agent.notices}
@@ -248,6 +252,9 @@ export default function EditorChatPanel({
         <MessageSquare size={15} aria-hidden="true" className="ml-1 flex-none text-accent" />
         <h2 className="min-w-0 flex-1 truncate font-display text-[14px] font-extrabold text-text">Chat</h2>
         <ModeSwitch mode={agent.mode} onMode={agent.setMode} locked={busy} size="sm" />
+        <button type="button" className={HEAD_BTN} onClick={() => setChatsOpen(true)} disabled={busy || agent.startingNew} aria-label="This video's chats" title="This video's chats: the whole team shares them">
+          <MessagesSquare size={15} aria-hidden="true" />
+        </button>
         <button type="button" className={HEAD_BTN} onClick={() => setConfirmNew(true)} disabled={busy || agent.startingNew || agent.status === 'loading'} aria-label="New chat" title="Start a new chat about this video">
           <SquarePen size={15} aria-hidden="true" />
         </button>
@@ -291,7 +298,7 @@ export default function EditorChatPanel({
       <ConfirmModal
         open={confirmNew}
         title="Start a new chat about this video?"
-        message="This conversation won’t be kept; the video, memory, brief and plans stay. A job still waiting for its Go is dropped; one that is running keeps going."
+        message="The whole team moves to the new chat about this video. The current one stays in this video’s chats for 7 days; the video, memory, brief and plans stay, and a running job keeps going."
         confirmLabel="New chat"
         cancelLabel="Keep this one"
         onConfirm={() => {
@@ -300,6 +307,19 @@ export default function EditorChatPanel({
           void agent.newChat().then((ok) => ok && onDraft(''))
         }}
         onCancel={() => setConfirmNew(false)}
+      />
+
+      <TeamChatsModal
+        open={chatsOpen}
+        onClose={() => setChatsOpen(false)}
+        currentId={agent.sessionId}
+        videoId={videoId}
+        onOpen={(id) => {
+          setChatsOpen(false)
+          if (id === agent.sessionId) return
+          firstScroll.current = true
+          void agent.openSession(id).then((ok) => ok && onDraft(''))
+        }}
       />
     </section>
   )

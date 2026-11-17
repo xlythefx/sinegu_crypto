@@ -859,9 +859,23 @@ GET/DELETE 405) over 15 tools in `App\Services\Ai\Tools`, registered in
 `AiTools::TOOLSETS`. Admin → AI Access (`/admin/ai-access`, full admins only,
 NOT in `collaboratorMayOpen`) makes/revokes keys and shows every call.
 Rules:
-- **Read-only by construction.** A tool never writes; a new tool is a new
-  `definitions()` entry in a Toolset, never a write path. The key is not a
-  user and never passes `auth:sanctum`.
+- **Read-only by construction — with ONE exception (owner, 2026-11-17).** A
+  tool never writes; a new tool is a new `definitions()` entry in a Toolset,
+  never a write path. The exception is `CreativeMakeTools` (price_generation
+  → start_generation, save_plan_idea), a `KeyAwareToolset` that is listed and
+  runs ONLY for a key with `ai_access_keys.can_create` (off until a full admin
+  presses "Allow creating", confirmed; `PUT /admin/ai-access/keys/{id}`).
+  Money moves in two steps: the free price answers a `quote_id` (cache, 15
+  min, tied to the key) and start PULLS it, so one price starts once. Limits
+  before anything is sent: $1.00 per generation, $20 per key per UTC day
+  (`creative_generations.ai_access_key_id`), the monthly cap. Everything it
+  makes is labelled "Grok" (`created_by_name`, no uni_id). Prompts and plans
+  pass `CreativeAiOutput::privateIn` — Grok READS money and names, a picture
+  or post may not carry them. The 8 `creative_*` read tools are for every
+  key. Both Creatives toolsets are `AiTools::CONNECTOR_ONLY`: the Creatives
+  assistant's query_data runs `dataToolNames()` only, so its tool list (and
+  `TOOLS_VERSION`) did not change. The key is not a user and never passes
+  `auth:sanctum`.
 - **Not `/api/public/*`.** It carries names, balances, P&L and invoices (owner
   decided real names, billing included), so it lives behind its own key:
   `pxa_…` in `X-Api-Key` (or Bearer), SHA-256 stored only
@@ -967,8 +981,19 @@ Planner / Studio / Character / Budget. API `/admin/creatives*`,
     checks the budget and runs the steps through `CreativeGenerator`. Jobs
     advance in `creatives:poll`.
   - **Memory is team-wide** (`creative_memories`). The brief is Markdown on
-    `creative_settings`. Chat sessions are per person and pruned after 7 days,
-    by the owner's choice: only the current chat matters.
+    `creative_settings`. Chats are pruned after 7 days idle, by the owner's
+    choice: only the current chat matters.
+  - **Chats are SHARED by every staff role (owner, 2026-11-17).** Any staff
+    member opens, continues, Goes or cancels anything in any chat (the
+    "Chats" list, `GET /agent/sessions`); the workspace opens the caller's own
+    newest by default, the editor ONE chat per video for everyone. Each person
+    message stores `display.author`; old ones fall back to `started_by`
+    (`user_name`). While a turn says `continue` the chat is HELD for that
+    person (`CreativeAgent::answeringFor`, cache, 180 s): anyone else's turn
+    is `SESSION_BUSY` naming them — the client-stepped loop would otherwise
+    interleave two people's messages between steps. `CreativeAgentSession::
+    actor()` = the person being answered: plans, videos and a job's owner are
+    theirs. The client re-reads an idle chat every 10 s.
   - Every model call is an AI call of kind `agent` under the same cap.
 - No auto-posting. Posting is download → post by hand.
 
@@ -1000,10 +1025,21 @@ instead of stitching single clips in outside apps. Plan: `~/.claude/plans/here-s
   `seedance-reference`). Pixel is OFF by default. Seedance is priced at
   Higgsfield's live rate (480p 0.1177, 720p 0.2647 USD/s).
 - **Bulk generation**: `CreativeAgentJobs::advance` starts every unblocked
-  step (≤ `MAX_IN_FLIGHT` 4), a still's animation after it; each clip lands
-  in its scene slot as it finishes; one failed scene ends the job
-  `completed_with_failures`, not the others. `MAX_STEPS` 12. Editor-born jobs
-  have no chat (`session_id` NULL, `owner_uni_id`), any staff member may Go.
+  step (≤ `MAX_IN_FLIGHT` 6 — was 4 until 2026-11-17), a still's animation
+  after it; each clip lands in its scene slot as it finishes; one failed
+  scene ends the job `completed_with_failures`, not the others. `MAX_STEPS`
+  12. Editor-born jobs have no chat (`session_id` NULL, `owner_uni_id`), any
+  staff member may Go.
+- **History + timers (2026-11-17, "why is it slow / why did it fail").**
+  Steps record `started_at` / `ended_at`; `GET /videos/{id}/history`
+  (`CreativeVideoHistory`) lists every step of every job past Go with its
+  generation (a retry ADDS a row, the old failure stays). A running scene
+  carries `progress` with `typical_seconds` = `CreativeTimings` (median
+  submit → done per model over 60 days, ≥ 3 runs, else null — never a
+  guess). `creatives:poll --for=100 --every=30` (odd minutes, background,
+  exits as soon as nothing runs): with the editor closed a still's
+  animation used to wait up to 2 minutes. Higgsfield's own rendering is
+  most of the wait and is not ours to shorten.
 - **Styles library** (`creative_styles`, seeded: data-recap, pixel-arcade,
   pixel-storytime, cinematic-broll, fast-cut) + the **Playbook**
   (`creative_settings.playbook_markdown`), both editable on the page, both

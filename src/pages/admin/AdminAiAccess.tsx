@@ -12,7 +12,7 @@ import { ApiError } from '../../services/api'
 
 const TITLE = 'AI Access'
 const SUBTITLE =
-  'Let an AI assistant (Grok) answer questions about signals, trades, assets and billing. Read-only, one key per person.'
+  'Let an AI assistant (Grok) answer questions about signals, trades, assets, billing and Creatives. Read-only unless you allow a key to create in Creatives; one key per person.'
 
 /**
  * Admin → AI Access: how to connect Grok, the keys that let it in, what it
@@ -43,7 +43,7 @@ export default function AdminAiAccess() {
         <KeysCard data={data} onChanged={reload} delay={50} />
         <HelpCard delay={100} />
         <QuestionLog titles={titles} delay={150} />
-        <WhatItReadsCard tools={data.tools} delay={200} />
+        <WhatItReadsCard tools={data.tools} create={data.create} delay={200} />
       </div>
     </AdminLayout>
   )

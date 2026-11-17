@@ -79,7 +79,7 @@ export const ADMIN_TODOS: AdminTodo[] = [
     kind: 'action',
     title: 'Raise the number of clips made at once, once Higgsfield\'s limit is known',
     added: '2026-11-12',
-    why: 'A video\'s clips are made 4 at a time, a safe guess because Higgsfield has not published how many requests one account may run together. If Higgsfield allows more, a 6-scene video is ready sooner.',
+    why: 'A video\'s clips are made 6 at a time (raised from 4 on 17 Nov 2026). That is still a guess, because Higgsfield has not published how many requests one account may run together. If it allows more, a full video is ready sooner; if it allows fewer, the extra clips wait in Higgsfield\'s own queue.',
     steps: [
       'After the first few full videos, check in Higgsfield\'s dashboard (or ask their support) how many generations one account may run at the same time.',
       'Write that number in the note below; a developer then raises the limit to match.',

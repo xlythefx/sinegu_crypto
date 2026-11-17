@@ -1,8 +1,10 @@
-import { EyeOff, ScanSearch } from 'lucide-react'
-import type { AiToolInfo } from '../../../types/aiAccess'
+import { EyeOff, Palette, ScanSearch } from 'lucide-react'
+import type { AiCreateAccess, AiToolInfo } from '../../../types/aiAccess'
 
 interface WhatItReadsCardProps {
   tools: AiToolInfo[]
+  /** What a key switched on for Creatives may also do. */
+  create?: AiCreateAccess
   delay?: number
 }
 
@@ -10,14 +12,14 @@ const NEVER = [
   'Exchange API keys and secrets',
   'Passwords, login sessions and reset codes',
   'Email addresses and IP addresses of customers',
-  'Any way to place, close or change anything',
+  'Any way to place, close or change a trade, an account, a person or an invoice',
 ]
 
 /**
  * What a key opens, in the tools' own titles (from the API, so a new tool
  * shows up here without a frontend change), and what it never does.
  */
-export default function WhatItReadsCard({ tools, delay }: WhatItReadsCardProps) {
+export default function WhatItReadsCard({ tools, create, delay }: WhatItReadsCardProps) {
   return (
     <section
       className="grid min-w-0 grid-cols-1 gap-4 rounded-card border border-border bg-surface p-card lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)] max-[480px]:p-3.5"
@@ -60,6 +62,26 @@ export default function WhatItReadsCard({ tools, delay }: WhatItReadsCardProps) 
           Customer names, balances and P&amp;L ARE shared, by the owner’s decision. Whatever the AI reads is sent to its
           provider (xAI for Grok).
         </p>
+        {create && (
+          <div className="mt-4 rounded-row border border-accent-line bg-accent-soft px-3.5 py-3">
+            <h3 className="flex items-center gap-2 font-display text-[13.5px] font-extrabold text-text">
+              <Palette size={14} className="text-accent" aria-hidden="true" />
+              With “May create in Creatives”
+            </h3>
+            <ul className="mt-2 flex flex-col gap-1">
+              {create.tools.map((t) => (
+                <li key={t.name} className="text-[12.5px] leading-[1.5] text-muted">
+                  — {t.title}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-[12px] leading-[1.55] text-muted">
+              It always says the price and asks first. At most ${create.max_per_generation_usd.toFixed(2)} per image or
+              clip and ${create.max_per_key_day_usd.toFixed(0)} a day per key, inside the team’s monthly cap. Labelled “
+              {create.label}” everywhere. It can never put a money amount or a customer’s name into a picture or a post.
+            </p>
+          </div>
+        )}
       </div>
     </section>
   )

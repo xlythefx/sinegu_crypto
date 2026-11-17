@@ -426,6 +426,8 @@ export interface CreativeAgentMessage {
    */
   thinking?: string | null
   mode?: CreativeAgentMode
+  /** kind 'user' in a shared chat: who wrote it (absent before 2026-11-17 = whoever started the chat). */
+  author?: string
   /** ISO. */
   created_at: string
 }
@@ -485,6 +487,25 @@ export interface CreativeAgentSession {
   mode: CreativeAgentMode
   /** Set = this is that video's editor chat (Creatives v2.1). */
   video_id?: number | null
+  /** Who started this shared chat. */
+  started_by?: string | null
+}
+
+/** One of the team's live chats (GET /agent/sessions), for the Chats list. */
+export interface CreativeTeamChat {
+  id: string
+  video_id: number | null
+  started_by: string | null
+  /** Everyone who has written in it. */
+  people: string[]
+  /** Person messages. */
+  messages: number
+  last_text: string | null
+  last_author: string | null
+  /** The assistant is answering this person right now. */
+  answering: string | null
+  created_at: string | null
+  updated_at: string | null
 }
 
 /** GET /agent/session and POST /agent/sessions. */
@@ -498,6 +519,8 @@ export interface CreativeAgentSessionState {
    * closed and this is a fresh one.
    */
   notice?: 'new_tools' | null
+  /** The assistant is answering this teammate in this chat right now (null = nobody). */
+  answering?: string | null
 }
 
 export type CreativeAgentTurnStatus = 'continue' | 'done' | 'awaiting_approval' | 'error'

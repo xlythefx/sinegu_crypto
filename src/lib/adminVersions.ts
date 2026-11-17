@@ -14,6 +14,84 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'grok-creatives',
+    date: '2026-11-17',
+    kind: 'new',
+    area: 'AI Access',
+    title: 'Grok can see Creatives, and make images and clips when allowed',
+    summary:
+      'Grok can now answer questions about Creatives: the content plan, the video projects, what was generated and what it cost, the budget, the brief and the team’s chats. On a key switched on for it, Grok can also make images and clips on Higgsfield and save post ideas. Everything it makes is labelled “Grok”.',
+    howItWorks: [
+      'Reading works on every key: “What’s planned for TikTok this week?”, “Which scenes of the BTC video failed and why?”, “How much of this month’s budget is left?”.',
+      'Making something takes two steps. Example: “Make a still of Pixel celebrating a green day.” Grok asks Higgsfield for the price (free) and answers “about $0.004, $73 of $100 left this month. Shall I start it?” Only after you say yes does it start, and that price can be started only once.',
+      'Limits: at most $1.00 for one image or clip, $20 a day per key, and never past the team’s monthly cap. Pixel’s pictures and posts may never carry a money amount or a customer’s name, even though Grok can read them.',
+      'It is OFF for every key until a full admin presses “Allow creating” on that key in Admin → AI Access (confirmed first). The key shows what its Grok spent today and this month. “Switch off” returns it to reading only.',
+      'What Grok makes appears in the Gallery and the Budget as “Grok”; post ideas land in the planner at the Idea stage for the team to review. Nothing is posted by itself.',
+    ],
+    technical: [
+      'CreativeTools (8 read tools) and CreativeMakeTools (price_generation, start_generation, save_plan_idea; a KeyAwareToolset listed and run only for ai_access_keys.can_create). Quotes in cache 15 min, pulled on start. creative_generations.ai_access_key_id; PUT /admin/ai-access/keys/{id} {can_create}. Download links: signed, 24 h. The Creatives assistant’s query_data still runs only the data tools (AiTools::dataToolNames), so its tool list did not change.',
+    ],
+    links: [{ label: 'AI Access', href: '/admin/ai-access' }],
+  },
+  {
+    id: 'creatives-shared-chats',
+    date: '2026-11-17',
+    kind: 'improved',
+    area: 'Creatives',
+    title: 'Creatives chats are shared by the whole team, with names on every message',
+    summary:
+      'Every staff member can now see and continue every chat with the Creatives assistant. Each message shows who wrote it and when, and each video has one chat for the whole team.',
+    howItWorks: [
+      'The new “Chats” button (Creatives top bar, and in the video editor’s chat) lists the team’s chats from the last 7 days: who started each, who wrote in it, and the latest message. Open one to read it or carry on.',
+      'Each message shows its author, for example “Dima · 14:02”.',
+      'In the video editor everyone lands in the same chat for that video. “New chat” starts the next one for everyone; the old one stays in the list.',
+      'While the assistant is answering someone, the chat waits for that answer to finish. A teammate who types meanwhile sees “The assistant is still answering Dima in this chat. It’s yours in a moment.” This keeps two people’s requests from getting mixed up.',
+      'A teammate’s new messages appear on your screen within about 10 seconds, without refreshing.',
+      'Anything the assistant makes or spends is recorded under the person it was answering.',
+    ],
+    technical: [
+      'CreativeAgent::resolveSession: any staff member may open a chat by id; the editor chat is the newest live session of the video (any user). Person messages store display.author. answeringFor(): a cache hold per session while a turn says continue (SESSION_BUSY names the person, 180 s TTL). CreativeAgentSession::actor() = the person being answered (plans, videos, job owner). GET /admin/creatives/agent/sessions. Idle poll 10 s.',
+    ],
+    links: [{ label: 'Creatives', href: '/admin/creatives' }],
+  },
+  {
+    id: 'creatives-faster-generation',
+    date: '2026-11-17',
+    kind: 'improved',
+    area: 'Creatives',
+    title: 'Videos are made faster, and each scene shows how long it is taking',
+    summary:
+      'A scene being made now shows a live timer and how long that usually takes, so a slow scene no longer looks stuck. More scenes are made at the same time, and a video keeps moving while nobody has the editor open.',
+    howItWorks: [
+      'Timer: “Making the still image (1 of 2) · 1 m 40 s · usually about 3 min” on the scene, and the elapsed time on its tile in the timeline. Past 1.5 times the usual time it says it is taking longer than usual and carries on by itself. The “usually” figure comes from our own finished generations, so it appears once each model has a few.',
+      'Why a Kling scene takes two waits: Higgsfield first makes a still image, then animates it. Higgsfield’s own rendering is most of the time and is outside our control.',
+      'Up to 6 steps of a video now run at once (was 4), so a 6-scene Kling video starts all six stills together.',
+      'With the editor closed, the server now checks Higgsfield about every 30 seconds while something is being made (was every 2 minutes), so a still’s animation starts sooner. When nothing is being made it does no extra work.',
+    ],
+    technical: [
+      'CreativeAgentJobs::MAX_IN_FLIGHT 4 → 6. creatives:poll --for=100 --every=30 (odd minutes, runInBackground; stops as soon as nothing runs). Steps record started_at / ended_at. CreativeTimings: median submit → done per model over 60 days, ≥ 3 runs. Scene payload: progress {started_at, step, steps, step_label, waiting, typical_seconds}.',
+    ],
+    links: [{ label: 'Video projects', href: '/admin/creatives?panel=videos' }],
+  },
+  {
+    id: 'creatives-scene-history',
+    date: '2026-11-17',
+    kind: 'new',
+    area: 'Creatives',
+    title: 'Video editor: a history of every attempt, and why one failed',
+    summary:
+      'Every attempt at a video’s scenes is now kept: when it started, how long it took, whether it was made or failed, Higgsfield’s own reason, what it cost and who started it. Regenerating a scene no longer wipes out why it failed before.',
+    howItWorks: [
+      'Click a scene: under it, “Attempts” lists its latest tries. Example: “Failed · Still image · Character image · Higgsfield’s moderation blocked this result. Nothing was charged · took 45 s · $0 · by Dima”, then the retry: “Made · took 2 m 05 s · $0.07 · by Christian”.',
+      'The new “History” tab lists every attempt at every scene of the video, newest first, with how many failed. Click one to jump to its scene.',
+      'A step that never started (because the still before it failed) says so, and costs nothing.',
+    ],
+    technical: [
+      'GET /admin/creatives/videos/{id}/history (CreativeVideoHistory): every step of every job of the video past Go, with its generation; started_at / ended_at on steps from now on, generation times for older ones.',
+    ],
+    links: [{ label: 'Video projects', href: '/admin/creatives?panel=videos' }],
+  },
+  {
     id: 'telegram-whatsapp-required',
     date: '2026-11-16',
     kind: 'new',

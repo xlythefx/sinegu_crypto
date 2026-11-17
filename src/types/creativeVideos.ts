@@ -65,6 +65,48 @@ export interface CreativeVideoScene {
   duration_ms: number
   status: SceneStatus
   error: string | null
+  /** While a job makes this scene: where it is and how long it usually takes. */
+  progress?: SceneProgress | null
+}
+
+export interface SceneProgress {
+  /** When the scene's first step started (ISO). */
+  started_at: string | null
+  /** 1-based step of `steps` (a Kling scene: 1 = still image, 2 = animation). */
+  step: number
+  steps: number
+  step_label: string
+  /** The current step has not started yet (waiting for a free slot or its still). */
+  waiting: boolean
+  /** Median of our own finished runs of these models; null until there are enough. */
+  typical_seconds: number | null
+}
+
+export type AttemptStatus = 'made' | 'running' | 'waiting' | 'failed' | 'canceled' | 'skipped'
+
+/** One step of one job for this video: the editor's History. */
+export interface SceneAttempt {
+  id: string
+  job_id: number
+  job_title: string
+  step_index: number
+  scene_id: number | null
+  scene_label: string | null
+  /** null = the scene has since been removed. */
+  scene_position: number | null
+  /** Still image | Animation | Image | Clip */
+  role: string
+  model: string
+  model_label: string
+  status: AttemptStatus
+  error: string | null
+  started_at: string | null
+  ended_at: string | null
+  seconds: number | null
+  usd: number
+  started_by: string | null
+  approved_by: string | null
+  generation_id: number | null
 }
 
 /* ---------- the timeline document (client-owned JSON) ---------- */
