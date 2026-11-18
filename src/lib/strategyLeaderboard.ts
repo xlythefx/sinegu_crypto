@@ -1,5 +1,5 @@
 /** Pure helpers for the admin dashboard's Strategies tab — no React.
- *  Everything is BEFORE fees, like lib/strategyStats.ts it builds on. */
+ *  Everything is AFTER fees, like lib/strategyStats.ts it builds on. */
 
 import {
   computeStrategyStats,
@@ -93,7 +93,10 @@ export interface ExchangeSplit {
   exchange: string
   trades: number
   winrate: number
+  /** After fees. */
   totalPnl: number
+  /** Before fees (hover). */
+  totalPnlGross: number
   profitFactor: number | null
 }
 
@@ -114,6 +117,7 @@ export function splitByExchange(trades: StrategyTrade[]): ExchangeSplit[] {
         trades: s.totalTrades,
         winrate: s.winrate,
         totalPnl: s.totalPnl,
+        totalPnlGross: s.totalPnlGross,
         profitFactor: s.profitFactor,
       }
     })

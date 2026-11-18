@@ -1,11 +1,14 @@
 /** Pure strategy-statistics helpers — no React. Mirrors the mother
  *  dashboard's AdminStrategies math over closed trades.
  *
- *  BASIS: every figure is the strategy's result BEFORE exchange fees —
- *  `realized_pnl` (stored net of fees) with `exchange_fee` added back — and
- *  the after-fees twin rides along (`cumulativeNet`, `totalPnlNet`) so a
- *  curve can show what landed on hover. A trade with no fee on record (closed
- *  before the fee ledger existed) counts the same on both bases. */
+ *  BASIS: every figure is AFTER exchange fees — `realized_pnl` as stored, what
+ *  actually landed on the account (the user's rule, 2026-11-19: "always show
+ *  after fees first, before fees on hover"). Until then these pages led before
+ *  fees, and a SANTOS week of +$0.30 wins read "all green" while the same
+ *  trades were red in the customer's Binance app. The before-fees twin rides
+ *  along (`cumulativeGross`, `totalPnlGross`, `pnlGross`) for the hover. A
+ *  trade with no fee on record (closed before the fee ledger existed) counts
+ *  the same on both bases. */
 
 import { displaySymbol, seriesColor } from './chart'
 
@@ -24,14 +27,14 @@ export interface StrategyTrade {
   increments?: number
 }
 
-/** The trade's P&L before fees — what the strategy made. */
+/** The trade's P&L after fees — what landed. Every strategy figure's basis. */
 export function tradePnl(t: StrategyTrade): number {
-  return tradePnlNet(t) + tradeFee(t)
+  return Number(t.realized_pnl) || 0
 }
 
-/** The trade's P&L after fees — what landed. */
-export function tradePnlNet(t: StrategyTrade): number {
-  return Number(t.realized_pnl) || 0
+/** The trade's P&L before fees — what the strategy made on price. Hover only. */
+export function tradePnlGross(t: StrategyTrade): number {
+  return tradePnl(t) + tradeFee(t)
 }
 
 /** The fee on record for the trade; 0 when there is none. */
@@ -51,10 +54,10 @@ export function parseTradeDate(raw: string): Date | null {
 export interface EquityPoint {
   index: number
   date: string
-  /** Cumulative P&L before fees. */
+  /** Cumulative P&L after fees. */
   cumulative: number
-  /** ...and after. */
-  cumulativeNet: number
+  /** ...and before. */
+  cumulativeGross: number
 }
 
 export interface StrategyStats {
@@ -63,9 +66,10 @@ export interface StrategyStats {
   wins: number
   losses: number
   winrate: number
-  /** Before fees. */
+  /** After fees. */
   totalPnl: number
-  totalPnlNet: number
+  /** Before fees (hover). */
+  totalPnlGross: number
   fees: number
   grossWin: number
   grossLoss: number
@@ -113,7 +117,7 @@ export function computeStrategyStats(
     : allTrades
 
   let cumulative = 0
-  let cumulativeNet = 0
+  let cumulativeGross = 0
   let fees = 0
   let peak = 0
   let maxDrawdown = 0
@@ -126,9 +130,9 @@ export function computeStrategyStats(
     const pnl = tradePnl(t)
     pnlValues.push(pnl)
     cumulative += pnl
-    cumulativeNet += tradePnlNet(t)
+    cumulativeGross += tradePnlGross(t)
     fees += tradeFee(t)
-    equitySeries.push({ index: idx + 1, date: t.closed_at, cumulative, cumulativeNet })
+    equitySeries.push({ index: idx + 1, date: t.closed_at, cumulative, cumulativeGross })
     peak = Math.max(peak, cumulative)
     maxDrawdown = Math.max(maxDrawdown, peak - cumulative)
     if (pnl >= 0) winPnls.push(pnl)
@@ -150,7 +154,7 @@ export function computeStrategyStats(
     losses: lossPnls.length,
     winrate: totalTrades > 0 ? (winPnls.length / totalTrades) * 100 : 0,
     totalPnl: cumulative,
-    totalPnlNet: cumulativeNet,
+    totalPnlGross: cumulativeGross,
     fees,
     grossWin,
     grossLoss,
@@ -172,7 +176,10 @@ export function computeStrategyStats(
 
 export interface DetailTrade {
   symbol: string
+  /** After fees. */
   pnl: number
+  /** Before fees (hover). */
+  pnlGross: number
   closed_at: string
 }
 
@@ -184,7 +191,10 @@ export interface AssetStat {
   wins: number
   losses: number
   winrate: number
+  /** After fees. */
   totalPnl: number
+  /** Before fees (hover). */
+  totalPnlGross: number
   avgPnl: number
   profitFactor: number | null
 }
@@ -223,9 +233,10 @@ export interface StrategyDetailStats {
   wins: number
   losses: number
   winrate: number
-  /** Before fees. */
+  /** After fees. */
   totalPnl: number
-  totalPnlNet: number
+  /** Before fees (hover). */
+  totalPnlGross: number
   fees: number
   grossWin: number
   grossLoss: number
@@ -290,7 +301,7 @@ export function computeStrategyDetail(
   )
 
   let cumulative = 0
-  let cumulativeNet = 0
+  let cumulativeGross = 0
   let fees = 0
   let peak = 0
   let maxDrawdown = 0
@@ -321,9 +332,9 @@ export function computeStrategyDetail(
     pnlValues.push(pnl)
     pnlDates.push(t.closed_at)
     cumulative += pnl
-    cumulativeNet += tradePnlNet(t)
+    cumulativeGross += tradePnlGross(t)
     fees += tradeFee(t)
-    equitySeries.push({ index: idx + 1, date: t.closed_at, cumulative, cumulativeNet })
+    equitySeries.push({ index: idx + 1, date: t.closed_at, cumulative, cumulativeGross })
     peak = Math.max(peak, cumulative)
     maxDrawdown = Math.max(maxDrawdown, peak - cumulative)
     bestTrade = Math.max(bestTrade, pnl)
@@ -341,9 +352,10 @@ export function computeStrategyDetail(
       maxLossStreak = Math.max(maxLossStreak, curLoss)
     }
 
+    const row = { symbol, pnl, pnlGross: tradePnlGross(t), closed_at: t.closed_at }
     const list = assetMap.get(symbol)
-    if (list) list.push({ symbol, pnl, closed_at: t.closed_at })
-    else assetMap.set(symbol, [{ symbol, pnl, closed_at: t.closed_at }])
+    if (list) list.push(row)
+    else assetMap.set(symbol, [row])
 
     const d = parseTradeDate(t.closed_at)
     if (d) {
@@ -374,6 +386,7 @@ export function computeStrategyDetail(
       const gWin = wins.reduce((s, t) => s + t.pnl, 0)
       const gLoss = losses.reduce((s, t) => s + Math.abs(t.pnl), 0)
       const totalPnl = list.reduce((s, t) => s + t.pnl, 0)
+      const totalPnlGross = list.reduce((s, t) => s + t.pnlGross, 0)
       return {
         ticker,
         display: displaySymbol(ticker),
@@ -383,6 +396,7 @@ export function computeStrategyDetail(
         losses: losses.length,
         winrate: list.length ? (wins.length / list.length) * 100 : 0,
         totalPnl,
+        totalPnlGross,
         avgPnl: list.length ? totalPnl / list.length : 0,
         profitFactor: gLoss > 0 ? gWin / gLoss : null,
       }
@@ -412,7 +426,7 @@ export function computeStrategyDetail(
     losses: lossPnls.length,
     winrate: totalTrades > 0 ? (winPnls.length / totalTrades) * 100 : 0,
     totalPnl: cumulative,
-    totalPnlNet: cumulativeNet,
+    totalPnlGross: cumulativeGross,
     fees,
     grossWin,
     grossLoss,
@@ -437,6 +451,7 @@ export function computeStrategyDetail(
     trades: sorted.map((t) => ({
       symbol: t.symbol.trim(),
       pnl: tradePnl(t),
+      pnlGross: tradePnlGross(t),
       closed_at: t.closed_at,
     })),
   }

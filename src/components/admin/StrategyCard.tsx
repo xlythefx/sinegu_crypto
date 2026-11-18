@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { fmtMoney, fmtShortDate, fmtSignedMoney } from '../../lib/format'
 import type { StrategyStats } from '../../lib/strategyStats'
+import PnlBreakdown from '../ui/PnlBreakdown'
 
 const W = 600
 const H = 220
@@ -186,12 +187,15 @@ export default function StrategyCard({
             >
               <span className={TILE_LABEL}>
                 <TrendingUp size={11} />
-                Total P&L
+                Total P&L · after fees
               </span>
               <span
                 className={`${TILE_VALUE} ${stats.totalPnl >= 0 ? 'text-green' : 'text-red'}`}
               >
-                {fmtSignedMoney(stats.totalPnl)}
+                {/* hoverOnly: the card sits inside a link. */}
+                <PnlBreakdown hoverOnly gross={stats.totalPnlGross} net={stats.totalPnl}>
+                  {fmtSignedMoney(stats.totalPnl)}
+                </PnlBreakdown>
               </span>
             </div>
             <div className={TILE}>

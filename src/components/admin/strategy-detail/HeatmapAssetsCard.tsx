@@ -3,6 +3,7 @@ import { Calendar, ChevronLeft, ChevronRight, Trophy, TrendingDown, TrendingUp }
 import SignedBars from './SignedBars'
 import { fmtMoney, fmtSignedMoney } from '../../../lib/format'
 import type { StrategyDetailStats } from '../../../lib/strategyStats'
+import PnlBreakdown from '../../ui/PnlBreakdown'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -256,7 +257,9 @@ export default function HeatmapAssetsCard({ stats, onOpenAsset }: Props) {
                             {a.display}
                           </span>
                           <span className="font-mono font-bold text-green">
-                            +{fmtMoney(a.totalPnl).slice(1)}
+                            <PnlBreakdown hoverOnly gross={a.totalPnlGross} net={a.totalPnl} heading={a.display}>
+                              +{fmtMoney(a.totalPnl).slice(1)}
+                            </PnlBreakdown>
                           </span>
                           <span className={WL_WR}>{a.winrate.toFixed(0)}%</span>
                         </button>
@@ -282,7 +285,9 @@ export default function HeatmapAssetsCard({ stats, onOpenAsset }: Props) {
                             {a.display}
                           </span>
                           <span className="font-mono font-bold text-red">
-                            {fmtSignedMoney(a.totalPnl)}
+                            <PnlBreakdown hoverOnly gross={a.totalPnlGross} net={a.totalPnl} heading={a.display}>
+                              {fmtSignedMoney(a.totalPnl)}
+                            </PnlBreakdown>
                           </span>
                           <span className={WL_WR}>{a.winrate.toFixed(0)}%</span>
                         </button>

@@ -20,12 +20,12 @@ interface Mark {
   yFrac: number
   date: string
   cumulative: number
-  cumulativeNet: number
+  cumulativeGross: number
 }
 
 /** Cumulative-P&L area chart for the strategy (SVG, our design tokens).
- *  Drawn BEFORE exchange fees — the strategy's own result; hovering a point
- *  reads out the after-fees figure beside it. */
+ *  Drawn AFTER exchange fees — what landed on the accounts; hovering a point
+ *  reads out the before-fees figure beside it. */
 export default function EquityCurveCard({
   equitySeries,
 }: {
@@ -59,7 +59,7 @@ export default function EquityCurveCard({
       yFrac: yOf(p.cumulative) / H,
       date: p.date,
       cumulative: p.cumulative,
-      cumulativeNet: p.cumulativeNet,
+      cumulativeGross: p.cumulativeGross,
     }))
     return {
       line: `M${pts.join(' L')}`,
@@ -96,7 +96,7 @@ export default function EquityCurveCard({
         </span>
         <div>
           <div className={CARD_TITLE}>Equity Curve</div>
-          <div className={CARD_SUB}>Cumulative P&L over time · before fees</div>
+          <div className={CARD_SUB}>Cumulative P&L over time · after fees</div>
         </div>
       </div>
 
@@ -172,13 +172,13 @@ export default function EquityCurveCard({
                 }`}
               >
                 {fmtSignedMoney(hovered.cumulative)}
-                <span className="ml-1.5 text-[10.5px] font-semibold text-faint">before fees</span>
+                <span className="ml-1.5 text-[10.5px] font-semibold text-faint">after fees</span>
               </div>
               <div className="font-mono text-[11px] text-muted whitespace-nowrap">
-                {fmtSignedMoney(hovered.cumulativeNet)} after fees
-                {hovered.cumulative !== hovered.cumulativeNet && (
+                {fmtSignedMoney(hovered.cumulativeGross)} before fees
+                {hovered.cumulative !== hovered.cumulativeGross && (
                   <span className="text-faint">
-                    {' '}· fees ${fmtNum(hovered.cumulative - hovered.cumulativeNet)}
+                    {' '}· fees ${fmtNum(hovered.cumulativeGross - hovered.cumulative)}
                   </span>
                 )}
               </div>

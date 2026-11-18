@@ -247,9 +247,9 @@ export default function StrategyDetail() {
               }`}
             >
               <span className="text-[9.5px] font-extrabold tracking-[0.5px] text-faint uppercase">
-                Total P&L · before fees
+                Total P&L · after fees
               </span>
-              <PnlBreakdown gross={detail.totalPnl} net={detail.totalPnlNet} heading={detail.key}>
+              <PnlBreakdown gross={detail.totalPnlGross} net={detail.totalPnl} heading={detail.key}>
                 <span className="text-[16px] font-extrabold font-mono">
                   {fmtSignedMoney(detail.totalPnl)}
                 </span>
@@ -365,12 +365,12 @@ export default function StrategyDetail() {
             >
               <MetricTile
                 icon={<TrendingUp size={13} />}
-                label="Total P&L · before fees"
+                label="Total P&L · after fees"
                 value={fmtSignedMoney(detail.totalPnl)}
                 tone={detail.totalPnl >= 0 ? 'pos' : 'neg'}
                 sub={
                   detail.fees !== 0
-                    ? `${fmtSignedMoney(detail.totalPnlNet)} after fees`
+                    ? `${fmtSignedMoney(detail.totalPnlGross)} before fees`
                     : `Gross win +${fmtMoney(detail.grossWin).slice(1)}`
                 }
               />
@@ -429,7 +429,7 @@ export default function StrategyDetail() {
               className="grid grid-cols-[1.6fr_1fr] gap-stack items-stretch max-[900px]:grid-cols-1"
               data-aos="fade-up"
             >
-              {/* Before fees, with the after-fees figure on hover — the same
+              {/* After fees, with the before-fees figure on hover — the same
                   card the admin strategy detail draws. */}
               {detail.equitySeries.length > 0 ? (
                 <EquityCurveCard equitySeries={detail.equitySeries} />
@@ -667,7 +667,13 @@ export default function StrategyDetail() {
                           <td
                             className={`${TD} text-right font-mono ${pnl < 0 ? 'text-red' : 'text-green'}`}
                           >
-                            {fmtSignedMoney(pnl)}
+                            <PnlBreakdown
+                              hoverOnly
+                              gross={pnl + (r.exchange_fee == null ? 0 : num(r.exchange_fee))}
+                              net={pnl}
+                            >
+                              {fmtSignedMoney(pnl)}
+                            </PnlBreakdown>
                           </td>
                           <td className={`${TD} text-right font-mono text-muted`}>
                             {r.exit_price ? fmtMoney(num(r.exit_price)) : '—'}

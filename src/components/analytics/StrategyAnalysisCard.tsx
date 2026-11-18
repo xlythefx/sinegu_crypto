@@ -83,7 +83,7 @@ export default function StrategyAnalysisCard() {
             Strategy Analysis
           </div>
           <div className="text-[12px] text-muted mt-px">
-            How each of your trading strategies is performing · before fees
+            How each of your trading strategies is performing · after fees
           </div>
         </div>
       </div>
@@ -144,8 +144,8 @@ export default function StrategyAnalysisCard() {
                 <Sparkline stats={s} />
                 <div className="flex flex-col items-end gap-1 flex-none">
                   {/* The row is a link, so the hover is mouse-only; the
-                      after-fees line beneath is what a phone reads. */}
-                  <PnlBreakdown hoverOnly gross={s.totalPnl} net={s.totalPnlNet} heading={s.key}>
+                      before-fees line beneath is what a phone reads. */}
+                  <PnlBreakdown hoverOnly gross={s.totalPnlGross} net={s.totalPnl} heading={s.key}>
                     <span
                       className={`font-mono text-[15px] font-extrabold ${s.totalPnl < 0 ? 'text-red' : 'text-green'}`}
                     >
@@ -154,7 +154,7 @@ export default function StrategyAnalysisCard() {
                   </PnlBreakdown>
                   {s.fees !== 0 && (
                     <span className="font-mono text-[10.5px] text-faint whitespace-nowrap">
-                      {fmtSignedMoney(s.totalPnlNet)} after fees
+                      {fmtSignedMoney(s.totalPnlGross)} before fees
                     </span>
                   )}
                   <span className="inline-flex items-center gap-1 text-[11px] font-bold text-accent">

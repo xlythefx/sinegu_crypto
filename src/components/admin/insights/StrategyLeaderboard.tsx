@@ -81,7 +81,7 @@ export default function StrategyLeaderboard({ rows, enabled, selected, onSelect 
                       </div>
                     </td>
                     <td className={`${TD} text-right font-bold ${r.totalPnl < 0 ? 'text-red' : 'text-green'}`}>
-                      <PnlBreakdown gross={r.totalPnl} net={r.totalPnlNet} hoverOnly>
+                      <PnlBreakdown gross={r.totalPnlGross} net={r.totalPnl} hoverOnly>
                         {fmtSignedMoney(r.totalPnl)}
                       </PnlBreakdown>
                     </td>

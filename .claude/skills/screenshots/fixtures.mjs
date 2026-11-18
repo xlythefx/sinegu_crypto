@@ -914,11 +914,39 @@ const WEBHOOKS_BODY = {
 
 // ---------------------------------------------------------------- router
 /** Longest matching prefix wins; values may be functions (fresh dates per call). */
+/** GET /admin/strategies — invented closes. Several are small price wins that a
+ *  fee turns into losses, which is the case the after-fees view exists for. */
+const STRATEGY_TRADES = (() => {
+  const rows = []
+  const plan = [
+    ['VWMA-Reversion', 'SANTOSUSDT', [7.94, 12.91, 9.33, 112.16, 1.94, -7.48, -58.68, 3.71, -8.38, 15.04, 0.18]],
+    ['VWMA-Reversion', 'LTCUSDT', [24.1, -11.2, 0.4, 31.8, 0.9, -5.5, 18.2]],
+    ['ABCD-v1', 'LTCUSDT', [40.2, -18.4, 22.9, 0.6, -9.1, 35.7, 12.3, -4.2]],
+    ['ABCD-v1', 'RENDERUSDT', [15.4, -22.8, 8.8, 0.3, 27.1]],
+  ]
+  let n = 0
+  for (const [strategy, symbol, grosses] of plan) {
+    grosses.forEach((gross, i) => {
+      const fee = Math.round((0.6 + (i % 4) * 0.55) * 100) / 100
+      const day = String(1 + ((n * 3 + i) % 18)).padStart(2, '0')
+      rows.push({
+        strategy, symbol, exchange: 'binance', uni_id: 'sample',
+        realized_pnl: Math.round((gross - fee) * 100) / 100, exchange_fee: fee,
+        closed_at: `2026-11-${day} ${String(2 + (i % 20)).padStart(2, '0')}:15:00`, increments: 1,
+      })
+    })
+    n += 1
+  }
+  return rows.sort((a, b) => a.closed_at.localeCompare(b.closed_at))
+})()
+const STRATEGIES_BODY = { success: true, enabled: {}, trades: STRATEGY_TRADES }
+
 const GET = {
   '/admin/users/': (_user, path) => userProfile(path),
   '/admin/invoices/': (_user, path) => invoiceView(path),
   '/admin/affiliate/users/': { success: true, referrals: [] },
   '/admin/users': USERS_BODY,
+  '/admin/strategies': STRATEGIES_BODY,
   '/auth/me': (user) => ({ success: true, user }),
   '/admin/invoices': INVOICES_BODY,
   '/admin/tron-transfers': TRANSFERS_BODY,

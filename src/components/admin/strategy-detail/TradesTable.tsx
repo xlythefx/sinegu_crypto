@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { displaySymbol } from '../../../lib/chart'
 import { fmtDateTime, fmtSignedMoney } from '../../../lib/format'
+import PnlBreakdown from '../../ui/PnlBreakdown'
 import type { AssetStat, DetailTrade } from '../../../lib/strategyStats'
 
 const PER_PAGE = 10
@@ -101,7 +102,7 @@ export default function TradesTable({
         <div>
           <div className={CARD_TITLE}>Past Positions</div>
           <div className={CARD_SUB}>
-            {filtered.length} trades
+            {filtered.length} trades · after fees
             {assetFilter ? ` · filtered by ${displaySymbol(assetFilter)}` : ''}
           </div>
         </div>
@@ -195,7 +196,10 @@ export default function TradesTable({
                     <span className="font-bold">{displaySymbol(t.symbol)}</span>
                   </td>
                   <td className={`${TD_RIGHT} ${t.pnl >= 0 ? 'text-green' : 'text-red'}`}>
-                    {fmtSignedMoney(t.pnl)}
+                    {/* After fees — what the exchange app shows; before fees on hover. */}
+                    <PnlBreakdown gross={t.pnlGross} net={t.pnl} heading={displaySymbol(t.symbol)}>
+                      {fmtSignedMoney(t.pnl)}
+                    </PnlBreakdown>
                   </td>
                   <td className={`${TD_RIGHT} text-muted`}>
                     {fmtDateTime(t.closed_at)}

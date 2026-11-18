@@ -52,7 +52,7 @@ export function SignalReliabilityCard({ data }: { data: StrategyReliability | un
 /** One strategy's result on each exchange it traded on. */
 export function ExchangeSplitCard({ rows }: { rows: ExchangeSplit[] }) {
   return (
-    <InsightCard icon={Server} title="By exchange" subtitle="The same strategy on each venue, before fees">
+    <InsightCard icon={Server} title="By exchange" subtitle="The same strategy on each venue, after fees · hover for before fees">
       {rows.length === 0 ? (
         <EmptyNote>No trades.</EmptyNote>
       ) : (
@@ -63,6 +63,7 @@ export function ExchangeSplitCard({ rows }: { rows: ExchangeSplit[] }) {
               label={EXCHANGE_META[r.exchange as ExchangeKind]?.label ?? r.exchange}
               value={fmtSignedMoney(r.totalPnl)}
               tone={r.totalPnl < 0 ? 'neg' : 'pos'}
+              breakdown={{ gross: r.totalPnlGross, net: r.totalPnl }}
               sub={`${r.trades} trades · ${r.winrate.toFixed(1)}% win · PF ${r.profitFactor === null ? '∞' : r.profitFactor.toFixed(2)}`}
             />
           ))}

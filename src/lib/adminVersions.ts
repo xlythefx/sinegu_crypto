@@ -14,6 +14,24 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'strategy-pages-after-fees',
+    date: '2026-11-19',
+    kind: 'improved',
+    area: 'Strategies',
+    title: 'Strategy pages now show profit after exchange fees first',
+    summary:
+      'Every figure on the strategy pages is now what actually landed on the accounts, after Binance’s fee, which is the same number the exchange app shows. The figure before fees is still there: hover over (or tap) a figure to see before fees, the fee and after fees.',
+    howItWorks: [
+      'Example: a SANTOS close on 18 Nov made +$0.18 on price, but the fee was $2.25. The list used to show +$0.18 in green. It now shows −$2.07 in red, and the hover shows +$0.18 before fees, −$2.25 fees.',
+      'This covers the strategy list, each strategy’s page (the totals, the trade list, the equity curve, the per-coin winners and losers and the “By exchange” card), the Strategies leaderboard, and the trader’s own strategy pages.',
+      'Win rate, profit factor, drawdown and the other ratios are worked out after fees too, so a trade that only won before fees now counts as a loss. Some win rates will read lower than before. Nothing was recalculated in the data, and invoices are unchanged.',
+    ],
+    technical: [
+      'lib/strategyStats.ts: tradePnl = realized_pnl (net) is the basis; tradePnlGross adds exchange_fee back. Twins renamed cumulativeNet → cumulativeGross, totalPnlNet → totalPnlGross; DetailTrade.pnlGross, AssetStat.totalPnlGross, ExchangeSplit.totalPnlGross. Hovers use the shared PnlBreakdown.',
+    ],
+    links: [{ label: 'Strategies', href: '/admin/strategies' }],
+  },
+  {
     id: 'submaster-role-feed',
     date: '2026-11-18',
     kind: 'new',

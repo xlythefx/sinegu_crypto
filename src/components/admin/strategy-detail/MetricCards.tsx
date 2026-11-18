@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { fmtMoney, fmtSignedMoney } from '../../../lib/format'
+import PnlBreakdown from '../../ui/PnlBreakdown'
 import type { StrategyDetailStats } from '../../../lib/strategyStats'
 
 type Tone = 'pos' | 'neg' | 'accent' | ''
@@ -16,21 +17,25 @@ type Tone = 'pos' | 'neg' | 'accent' | ''
 interface Card {
   label: string
   value: string
+  /** Before / fees / after hover for a money value. */
+  breakdown?: { gross: number; net: number }
   sub: string
   tone: Tone
   icon: LucideIcon
 }
 
-/** The 7-tile metric grid at the top of the strategy detail page. */
+/** The 7-tile metric grid at the top of the strategy detail page.
+ *  Every figure is AFTER exchange fees; Total P&L shows before fees on hover. */
 export default function MetricCards({ stats }: { stats: StrategyDetailStats }) {
   const pf =
     stats.profitFactor === null ? '∞' : stats.profitFactor.toFixed(2)
 
   const cards: Card[] = [
     {
-      label: 'Total P&L',
+      label: 'Total P&L · after fees',
       value: fmtSignedMoney(stats.totalPnl),
-      sub: `Gross win: +${fmtMoney(stats.grossWin).slice(1)}`,
+      breakdown: { gross: stats.totalPnlGross, net: stats.totalPnl },
+      sub: `Before fees: ${fmtSignedMoney(stats.totalPnlGross)}`,
       tone: stats.totalPnl >= 0 ? 'pos' : 'neg',
       icon: DollarSign,
     },
@@ -108,7 +113,13 @@ export default function MetricCards({ stats }: { stats: StrategyDetailStats }) {
           <div
             className={`text-[20px] font-extrabold tracking-[-0.4px] font-mono ${toneClass(c.tone)}`}
           >
-            {c.value}
+            {c.breakdown ? (
+              <PnlBreakdown gross={c.breakdown.gross} net={c.breakdown.net}>
+                {c.value}
+              </PnlBreakdown>
+            ) : (
+              c.value
+            )}
           </div>
           <div className="mt-[3px] text-[10.5px] text-faint whitespace-nowrap overflow-hidden text-ellipsis">
             {c.sub}
