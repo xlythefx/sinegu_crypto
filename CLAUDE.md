@@ -1181,6 +1181,51 @@ exchange accounts (demo OR real money) follow the **test feed** and nothing else
   `tests/test_test_feed.py`), and the API's `App\Services\Engine\WebhookPaths`.
   A new path needs `deploy-nginx` or nginx 404s it.
 
+## Sub-master role + the sub-master feed (2026-11-18)
+
+`user_credentials.type = 'submaster'` (UserCredential::SUBMASTER, label
+"Sub-master") is a second HOUSE account (Dima's) trading its OWN signals.
+- **A third feed, built like the test feed**: `/{venue}_submaster_webhook`
+  (`hooks.SUBMASTER_WEBHOOK_PATHS` / `WebhookPaths::SUBMASTER` / the deploy
+  script's `ENGINE_WEBHOOK_PATHS`), its own secret
+  `BINANCE_ABCD_SUBMASTER_WEBHOOK_SECRET` = API `ENGINE_SUBMASTER_WEBHOOK_SECRET`
+  (mirrored; refused when equal to the main or test one). Sub-master accounts
+  trade ONLY it, and only they do. `WebhookPaths::feedForRole` is the ONE
+  role → feed rule (engine account list, manual console, Open positions,
+  Webhooks, FeedAudit); `hooks.PRIVATE_FEEDS` = test + submaster.
+- **Private**: admin Telegram only (purple banner), no public post, no
+  Discord, no main-account hold-back. **Real money**, unlike the test feed:
+  its refused closes go to `stuck_exits`, and SignalHealth / the hourly
+  failure summary read `TradeLog::REPORTED_FEEDS` (main + submaster).
+- **Trader dashboard only** — NOT in `EnsureAdmin::ROLES` / `ADMIN_ROLES` /
+  the staff group. Never billed, not a customer (`type = 'user'` keys), own
+  streak run (not in `StreakSizing::MASTER_FOLLOWERS`), same coin sizing.
+- Role changes into/out of it wait until the user is flat (409
+  `OPEN_POSITIONS`, any feed change). `trade_logs.feed` is 16 chars since.
+
+## High-risk alerts (2026-11-18)
+
+`App\Services\Alerts\RiskAlerts` is the ONE way a serious failure is told:
+a `risk_alerts` row (Overview → Needs attention, red, until a full admin
+presses "Mark resolved"; `attention.risk_alerts`, hidden from
+collaborators), an email to **`TRADE_ALERT_EMAILS`** (`RiskAlertNotice`,
+EmailCatalogue `risk-alert`; the user asked for christian@feature-digital.com
++ napaychristianpaolo@gmail.com), and Telegram only for what the engine did
+not already post (engine `POST /admin/risk-alert`, `_send_private`). One
+open row per kind + key; repeats count `occurrences` and re-email at most
+hourly. Kinds and where they are raised:
+- `feed_breach` — **`FeedAudit`** on every `POST /engine/{x}/trade-logs`:
+  each FILLED ENTRY account's owner role vs the row's feed, read here, never
+  trusted from the engine. Writes `trade_logs.breach` (the Signal Log's
+  proof). Exits are never judged (a manual close may reach any feed).
+- `exit_stuck` (listed only; `TradeAlerts::exitStuck` keeps its own email),
+  `kill_switch` (KillSwitch trip), `key_refused` (master/sub-master key
+  turning blocked in `keyStatus`; closes itself when ok again),
+  `assets_unavailable` (a rejected row with that reason, not the test feed),
+  `engine_down` (`engine:watch`, odd minutes, 2 misses; email only, closes
+  itself; on where `ENGINE_HEALTH_WATCH`, default production).
+A new serious failure = a new kind here, never a second mailer.
+
 ## Signal delivery proof (2026-10-25)
 
 TradingView gives up on a webhook after ~3 s and marks the alert "failed —

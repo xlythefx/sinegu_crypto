@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowRight, Globe, Power, ShieldAlert, UserPlus } from '
 import Tabs, { type TabItem } from '../../ui/Tabs'
 import AttentionPane from './AttentionPane'
 import PlatformPane from './PlatformPane'
+import RiskAlertsStrip from './RiskAlertsStrip'
 import { RecentPaymentStrip } from './RecentPaymentsCard'
 import { useApiData } from '../../../hooks/useApiData'
 import { useSessionUser } from '../../../hooks/useSessionUser'
@@ -88,6 +89,8 @@ export default function OverviewTab({ toolbarSlot }: { toolbarSlot?: HTMLElement
   const pendingCount = overview.data?.attention.pending_users_count ?? 0
   const disputed = overview.data?.attention.disputed_payments ?? 0
   const killedAssets = overview.data?.attention.killed_assets ?? []
+  // Absent for a collaborator: the strip simply never shows for one.
+  const riskAlerts = overview.data?.attention.risk_alerts ?? []
   // Collaborators see the kill-switch strips too, without the link to a page
   // they cannot open.
   const fullAdmin = canSeeAdmin(useSessionUser()?.type)
@@ -110,6 +113,18 @@ export default function OverviewTab({ toolbarSlot }: { toolbarSlot?: HTMLElement
     <div className="flex flex-col gap-stack">
       {/* At the right end of the dashboard's tab row when it offers a slot. */}
       {toolbarSlot ? createPortal(viewTabs, toolbarSlot) : viewTabs}
+      {/* First above BOTH views: something can lose real money right now.
+          On Needs attention it scrolls to the card that lists them. */}
+      {riskAlerts.length > 0 && (
+        <RiskAlertsStrip
+          alerts={riskAlerts}
+          onOpen={() =>
+            view === 'attention'
+              ? document.getElementById('risk-alerts')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              : select('attention')
+          }
+        />
+      )}
       {/* Above BOTH views: money may be sitting on the wrong invoice. Absent
           for a read-only collaborator (the API omits the count). */}
       {disputed > 0 && (

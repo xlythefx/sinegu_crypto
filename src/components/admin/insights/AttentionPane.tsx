@@ -18,6 +18,7 @@ import { BarRow, EmptyNote, GRID_2, InsightCard, TILES } from './parts'
 import PendingApprovalsCard from './PendingApprovalsCard'
 import OutsideClosesCard from './OutsideClosesCard'
 import RecentPaymentsCard from './RecentPaymentsCard'
+import RiskAlertsCard from './RiskAlertsCard'
 import type { ApiDataState } from '../../../hooks/useApiData'
 import { fmtMoney, fmtSignedMoney } from '../../../lib/format'
 import { reasonLabel } from '../../../lib/insightLabels'
@@ -135,6 +136,9 @@ export default function AttentionPane({
 
   return (
     <div className="flex flex-col gap-stack">
+      {/* First of all: things that can lose real money. Absent for a
+          collaborator (the API omits the list). */}
+      {a.risk_alerts && <RiskAlertsCard alerts={a.risk_alerts} onResolved={reload} />}
       {a.pending_users_count > 0 && (
         <PendingApprovalsCard
           users={a.pending_users}

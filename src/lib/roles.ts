@@ -79,3 +79,23 @@ export function isDeveloper(role: UserRole | undefined): boolean {
 export function isTester(role: UserRole | undefined): boolean {
   return role === 'tester'
 }
+
+/**
+ * Sub-master: a second house account that trades its OWN signal feed (the
+ * engine's `submaster` webhooks, real money, announced in the admin chat
+ * only). Trader dashboard ONLY — deliberately in neither ADMIN_ROLES nor
+ * STAFF_ROLES, so it never opens the portal. Never billed, never counted as a
+ * customer, and its streak sizing follows its own run, not the master's.
+ */
+export function isSubmaster(role: UserRole | undefined): boolean {
+  return role === 'submaster'
+}
+
+/**
+ * Roles whose exchange accounts trade a feed of their own rather than the
+ * main one. Moving a user into or out of one (or between them) switches
+ * feeds, which the API refuses while a position is open (409 OPEN_POSITIONS).
+ */
+export function hasOwnFeed(role: UserRole | undefined): boolean {
+  return role === 'tester' || role === 'submaster'
+}

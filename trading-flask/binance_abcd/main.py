@@ -67,6 +67,7 @@ def create_app() -> Flask:
             # for the admin Webhooks page. Paths and an on/off flag only —
             # never a secret.
             "test_feed": {"enabled": hooks.test_feed_enabled()},
+            "submaster_feed": {"enabled": hooks.submaster_feed_enabled()},
             "webhooks": webhook_catalogue(),
         })
 
@@ -209,6 +210,14 @@ def main() -> None:
                     "test feed OFF; give it its own value")
     else:
         log.info("test feed off (BINANCE_ABCD_TEST_WEBHOOK_SECRET not set)")
+    if hooks.submaster_feed_enabled():
+        log.info("sub-master feed ON: %s",
+                 ", ".join(f"{ex}={hooks.SUBMASTER_WEBHOOK_PATHS[ex]}" for ex in enabled_exchanges()))
+    elif hooks.SUBMASTER_WEBHOOK_SECRET_IS_SHARED:
+        log.warning("BINANCE_ABCD_SUBMASTER_WEBHOOK_SECRET equals the main or the test secret — "
+                    "sub-master feed OFF; give it its own value")
+    else:
+        log.info("sub-master feed off (BINANCE_ABCD_SUBMASTER_WEBHOOK_SECRET not set)")
     if hooks.ADMIN_SECRET_IS_FALLBACK:
         # Once, at startup: the box works, but the token that fires a signal
         # is also the token that closes every position.

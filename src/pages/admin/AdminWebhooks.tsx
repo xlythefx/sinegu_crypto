@@ -16,8 +16,9 @@ const SUBTITLE =
 
 /**
  * Admin → Webhooks: every address the engine takes signals on, with copyable
- * links. Two feeds — main (TradingView → everyone) and test (testers only) —
- * one card per exchange each, the alert message to paste, and the fields it
+ * links. Three feeds — main (TradingView → everyone), test (testers only) and
+ * sub-master (the sub-master's accounts only, real money) — one card per
+ * exchange each, the alert message to paste, and the fields it
  * may carry. Full admins only (not in the collaborator allowlist).
  */
 export default function AdminWebhooks() {
@@ -46,7 +47,13 @@ export default function AdminWebhooks() {
           data={data}
           delay={100}
         />
-        <MessageFieldsCard delay={150} />
+        <FeedSection
+          feed="submaster"
+          webhooks={webhooksFor(data.webhooks, 'submaster', EXCHANGE_ORDER)}
+          data={data}
+          delay={150}
+        />
+        <MessageFieldsCard delay={200} />
       </div>
     </AdminLayout>
   )

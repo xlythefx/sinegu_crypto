@@ -31,7 +31,7 @@ from typing import Iterable, Optional
 from binance_abcd import notify, stuck_exits
 from binance_abcd.exchanges import enabled as enabled_exchanges
 from binance_abcd.exchanges import label
-from binance_abcd.hooks import MAIN_FEED, RETRY_ENABLED, RETRY_INTERVAL_SECONDS, RETRY_MAX_ATTEMPTS, TEST_FEED
+from binance_abcd.hooks import MAIN_FEED, RETRY_ENABLED, RETRY_INTERVAL_SECONDS, RETRY_MAX_ATTEMPTS, PRIVATE_FEEDS, TEST_FEED
 
 log = logging.getLogger(__name__)
 
@@ -135,7 +135,7 @@ def _requeue(job: RetryJob) -> None:
         # The engine is done trying: NOW it is manual action, and the alert has
         # to say so out loud rather than in the journal.
         notify.notify_retry_abandoned(job.action, job.ticker, _describe(job.targets), job.attempts,
-                                      test_feed=job.feed == TEST_FEED)
+                                      test_feed=job.feed in PRIVATE_FEEDS, feed=job.feed)
         if job.feed != TEST_FEED:
             stuck_exits.report(job.action, job.ticker, [
                 {"exchange": exchange, "uni_id": uni_id}
@@ -178,7 +178,7 @@ def _run_due_job(job: RetryJob) -> None:
     if rejected:
         notify.notify_retry_abandoned(
             job.action, job.ticker, _describe(_normalize_targets(rejected)), job.attempts + 1,
-            test_feed=job.feed == TEST_FEED,
+            test_feed=job.feed in PRIVATE_FEEDS, feed=job.feed,
         )
         if job.feed != TEST_FEED:
             errors = {(r.get("exchange", "binance"), r.get("uni_id")): r for r in details}

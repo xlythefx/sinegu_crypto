@@ -72,17 +72,36 @@ FLASK_PORT = _env_int("FLASK_PORT", 5010)
 #          prod and to try other signal providers. Nothing it does is posted
 #          publicly, the master-account rules do not apply to it, and testers
 #          are never billed.
+#   submaster — the paths below that: accounts owned by a `submaster` user
+#          ONLY (2026-11-18). A second house account with signals of its own,
+#          on its own secret; private like the test feed (admin chat only,
+#          no master rules), but real money, so its failures are reported.
 # One feed per account because a venue merges positions by coin + side: an
 # account on both feeds would have one feed's exit close the other's entry.
 MAIN_FEED = "main"
 TEST_FEED = "test"
-FEEDS = (MAIN_FEED, TEST_FEED)
+SUBMASTER_FEED = "submaster"
+FEEDS = (MAIN_FEED, TEST_FEED, SUBMASTER_FEED)
+# Feeds that are never announced publicly and never meet the master's rules
+# (the main-account hold-back): their accounts follow other signals.
+PRIVATE_FEEDS = (TEST_FEED, SUBMASTER_FEED)
 # Same one-path-per-venue rule as WEBHOOK_PATHS, and the same nginx rule: the
 # deploy script's ENGINE_WEBHOOK_PATHS proxies these too.
 TEST_WEBHOOK_PATHS = {
     "binance": "/binance_test_webhook",
     "mexc": "/mexc_test_webhook",
     "bybit": "/bybit_test_webhook",
+}
+SUBMASTER_WEBHOOK_PATHS = {
+    "binance": "/binance_submaster_webhook",
+    "mexc": "/mexc_submaster_webhook",
+    "bybit": "/bybit_submaster_webhook",
+}
+# Every feed's paths, main first — what the engine registers and /health lists.
+FEED_PATHS = {
+    MAIN_FEED: WEBHOOK_PATHS,
+    TEST_FEED: TEST_WEBHOOK_PATHS,
+    SUBMASTER_FEED: SUBMASTER_WEBHOOK_PATHS,
 }
 
 # TradingView -> webhook shared secret. Required; compared with hmac.compare_digest.
@@ -96,6 +115,16 @@ TEST_WEBHOOK_SECRET = (
     _TEST_WEBHOOK_SECRET_RAW if _TEST_WEBHOOK_SECRET_RAW != WEBHOOK_SECRET else ""
 )
 TEST_WEBHOOK_SECRET_IS_MAIN = bool(_TEST_WEBHOOK_SECRET_RAW) and not TEST_WEBHOOK_SECRET
+# The SUB-MASTER feed's own secret, same rules: empty = the feed is OFF, and
+# a value equal to the main or the test secret is refused (it would let one
+# feed's token fire the other's trades).
+_SUBMASTER_WEBHOOK_SECRET_RAW = _env_str("SUBMASTER_WEBHOOK_SECRET", "")
+SUBMASTER_WEBHOOK_SECRET = (
+    _SUBMASTER_WEBHOOK_SECRET_RAW
+    if _SUBMASTER_WEBHOOK_SECRET_RAW not in (WEBHOOK_SECRET, _TEST_WEBHOOK_SECRET_RAW)
+    else ""
+)
+SUBMASTER_WEBHOOK_SECRET_IS_SHARED = bool(_SUBMASTER_WEBHOOK_SECRET_RAW) and not SUBMASTER_WEBHOOK_SECRET
 # /admin/* (cache flushes, manual closes, ledger reads, recap previews) has its
 # OWN secret, held only by this box and the API beside it. Until 2026-10-07 it
 # was the webhook secret above — which also sits at TradingView, in every
@@ -400,13 +429,29 @@ OUT_DIR.mkdir(exist_ok=True)
 
 def account_feed(account: dict) -> str:
     """The feed an account follows. An API that predates feeds sends no key:
-    every account is then on the main feed, exactly as before."""
-    return TEST_FEED if account.get("feed") == TEST_FEED else MAIN_FEED
+    every account is then on the main feed, exactly as before. An unknown
+    value is main too — never a private feed by accident."""
+    feed = account.get("feed")
+    return feed if feed in FEEDS else MAIN_FEED
 
 
 def test_feed_enabled() -> bool:
     # Read through the module so a test can monkeypatch TEST_WEBHOOK_SECRET.
     return bool(TEST_WEBHOOK_SECRET)
+
+
+def submaster_feed_enabled() -> bool:
+    return bool(SUBMASTER_WEBHOOK_SECRET)
+
+
+def feed_secret(feed: str) -> str:
+    """The token a request on this feed must carry; empty = the feed is off.
+    Read through the module at call time so a test can monkeypatch it."""
+    if feed == TEST_FEED:
+        return TEST_WEBHOOK_SECRET
+    if feed == SUBMASTER_FEED:
+        return SUBMASTER_WEBHOOK_SECRET
+    return WEBHOOK_SECRET
 
 
 def engine_headers() -> dict[str, str]:

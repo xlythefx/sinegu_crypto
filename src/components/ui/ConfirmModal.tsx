@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 interface ConfirmModalProps {
@@ -9,6 +9,13 @@ interface ConfirmModalProps {
   cancelLabel?: string
   /** Renders the confirm button in red for destructive actions */
   danger?: boolean
+  /** Disables the confirm button (e.g. while the action runs). */
+  confirmDisabled?: boolean
+  /**
+   * Extra content between the message and the buttons — e.g. an optional
+   * note field that travels with the confirmed action.
+   */
+  children?: ReactNode
   onConfirm: () => void
   onCancel: () => void
 }
@@ -40,6 +47,8 @@ export default function ConfirmModal({
   confirmLabel = 'Yes',
   cancelLabel = 'No',
   danger = false,
+  confirmDisabled = false,
+  children,
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
@@ -70,10 +79,11 @@ export default function ConfirmModal({
           {title}
         </h3>
         {message && (
-          <p className="text-[14px] leading-[1.6] text-muted mb-[22px]">
+          <p className={`text-[14px] leading-[1.6] text-muted ${children ? 'mb-4' : 'mb-[22px]'}`}>
             {message}
           </p>
         )}
+        {children && <div className="mb-[22px]">{children}</div>}
         <div className="flex gap-2.5 justify-end">
           <button
             className="text-[14px] font-semibold bg-surface2 text-text border border-border py-[11px] px-[22px] rounded-pill cursor-pointer"
@@ -82,7 +92,8 @@ export default function ConfirmModal({
             {cancelLabel}
           </button>
           <button
-            className={`text-[14px] font-bold py-[11px] px-[22px] rounded-pill border-0 cursor-pointer ${
+            disabled={confirmDisabled}
+            className={`text-[14px] font-bold py-[11px] px-[22px] rounded-pill border-0 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
               danger
                 ? 'bg-red text-white shadow-[0_10px_24px_rgba(255,90,90,0.25)]'
                 : 'bg-accent text-on-accent shadow-[0_10px_24px_var(--glow)]'

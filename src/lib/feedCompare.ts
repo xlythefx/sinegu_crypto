@@ -4,18 +4,17 @@
  */
 
 import { fmtDuration } from './signalDelivery'
-import type { SignalFeed } from '../types/feeds'
-import type { FeedCompareRow, FeedSide } from '../types/feedCompare'
+import type { ComparedFeed, FeedCompareRow, FeedSide } from '../types/feedCompare'
 
 /**
  * Who sends each feed today: TradingView alerts post to the main webhooks,
  * QuantLab to the test ones. The one place the page names them, so another
  * provider on the test feed is a one-line change.
  */
-export const FEED_SOURCE: Record<SignalFeed, string> = { main: 'TradingView', test: 'QuantLab' }
+export const FEED_SOURCE: Record<ComparedFeed, string> = { main: 'TradingView', test: 'QuantLab' }
 
 /** Whose fill each side shows: the master on the main feed, a tester on the test feed. */
-export const FEED_ACCOUNT_ROLE: Record<SignalFeed, string> = { main: 'Master', test: 'Tester' }
+export const FEED_ACCOUNT_ROLE: Record<ComparedFeed, string> = { main: 'Master', test: 'Tester' }
 
 /** Arrival times keep milliseconds from this day on; earlier rows have whole seconds. */
 export const MS_PRECISION_SINCE = '2026-10-26'
@@ -64,7 +63,7 @@ export function priceLine(row: FeedCompareRow): { text: string; good: boolean } 
 }
 
 /** What the side's account did: "Filled at 92.41" / "Skipped — maxed sizing". */
-export function outcomeText(side: FeedSide, feed: SignalFeed): string {
+export function outcomeText(side: FeedSide, feed: ComparedFeed): string {
   switch (side.outcome) {
     case 'filled':
       return side.fillPrice !== null ? `Filled at ${fmtFillPrice(side.fillPrice)}` : 'Filled'

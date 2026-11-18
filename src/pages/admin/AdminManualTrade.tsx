@@ -8,9 +8,10 @@ import {
   Send,
   Sliders,
   TestTubeDiagonal,
+  Gem,
 } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
-import { TESTER_TINT } from '../../components/admin/badges'
+import { SUBMASTER_TINT, TESTER_TINT } from '../../components/admin/badges'
 import DataState from '../../components/dashboard/DataState'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import RecipientPicker from '../../components/admin/manual-trade/RecipientPicker'
@@ -43,6 +44,7 @@ import {
   getManualTradeTargets,
   sendManualTrade,
   TEST_SECRET_MISSING,
+  SUBMASTER_SECRET_MISSING,
 } from '../../services/manualTrade'
 import type { ExchangeKind } from '../../types/exchanges'
 import type { SignalFeed } from '../../types/feeds'
@@ -70,6 +72,7 @@ const TARGETS: { value: EngineTarget; label: string; hint: string }[] = [
 const FEEDS: { value: SignalFeed; label: string; hint: string }[] = [
   { value: 'main', label: 'Main feed', hint: 'Customers, the master and staff' },
   { value: 'test', label: 'Test feed', hint: 'Tester accounts only' },
+  { value: 'submaster', label: 'Sub-master feed', hint: 'Sub-master accounts only · real money' },
 ]
 
 const isEntry = (action: TradeAction) => action === 'BUY' || action === 'SELL'
@@ -87,7 +90,9 @@ const DEFAULT_LEVERAGE = '25'
  * signs it with the webhook secret and forwards it to the engine. The preview
  * shows the real secret (admin-only page) but sends never carry it from here.
  * The feed picks which webhook: main (everyone the TradingView alerts reach)
- * or test (tester accounts only, signed with the test secret, never public).
+ * or test (tester accounts only, signed with the test secret, never public)
+ * or sub-master (the sub-master's accounts only, its own secret, real money,
+ * never public).
  */
 export default function AdminManualTrade() {
   const { data: assets, loading, error, reload } = useApiData(getAdminAssets)
@@ -144,6 +149,8 @@ export default function AdminManualTrade() {
   }, [target, exchange, feed])
 
   const testFeed = feed === 'test'
+  const subFeed = feed === 'submaster'
+  const feedLabel = FEEDS.find((f) => f.value === feed)?.label ?? 'Main feed'
 
   const exchangeAssets = useMemo(
     () => (assets ?? []).filter((a) => a.enabled && brokerMatches(a.broker, exchange)),
@@ -160,7 +167,7 @@ export default function AdminManualTrade() {
     selectedAsset.side !== (action === 'BUY' ? 'LONG' : 'SHORT')
 
   const recipientCount = mode === 'selected' ? selected.length : targets.length
-  const noun = testFeed ? 'tester' : 'user'
+  const noun = testFeed ? 'tester' : subFeed ? 'sub-master' : 'user'
   const recipientLabel =
     mode === 'selected'
       ? `${selected.length} selected ${noun}${selected.length === 1 ? '' : 's'}`
@@ -178,7 +185,9 @@ export default function AdminManualTrade() {
               ? 'loading…'
               : testFeed
                 ? 'ENGINE_TEST_WEBHOOK_SECRET not set'
-                : `${exchange.toUpperCase()}_ENGINE_WEBHOOK_SECRET not set`),
+                : subFeed
+                  ? 'ENGINE_SUBMASTER_WEBHOOK_SECRET not set'
+                  : `${exchange.toUpperCase()}_ENGINE_WEBHOOK_SECRET not set`),
           action,
           symbol: ticker || '—',
           ...(leverage ? { leverage } : {}),
@@ -190,7 +199,7 @@ export default function AdminManualTrade() {
         null,
         2,
       ),
-    [engine, exchange, testFeed, action, ticker, leverage, strategy, mode, selected],
+    [engine, exchange, testFeed, subFeed, action, ticker, leverage, strategy, mode, selected],
   )
 
   if (error instanceof ApiError && error.status === 401) {
@@ -215,11 +224,14 @@ export default function AdminManualTrade() {
       })
       setResult(res)
     } catch (err) {
-      // 503 from the API itself: it has no test secret to sign the signal with.
+      // 503 from the API itself: it has no test / sub-master secret to sign the signal with.
+      const code = err instanceof ApiError ? err.errorCode : null
       const fallback =
-        err instanceof ApiError && err.errorCode === TEST_SECRET_MISSING
+        code === TEST_SECRET_MISSING
           ? 'The API has no test webhook secret (ENGINE_TEST_WEBHOOK_SECRET), so it cannot sign a test-feed signal. Set it in the API’s .env — the same value as the engine’s BINANCE_ABCD_TEST_WEBHOOK_SECRET — and re-cache the config.'
-          : 'Could not reach the engine.'
+          : code === SUBMASTER_SECRET_MISSING
+            ? 'The API has no sub-master webhook secret (ENGINE_SUBMASTER_WEBHOOK_SECRET), so it cannot sign a sub-master signal. Set it in the API’s .env — the same value as the engine’s BINANCE_ABCD_SUBMASTER_WEBHOOK_SECRET — and re-cache the config.'
+            : 'Could not reach the engine.'
       setSendError(getApiErrorMessage(err, fallback))
     } finally {
       setSending(false)
@@ -309,7 +321,7 @@ export default function AdminManualTrade() {
             <div className="mt-4 border-t border-hair pt-4">
               <p className={LABEL}>Feed</p>
               <div
-                className="grid grid-cols-2 max-[560px]:grid-cols-1 gap-2.5"
+                className="grid grid-cols-3 max-[720px]:grid-cols-1 gap-2.5"
                 role="group"
                 aria-label="Signal feed"
               >
@@ -348,6 +360,27 @@ export default function AdminManualTrade() {
                     The {target === 'prod' ? 'production' : 'local'} engine has no test
                     webhook secret set (
                     <code className="font-mono break-all">BINANCE_ABCD_TEST_WEBHOOK_SECRET</code>),
+                    so it will refuse this signal with a 403. You can still send it — the
+                    engine&apos;s answer shows under Review &amp; send.
+                  </span>
+                </div>
+              )}
+              {subFeed && (
+                <div className={`${MSG} ${SUBMASTER_TINT} mt-3.5`} role="note">
+                  <Gem size={15} className="flex-none mt-px" />
+                  <span>
+                    Goes to the sub-master&apos;s accounts only — real money. Announced in the
+                    admin Telegram chat only, never in the public channels.
+                  </span>
+                </div>
+              )}
+              {subFeed && engine?.submaster_feed_enabled === false && (
+                <div className={`${MSG} ${MSG_WARN} mt-2.5`} role="alert">
+                  <AlertTriangle size={15} className="flex-none mt-px" />
+                  <span>
+                    The {target === 'prod' ? 'production' : 'local'} engine has no sub-master
+                    webhook secret set (
+                    <code className="font-mono break-all">BINANCE_ABCD_SUBMASTER_WEBHOOK_SECRET</code>),
                     so it will refuse this signal with a 403. You can still send it — the
                     engine&apos;s answer shows under Review &amp; send.
                   </span>
@@ -553,7 +586,7 @@ export default function AdminManualTrade() {
             <dl className="flex flex-col gap-1.5 rounded-[12px] border border-hair bg-surface2 p-3.5 text-[12.5px] mb-3.5">
               {[
                 ['Exchange', exchangeMeta.label],
-                ['Feed', testFeed ? 'Test feed' : 'Main feed'],
+                ['Feed', feedLabel],
                 ['Ticker', ticker || '—'],
                 ['Action', action],
                 ...(isEntry(action) ? [['Increments', String(increments)]] : []),
@@ -663,7 +696,8 @@ export default function AdminManualTrade() {
           (target === 'prod'
             ? `This places real orders on every live account of ${recipientLabel}. Demo accounts stay on the testnet. This cannot be undone.`
             : `${isEntry(action) ? `${increments} signal${increments === 1 ? '' : 's'}` : 'One signal'} will be sent to the local engine for ${recipientLabel}.`) +
-          (testFeed ? ' It goes through the test feed: nothing is posted to Telegram or Discord.' : '')
+          (testFeed ? ' It goes through the test feed: nothing is posted to Telegram or Discord.' : '') +
+          (subFeed ? ' It goes through the sub-master feed: real money, announced in the admin chat only.' : '')
         }
         confirmLabel={sending ? 'Sending…' : 'Yes, send'}
         cancelLabel="Cancel"

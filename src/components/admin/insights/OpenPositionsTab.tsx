@@ -9,7 +9,7 @@ import JsonPanel from '../open-positions/JsonPanel'
 import ExitAllButton from '../open-positions/ExitAllButton'
 import ClosePanel from '../open-positions/ClosePanel'
 import CloseResult, { type CloseOutcome } from '../open-positions/CloseResult'
-import { TestFeedBadge } from '../badges'
+import { SubmasterFeedBadge, TestFeedBadge } from '../badges'
 import { useApiData } from '../../../hooks/useApiData'
 import { ApiError, getApiErrorMessage } from '../../../services/api'
 import {
@@ -87,8 +87,9 @@ function useCountdown(until: number): number {
  * Admin Dashboard → Open positions. Leads with the MASTER — the strategy's own
  * book — and keeps users one click away, each compared with the master on the
  * same venue by coin + side (sizes scale with balance, so size is not a
- * difference). Testers' accounts follow the separate test feed, so they sit in
- * their own group under the users and are never compared. A forced fetch from the exchanges has a 30 s cooldown enforced
+ * difference). Testers' accounts follow the separate test feed and the
+ * sub-master's its own feed, so each sits in its own group under the users
+ * and is never compared. A forced fetch from the exchanges has a 30 s cooldown enforced
  * by the API for the whole platform; ticked rows close at market through the
  * engine's exit path without a public announcement. The request / response
  * JSON stays one click away for testing and opens itself after a close.
@@ -122,8 +123,8 @@ export default function OpenPositionsTab() {
   useEffect(() => applyRefresh(data?.refresh), [data])
 
   const positions = useMemo(() => data?.positions ?? [], [data])
-  const { master, users, testFeed } = useMemo(
-    () => (data ? splitByMaster(data) : { master: [], users: [], testFeed: [] }),
+  const { master, users, testFeed, submasterFeed } = useMemo(
+    () => (data ? splitByMaster(data) : { master: [], users: [], testFeed: [], submasterFeed: [] }),
     [data],
   )
   const differing = users.filter((u) => u.state === 'differs').length
@@ -357,8 +358,14 @@ export default function OpenPositionsTab() {
                 onExitAll={(u) => exitAll(u.positions, u.owner_name)}
                 busy={closing}
                 emptyText={
-                  testFeed.length > 0
-                    ? 'Nobody besides the testers below is trading right now.'
+                  testFeed.length > 0 || submasterFeed.length > 0
+                    ? `Nobody besides the ${
+                        testFeed.length > 0 && submasterFeed.length > 0
+                          ? 'testers and the sub-master'
+                          : testFeed.length > 0
+                            ? 'testers'
+                            : 'sub-master'
+                      } below is trading right now.`
                     : undefined
                 }
               />
@@ -374,6 +381,25 @@ export default function OpenPositionsTab() {
                   </div>
                   <UserSyncList
                     users={testFeed}
+                    selected={selected}
+                    onToggle={toggle}
+                    onToggleAll={toggleAll}
+                    onExitAll={(u) => exitAll(u.positions, u.owner_name)}
+                    busy={closing}
+                  />
+                </div>
+              )}
+              {/* The sub-master trades its own feed — same reason. */}
+              {submasterFeed.length > 0 && (
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+                    <SubmasterFeedBadge />
+                    <span className="text-[12.5px] text-muted">
+                      Sub-master accounts follow their own feed — not compared with the master.
+                    </span>
+                  </div>
+                  <UserSyncList
+                    users={submasterFeed}
                     selected={selected}
                     onToggle={toggle}
                     onToggleAll={toggleAll}

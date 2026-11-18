@@ -14,6 +14,48 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'submaster-role-feed',
+    date: '2026-11-18',
+    kind: 'new',
+    area: 'Users & signals',
+    title: 'A sub-master account with its own signals',
+    summary:
+      'There is a new account type, Sub-master: a second house account that trades its OWN signals, separately from the master’s. It has its own webhook address with its own secret. Only sub-master accounts receive those signals, and a sub-master never receives the master’s TradingView signals. It sees the normal trading dashboard, not the admin portal, and is never billed.',
+    howItWorks: [
+      'Example: a TradingView alert posts a LTC buy to the sub-master address. Only the sub-master’s Binance account opens it. The master and every customer are untouched. The master’s usual LTC alert still trades the master and the customers, never the sub-master.',
+      'Sub-master signals are reported in the private admin Telegram group under a purple “SUB-MASTER FEED” banner. Nothing is posted in the public channel or on Discord.',
+      'It uses the same coin sizes as everyone, but its own win/loss run for streak sizing. The master’s full position never holds it back.',
+      'The Signal Log has a “Sub-master” filter. Admin → Webhooks lists the three new addresses, and the manual trade console can send to them.',
+      'A user can be moved to or from Sub-master only while they hold no open position, because a position opened by one set of signals would never receive its close from the other.',
+    ],
+    technical: [
+      'user_credentials.type = submaster (UserCredential::SUBMASTER; not in EnsureAdmin::ROLES or the staff group). WebhookPaths::SUBMASTER + feedForRole(); /engine/{x}/accounts → feed: submaster. Engine hooks.SUBMASTER_FEED / FEED_PATHS / PRIVATE_FEEDS, BINANCE_ABCD_SUBMASTER_WEBHOOK_SECRET (= API ENGINE_SUBMASTER_WEBHOOK_SECRET, mirrored). trade_logs.feed widened to 16 chars.',
+    ],
+    links: [
+      { label: 'Webhooks', href: '/admin/webhooks' },
+      { label: 'Signal Log', href: '/admin/trade-logs?feed=submaster' },
+    ],
+  },
+  {
+    id: 'high-risk-alerts',
+    date: '2026-11-18',
+    kind: 'new',
+    area: 'Alerts',
+    title: 'High-risk alerts by email, on the Overview, and proof when a trade reaches the wrong accounts',
+    summary:
+      'Serious problems are now emailed at once to the high-risk list and stay in red at the top of Admin → Overview → Needs attention until someone marks them resolved. Every trade is also checked against who it was meant for. If an account outside a signal’s group gets filled, the Signal Log row shows exactly which accounts, and the alert goes to Telegram as well.',
+    howItWorks: [
+      'Six problems raise an alert: (1) a trade filled accounts outside its group, for example a customer filled from the sub-master’s signal; (2) a close failed for good, so a position may still be open; (3) the kill switch switched a coin off; (4) the master’s or sub-master’s exchange key was refused; (5) the bot engine stopped answering for about 4 minutes; (6) a signal was refused because the bot could not load the coin list.',
+      'One problem is one alert. If it keeps happening, the alert counts it again (“seen 5 times”) and emails at most once an hour, so the inbox is not flooded.',
+      'Two alerts close themselves: a key that works again, and the engine answering again. The rest stay until an admin presses “Mark resolved”, with an optional note.',
+      'The check does not trust the bot. For every filled entry it looks up each account owner’s role and compares it with the signal’s group. Closes are never judged, because an open position must always be closable.',
+    ],
+    technical: [
+      'App\\Services\\Alerts\\RiskAlerts (risk_alerts table, emailed to TRADE_ALERT_EMAILS via RiskAlertNotice, hourly re-email, engine POST /admin/risk-alert for Telegram) and FeedAudit (on POST /engine/{x}/trade-logs, entries only → trade_logs.breach). engine:watch every 2 min (ENGINE_HEALTH_WATCH, default on in production). Overview attention.risk_alerts (full admins); POST /admin/risk-alerts/{id}/resolve. The health banner and hourly summary now include the sub-master feed.',
+    ],
+    links: [{ label: 'Overview → Needs attention', href: '/admin?tab=overview&view=attention' }],
+  },
+  {
     id: 'kill-switch-price-losses',
     date: '2026-11-17',
     kind: 'improved',

@@ -2,7 +2,10 @@ import type { ExchangeKind } from './exchanges'
 import type { TradeAction, TradeKindWord, TradeSideWord } from './tradeLogs'
 
 /** Which feed's signal reached us first; `tie` = within 0.1 s. */
-export type FeedLead = 'main' | 'test' | 'tie'
+/** The two feeds the comparison pairs — the sub-master feed is never compared. */
+export type ComparedFeed = 'main' | 'test'
+
+export type FeedLead = ComparedFeed | 'tie'
 
 /**
  * What the side's account did with the signal. `absent` = the account was not

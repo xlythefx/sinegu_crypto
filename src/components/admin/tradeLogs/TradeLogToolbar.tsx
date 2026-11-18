@@ -1,4 +1,4 @@
-import { AlertTriangle, Hand, LogIn, LogOut, Radio, TestTubeDiagonal, Timer } from 'lucide-react'
+import { AlertTriangle, Gem, Hand, LogIn, LogOut, Radio, TestTubeDiagonal, Timer } from 'lucide-react'
 import {
   ActiveFilters,
   DateRangeFilter,
@@ -21,11 +21,15 @@ const KNOWN_EXCHANGES: ExchangeKind[] = ['binance', 'mexc', 'bybit']
 /** One full-width line of the panel. */
 const ROW = 'flex w-full flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-7 sm:gap-y-3.5'
 
-/** Which webhook the signal came in on — the test feed reaches testers only. */
+/**
+ * Which webhook the signal came in on — the test feed reaches testers only,
+ * the sub-master feed the sub-master only.
+ */
 const FEEDS: SegmentedOption[] = [
   { value: 'all', label: 'All' },
   { value: 'main', label: 'Main', icon: Radio },
   { value: 'test', label: 'Test', icon: TestTubeDiagonal },
+  { value: 'submaster', label: 'Sub-master', icon: Gem },
 ]
 
 const SIDES: SegmentedOption[] = [
@@ -74,7 +78,7 @@ function humanizeKey(key: string): string {
  * see FilterPanel for the convention): scope first (exchange, main or test
  * feed, side, entry or exit, what to show), then narrowing (coin, account
  * outcome, reason, account search), then dates; every value lives in the URL
- * (the feed as `?feed=main|test`), and whatever is active
+ * (the feed as `?feed=main|test|submaster`), and whatever is active
  * shows as removable chips under the panel.
  *
  * The Issues view gets only the SIGNAL filters — issues are grouped across

@@ -356,6 +356,26 @@ def kill_switch():
     return jsonify({"success": True, "telegram": notify.telegram_enabled()})
 
 
+@admin_bp.route("/risk-alert", methods=["POST"])
+def risk_alert():
+    """The API found a HIGH-RISK problem the engine could not see itself (a
+    trade that reached accounts outside its feed) — tell the admin Telegram
+    group. Body: ``{"label", "title", "lines": [str]}``. A messenger only,
+    like /kill-switch."""
+    if not _authorized():
+        return jsonify({"error": "Unauthorized"}), 403
+    from binance_abcd import notify
+
+    body = request.get_json(silent=True) or {}
+    title = str(body.get("title") or "").strip()
+    if not title:
+        return jsonify({"error": "title is required"}), 400
+    lines = body.get("lines") if isinstance(body.get("lines"), list) else []
+    notify.notify_risk_alert(str(body.get("label") or "Alert").strip()[:80], title[:255],
+                             [str(x)[:500] for x in lines[:30]])
+    return jsonify({"success": True, "telegram": notify.telegram_enabled()})
+
+
 @admin_bp.route("/payment-received", methods=["POST"])
 def payment_received():
     """The API settled an invoice — tell the admin Telegram group who paid.

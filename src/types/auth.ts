@@ -7,9 +7,12 @@ export type UserStatus = 'pending' | 'active' | 'suspended'
  * account with NO admin access — it signs in like a trader, but its exchange
  * accounts receive only the engine's separate test feed (never the main
  * TradingView webhooks), and it is never billed or counted as a customer.
+ * `submaster` is a second house account: trader dashboard only (NO admin
+ * portal), its exchange accounts trade only the engine's sub-master feed
+ * with real money, never billed, never a customer, its own streak run.
  * See `lib/roles.ts`.
  */
-export type UserRole = 'user' | 'admin' | 'master' | 'developer' | 'collaborator' | 'tester'
+export type UserRole = 'user' | 'admin' | 'master' | 'developer' | 'collaborator' | 'tester' | 'submaster'
 
 export interface AuthUser {
   uni_id: string

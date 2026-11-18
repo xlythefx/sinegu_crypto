@@ -21,8 +21,9 @@ export interface AdminWebhook {
    */
   venue_live: boolean | null
   /**
-   * Whether the engine accepts signals on this webhook — for the test feed,
-   * whether its test secret is set. null = unknown (engine silent).
+   * Whether the engine accepts signals on this webhook — for the test and
+   * sub-master feeds, whether that feed's secret is set. null = unknown
+   * (engine silent).
    */
   enabled: boolean | null
   receivers: WebhookReceivers
@@ -33,6 +34,8 @@ export interface AdminWebhooksData {
     reachable: boolean
     /** The engine has its test-feed secret. null = unknown. */
     test_feed_enabled: boolean | null
+    /** The engine has its sub-master-feed secret. null = unknown (or an older API). */
+    submaster_feed_enabled?: boolean | null
   }
   /** Where the engine is reached from outside: `prod` (via nginx) and `local`. */
   bases: { prod: string; local: string }
@@ -40,6 +43,6 @@ export interface AdminWebhooksData {
    * Whether the API holds each feed's secret (it signs the Manual Trade
    * console's signals with it). Presence only — a secret is never sent.
    */
-  secrets: { main_set: boolean; test_set: boolean }
+  secrets: { main_set: boolean; test_set: boolean; submaster_set?: boolean }
   webhooks: AdminWebhook[]
 }

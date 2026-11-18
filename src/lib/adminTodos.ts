@@ -18,6 +18,41 @@ import type { AdminTodo } from '../types/adminTodos'
  *    the note and the date it was settled stay readable.
  */
 export const ADMIN_TODOS: AdminTodo[] = [
+  // ── Sub-master account + high-risk alerts (2026-11-18) ───────────────────
+  {
+    id: 'submaster-tradingview-alerts',
+    feature: 'Sub-master',
+    kind: 'action',
+    title: 'Point the sub-master’s TradingView alerts at its own webhook',
+    added: '2026-11-18',
+    why: 'The sub-master account trades ONLY signals sent to its own webhook address, with its own secret. Until an alert posts there, it opens no trades at all. The master’s alerts never reach it.',
+    steps: [
+      'Open Admin → Webhooks and find the Sub-master section. Copy the Binance address (https://pixel-alpha.com/binance_submaster_webhook) and the alert template.',
+      'Get the sub-master secret from the developer: it is BINANCE_ABCD_SUBMASTER_WEBHOOK_SECRET in the engine’s .env. It is a different value from the main and test secrets.',
+      'In TradingView, create each sub-master alert with that address as the Webhook URL and the template as the message, with the secret filled in.',
+      'Fire one test (or use Admin → Manual trade → Sub-master feed) and check the Signal Log under the Sub-master filter: the sub-master’s account should be the only one listed.',
+    ],
+    envKeys: ['BINANCE_ABCD_SUBMASTER_WEBHOOK_SECRET'],
+    links: [
+      { label: 'Admin → Webhooks', href: '/admin/webhooks' },
+      { label: 'Signal Log (sub-master)', href: '/admin/trade-logs?feed=submaster' },
+    ],
+  },
+  {
+    id: 'submaster-binance-key',
+    feature: 'Sub-master',
+    kind: 'action',
+    title: 'Make sure the sub-master’s Binance key can trade futures from our server',
+    added: '2026-11-18',
+    why: 'The sub-master’s live Binance account is connected, but Binance refuses every order unless the API key allows futures trading and our server’s IP. It also opens no trade until at least $1,000 has been deposited on that futures account.',
+    steps: [
+      'Sign in to the sub-master’s Binance account → API Management → the key used for Pixel Alpha → Edit restrictions.',
+      'Tick “Enable Futures”. Under IP access, choose “Restrict access to trusted IPs only” and add 2.24.139.176.',
+      'Make sure at least 1,000 USDT has been deposited to the USDⓈ-M Futures wallet.',
+      'In Admin → API Keys, press Recheck on the sub-master’s account. It should read Connected with no red strip.',
+    ],
+    links: [{ label: 'Admin → API Keys', href: '/admin/api-keys' }],
+  },
   // ── Creatives v2: the video editor (2026-11-12) ──────────────────────────
   {
     id: 'creatives-cdn-cors',

@@ -908,6 +908,7 @@ def _credential_fixes(failures: list[tuple]) -> list[str]:
 
 def notify_retry_abandoned(
     action: str, ticker: str, uni_ids: list, attempts: int, *, test_feed: bool = False,
+    feed: Optional[str] = None,
 ) -> None:
     """The engine has STOPPED retrying — the one moment a human is actually
     needed, and until now it was a log line nobody reads.
@@ -930,7 +931,7 @@ def notify_retry_abandoned(
         head = "⚠️ <b>ENTRY ABANDONED</b>"
         sub = f"gave up after {attempts} attempt(s) — no order was placed for:"
     if test_feed:
-        head = f"{_TEST_BANNER}\n{head}"
+        head = f"{_feed_banner(feed)}\n{head}"
     lines = [head, f"{_esc(ticker)} ({_esc(action)}) — {sub}"]
     for uni_id in list(uni_ids)[:20]:
         lines.append(f"  • user <code>{_esc(uni_id)}</code>")
@@ -949,6 +950,14 @@ def notify_retry_abandoned(
 # still has every row.
 
 _TEST_BANNER = "🧪 <b>TEST FEED</b> — tester accounts only, nothing posted publicly"
+# The sub-master's own feed (hooks.SUBMASTER_FEED, 2026-11-18): private like
+# the test feed, but REAL money on a house account.
+_SUBMASTER_BANNER = "🟣 <b>SUB-MASTER FEED</b> — sub-master accounts only, nothing posted publicly"
+
+
+def _feed_banner(feed: Optional[str]) -> str:
+    """The banner over a private feed's message (default: the test feed)."""
+    return _SUBMASTER_BANNER if feed == hooks.SUBMASTER_FEED else _TEST_BANNER
 
 
 def _test_result_line(name: Any, result: dict) -> str:
@@ -989,15 +998,17 @@ def notify_test_feed(
     is_retry: bool = False,
     retrying: bool = False,
     label: Optional[str] = None,
+    feed: Optional[str] = None,
 ) -> None:
-    """One private summary per test-feed signal: every tester account's
-    outcome on one message. `rows` = (account_label, result dict). Retry runs
-    stay silent, as on the main feed — the queue reports the ending."""
+    """One private summary per test-feed (or sub-master-feed) signal: every
+    account's outcome on one message. `rows` = (account_label, result dict).
+    Retry runs stay silent, as on the main feed — the queue reports the
+    ending. `feed` picks the banner."""
     if is_retry:
         return
     emoji, action_label = _ACTION_LABEL.get(action.upper(), ("📈", action))
     lines = [
-        _TEST_BANNER,
+        _feed_banner(feed),
         f"{emoji} <b>{action_label} — {_esc(ticker)} · {_esc(label or BROKER_LABEL)}</b>",
         f"Filled {filled} · skipped {skipped} · failed {failed}",
     ]
@@ -1013,11 +1024,12 @@ def notify_test_feed(
 def notify_test_feed_rejected(
     action: str, ticker: str, reason: str, label: Optional[str] = None, hints: Sequence[str] = (),
     daily: bool = False,
+    feed: Optional[str] = None,
 ) -> None:
-    """A test signal that reached no account (coin turned off or not added,
-    side gate, no tester account on the venue). Private, like the rest of the
-    feed."""
-    _send_private(f"{_TEST_BANNER}\n{_rejected_text(action, ticker, reason, label, hints, daily)}")
+    """A test (or sub-master) signal that reached no account (coin turned off
+    or not added, side gate, no account on the venue). Private, like the rest
+    of the feed."""
+    _send_private(f"{_feed_banner(feed)}\n{_rejected_text(action, ticker, reason, label, hints, daily)}")
 
 
 def notify_max_increments(
@@ -1259,6 +1271,20 @@ def notify_payment_received(payment: dict) -> None:
     account counts out of the channel.
     """
     _send_private(render_payment_received(payment))
+
+
+def render_risk_alert(label: str, title: str, lines: Sequence[str]) -> str:
+    """A HIGH-RISK alert the API found (App\\Services\\Alerts\\RiskAlerts —
+    a trade that reached accounts outside its signal feed)."""
+    out = [f"🚨 <b>HIGH RISK — {_esc(label)}</b>", f"<b>{_esc(title)}</b>"]
+    out += [_esc(str(line)) for line in list(lines)[:30]]
+    return "\n".join(out)
+
+
+def notify_risk_alert(label: str, title: str, lines: Sequence[str]) -> None:
+    """ADMIN chat only (`_send_private`), never the public fallback: it names
+    accounts."""
+    _send_private(render_risk_alert(label, title, lines))
 
 
 def notify_kill_switch(exchange: str, ticker: str, losses: Any, reason: str) -> None:

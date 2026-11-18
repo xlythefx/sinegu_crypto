@@ -186,7 +186,7 @@ function AttentionBody({
   meta: string
   onSeeIssues: () => void
 }) {
-  const { problems, masterMissed, hours } = data
+  const { problems, masterMissed, breaches, hours } = data
   const top = data.issues.slice(0, BANNER_ISSUES)
 
   return (
@@ -200,6 +200,12 @@ function AttentionBody({
           <span className="text-red">
             {' '}
             · the master missed {plural(masterMissed, 'signal', 'signals')}
+          </span>
+        )}
+        {breaches > 0 && (
+          <span className="text-red">
+            {' '}
+            · {plural(breaches, 'signal', 'signals')} filled the wrong accounts
           </span>
         )}
       </p>

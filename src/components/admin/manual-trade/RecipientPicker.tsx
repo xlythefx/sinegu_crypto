@@ -20,7 +20,8 @@ const PER_PAGE = 8
 /**
  * Who receives the signal: everyone the engine would trade, or a hand-picked
  * subset (which becomes `target_uni_ids` — the same field the retry queue uses).
- * On the test feed the list is tester accounts only; the wording says so.
+ * On the test feed the list is tester accounts only, on the sub-master feed
+ * the sub-master's; the wording says so.
  */
 export default function RecipientPicker({
   targets,
@@ -40,7 +41,8 @@ export default function RecipientPicker({
   feed?: SignalFeed
 }) {
   const test = feed === 'test'
-  const noun = test ? 'tester' : 'user'
+  const sub = feed === 'submaster'
+  const noun = test ? 'tester' : sub ? 'sub-master' : 'user'
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
 
@@ -77,7 +79,9 @@ export default function RecipientPicker({
           <div className={CARD_SUB}>
             {test
               ? 'Tester accounts only. Suspended users and disabled accounts never appear here.'
-              : 'Suspended users and disabled accounts never appear here.'}
+              : sub
+                ? 'Sub-master accounts only. Suspended users and disabled accounts never appear here.'
+                : 'Suspended users and disabled accounts never appear here.'}
           </div>
         </div>
       </div>
@@ -118,7 +122,9 @@ export default function RecipientPicker({
             <span className="text-red">
               {test
                 ? 'No tester accounts on this exchange — nothing would be traded.'
-                : 'No eligible users — nothing would be traded.'}
+                : sub
+                  ? 'No sub-master accounts on this exchange — nothing would be traded.'
+                  : 'No eligible users — nothing would be traded.'}
             </span>
           )}
         </div>

@@ -1,7 +1,7 @@
-import { Radio, TestTubeDiagonal } from 'lucide-react'
+import { Gem, Radio, TestTubeDiagonal } from 'lucide-react'
 import WebhookCard from './WebhookCard'
 import AlertMessageCard from './AlertMessageCard'
-import { TESTER_TINT } from '../badges'
+import { SUBMASTER_TINT, TESTER_TINT } from '../badges'
 import type { AdminWebhook, AdminWebhooksData } from '../../../types/adminWebhooks'
 import type { SignalFeed } from '../../../types/feeds'
 
@@ -25,17 +25,30 @@ const COPY: Record<SignalFeed, { title: string; lead: string; facts: string[] }>
     lead: 'Tester accounts only. Nobody else’s accounts follow it, and testers follow nothing else.',
     facts: ['Never posted to Telegram or Discord', 'Skips the master-account rules', 'Nothing is billed'],
   },
+  submaster: {
+    title: 'Sub-master feed',
+    lead: 'The sub-master’s accounts only — a second house account with its own signals. Nobody else’s accounts follow it, and the sub-master follows nothing else.',
+    facts: [
+      'Real money',
+      'Announced in the admin Telegram chat only',
+      'Skips the master-account rules',
+      'Nothing is billed',
+    ],
+  },
 }
 
 const ICON_CHIP: Record<SignalFeed, string> = {
   main: 'bg-accent-soft border-accent-line text-accent',
   test: TESTER_TINT,
+  submaster: SUBMASTER_TINT,
 }
+
+const ICON = { main: Radio, test: TestTubeDiagonal, submaster: Gem } as const
 
 /** One feed: what it is, one card per exchange, then the alert message. */
 export default function FeedSection({ feed, webhooks, data, delay }: FeedSectionProps) {
   const copy = COPY[feed]
-  const Icon = feed === 'test' ? TestTubeDiagonal : Radio
+  const Icon = ICON[feed]
 
   return (
     <section
@@ -83,8 +96,20 @@ export default function FeedSection({ feed, webhooks, data, delay }: FeedSection
 
       <AlertMessageCard
         feed={feed}
-        secretSetOnApi={feed === 'test' ? data.secrets.test_set : data.secrets.main_set}
-        engineHasSecret={feed === 'test' ? data.engine.test_feed_enabled : undefined}
+        secretSetOnApi={
+          feed === 'test'
+            ? data.secrets.test_set
+            : feed === 'submaster'
+              ? data.secrets.submaster_set === true
+              : data.secrets.main_set
+        }
+        engineHasSecret={
+          feed === 'test'
+            ? data.engine.test_feed_enabled
+            : feed === 'submaster'
+              ? (data.engine.submaster_feed_enabled ?? null)
+              : undefined
+        }
       />
     </section>
   )

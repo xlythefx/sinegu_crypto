@@ -11,6 +11,12 @@ export function webhookUrl(base: string, path: string): string {
   return `${base.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`
 }
 
+const SECRET_PLACEHOLDER: Record<SignalFeed, string> = {
+  main: '<paste the main webhook secret>',
+  test: '<paste the test webhook secret>',
+  submaster: '<paste the sub-master webhook secret>',
+}
+
 /**
  * The JSON a TradingView alert's Message box takes, pretty-printed. The
  * secret is a placeholder ON PURPOSE — the real one is never in the browser
@@ -19,7 +25,7 @@ export function webhookUrl(base: string, path: string): string {
 export function alertTemplate(feed: SignalFeed): string {
   return JSON.stringify(
     {
-      secret: feed === 'test' ? '<paste the test webhook secret>' : '<paste the main webhook secret>',
+      secret: SECRET_PLACEHOLDER[feed],
       action: 'BUY',
       symbol: '{{ticker}}',
       price: '{{close}}',

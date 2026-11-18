@@ -1,6 +1,6 @@
 import { Ban } from 'lucide-react'
 import { EXCHANGE_META } from '../../exchanges/meta'
-import { TESTER_TINT } from '../badges'
+import { SUBMASTER_TINT, TESTER_TINT } from '../badges'
 import { fmtAgo, fmtNum, fmtQty, fmtSignedMoney } from '../../../lib/format'
 import { positionKey } from '../../../lib/openPositions'
 import type { AdminOpenPosition } from '../../../types/openPositions'
@@ -44,6 +44,9 @@ function Who({ p, showOwner }: { p: AdminOpenPosition; showOwner: boolean }) {
         )}
         {p.feed === 'test' && (
           <span className={`flex-none rounded-pill px-1.5 font-mono text-[10px] font-bold ${TESTER_TINT}`}>TEST FEED</span>
+        )}
+        {p.feed === 'submaster' && (
+          <span className={`flex-none rounded-pill px-1.5 font-mono text-[10px] font-bold ${SUBMASTER_TINT}`}>SUB-MASTER FEED</span>
         )}
         {p.demo && (
           <span className="flex-none rounded-pill bg-surface2 px-1.5 font-mono text-[10px] font-bold text-muted">DEMO</span>

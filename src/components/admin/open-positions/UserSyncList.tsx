@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { CheckCircle2, ChevronRight, CircleSlash, AlertTriangle, TestTubeDiagonal } from 'lucide-react'
+import { CheckCircle2, ChevronRight, CircleSlash, AlertTriangle, Gem, TestTubeDiagonal } from 'lucide-react'
 import { EXCHANGE_META } from '../../exchanges/meta'
-import { TESTER_TINT } from '../badges'
+import { SUBMASTER_TINT, TESTER_TINT } from '../badges'
 import PositionsList from './PositionsList'
 import ExitAllButton from './ExitAllButton'
 import { EmptyNote } from '../insights/parts'
@@ -27,6 +27,7 @@ const BADGE: Record<SyncState, { label: string; cls: string; Icon: typeof CheckC
   differs: { label: 'Different', cls: 'bg-red/15 text-red', Icon: AlertTriangle },
   'no-master': { label: 'No master here', cls: 'bg-surface2 text-muted', Icon: CircleSlash },
   'test-feed': { label: 'Test feed', cls: TESTER_TINT, Icon: TestTubeDiagonal },
+  'submaster-feed': { label: 'Sub-master feed', cls: SUBMASTER_TINT, Icon: Gem },
 }
 
 const refs = (list: SideRef[]) => list.map((r) => `${r.symbol} ${r.side}`).join(', ')
@@ -35,6 +36,9 @@ const refs = (list: SideRef[]) => list.map((r) => `${r.symbol} ${r.side}`).join(
 function summary(u: UserSync): string {
   if (u.state === 'test-feed') {
     return `${u.positions.length ? `Holds ${refs(u.positions)}` : 'Flat'} · follows the test feed`
+  }
+  if (u.state === 'submaster-feed') {
+    return `${u.positions.length ? `Holds ${refs(u.positions)}` : 'Flat'} · follows the sub-master feed`
   }
   if (u.state === 'no-master') return `${u.positions.length} open · the master does not trade ${EXCHANGE_META[u.exchange]?.label ?? u.exchange}`
   if (u.state === 'same') return u.positions.length ? `Holds ${refs(u.positions)}` : 'Flat, like the master'

@@ -93,7 +93,7 @@ export default function UserSignalsCard({ uniId, name }: { uniId: string; name: 
                   <span className="font-semibold text-text">{ACTION[s.action] ?? s.action}</span>{' '}
                   <span className="text-muted">
                     {s.ticker} · {venue}
-                    {s.feed === 'test' ? ' · test feed' : ''}
+                    {s.feed === 'test' ? ' · test feed' : s.feed === 'submaster' ? ' · sub-master feed' : ''}
                   </span>
                   {s.reason && <span className="block text-[11.5px] text-muted">{s.reason.label}</span>}
                 </span>

@@ -8,7 +8,7 @@ interface AlertMessageCardProps {
   feed: SignalFeed
   /** The API holds this feed's secret (it signs the Manual Trade console with it). */
   secretSetOnApi: boolean
-  /** Test feed: the engine has its test secret. null = unknown (engine silent). */
+  /** Test / sub-master feed: the engine has that feed's secret. null = unknown (engine silent). */
   engineHasSecret?: boolean | null
 }
 
@@ -26,7 +26,12 @@ export default function AlertMessageCard({
   engineHasSecret,
 }: AlertMessageCardProps) {
   const template = alertTemplate(feed)
-  const test = feed === 'test'
+  // The two own-feed secrets are told the same way; only the key names differ.
+  const ownFeed = feed === 'test' || feed === 'submaster'
+  const keys =
+    feed === 'submaster'
+      ? { engine: 'BINANCE_ABCD_SUBMASTER_WEBHOOK_SECRET', api: 'ENGINE_SUBMASTER_WEBHOOK_SECRET' }
+      : { engine: 'BINANCE_ABCD_TEST_WEBHOOK_SECRET', api: 'ENGINE_TEST_WEBHOOK_SECRET' }
 
   return (
     <div className="flex min-w-0 flex-col gap-3.5 rounded-row border border-hair bg-surface2 p-4 max-[480px]:p-3.5">
@@ -56,11 +61,11 @@ export default function AlertMessageCard({
           <KeyRound size={14} className="mt-[3px] flex-none text-faint" aria-hidden="true" />
           <span className="min-w-0">
             <b className="font-semibold text-text">Where is the secret?</b>{' '}
-            {test ? (
+            {ownFeed ? (
               <>
-                On the engine as <code className={CODE}>BINANCE_ABCD_TEST_WEBHOOK_SECRET</code>{' '}
+                On the engine as <code className={CODE}>{keys.engine}</code>{' '}
                 — the same value as the API&apos;s{' '}
-                <code className={CODE}>ENGINE_TEST_WEBHOOK_SECRET</code>.
+                <code className={CODE}>{keys.api}</code>.
               </>
             ) : (
               <>
@@ -79,7 +84,7 @@ export default function AlertMessageCard({
           >
             {secretSetOnApi ? 'Set on the API' : 'Not set on the API'}
           </StatusChip>
-          {test && (
+          {ownFeed && (
             <StatusChip
               tone={engineHasSecret === true ? 'good' : engineHasSecret === false ? 'bad' : 'neutral'}
               icon={
@@ -89,7 +94,7 @@ export default function AlertMessageCard({
                     ? XCircle
                     : CircleHelp
               }
-              title="Without it the engine refuses every test signal (403)."
+              title={`Without it the engine refuses every ${feed === 'submaster' ? 'sub-master' : 'test'} signal (403).`}
             >
               {engineHasSecret === true
                 ? 'Set on the engine'

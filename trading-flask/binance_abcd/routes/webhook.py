@@ -49,6 +49,9 @@ from binance_abcd.hooks import (
     OUT_DIR,
     REFERENCE_BALANCE,
     RETRY_ENABLED,
+    FEED_PATHS,
+    PRIVATE_FEEDS,
+    SUBMASTER_FEED,
     TEST_FEED,
     TEST_WEBHOOK_PATHS,
     WEBHOOK_PATHS,
@@ -1209,7 +1212,7 @@ def _process_trade_job(
     symbol = ticker.upper()
     is_entry = action in ENTRY_ACTIONS
     position_side = "LONG" if action in ("BUY", "EXIT_LONG") else "SHORT"
-    if feed == TEST_FEED:
+    if feed in PRIVATE_FEEDS:
         announce = False
 
     live = enabled_exchanges()
@@ -1227,8 +1230,10 @@ def _process_trade_job(
     # The test feed never meets the main-account rule: its accounts follow
     # other signals than the master, so the master's stack says nothing
     # about theirs (and the master is never on the test feed anyway).
+    # The sub-master feed neither: the sub-master follows its own run and its
+    # own signals (2026-11-18).
     main_gate = (is_entry and not is_retry and not targets and target_uni_ids is None
-                 and feed != TEST_FEED)
+                 and feed not in PRIVATE_FEEDS)
     plans = {
         ex: _plan_exchange(ex, action, symbol, targets.get(ex) if targets else target_uni_ids, main_gate, feed)
         for ex in run
@@ -1237,7 +1242,9 @@ def _process_trade_job(
     # What this job counts as for the Signal Log and the alerts. A manual close
     # (feed None) of tester accounts only is test traffic too.
     job_feed = feed or _feed_of_accounts([a for plan in runnable.values() for a in plan["accounts"]])
-    is_test = job_feed == TEST_FEED
+    # Test and sub-master traffic is reported privately (admin chat, its
+    # own banner), never through the public builders.
+    is_test = job_feed in PRIVATE_FEEDS
 
     if not runnable:
         # Nothing ran anywhere: every venue rejected the entry or had no
@@ -1262,7 +1269,8 @@ def _process_trade_job(
         if daily and not daily_alerts.first_today(f"asset_disabled|{ex}|{symbol}" for ex in run):
             log.info("signal rejected: %s %s — coin off, already announced today", action, symbol)
         elif is_test:
-            notify.notify_test_feed_rejected(action, symbol, reason_text, label=labels(run), hints=hints, daily=daily)
+            notify.notify_test_feed_rejected(action, symbol, reason_text, label=labels(run), hints=hints, daily=daily,
+                                             feed=job_feed)
         else:
             notify.notify_rejected(action, symbol, reason_text, label=labels(run), hints=hints, daily=daily)
         per_exchange = [
@@ -1350,7 +1358,18 @@ def _process_trade_job(
             [(_account_label(r, len(live) > 1), r) for r in results],
             filled=filled, failed=failed, skipped=skipped, is_retry=is_retry,
             retrying=bool(retrying), label=labels(filled_on or list(runnable)),
+            feed=job_feed,
         )
+        # The sub-master trades real money: a close refused outright is
+        # emailed at once, exactly as on the main feed (stuck_exits). The test
+        # feed's is not.
+        if job_feed == SUBMASTER_FEED and not is_retry:
+            stuck_exits.report(action, symbol, [
+                {"exchange": r.get("exchange", "binance"), "uni_id": r.get("uni_id"),
+                 "name": r.get("account"), "error": r.get("error")}
+                for r in results if r["status"] == "failed"
+                and r.get("uni_id") not in retrying.get(r.get("exchange", "binance"), set())
+            ], why="rejected")
     else:
         _notify_job(action, symbol, price, results,
                     filled=filled, failed=failed, skipped=skipped,
@@ -1388,10 +1407,12 @@ def _process_trade_job(
 
 
 def _feed_of_accounts(accounts: list[dict]) -> str:
-    """TEST only when every account is on the test feed — a manual close that
-    names testers alone. Anything else (none, mixed, main) is main traffic."""
-    if accounts and all(account_feed(a) == TEST_FEED for a in accounts):
-        return TEST_FEED
+    """A private feed only when every account is on that ONE feed — a manual
+    close that names testers (or the sub-master) alone. Anything else (none,
+    mixed, main) is main traffic."""
+    feeds = {account_feed(a) for a in accounts}
+    if len(feeds) == 1 and (only := next(iter(feeds))) in PRIVATE_FEEDS:
+        return only
     return MAIN_FEED
 
 
@@ -1687,7 +1708,11 @@ def _delivery(raw_sent_at: Any, received_at: datetime, started: float) -> dict:
 def _feed_secret(feed: str) -> str:
     """The token a request on this feed must carry. Read at call time so a
     test can monkeypatch hooks.TEST_WEBHOOK_SECRET; empty = feed is off."""
-    return hooks.TEST_WEBHOOK_SECRET if feed == TEST_FEED else WEBHOOK_SECRET
+    if feed == TEST_FEED:
+        return hooks.TEST_WEBHOOK_SECRET
+    if feed == SUBMASTER_FEED:
+        return hooks.SUBMASTER_WEBHOOK_SECRET
+    return WEBHOOK_SECRET
 
 
 def _handle_webhook(exchange: str, feed: str = MAIN_FEED):
@@ -1788,11 +1813,11 @@ def _register_webhooks() -> None:
     a clear 400 rather than nginx's 404 — the two look identical from
     TradingView. A test path is registered with the test feed off too; it
     answers 403 until BINANCE_ABCD_TEST_WEBHOOK_SECRET is set."""
-    for feed, paths in ((MAIN_FEED, WEBHOOK_PATHS), (TEST_FEED, TEST_WEBHOOK_PATHS)):
+    for feed, paths in FEED_PATHS.items():
         for venue, path in paths.items():
             webhook_bp.add_url_rule(
                 path,
-                endpoint=f"{venue}_abcd_webhook" if feed == MAIN_FEED else f"{venue}_test_webhook",
+                endpoint=f"{venue}_abcd_webhook" if feed == MAIN_FEED else f"{venue}_{feed}_webhook",
                 view_func=(lambda v, f: (lambda: _handle_webhook(v, f)))(venue, feed),
                 methods=["POST"],
             )
@@ -1810,7 +1835,7 @@ def webhook_catalogue() -> list[dict]:
             "path": path,
             "enabled": venue in live and bool(_feed_secret(feed)),
         }
-        for feed, paths in ((MAIN_FEED, WEBHOOK_PATHS), (TEST_FEED, TEST_WEBHOOK_PATHS))
+        for feed, paths in FEED_PATHS.items()
         for venue, path in paths.items()
     ]
 

@@ -4,8 +4,7 @@ import { EXCHANGE_META } from '../../../exchanges/meta'
 import { fmtDateTimeSeconds, fmtTimeMillis } from '../../../../lib/format'
 import { FEED_ACCOUNT_ROLE, FEED_SOURCE, fmtGap, leadLine, outcomeText, priceLine } from '../../../../lib/feedCompare'
 import { LABEL_CHIP, TONE } from '../tradeLogClasses'
-import type { SignalFeed } from '../../../../types/feeds'
-import type { FeedCompareRow, FeedSide } from '../../../../types/feedCompare'
+import type { ComparedFeed, FeedCompareRow, FeedSide } from '../../../../types/feedCompare'
 
 const FEED_ICON = { main: Radio, test: TestTubeDiagonal }
 const LABEL = 'text-[10.5px] font-semibold uppercase tracking-[0.07em] text-faint'
@@ -56,7 +55,7 @@ function FeedPanel({
   first,
   matchSeconds,
 }: {
-  feed: SignalFeed
+  feed: ComparedFeed
   side: FeedSide | null
   first: boolean
   matchSeconds: number

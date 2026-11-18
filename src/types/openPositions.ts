@@ -12,8 +12,9 @@ export interface AdminOpenPosition {
   owner_name: string
   owner_type: string | null
   /**
-   * `test` on a tester's account: it follows the test feed, not the master's
-   * signals. Absent on an API older than the test feed = main.
+   * `test` on a tester's account, `submaster` on the sub-master's: it follows
+   * that feed, not the master's signals. Absent on an API older than the
+   * test feed = main.
    */
   feed?: SignalFeed
   /** Testnet / demo-trading account: closing it moves no real money. */
@@ -46,7 +47,7 @@ export interface TradedAccount {
   owner_name: string
   account_name: string | null
   demo: boolean
-  /** `test` for a tester's account (test feed); absent = main. */
+  /** `test` for a tester's account, `submaster` for the sub-master's; absent = main. */
   feed?: SignalFeed
 }
 

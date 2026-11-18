@@ -38,8 +38,17 @@ function VenueChip({ live }: { live: boolean | null }) {
   )
 }
 
-/** Test feed only: whether the engine has the test secret, i.e. accepts signals here. */
-function SecretChip({ enabled }: { enabled: boolean | null }) {
+/** The engine env key holding each own-feed secret, for the chip's hint. */
+const ENGINE_SECRET_KEY: Partial<Record<AdminWebhook['feed'], string>> = {
+  test: 'BINANCE_ABCD_TEST_WEBHOOK_SECRET',
+  submaster: 'BINANCE_ABCD_SUBMASTER_WEBHOOK_SECRET',
+}
+
+/**
+ * Test and sub-master feeds: whether the engine has that feed's secret, i.e.
+ * accepts signals here.
+ */
+function SecretChip({ enabled, feed }: { enabled: boolean | null; feed: AdminWebhook['feed'] }) {
   if (enabled === true) {
     return (
       <StatusChip tone="good" icon={KeyRound}>
@@ -52,7 +61,7 @@ function SecretChip({ enabled }: { enabled: boolean | null }) {
       <StatusChip
         tone="bad"
         icon={KeyRound}
-        title="The engine has no BINANCE_ABCD_TEST_WEBHOOK_SECRET, so it refuses test signals."
+        title={`The engine has no ${ENGINE_SECRET_KEY[feed] ?? 'secret for this feed'}, so it refuses signals on this feed.`}
       >
         Secret not set
       </StatusChip>
@@ -91,7 +100,7 @@ export default function WebhookCard({ webhook, bases }: WebhookCardProps) {
 
         <div className="flex flex-wrap gap-1.5">
           <VenueChip live={webhook.venue_live} />
-          {webhook.feed === 'test' && <SecretChip enabled={webhook.enabled} />}
+          {webhook.feed !== 'main' && <SecretChip enabled={webhook.enabled} feed={webhook.feed} />}
         </div>
 
         <p className={`flex items-start gap-2 text-[12.5px] leading-[1.5] ${nobody ? 'text-faint' : 'text-muted'}`}>

@@ -146,13 +146,29 @@ export interface TradeLogDelivery {
   slow: boolean
 }
 
+/**
+ * An account that FILLED an entry although its owner's role does not belong
+ * to that signal's feed — e.g. a customer filled on the sub-master feed. The
+ * feeds are meant to be disjoint, so every one of these is a high-risk alarm.
+ */
+export interface TradeLogBreach {
+  uniId: string
+  owner: string | null
+  role: string | null
+  account: string | null
+  /** The feed the owner's role belongs to. */
+  expectedFeed: SignalFeed
+}
+
 /** One append-only row per signal the engine processed. */
 export interface TradeLogRow {
   kind: 'signal'
   id: number
   exchange: ExchangeKind
-  /** Main or test feed; an API older than the test feed sends none = main. */
+  /** Main, test or sub-master feed; an API older than the test feed sends none = main. */
   feed: SignalFeed
+  /** Accounts that filled although they belong to another feed; null = clean. */
+  breach: TradeLogBreach[] | null
   action: TradeAction
   side: TradeSideWord
   type: TradeKindWord
@@ -233,7 +249,7 @@ export interface ReasonCount {
 
 export interface TradeLogFilters {
   exchange?: string
-  /** 'main' | 'test' — which webhook the signal came in on (both endpoints). */
+  /** 'main' | 'test' | 'submaster' — which webhook the signal came in on (both endpoints). */
   feed?: string
   /** 'long' | 'short' */
   side?: string
@@ -303,6 +319,8 @@ export interface SignalHealth {
   problems: number
   /** Signals where the master was in the fan-out and did not trade, for a problem reason. */
   masterMissed: number
+  /** Signals that filled accounts outside their feed (high risk) — any feed. */
+  breaches: number
   lastSignalAt: string | null
   /** The top five; `issuesTotal` says how many there are. */
   issues: SignalIssue[]

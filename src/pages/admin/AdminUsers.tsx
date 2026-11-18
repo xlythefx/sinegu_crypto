@@ -26,7 +26,7 @@ import UserBalanceCell from '../../components/admin/UserBalanceCell'
 import { EXCHANGE_META } from '../../components/exchanges/meta'
 import { useApiData } from '../../hooks/useApiData'
 import { useSessionUser } from '../../hooks/useSessionUser'
-import { isCollaborator } from '../../lib/roles'
+import { hasOwnFeed, isCollaborator } from '../../lib/roles'
 import {
   acceptUser,
   createAdminUser,
@@ -77,6 +77,7 @@ const ROLE_FILTERS: { key: RoleFilter; label: string }[] = [
   { key: 'developer', label: 'Developer' },
   { key: 'collaborator', label: 'Collaborator' },
   { key: 'tester', label: 'Tester' },
+  { key: 'submaster', label: 'Sub-master' },
 ]
 
 const USERS_PER_PAGE = 10
@@ -117,18 +118,30 @@ const ROLE_EFFECT: Record<UserRole, string> = {
     'They get a read-only view of the admin portal — the dashboard overview, users and strategies — and can change nothing.',
   tester:
     'An internal test account: they get the admin portal (not the database console), their exchange accounts receive only the test feed (never the main TradingView signals), and they are never billed. Refused while they hold an open position.',
+  submaster:
+    'A second house account: trader dashboard only (no admin portal), their exchange accounts trade only the sub-master feed with real money (never the main TradingView signals), they are never billed, and their streak sizing follows their own trades. Refused while they hold an open position.',
+}
+
+/** The feed a role's exchange accounts trade, as the confirm sentence names it. */
+function feedName(role: UserRole | undefined): string {
+  if (role === 'tester') return 'the test feed'
+  if (role === 'submaster') return 'the sub-master feed'
+  return 'the main TradingView signals'
 }
 
 /**
- * The confirm dialog's sentence. Leaving `tester` is its own case: the
- * accounts switch feeds, so the API refuses it while a position is open
- * (409 OPEN_POSITIONS) — said up front rather than only on refusal.
+ * The confirm dialog's sentence. Leaving `tester` or `submaster` is its own
+ * case: the accounts switch feeds, so the API refuses it while a position is
+ * open (409 OPEN_POSITIONS) — said up front rather than only on refusal.
+ * Entering one already says so in ROLE_EFFECT.
  */
 function roleEffect({ user, role }: PendingRole): string {
-  if (user.type !== 'tester' || role === 'tester') return ROLE_EFFECT[role]
-  const feeds =
-    'Their exchange accounts move from the test feed to the main TradingView signals. Refused while they hold an open position.'
+  if (!hasOwnFeed(user.type) || role === user.type) return ROLE_EFFECT[role]
+  const feeds = `Their exchange accounts move from ${feedName(user.type)} to ${feedName(role)}. Refused while they hold an open position.`
+  // Entering the other own-feed role: its sentence already names the feed.
+  if (hasOwnFeed(role)) return ROLE_EFFECT[role].replace(' Refused while they hold an open position.', '') + ` ${feeds}`
   if (role === 'user') {
+    // A sub-master never had the portal, so "they lose the admin portal" would be wrong.
     return `They become a customer: billed like everyone else and counted as one. ${feeds}`
   }
   return `${ROLE_EFFECT[role]} ${feeds}`
@@ -353,7 +366,8 @@ export default function AdminUsers() {
       reload()
     } catch (err) {
       // The API owns the rules (no self-change, one master, no switching a
-      // tester's feed under an open position — 409 OPEN_POSITIONS) — show
+      // tester's or sub-master's feed under an open position — 409
+      // OPEN_POSITIONS) — show
       // what it said.
       const fallback =
         err instanceof ApiError && err.errorCode === 'OPEN_POSITIONS'

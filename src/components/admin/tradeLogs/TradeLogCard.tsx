@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Check, ChevronDown, ChevronRight, RotateCw, TestTubeDiagonal, Timer } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Gem, RotateCw, TestTubeDiagonal, Timer } from 'lucide-react'
 import ExchangeBadge from '../../billing/ExchangeBadge'
-import { TESTER_TINT } from '../badges'
+import { SUBMASTER_TINT, TESTER_TINT } from '../badges'
 import DeliveryProof from './DeliveryProof'
+import FeedBreachStrip from './FeedBreachStrip'
 import SideTypePill from './SideTypePill'
 import SizingBreakdown from './SizingBreakdown'
 import {
@@ -15,6 +16,7 @@ import {
 } from './tradeLogClasses'
 import { fmtDateTime, fmtMoney, fmtQty, fmtSignedMoney } from '../../../lib/format'
 import { filledInAll } from '../../../lib/signalDelivery'
+import { isPrivateFeed } from '../../../lib/feeds'
 import {
   masterBadge,
   masterDetailOf,
@@ -75,9 +77,10 @@ export default function TradeLogCard({
   const lastRetry = log.retries[log.retries.length - 1] ?? null
   const rejected = log.category === 'rejected'
   const rejectReason = log.details[0]?.reason ?? log.details[0]?.error ?? null
-  // The test feed reaches testers only — the master is never in it, so a
-  // "No master" chip there would be noise.
-  const master = rejected || log.feed === 'test' ? null : masterBadge(log.master, masterDetailOf(log))
+  // The test and sub-master feeds reach their own role only — the master is
+  // never in them, so a "No master" chip there would be noise.
+  const master = rejected || isPrivateFeed(log.feed) ? null : masterBadge(log.master, masterDetailOf(log))
+  const breached = log.breach !== null && log.breach.length > 0
 
   const sorted = sortDetails(log.details)
   const matching = accountFiltersActive ? sorted.filter((d) => d.match) : sorted
@@ -87,7 +90,9 @@ export default function TradeLogCard({
   return (
     <article
       className={`rounded-card border bg-surface overflow-hidden ${
-        log.problems > 0 || rejected
+        breached
+          ? 'border-[color-mix(in_srgb,var(--red)_55%,var(--border))]'
+          : log.problems > 0 || rejected
           ? 'border-[color-mix(in_srgb,var(--red)_28%,var(--border))]'
           : 'border-border'
       }`}
@@ -114,6 +119,15 @@ export default function TradeLogCard({
               >
                 <TestTubeDiagonal size={11} aria-hidden="true" />
                 Test feed
+              </span>
+            )}
+            {log.feed === 'submaster' && (
+              <span
+                className={`${LABEL_CHIP} ${SUBMASTER_TINT} whitespace-nowrap`}
+                title="Came in on the engine's sub-master webhook: the sub-master's accounts only (real money), never posted to Telegram or Discord"
+              >
+                <Gem size={11} aria-hidden="true" />
+                Sub-master feed
               </span>
             )}
             {log.category && log.category !== 'signal' && !rejected && (
@@ -198,6 +212,8 @@ export default function TradeLogCard({
           )}
         </div>
       </button>
+
+      {breached && log.breach && <FeedBreachStrip feed={log.feed} breach={log.breach} />}
 
       {expanded && (
         <div className="px-card pb-card pt-0 animate-[fadeup_0.25s_ease-out] max-[480px]:px-3.5 max-[480px]:pb-3.5">

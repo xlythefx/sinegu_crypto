@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Check, Crown, Globe, Search, User, XOctagon } from 'lucide-react'
 import { EXCHANGE_META } from '../../exchanges/meta'
-import { TESTER_TINT } from '../badges'
+import { SUBMASTER_TINT, TESTER_TINT } from '../badges'
 import type { AdminOpenPosition } from '../../../types/openPositions'
 import type { ExchangeKind } from '../../../types/exchanges'
 
@@ -20,6 +20,8 @@ interface Owner {
   isMaster: boolean
   /** A tester: their accounts follow the test feed. */
   testFeed: boolean
+  /** The sub-master: their accounts follow the sub-master feed. */
+  submasterFeed: boolean
   positions: AdminOpenPosition[]
   exchanges: ExchangeKind[]
   accounts: string[]
@@ -49,6 +51,7 @@ function owners(positions: AdminOpenPosition[]): Owner[] {
         name: p.owner_name,
         isMaster: p.owner_type === 'master',
         testFeed: false,
+        submasterFeed: false,
         positions: [],
         exchanges: [],
         accounts: [],
@@ -56,6 +59,7 @@ function owners(positions: AdminOpenPosition[]): Owner[] {
       map.set(p.uni_id, o)
     }
     if (p.feed === 'test') o.testFeed = true
+    if (p.feed === 'submaster') o.submasterFeed = true
     o.positions.push(p)
     if (!o.exchanges.includes(p.exchange)) o.exchanges.push(p.exchange)
     if (p.account_name && !o.accounts.includes(p.account_name)) o.accounts.push(p.account_name)
@@ -151,6 +155,9 @@ export default function ClosePanel({ positions, busy, onClose }: ClosePanelProps
                         )}
                         {o.testFeed && (
                           <span className={`flex-none rounded-pill px-1.5 font-mono text-[10px] font-bold ${TESTER_TINT}`}>TEST FEED</span>
+                        )}
+                        {o.submasterFeed && (
+                          <span className={`flex-none rounded-pill px-1.5 font-mono text-[10px] font-bold ${SUBMASTER_TINT}`}>SUB-MASTER FEED</span>
                         )}
                       </span>
                       <span className="block truncate text-[11.5px] text-muted">

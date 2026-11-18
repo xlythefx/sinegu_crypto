@@ -21,6 +21,8 @@ os.environ.setdefault("BINANCE_ABCD_ADMIN_SECRET", "")
 # Test feed OFF by default, whatever a developer's .env says;
 # test_test_feed.py monkeypatches hooks.TEST_WEBHOOK_SECRET to turn it on.
 os.environ.setdefault("BINANCE_ABCD_TEST_WEBHOOK_SECRET", "")
+# Same for the sub-master feed (test_submaster_feed.py turns it on).
+os.environ.setdefault("BINANCE_ABCD_SUBMASTER_WEBHOOK_SECRET", "")
 os.environ.setdefault("BINANCE_ABCD_ENGINE_SECRET", "test-engine-secret")
 os.environ.setdefault("BINANCE_ABCD_ENGINE_API_BASE", "http://engine.test/api")
 os.environ.setdefault("BINANCE_ABCD_RUN_POLLERS", "false")

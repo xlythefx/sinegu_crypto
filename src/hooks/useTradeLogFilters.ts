@@ -23,7 +23,7 @@ const DEFAULTS = {
 }
 
 const ALLOWED = {
-  feed: ['all', 'main', 'test'],
+  feed: ['all', 'main', 'test', 'submaster'],
   side: ['all', 'long', 'short'],
   type: ['all', 'entry', 'exit'],
   source: ['all', 'signals', 'outside'],

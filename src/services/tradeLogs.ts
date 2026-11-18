@@ -18,6 +18,7 @@ import type {
   TradeLogsData,
 } from '../types/tradeLogs'
 import type { FeedCompareData, FeedCompareRow, FeedSide } from '../types/feedCompare'
+import { feedOf } from '../lib/feeds'
 
 /* ---- wire shapes (snake_case straight from AdminTradeLogController) ---- */
 
@@ -127,6 +128,13 @@ interface ApiLog {
   master?: MasterOutcome | null
   problems?: number
   normal_skips?: number
+  breach?: Array<{
+    uni_id: string
+    owner: string | null
+    role: string | null
+    account: string | null
+    expected_feed: SignalFeed
+  }> | null
   delivery?: {
     sent_at: string | null
     received_at: string
@@ -252,7 +260,18 @@ function mapLog(l: ApiLog): TradeLogRow {
     id: l.id,
     exchange: l.exchange,
     // An API older than the test feed: every signal it logged was main.
-    feed: l.feed === 'test' ? 'test' : 'main',
+    feed: feedOf(l.feed),
+    // An API older than the breach check sends none: nothing to flag.
+    breach:
+      l.breach && l.breach.length > 0
+        ? l.breach.map((b) => ({
+            uniId: b.uni_id,
+            owner: b.owner,
+            role: b.role,
+            account: b.account,
+            expectedFeed: feedOf(b.expected_feed),
+          }))
+        : null,
     action: l.action,
     // An API older than the side/type words: derive them from the action.
     side: l.side ?? (l.action === 'SELL' || l.action === 'EXIT_SHORT' ? 'SHORT' : 'LONG'),
@@ -416,6 +435,7 @@ export async function getTradeLogHealth(hours = 24): Promise<SignalHealth> {
       normal_skips: number
       problems: number
       master_missed: number
+      breaches?: number
       last_signal_at: string | null
       issues: ApiIssue[]
       issues_total: number
@@ -431,6 +451,7 @@ export async function getTradeLogHealth(hours = 24): Promise<SignalHealth> {
     normalSkips: h.normal_skips,
     problems: h.problems,
     masterMissed: h.master_missed,
+    breaches: h.breaches ?? 0,
     lastSignalAt: h.last_signal_at,
     issues: (h.issues ?? []).map(mapIssue),
     issuesTotal: h.issues_total,

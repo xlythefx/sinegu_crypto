@@ -97,6 +97,28 @@ const OVERVIEW_BODY = {
       ],
     },
     disputed_payments: 0, killed_assets: [],
+    // High-risk alerts (invented): one feed breach, one engine outage.
+    risk_alerts: [
+      {
+        id: 7, kind: 'feed_breach', label: 'Wrong accounts traded',
+        title: 'A customer account filled a sub-master signal (BUY LTCUSDT on Binance)',
+        lines: [
+          'Carla Customer · Main — role user, belongs to the main feed.',
+          'Only sub-master accounts should trade the sub-master feed. Check the account and close the stray position if it should not be there.',
+        ],
+        exchange: 'binance', trade_log_id: 9001, occurrences: 1,
+        first_seen_at: new Date(Date.now() - 40 * 60000).toISOString(),
+        last_seen_at: new Date(Date.now() - 40 * 60000).toISOString(), emailed: true,
+      },
+      {
+        id: 6, kind: 'engine_down', label: 'Bot engine not answering',
+        title: 'The trading engine did not answer its health check',
+        lines: ['No signal can be traded while it is down.', 'Restart it from Bot Engine and check its log.'],
+        exchange: null, trade_log_id: null, occurrences: 3,
+        first_seen_at: new Date(Date.now() - 3 * 3600000).toISOString(),
+        last_seen_at: new Date(Date.now() - 2 * 3600000).toISOString(), emailed: true,
+      },
+    ],
     signals_today: { signals: 6, with_problems: 0, filled: 30, skipped: 2, failed: 0, reasons: { 'maxed sizing': 2 } },
     paused_for_payment: 0,
     outside_closes: {
@@ -525,6 +547,9 @@ const USERS_BODY = {
     }),
     sampleUser('Emma Duarte', T('below_min', 'Below the $1,000 minimum deposit')),
     { ...sampleUser('Lucas Petit', T('no_exchange', 'No exchange')), accounts: [], last_activity: null },
+    // Staff (the Staff tab, ?group=staff): an invented sub-master and tester.
+    { ...sampleUser('Mira Second', T('trading', 'Trading')), type: 'submaster' },
+    { ...sampleUser('Theo Tester', T('trading', 'Trading')), type: 'tester' },
   ],
 }
 
@@ -833,6 +858,60 @@ const AI_ACCESS = () => {
   }
 }
 
+// ---------------------------------------------------------------- Signal Log + Webhooks (feeds)
+const minsAgo = (m) => new Date(Date.now() - m * 60000).toISOString()
+const logDetail = (account, user, extra = {}) => ({
+  account, uni_id: `u-${user.split(' ')[0].toLowerCase()}`, user_name: user, status: 'filled', reason: null, error: null,
+  retryable: null, quantity: 3.4, fill_price: 98.42, closed_quantity: null, sizing: null,
+  reason_key: 'filled', reason_label: 'Filled', severity: 'normal', is_master: false, match: true, ...extra,
+})
+const signalLog = (id, feed, minutes, details, extra = {}) => ({
+  kind: 'signal', id, exchange: 'binance', feed, action: 'BUY', side: 'LONG', type: 'entry', ticker: 'LTCUSDT',
+  success: true, price: 98.4, strategy: 'ABCD-v1', leverage: 25, category: 'signal',
+  target_count: details.length, filled: details.filter((d) => d.status === 'filled').length, failed: 0, skipped: 0,
+  details, ts: minsAgo(minutes), master: null, problems: 0, normal_skips: 0, retries: [], delivery: null, breach: null, ...extra,
+})
+const TRADE_LOGS_BODY = () => ({
+  success: true,
+  logs: [
+    signalLog(9001, 'submaster', 40, [logDetail('Main', 'Mira Second'), logDetail('Main', 'Carla Customer')], {
+      breach: [{ uni_id: 'u-carla', owner: 'Carla Customer', role: 'user', account: 'Main', expected_feed: 'main' }],
+    }),
+    signalLog(9000, 'main', 75, [logDetail('Main', 'Daniel Moreau'), logDetail('Main', 'Noah Klein')], { master: 'filled' }),
+    signalLog(8999, 'test', 120, [logDetail('Testnet', 'Theo Tester', { quantity: 1 })]),
+  ],
+  summary: { signals: 3, clean_signals: 3, filled: 5, failed: 0, skipped: 0, problem_accounts: 0, normal_skips: 0, outside_closes: 0 },
+  pagination: { limit: 25, offset: 0, total: 3 },
+  filters: { tickers: ['LTCUSDT'], exchanges: ['binance'], strategies: ['ABCD-v1'], reasons: [] },
+})
+const TRADE_LOG_HEALTH = () => ({
+  success: true,
+  health: {
+    status: 'healthy', hours: 24, signals: 3, filled: 5, normal_skips: 0, problems: 0, master_missed: 0,
+    last_signal_at: minsAgo(40), issues: [], issues_total: 0,
+  },
+})
+const WEBHOOK_EXCHANGES = ['binance', 'mexc', 'bybit']
+const WEBHOOK_PATH = { main: 'abcd', test: 'test', submaster: 'submaster' }
+const WEBHOOK_RECEIVERS = {
+  main: { binance: { live: 6, demo: 1 }, mexc: { live: 1, demo: 0 }, bybit: { live: 0, demo: 1 } },
+  test: { binance: { live: 0, demo: 1 }, mexc: { live: 0, demo: 0 }, bybit: { live: 0, demo: 0 } },
+  submaster: { binance: { live: 1, demo: 0 }, mexc: { live: 0, demo: 0 }, bybit: { live: 0, demo: 0 } },
+}
+const WEBHOOKS_BODY = {
+  success: true,
+  engine: { reachable: true, test_feed_enabled: true, submaster_feed_enabled: false },
+  bases: { prod: 'https://pixel-alpha.com', local: 'http://127.0.0.1:5010' },
+  secrets: { main_set: true, test_set: true, submaster_set: true },
+  webhooks: ['main', 'test', 'submaster'].flatMap((feed) =>
+    WEBHOOK_EXCHANGES.map((exchange) => ({
+      exchange, feed, path: `/${exchange}_${WEBHOOK_PATH[feed]}_webhook`,
+      venue_live: true, enabled: feed === 'submaster' ? false : true,
+      receivers: WEBHOOK_RECEIVERS[feed][exchange],
+    })),
+  ),
+}
+
 // ---------------------------------------------------------------- router
 /** Longest matching prefix wins; values may be functions (fresh dates per call). */
 const GET = {
@@ -844,6 +923,18 @@ const GET = {
   '/admin/invoices': INVOICES_BODY,
   '/admin/tron-transfers': TRANSFERS_BODY,
   '/admin/insights/overview': OVERVIEW_BODY,
+  '/admin/trade-logs/health': TRADE_LOG_HEALTH,
+  '/admin/trade-logs': TRADE_LOGS_BODY,
+  '/admin/webhooks': WEBHOOKS_BODY,
+  '/admin/risk-alerts': {
+    success: true,
+    alerts: [{
+      id: 5, kind: 'key_refused', label: 'House key refused', title: 'The master’s Binance key was refused',
+      lines: ['Fixed by allow-listing the server IP again.'], exchange: 'binance', trade_log_id: null, occurrences: 2,
+      first_seen_at: '2026-11-15T08:00:00Z', last_seen_at: '2026-11-15T08:20:00Z', emailed: true,
+      resolved_at: '2026-11-15T09:05:00Z', resolved_by: 'Sample Admin', resolve_note: 'IP added back on Binance.',
+    }],
+  },
   '/admin/visitors/summary': visitorSummary,
   '/admin/insights/customers': customerInsights,
   '/admin/visitors/log': VISITOR_LOG_BODY,

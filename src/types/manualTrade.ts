@@ -15,7 +15,10 @@ export interface ManualTradeTarget {
   display_name: string
   email: string | null
   exchange: ExchangeKind
-  /** The feed this user's accounts follow — `test` for a tester. Absent on an older API = main. */
+  /**
+   * The feed this user's accounts follow — `test` for a tester, `submaster`
+   * for the sub-master. Absent on an older API = main.
+   */
   feed?: SignalFeed
   account_count: number
   demo_count: number
@@ -27,7 +30,10 @@ export interface ManualTradeTarget {
 export interface ManualTradeInput {
   exchange: ExchangeKind
   target: EngineTarget
-  /** Which webhook to fire: `test` reaches tester accounts only. Default main. */
+  /**
+   * Which webhook to fire: `test` reaches tester accounts only, `submaster`
+   * the sub-master's accounts only. Default main.
+   */
   feed?: SignalFeed
   action: TradeAction
   symbol: string
@@ -63,6 +69,8 @@ export interface EngineStatus {
    * on an API older than the test feed.
    */
   test_feed_enabled?: boolean | null
+  /** Same for the sub-master feed's secret. Absent on an older API. */
+  submaster_feed_enabled?: boolean | null
   health?: {
     status?: string
     service?: string

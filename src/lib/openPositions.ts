@@ -1,6 +1,7 @@
 import type { AdminOpenPosition, AdminOpenPositionsData } from '../types/openPositions'
 import type { ExchangeKind } from '../types/exchanges'
 import type { SignalFeed } from '../types/feeds'
+import { feedOf } from './feeds'
 
 /** Selection key for an open-positions row — ids repeat across venues' tables. */
 export const positionKey = (p: Pick<AdminOpenPosition, 'exchange' | 'id'>) => `${p.exchange}:${p.id}`
@@ -16,8 +17,9 @@ export interface SideRef {
  * account on that venue, so there is nothing to compare against.
  * `test-feed`: a tester's account — it follows the test feed, not the
  * master's signals, so it is never compared (a "different" would be noise).
+ * `submaster-feed`: the sub-master's account — same reason, its own feed.
  */
-export type SyncState = 'same' | 'differs' | 'no-master' | 'test-feed'
+export type SyncState = 'same' | 'differs' | 'no-master' | 'test-feed' | 'submaster-feed'
 
 export interface UserSync {
   key: string
@@ -44,8 +46,6 @@ const unref = (k: string): SideRef => {
 
 const isMaster = (p: AdminOpenPosition) => p.owner_type === 'master'
 
-/** Absent on an API older than the test feed — every account was main then. */
-const feedOf = (row: { feed?: SignalFeed }): SignalFeed => (row.feed === 'test' ? 'test' : 'main')
 
 type EntryInit = Pick<UserSync, 'owner_name' | 'account_name' | 'demo' | 'feed'>
 
@@ -57,13 +57,15 @@ type EntryInit = Pick<UserSync, 'owner_name' | 'account_name' | 'demo' | 'feed'>
  * user holding nothing while the master is in a trade is the case that
  * matters most. Out-of-sync users sort first.
  *
- * Test-feed accounts (testers) come back on their own in `testFeed`, never
- * compared: they trade different signals than the master by design.
+ * Test-feed accounts (testers) come back on their own in `testFeed`, and the
+ * sub-master's in `submasterFeed`, never compared: they trade different
+ * signals than the master by design.
  */
 export function splitByMaster(data: AdminOpenPositionsData): {
   master: AdminOpenPosition[]
   users: UserSync[]
   testFeed: UserSync[]
+  submasterFeed: UserSync[]
 } {
   const master = data.positions.filter(isMaster)
   const masterSets = new Map<ExchangeKind, Set<string>>()
@@ -78,15 +80,16 @@ export function splitByMaster(data: AdminOpenPositionsData): {
       u = { key, uni_id, exchange, ...init, positions: [], missing: [], extra: [], state: 'same', unrealized: 0 }
       users.set(key, u)
     }
-    // Either half of the payload may be the one that says "test".
-    if (init.feed === 'test') u.feed = 'test'
+    // Either half of the payload may be the one that names the own feed.
+    if (init.feed !== 'main') u.feed = init.feed
     return u
   }
   const initOf = (row: { owner_name: string; account_name: string | null; demo: boolean; feed?: SignalFeed }): EntryInit => ({
     owner_name: row.owner_name,
     account_name: row.account_name,
     demo: row.demo,
-    feed: feedOf(row),
+    // Absent on an API older than the test feed — every account was main then.
+    feed: feedOf(row.feed),
   })
   for (const a of data.accounts) entry(a.exchange, a.uni_id, initOf(a))
   for (const p of data.positions) {
@@ -97,8 +100,8 @@ export function splitByMaster(data: AdminOpenPositionsData): {
   }
 
   for (const u of users.values()) {
-    if (u.feed === 'test') {
-      u.state = 'test-feed'
+    if (u.feed === 'test' || u.feed === 'submaster') {
+      u.state = u.feed === 'test' ? 'test-feed' : 'submaster-feed'
       continue
     }
     const target = masterSets.get(u.exchange)
@@ -112,13 +115,21 @@ export function splitByMaster(data: AdminOpenPositionsData): {
     u.state = u.missing.length || u.extra.length ? 'differs' : 'same'
   }
 
-  const order: Record<SyncState, number> = { differs: 0, same: 1, 'no-master': 2, 'test-feed': 3 }
+  const order: Record<SyncState, number> = {
+    differs: 0,
+    same: 1,
+    'no-master': 2,
+    'test-feed': 3,
+    'submaster-feed': 4,
+  }
+  const ownFeed = (s: SyncState) => s === 'test-feed' || s === 'submaster-feed'
   const sorted = [...users.values()].sort(
     (a, b) => order[a.state] - order[b.state] || a.owner_name.localeCompare(b.owner_name),
   )
   return {
     master,
-    users: sorted.filter((u) => u.state !== 'test-feed'),
+    users: sorted.filter((u) => !ownFeed(u.state)),
     testFeed: sorted.filter((u) => u.state === 'test-feed'),
+    submasterFeed: sorted.filter((u) => u.state === 'submaster-feed'),
   }
 }

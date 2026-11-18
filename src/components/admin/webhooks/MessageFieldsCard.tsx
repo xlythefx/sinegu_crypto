@@ -70,7 +70,7 @@ export default function MessageFieldsCard({ delay }: { delay?: number }) {
             Message fields
           </h2>
           <p className="mt-0.5 text-[12.5px] leading-[1.55] text-muted">
-            The same fields on every address, main or test.
+            The same fields on every address, main, test or sub-master.
           </p>
         </div>
       </header>

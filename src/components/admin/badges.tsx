@@ -1,4 +1,4 @@
-import { Code2, Crown, Handshake, Shield, TestTubeDiagonal } from 'lucide-react'
+import { Code2, Crown, Gem, Handshake, Shield, TestTubeDiagonal } from 'lucide-react'
 import type { UserRole, UserStatus } from '../../types/admin'
 
 /** Base pill badge shared across admin tables and cards. */
@@ -24,6 +24,25 @@ export function TestFeedBadge({ className = '' }: { className?: string }) {
   )
 }
 
+/**
+ * The sub-master / sub-master-feed tint — fuchsia, apart from the master's
+ * gold, the tester's orange and the developer's lavender. Same rule as
+ * TESTER_TINT: one colour marks a sub-master everywhere (role badge, Signal
+ * Log rows from its feed, Open positions, the Webhooks section).
+ */
+export const SUBMASTER_TINT =
+  'bg-[color-mix(in_srgb,#d946ef_12%,transparent)] border-[color-mix(in_srgb,#d946ef_38%,transparent)] text-[#d946ef]'
+
+/** Compact "Sub-master feed" tag for a row that belongs to the sub-master feed. */
+export function SubmasterFeedBadge({ className = '' }: { className?: string }) {
+  return (
+    <span className={`${BADGE} gap-[5px] ${SUBMASTER_TINT} ${className}`}>
+      <Gem size={11} aria-hidden="true" />
+      Sub-master feed
+    </span>
+  )
+}
+
 /** rgba/color-mix tints preserved exactly from the original CSS. */
 export const STATUS_BADGE: Record<UserStatus, string> = {
   active:
@@ -35,7 +54,8 @@ export const STATUS_BADGE: Record<UserStatus, string> = {
 
 /**
  * Crown for master, shield for admin, angle-brackets for developer,
- * handshake for the read-only collaborator, a test tube for the tester —
+ * handshake for the read-only collaborator, a test tube for the tester, a gem
+ * for the sub-master —
  * plain users get no badge.
  */
 export function RoleBadge({ role }: { role: UserRole }) {
@@ -84,6 +104,14 @@ export function RoleBadge({ role }: { role: UserRole }) {
       <span className={`${BADGE} gap-[5px] ${TESTER_TINT}`}>
         <TestTubeDiagonal size={11} />
         Tester
+      </span>
+    )
+  }
+  if (role === 'submaster') {
+    return (
+      <span className={`${BADGE} gap-[5px] ${SUBMASTER_TINT}`}>
+        <Gem size={11} />
+        Sub-master
       </span>
     )
   }

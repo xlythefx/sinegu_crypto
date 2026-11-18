@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Eye, EyeOff, RefreshCw, ShieldAlert, TestTubeDiagonal } from 'lucide-react'
-import { isTester } from '../../lib/roles'
-import { TESTER_TINT } from './badges'
+import { Eye, EyeOff, Gem, RefreshCw, ShieldAlert, TestTubeDiagonal } from 'lucide-react'
+import { isSubmaster, isTester } from '../../lib/roles'
+import { SUBMASTER_TINT, TESTER_TINT } from './badges'
 import type { AdminUserCreateInput, UserRole, UserStatus } from '../../types/admin'
 
 /* ---- shared class strings (the admin form-modal vocabulary) ---- */
@@ -40,6 +40,11 @@ const ROLES: { value: UserRole; label: string; hint: string }[] = [
     value: 'tester',
     label: 'Tester',
     hint: 'Internal test account: admin portal (not the database console). Trades the test feed only, never billed.',
+  },
+  {
+    value: 'submaster',
+    label: 'Sub-master',
+    hint: 'A second house account: trader dashboard only, no admin portal. Trades its own signal feed, never billed.',
   },
 ]
 
@@ -120,8 +125,9 @@ export default function CreateUserModal({
 
   const roleHint = ROLES.find((r) => r.value === role)?.hint
   const statusHint = STATUSES.find((s) => s.value === status)?.hint
-  // Every role but `user` opens the portal; a tester also gets its own note below.
-  const elevated = role !== 'user'
+  // Every role but `user` and `submaster` opens the portal; a tester and a
+  // sub-master also get their own note below.
+  const elevated = role !== 'user' && role !== 'submaster'
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -283,6 +289,20 @@ export default function CreateUserModal({
               Its exchange accounts only receive the test feed — never the main
               TradingView signals — and it is never billed. It can fetch its own
               positions from the exchange on demand.
+            </span>
+          </p>
+        )}
+
+        {isSubmaster(role) && (
+          <p
+            className={`flex items-start gap-2 rounded-field border px-3 py-2.5 text-[12.5px] ${SUBMASTER_TINT}`}
+          >
+            <Gem size={15} className="mt-px flex-none" />
+            <span className="text-text">
+              Its exchange accounts only receive the sub-master feed — with real
+              money — and never the main TradingView signals. Trader dashboard
+              only (no admin portal), never billed, and its streak sizing follows
+              its own trades.
             </span>
           </p>
         )}

@@ -1,3 +1,5 @@
+import type { RiskAlert } from './riskAlerts'
+
 /**
  * GET /admin/insights/* — the admin dashboard's tabs
  * (sinegutrade-api AdminInsightsController + App\Services\Admin\AdminInsights).
@@ -97,6 +99,11 @@ export interface OverviewInsights {
      * predates the kill switch does not send it.
      */
     killed_assets?: KilledAssetRow[]
+    /**
+     * Open high-risk alerts, newest first (each was emailed when raised).
+     * ABSENT for a collaborator (they name accounts) and on an older API.
+     */
+    risk_alerts?: RiskAlert[]
     signals_today: {
       signals: number
       with_problems: number

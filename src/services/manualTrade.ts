@@ -11,7 +11,8 @@ import type {
 
 /**
  * Users the engine would trade for this exchange (same filters as the
- * fan-out) on this feed — the test feed lists tester accounts only.
+ * fan-out) on this feed — the test feed lists tester accounts only, the
+ * sub-master feed the sub-master's.
  */
 export async function getManualTradeTargets(
   exchange: ExchangeKind,
@@ -40,12 +41,17 @@ export async function getEngineStatus(
 /** The API has no test-feed secret to sign a test signal with. */
 export const TEST_SECRET_MISSING = 'ENGINE_TEST_WEBHOOK_SECRET_MISSING'
 
+/** The API has no sub-master-feed secret to sign a sub-master signal with (503). */
+export const SUBMASTER_SECRET_MISSING = 'ENGINE_SUBMASTER_WEBHOOK_SECRET_MISSING'
+
 /**
  * Fire the signal. The API adds the webhook secret and forwards it to the
  * engine, so nothing secret ever lives in the browser. A 502 means the engine
  * refused every attempt — surface its message rather than a generic failure.
  * A test-feed send on a box with no `ENGINE_TEST_WEBHOOK_SECRET` throws a 503
- * `ENGINE_TEST_WEBHOOK_SECRET_MISSING` (see {@link TEST_SECRET_MISSING}).
+ * `ENGINE_TEST_WEBHOOK_SECRET_MISSING` (see {@link TEST_SECRET_MISSING}); a
+ * sub-master send without `ENGINE_SUBMASTER_WEBHOOK_SECRET` the same way with
+ * {@link SUBMASTER_SECRET_MISSING}.
  */
 export async function sendManualTrade(
   input: ManualTradeInput,
