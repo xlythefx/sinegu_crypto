@@ -562,7 +562,10 @@ def do_inspect(ssh) -> None:
 DOMAIN = "pixel-alpha.com"
 DOMAIN_WWW = f"www.{DOMAIN}"
 CERT_LIVE = f"/etc/letsencrypt/live/{DOMAIN}"
-CERTBOT_EMAIL = "wodnxly3@gmail.com"
+# Let's Encrypt's expiry-notice contact. Read from the environment, never
+# committed (this repo is public). Only a FIRST issuance needs it; renewals
+# reuse the account certbot already registered on the box.
+CERTBOT_EMAIL = os.environ.get("PIXEL_ALPHA_CERTBOT_EMAIL", "").strip()
 
 NGINX_SNIPPET_PATH = "/etc/nginx/snippets/sinegualerts-app.conf"
 NGINX_HEADERS_PATH = "/etc/nginx/snippets/sinegualerts-headers.conf"
@@ -1048,6 +1051,11 @@ def do_setup_tls(ssh) -> None:
                           check=False, timeout=600)
         log("  " + ((out + err).strip() or "nothing due").replace("\n", "\n  "))
     else:
+        if not CERTBOT_EMAIL:
+            raise SystemExit(
+                "  no certificate on the box and PIXEL_ALPHA_CERTBOT_EMAIL is not set: "
+                "set it to the Let's Encrypt contact address and re-run setup-tls"
+            )
         log(f"  requesting certificate for {DOMAIN} + {DOMAIN_WWW} (webroot HTTP-01)...")
         rc, out, err = sh(
             ssh,
