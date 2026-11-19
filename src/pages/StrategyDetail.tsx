@@ -148,6 +148,7 @@ export default function StrategyDetail() {
         decodedKey,
         pastPositionsToStrategyTrades(scopedRows),
         excluded,
+        'gross',
       ),
     [decodedKey, scopedRows, excluded],
   )
@@ -241,17 +242,17 @@ export default function StrategyDetail() {
           <div className="flex gap-2.5 flex-wrap">
             <span
               className={`flex flex-col gap-0.5 py-[9px] px-[15px] rounded-row border ${
-                detail.totalPnl < 0
+                detail.totalPnlGross < 0
                   ? 'border-[rgba(255,90,90,0.3)] bg-[rgba(255,90,90,0.06)]'
                   : 'border-[rgba(47,214,122,0.3)] bg-[rgba(47,214,122,0.06)]'
               }`}
             >
               <span className="text-[9.5px] font-extrabold tracking-[0.5px] text-faint uppercase">
-                Total P&L · after fees
+                Total P&L · before fees
               </span>
               <PnlBreakdown gross={detail.totalPnlGross} net={detail.totalPnl} heading={detail.key}>
                 <span className="text-[16px] font-extrabold font-mono">
-                  {fmtSignedMoney(detail.totalPnl)}
+                  {fmtSignedMoney(detail.totalPnlGross)}
                 </span>
               </PnlBreakdown>
             </span>
@@ -365,12 +366,12 @@ export default function StrategyDetail() {
             >
               <MetricTile
                 icon={<TrendingUp size={13} />}
-                label="Total P&L · after fees"
-                value={fmtSignedMoney(detail.totalPnl)}
-                tone={detail.totalPnl >= 0 ? 'pos' : 'neg'}
+                label="Total P&L · before fees"
+                value={fmtSignedMoney(detail.totalPnlGross)}
+                tone={detail.totalPnlGross >= 0 ? 'pos' : 'neg'}
                 sub={
                   detail.fees !== 0
-                    ? `${fmtSignedMoney(detail.totalPnlGross)} before fees`
+                    ? `${fmtSignedMoney(detail.totalPnl)} after fees`
                     : `Gross win +${fmtMoney(detail.grossWin).slice(1)}`
                 }
               />
@@ -429,10 +430,10 @@ export default function StrategyDetail() {
               className="grid grid-cols-[1.6fr_1fr] gap-stack items-stretch max-[900px]:grid-cols-1"
               data-aos="fade-up"
             >
-              {/* After fees, with the before-fees figure on hover — the same
-                  card the admin strategy detail draws. */}
+              {/* Before fees, with the after-fees figure on hover — the same
+                  card the admin strategy detail draws (which leads after). */}
               {detail.equitySeries.length > 0 ? (
-                <EquityCurveCard equitySeries={detail.equitySeries} />
+                <EquityCurveCard equitySeries={detail.equitySeries} basis="gross" />
               ) : (
                 <section className={CARD}>
                   <div className={TITLE_ROW}>
@@ -667,13 +668,7 @@ export default function StrategyDetail() {
                           <td
                             className={`${TD} text-right font-mono ${pnl < 0 ? 'text-red' : 'text-green'}`}
                           >
-                            <PnlBreakdown
-                              hoverOnly
-                              gross={pnl + (r.exchange_fee == null ? 0 : num(r.exchange_fee))}
-                              net={pnl}
-                            >
-                              {fmtSignedMoney(pnl)}
-                            </PnlBreakdown>
+                            {fmtSignedMoney(pnl)}
                           </td>
                           <td className={`${TD} text-right font-mono text-muted`}>
                             {r.exit_price ? fmtMoney(num(r.exit_price)) : '—'}

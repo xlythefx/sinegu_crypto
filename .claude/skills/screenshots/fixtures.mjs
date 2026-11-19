@@ -947,6 +947,15 @@ const GET = {
   '/admin/affiliate/users/': { success: true, referrals: [] },
   '/admin/users': USERS_BODY,
   '/admin/strategies': STRATEGIES_BODY,
+  // The trader's own closes (Strategy Analysis card + /dashboard/strategies/:key).
+  '/binance/past-positions': {
+    success: true,
+    positions: STRATEGY_TRADES.map((t, i) => ({
+      id: i + 1, symbol: t.symbol, side: i % 3 ? 'LONG' : 'SHORT', strategy: t.strategy,
+      exchange: 'binance', realized_pnl: t.realized_pnl, exchange_fee: t.exchange_fee,
+      fee_source: 'actual', closed_at: t.closed_at, exit_price: 1.5, position_amt: 100,
+    })),
+  },
   '/auth/me': (user) => ({ success: true, user }),
   '/admin/invoices': INVOICES_BODY,
   '/admin/tron-transfers': TRANSFERS_BODY,

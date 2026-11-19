@@ -20,14 +20,14 @@ function Sparkline({ stats }: { stats: StrategyStats }) {
   const W = 132
   const H = 40
   const values = useMemo(
-    () => [0, ...stats.equitySeries.map((p) => p.cumulative)],
+    () => [0, ...stats.equitySeries.map((p) => p.cumulativeGross)],
     [stats.equitySeries],
   )
   if (values.length < 2)
     return (
       <div className="w-[132px] h-10 flex-none max-[560px]:hidden bg-[repeating-linear-gradient(90deg,var(--hair),var(--hair)_2px,transparent_2px,transparent_6px)] opacity-40 rounded-[4px]" />
     )
-  const up = stats.totalPnl >= 0
+  const up = stats.totalPnlGross >= 0
   const stroke = up ? 'var(--green)' : 'var(--red)'
   const d = linePath(values, W, H, 4)
   return (
@@ -62,8 +62,8 @@ export default function StrategyAnalysisCard() {
     const trades = pastPositionsToStrategyTrades(data ?? [])
     const grouped = groupTradesByStrategy(trades)
     return Array.from(grouped.entries())
-      .map(([key, list]) => computeStrategyStats(key, list, NO_EXCLUDE))
-      .sort((a, b) => b.totalPnl - a.totalPnl)
+      .map(([key, list]) => computeStrategyStats(key, list, NO_EXCLUDE, 'gross'))
+      .sort((a, b) => b.totalPnlGross - a.totalPnlGross)
   }, [data])
 
   const visible =
@@ -83,7 +83,7 @@ export default function StrategyAnalysisCard() {
             Strategy Analysis
           </div>
           <div className="text-[12px] text-muted mt-px">
-            How each of your trading strategies is performing · after fees
+            How each of your trading strategies is performing · before fees
           </div>
         </div>
       </div>
@@ -144,17 +144,17 @@ export default function StrategyAnalysisCard() {
                 <Sparkline stats={s} />
                 <div className="flex flex-col items-end gap-1 flex-none">
                   {/* The row is a link, so the hover is mouse-only; the
-                      before-fees line beneath is what a phone reads. */}
+                      after-fees line beneath is what a phone reads. */}
                   <PnlBreakdown hoverOnly gross={s.totalPnlGross} net={s.totalPnl} heading={s.key}>
                     <span
-                      className={`font-mono text-[15px] font-extrabold ${s.totalPnl < 0 ? 'text-red' : 'text-green'}`}
+                      className={`font-mono text-[15px] font-extrabold ${s.totalPnlGross < 0 ? 'text-red' : 'text-green'}`}
                     >
-                      {fmtSignedMoney(s.totalPnl)}
+                      {fmtSignedMoney(s.totalPnlGross)}
                     </span>
                   </PnlBreakdown>
                   {s.fees !== 0 && (
                     <span className="font-mono text-[10.5px] text-faint whitespace-nowrap">
-                      {fmtSignedMoney(s.totalPnlGross)} before fees
+                      {fmtSignedMoney(s.totalPnl)} after fees
                     </span>
                   )}
                   <span className="inline-flex items-center gap-1 text-[11px] font-bold text-accent">

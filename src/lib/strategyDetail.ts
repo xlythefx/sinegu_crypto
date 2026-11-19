@@ -1,11 +1,16 @@
 /** In-depth per-strategy analytics — pure, no React. Builds on strategyStats.ts
  *  with the richer metrics the strategy DETAIL page needs (streaks, best/worst,
- *  expectancy, per-asset, and seasonality breakdowns). */
+ *  expectancy, per-asset, and seasonality breakdowns).
+ *
+ *  The trader's pages call this with `basis: 'gross'` — BEFORE fees, like the
+ *  dashboard and analytics (only the admin strategy pages lead after fees,
+ *  2026-11-19). Every figure here follows the basis. */
 
 import type { PastPosition } from '../types/dashboard'
 import {
   computeStrategyStats,
-  tradePnl,
+  tradePnlOn,
+  type PnlBasis,
   type StrategyStats,
   type StrategyTrade,
 } from './strategyStats'
@@ -83,8 +88,10 @@ export function computeStrategyDetail(
   key: string,
   allTrades: StrategyTrade[],
   excluded: Set<string>,
+  basis: PnlBasis = 'net',
 ): StrategyDetail {
-  const base = computeStrategyStats(key, allTrades, excluded)
+  const base = computeStrategyStats(key, allTrades, excluded, basis)
+  const basisTotal = basis === 'gross' ? base.totalPnlGross : base.totalPnl
 
   const trades = excluded.size
     ? allTrades.filter((t) => !excluded.has(t.symbol.trim()))
@@ -116,7 +123,7 @@ export function computeStrategyDetail(
   const monthMap = new Map<string, MonthBucket>()
 
   for (const t of trades) {
-    const pnl = tradePnl(t)
+    const pnl = tradePnlOn(t, basis)
     const win = pnl >= 0
     bestTrade = Math.max(bestTrade, pnl)
     worstTrade = Math.min(worstTrade, pnl)
@@ -185,7 +192,7 @@ export function computeStrategyDetail(
     worstTrade,
     maxWinStreak,
     maxLossStreak,
-    expectancy: base.totalTrades > 0 ? base.totalPnl / base.totalTrades : 0,
+    expectancy: base.totalTrades > 0 ? basisTotal / base.totalTrades : 0,
     byAsset,
     byDayOfWeek: dow,
     byMonth,

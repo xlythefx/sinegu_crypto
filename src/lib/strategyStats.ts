@@ -1,14 +1,20 @@
 /** Pure strategy-statistics helpers — no React. Mirrors the mother
  *  dashboard's AdminStrategies math over closed trades.
  *
- *  BASIS: every figure is AFTER exchange fees — `realized_pnl` as stored, what
- *  actually landed on the account (the user's rule, 2026-11-19: "always show
- *  after fees first, before fees on hover"). Until then these pages led before
- *  fees, and a SANTOS week of +$0.30 wins read "all green" while the same
- *  trades were red in the customer's Binance app. The before-fees twin rides
- *  along (`cumulativeGross`, `totalPnlGross`, `pnlGross`) for the hover. A
- *  trade with no fee on record (closed before the fee ledger existed) counts
- *  the same on both bases. */
+ *  BASIS: the ADMIN strategy pages are AFTER exchange fees — `realized_pnl` as
+ *  stored, what actually landed on the account (the user's rule, 2026-11-19:
+ *  "only purely admin to do after fees"). Until then they led before fees, and
+ *  a SANTOS week of +$0.30 wins read "all green" while the same trades were
+ *  red in Binance. The CUSTOMER's strategy pages stay BEFORE fees (the
+ *  dashboard / analytics rule) and pass `basis: 'gross'`.
+ *
+ *  The basis decides every ratio and aggregate (wins/losses, win rate, profit
+ *  factor, drawdown, Sharpe, averages, best/worst, per-asset, day/month).
+ *  The totals always carry BOTH twins under honest names — `totalPnl` /
+ *  `cumulative` / `pnl` after fees, `totalPnlGross` / `cumulativeGross` /
+ *  `pnlGross` before — so each page leads with its basis and hovers the other.
+ *  A trade with no fee on record (closed before the fee ledger existed)
+ *  counts the same on both bases. */
 
 import { displaySymbol, seriesColor } from './chart'
 
@@ -27,14 +33,22 @@ export interface StrategyTrade {
   increments?: number
 }
 
-/** The trade's P&L after fees — what landed. Every strategy figure's basis. */
+/** 'net' = after fees (admin pages), 'gross' = before fees (customer pages). */
+export type PnlBasis = 'net' | 'gross'
+
+/** The trade's P&L after fees — what landed. */
 export function tradePnl(t: StrategyTrade): number {
   return Number(t.realized_pnl) || 0
 }
 
-/** The trade's P&L before fees — what the strategy made on price. Hover only. */
+/** The trade's P&L before fees — what the strategy made on price. */
 export function tradePnlGross(t: StrategyTrade): number {
   return tradePnl(t) + tradeFee(t)
+}
+
+/** The trade's P&L on the page's basis — what wins, losses and ratios read. */
+export function tradePnlOn(t: StrategyTrade, basis: PnlBasis): number {
+  return basis === 'gross' ? tradePnlGross(t) : tradePnl(t)
 }
 
 /** The fee on record for the trade; 0 when there is none. */
@@ -107,6 +121,7 @@ export function computeStrategyStats(
   key: string,
   allTrades: StrategyTrade[],
   excluded: Set<string>,
+  basis: PnlBasis = 'net',
 ): StrategyStats {
   const tickers = Array.from(
     new Set(allTrades.map((t) => t.symbol.trim()).filter(Boolean)),
@@ -118,6 +133,7 @@ export function computeStrategyStats(
 
   let cumulative = 0
   let cumulativeGross = 0
+  let running = 0
   let fees = 0
   let peak = 0
   let maxDrawdown = 0
@@ -127,14 +143,15 @@ export function computeStrategyStats(
   const pnlValues: number[] = []
 
   trades.forEach((t, idx) => {
-    const pnl = tradePnl(t)
+    const pnl = tradePnlOn(t, basis)
     pnlValues.push(pnl)
-    cumulative += pnl
+    cumulative += tradePnl(t)
     cumulativeGross += tradePnlGross(t)
+    running += pnl
     fees += tradeFee(t)
     equitySeries.push({ index: idx + 1, date: t.closed_at, cumulative, cumulativeGross })
-    peak = Math.max(peak, cumulative)
-    maxDrawdown = Math.max(maxDrawdown, peak - cumulative)
+    peak = Math.max(peak, running)
+    maxDrawdown = Math.max(maxDrawdown, peak - running)
     if (pnl >= 0) winPnls.push(pnl)
     else lossPnls.push(Math.abs(pnl))
   })

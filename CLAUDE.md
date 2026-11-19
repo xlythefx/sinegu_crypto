@@ -2830,13 +2830,17 @@ figure carries its after-fees twin so the UI can show the three-line hover
 portaled to `<body>` because the rail clips overflow and every AOS card is a
 transform; `hoverOnly` for figures inside a button or link, whose tap has its
 own job). The rule per surface:
-- **Strategy pages lead AFTER fees (the user, 2026-11-19: "always show after
-  fees first, before fees on hover")** — admin strategy list + detail, the
-  Strategies leaderboard / By exchange, the trader's strategy pages and the
-  Analytics "Strategy Analysis" card. On 18 Nov a SANTOS list read all green
-  before fees while Binance showed red (+$0.18 on price, −$2.07 after a $2.25
-  fee). Every figure there, the ratios included, is `realized_pnl`; before
-  fees is the hover (`PnlBreakdown`) and a sub line.
+- **ADMIN strategy pages lead AFTER fees (the user, 2026-11-19: "always show
+  after fees first, before fees on hover" — then "only purely admin")** —
+  admin strategy list + detail, the Strategies leaderboard / By exchange. On
+  18 Nov a SANTOS list read all green before fees while Binance showed red
+  (+$0.18 on price, −$2.07 after a $2.25 fee). Every figure there, the ratios
+  included, is `realized_pnl`; before fees is the hover (`PnlBreakdown`) and a
+  sub line. **The trader's strategy pages and the Analytics "Strategy
+  Analysis" card stay BEFORE fees** like the rest of the customer side: they
+  pass `basis: 'gross'` (`PnlBasis` in `lib/strategyStats.ts`, default net;
+  `EquityCurveCard basis`). A new customer surface never leads after fees
+  without the user saying so.
 - **Dashboard + Analytics: before fees is the big number**,
   the equity curves are drawn before fees (`equity_gross` = the anchored
   curve plus cumulative fees, so it ends at balance + fees), and the ratio
@@ -2876,7 +2880,8 @@ Payload convention: the gross figure keeps the plain key, its twin is `*_net`
 after for them; `trades_without_fee > 0` is what makes the hover print "fees
 are recorded from Sep 11, 2026" rather than a $0 that reads as free trading.
 Strategy math is client-side (`lib/strategyStats.ts`: `tradePnl` = after
-fees, the basis / `tradePnlGross` / `tradeFee`; twins `*Gross`), fed `exchange_fee` by `/admin/strategies` and
+fees / `tradePnlGross` / `tradeFee`, `tradePnlOn(t, basis)` for the ratios —
+net on admin, gross on the trader's; twins `*Gross`), fed `exchange_fee` by `/admin/strategies` and
 `pastPositionsToStrategyTrades`. The public track record is untouched.
 
 **Period Return now ADDS the saved daily % (2026-10-05, Christian's request:

@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, type PointerEvent } from 'react'
 import { TrendingUp } from 'lucide-react'
 import { fmtMediumDate, fmtNum, fmtShortDate, fmtSignedMoney } from '../../../lib/format'
-import type { EquityPoint } from '../../../lib/strategyStats'
+import type { EquityPoint, PnlBasis } from '../../../lib/strategyStats'
 
 const W = 600
 const H = 260
@@ -24,18 +24,22 @@ interface Mark {
 }
 
 /** Cumulative-P&L area chart for the strategy (SVG, our design tokens).
- *  Drawn AFTER exchange fees — what landed on the accounts; hovering a point
- *  reads out the before-fees figure beside it. */
+ *  Drawn on the page's basis — AFTER exchange fees on the admin pages, BEFORE
+ *  on the trader's (`basis="gross"`); hovering a point reads out the other. */
 export default function EquityCurveCard({
   equitySeries,
+  basis = 'net',
 }: {
   equitySeries: EquityPoint[]
+  basis?: PnlBasis
 }) {
+  const gross = basis === 'gross'
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
   const plotRef = useRef<HTMLDivElement>(null)
 
   const curve = useMemo(() => {
-    const values = [0, ...equitySeries.map((p) => p.cumulative)]
+    const lead = (p: EquityPoint) => (gross ? p.cumulativeGross : p.cumulative)
+    const values = [0, ...equitySeries.map(lead)]
     let min = Math.min(...values)
     let max = Math.max(...values)
     if (min === max) {
@@ -56,7 +60,7 @@ export default function EquityCurveCard({
     }
     const marks: Mark[] = equitySeries.map((p, i) => ({
       xFrac: ((i + 1) * step) / W,
-      yFrac: yOf(p.cumulative) / H,
+      yFrac: yOf(lead(p)) / H,
       date: p.date,
       cumulative: p.cumulative,
       cumulativeGross: p.cumulativeGross,
@@ -68,7 +72,7 @@ export default function EquityCurveCard({
       labels,
       marks,
     }
-  }, [equitySeries])
+  }, [equitySeries, gross])
 
   const hovered = hoverIdx !== null ? (curve.marks[hoverIdx] ?? null) : null
 
@@ -96,7 +100,9 @@ export default function EquityCurveCard({
         </span>
         <div>
           <div className={CARD_TITLE}>Equity Curve</div>
-          <div className={CARD_SUB}>Cumulative P&L over time · after fees</div>
+          <div className={CARD_SUB}>
+            Cumulative P&L over time · {gross ? 'before fees' : 'after fees'}
+          </div>
         </div>
       </div>
 
@@ -168,14 +174,17 @@ export default function EquityCurveCard({
               </div>
               <div
                 className={`font-mono text-[15px] font-extrabold whitespace-nowrap ${
-                  hovered.cumulative < 0 ? 'text-red' : 'text-green'
+                  (gross ? hovered.cumulativeGross : hovered.cumulative) < 0 ? 'text-red' : 'text-green'
                 }`}
               >
-                {fmtSignedMoney(hovered.cumulative)}
-                <span className="ml-1.5 text-[10.5px] font-semibold text-faint">after fees</span>
+                {fmtSignedMoney(gross ? hovered.cumulativeGross : hovered.cumulative)}
+                <span className="ml-1.5 text-[10.5px] font-semibold text-faint">
+                  {gross ? 'before fees' : 'after fees'}
+                </span>
               </div>
               <div className="font-mono text-[11px] text-muted whitespace-nowrap">
-                {fmtSignedMoney(hovered.cumulativeGross)} before fees
+                {fmtSignedMoney(gross ? hovered.cumulative : hovered.cumulativeGross)}{' '}
+                {gross ? 'after fees' : 'before fees'}
                 {hovered.cumulative !== hovered.cumulativeGross && (
                   <span className="text-faint">
                     {' '}· fees ${fmtNum(hovered.cumulativeGross - hovered.cumulative)}
