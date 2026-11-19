@@ -13,7 +13,14 @@ import type { StrategyDetailStats } from '../../../lib/strategyStats'
  * Every in-depth card for one strategy — shared by the strategy page
  * (`/admin/strategies/:key`) and the admin dashboard's Strategies tab.
  */
-export default function StrategyDetailBody({ stats }: { stats: StrategyDetailStats }) {
+export default function StrategyDetailBody({
+  stats,
+  ownerSwitch = true,
+}: {
+  stats: StrategyDetailStats
+  /** False when the page is already narrowed to the master's trades. */
+  ownerSwitch?: boolean
+}) {
   const [assetFilter, setAssetFilter] = useState<string | null>(null)
 
   return (
@@ -39,6 +46,7 @@ export default function StrategyDetailBody({ stats }: { stats: StrategyDetailSta
         assets={stats.byAsset}
         assetFilter={assetFilter}
         onAssetFilter={setAssetFilter}
+        ownerSwitch={ownerSwitch}
       />
     </>
   )

@@ -29,8 +29,17 @@ export interface StrategyTrade {
   /** Which venue's table the row came from (every exchange since 2026-09-27). */
   exchange?: string
   uni_id?: string
+  /** Owner's name (`user_credentials.name`) — admin payload only. */
+  owner_name?: string | null
+  /** Owner's role (`user_credentials.type`: master | user | tester …) — admin payload only. */
+  owner_role?: string | null
   /** Stacked entries this close covered (`increments_closed`, 1 when unrecorded). */
   increments?: number
+}
+
+/** True when the trade was the MASTER account's — the strategy's own result. */
+export function isMasterTrade(t: StrategyTrade): boolean {
+  return t.owner_role === 'master'
 }
 
 /** 'net' = after fees (admin pages), 'gross' = before fees (customer pages). */
@@ -193,6 +202,9 @@ export function computeStrategyStats(
 
 export interface DetailTrade {
   symbol: string
+  /** Whose trade (owner name); null when the payload carries none. */
+  owner: string | null
+  ownerRole: string | null
   /** After fees. */
   pnl: number
   /** Before fees (hover). */
@@ -369,7 +381,14 @@ export function computeStrategyDetail(
       maxLossStreak = Math.max(maxLossStreak, curLoss)
     }
 
-    const row = { symbol, pnl, pnlGross: tradePnlGross(t), closed_at: t.closed_at }
+    const row = {
+      symbol,
+      owner: t.owner_name ?? null,
+      ownerRole: t.owner_role ?? null,
+      pnl,
+      pnlGross: tradePnlGross(t),
+      closed_at: t.closed_at,
+    }
     const list = assetMap.get(symbol)
     if (list) list.push(row)
     else assetMap.set(symbol, [row])
@@ -467,6 +486,8 @@ export function computeStrategyDetail(
     tickers: byAsset.map((a) => a.ticker).sort((a, b) => a.localeCompare(b)),
     trades: sorted.map((t) => ({
       symbol: t.symbol.trim(),
+      owner: t.owner_name ?? null,
+      ownerRole: t.owner_role ?? null,
       pnl: tradePnl(t),
       pnlGross: tradePnlGross(t),
       closed_at: t.closed_at,

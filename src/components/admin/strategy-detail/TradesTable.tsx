@@ -9,12 +9,13 @@ import {
 import { displaySymbol } from '../../../lib/chart'
 import { fmtDateTime, fmtSignedMoney } from '../../../lib/format'
 import PnlBreakdown from '../../ui/PnlBreakdown'
+import Segmented from '../../ui/filters/Segmented'
 import type { AssetStat, DetailTrade } from '../../../lib/strategyStats'
 
 const PER_PAGE = 10
 
 const CARD = 'rounded-card border border-border bg-surface p-card'
-const TITLE_ROW = 'flex items-center gap-2.5 mb-3.5'
+const TITLE_ROW = 'flex flex-wrap items-center gap-2.5 mb-3.5'
 const CHIP =
   'w-7 h-7 rounded-[9px] bg-accent-soft border border-accent-line grid place-items-center text-accent flex-none'
 const CARD_TITLE = 'font-display text-[15px] font-extrabold'
@@ -32,9 +33,16 @@ const SORT_BTN =
   'inline-flex items-center gap-[5px] border-none bg-transparent text-faint text-[10.5px] font-bold tracking-[0.3px] uppercase cursor-pointer hover:text-text'
 const TD = 'py-[9px] px-3'
 const TD_RIGHT = 'py-[9px] px-3 text-right font-mono'
+const ROLE_TAG =
+  'inline-flex items-center py-px px-1.5 rounded-[5px] border text-[9.5px] font-extrabold tracking-[0.4px] uppercase flex-none'
+const ROLE_TAG_TONE: Record<string, string> = {
+  master: 'border-accent-line bg-accent-soft text-accent',
+  tester: 'border-border bg-surface2 text-muted',
+}
 
-type SortField = 'date' | 'ticker' | 'pnl'
+type SortField = 'date' | 'ticker' | 'owner' | 'pnl'
 type SortDir = 'asc' | 'desc'
+type OwnerView = 'all' | 'master'
 
 interface Props {
   trades: DetailTrade[]
@@ -42,6 +50,9 @@ interface Props {
   /** When set (from a heatmap/asset card click), pre-filters the table. */
   assetFilter: string | null
   onAssetFilter: (ticker: string | null) => void
+  /** False when the whole page is already narrowed to the master — the
+   *  card's own switch would then have nothing to do. */
+  ownerSwitch?: boolean
 }
 
 /** Paginated, sortable, searchable closed-trades table with asset filter pills. */
@@ -50,21 +61,32 @@ export default function TradesTable({
   assets,
   assetFilter,
   onAssetFilter,
+  ownerSwitch = true,
 }: Props) {
   const [search, setSearch] = useState('')
+  const [ownerView, setOwnerView] = useState<OwnerView>('all')
+  const hasOwners = trades.some((t) => t.owner !== null || t.ownerRole !== null)
+  const masterCount = useMemo(
+    () => trades.filter((t) => t.ownerRole === 'master').length,
+    [trades],
+  )
+  const showOwnerSwitch = ownerSwitch && hasOwners
   const [page, setPage] = useState(0)
   const [sortField, setSortField] = useState<SortField>('date')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
   const filtered = useMemo(() => {
     let list = [...trades]
+    if (showOwnerSwitch && ownerView === 'master')
+      list = list.filter((t) => t.ownerRole === 'master')
     if (assetFilter) list = list.filter((t) => t.symbol === assetFilter)
     if (search.trim()) {
       const q = search.toLowerCase()
       list = list.filter(
         (t) =>
           t.symbol.toLowerCase().includes(q) ||
-          displaySymbol(t.symbol).toLowerCase().includes(q),
+          displaySymbol(t.symbol).toLowerCase().includes(q) ||
+          (t.owner ?? '').toLowerCase().includes(q),
       )
     }
     list.sort((a, b) => {
@@ -74,11 +96,12 @@ export default function TradesTable({
           new Date(a.closed_at.replace(' ', 'T')).getTime() -
           new Date(b.closed_at.replace(' ', 'T')).getTime()
       else if (sortField === 'ticker') cmp = a.symbol.localeCompare(b.symbol)
+      else if (sortField === 'owner') cmp = (a.owner ?? '').localeCompare(b.owner ?? '')
       else cmp = a.pnl - b.pnl
       return sortDir === 'asc' ? cmp : -cmp
     })
     return list
-  }, [trades, assetFilter, search, sortField, sortDir])
+  }, [trades, assetFilter, search, sortField, sortDir, showOwnerSwitch, ownerView])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
   const clampedPage = Math.min(page, totalPages - 1)
@@ -103,9 +126,27 @@ export default function TradesTable({
           <div className={CARD_TITLE}>Past Positions</div>
           <div className={CARD_SUB}>
             {filtered.length} trades · after fees
+            {showOwnerSwitch && ownerView === 'master' ? ' · master only' : ''}
             {assetFilter ? ` · filtered by ${displaySymbol(assetFilter)}` : ''}
           </div>
         </div>
+        {showOwnerSwitch && (
+          <div className="ml-auto">
+            <Segmented<OwnerView>
+              size="sm"
+              ariaLabel="Whose trades"
+              value={ownerView}
+              onChange={(v) => {
+                setOwnerView(v)
+                setPage(0)
+              }}
+              options={[
+                { value: 'all', label: 'All accounts', count: trades.length, tone: 'neutral' },
+                { value: 'master', label: 'Master only', count: masterCount },
+              ]}
+            />
+          </div>
+        )}
       </div>
 
       {assets.length > 1 && (
@@ -141,7 +182,7 @@ export default function TradesTable({
         <Search size={15} />
         <input
           type="search"
-          placeholder="Search ticker…"
+          placeholder={hasOwners ? 'Search ticker or account…' : 'Search ticker…'}
           value={search}
           onChange={(e) => {
             setSearch(e.target.value)
@@ -152,7 +193,7 @@ export default function TradesTable({
       </div>
 
       <div
-        key={`${assetFilter ?? 'all'}-${search}-${sortField}-${sortDir}-${clampedPage}`}
+        key={`${ownerView}-${assetFilter ?? 'all'}-${search}-${sortField}-${sortDir}-${clampedPage}`}
         className="border border-hair rounded-row overflow-hidden animate-[fadeup_0.35s_ease-out]"
       >
         <table className="w-full border-collapse text-[12.5px]">
@@ -164,6 +205,13 @@ export default function TradesTable({
                   Asset <ArrowUpDown size={12} />
                 </button>
               </th>
+              {hasOwners && (
+                <th className={`${TH} max-[560px]:hidden`}>
+                  <button type="button" className={SORT_BTN} onClick={() => toggleSort('owner')}>
+                    Account <ArrowUpDown size={12} />
+                  </button>
+                </th>
+              )}
               <th className={`${TH} text-right`}>
                 <button type="button" className={`${SORT_BTN} ml-auto`} onClick={() => toggleSort('pnl')}>
                   P&L <ArrowUpDown size={12} />
@@ -179,7 +227,7 @@ export default function TradesTable({
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={4} className="text-center text-muted py-6 px-3">
+                <td colSpan={hasOwners ? 5 : 4} className="text-center text-muted py-6 px-3">
                   No trades match your filters.
                 </td>
               </tr>
@@ -194,7 +242,26 @@ export default function TradesTable({
                   </td>
                   <td className={TD}>
                     <span className="font-bold">{displaySymbol(t.symbol)}</span>
+                    {/* On a phone the Account column is hidden; the owner rides under the coin. */}
+                    {hasOwners && t.owner && (
+                      <span className="hidden max-[560px]:block text-[11px] text-muted mt-px">
+                        {t.owner}
+                        {t.ownerRole === 'master' && t.owner.toLowerCase() !== 'master' ? ' · Master' : ''}
+                      </span>
+                    )}
                   </td>
+                  {hasOwners && (
+                    <td className={`${TD} max-[560px]:hidden`}>
+                      <span className="inline-flex items-center gap-1.5 min-w-0">
+                        <span className="truncate max-w-[220px] text-text">{t.owner ?? '—'}</span>
+                        {t.ownerRole && ROLE_TAG_TONE[t.ownerRole] && (
+                          <span className={`${ROLE_TAG} ${ROLE_TAG_TONE[t.ownerRole]}`}>
+                            {t.ownerRole === 'master' ? 'Master' : 'Tester'}
+                          </span>
+                        )}
+                      </span>
+                    </td>
+                  )}
                   <td className={`${TD_RIGHT} ${t.pnl >= 0 ? 'text-green' : 'text-red'}`}>
                     {/* After fees — what the exchange app shows; before fees on hover. */}
                     <PnlBreakdown gross={t.pnlGross} net={t.pnl} heading={displaySymbol(t.symbol)}>

@@ -14,6 +14,24 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'strategy-trades-whose-and-master-only',
+    date: '2026-11-19',
+    kind: 'improved',
+    area: 'Strategies',
+    title: 'Strategy page names whose trade each row was, and can show the master alone',
+    summary:
+      'The trade list on a strategy’s page now has an Account column with the owner’s name, and the master’s rows carry a gold “Master” tag. A new “Master only” switch narrows the view to the master’s own trades: the switch at the top of the page changes every figure on it, and the switch on the trade list changes that list alone.',
+    howItWorks: [
+      'Example: on VWMA-Reversion with 616 trades from every account, pressing “Master only” at the top shows the master’s trades alone, so the total, win rate, equity curve and per-coin cards show the strategy’s own result, without customers who joined late or were sized differently.',
+      'The search box on the trade list also finds an account by name.',
+      'The top switch is kept in the page link, so going back or refreshing keeps the choice.',
+    ],
+    technical: [
+      'GET /admin/strategies rows carry owner_name + owner_role (user_credentials; AdminInsights::strategyTrades). isMasterTrade() in lib/strategyStats.ts; ?owner=master on /admin/strategies/:key filters before computeStrategyDetail; TradesTable has its own All / Master only switch, hidden when the page is already master-only.',
+    ],
+    links: [{ label: 'Strategies', href: '/admin/strategies' }],
+  },
+  {
     id: 'strategy-pages-after-fees',
     date: '2026-11-19',
     kind: 'improved',

@@ -929,8 +929,11 @@ const STRATEGY_TRADES = (() => {
     grosses.forEach((gross, i) => {
       const fee = Math.round((0.6 + (i % 4) * 0.55) * 100) / 100
       const day = String(1 + ((n * 3 + i) % 18)).padStart(2, '0')
+      // Invented owners: every third close is the master's.
+      const owner = [['Master', 'master'], ['Alex Rivera', 'user'], ['Mia Santos', 'user']][(n + i) % 3]
       rows.push({
         strategy, symbol, exchange: 'binance', uni_id: 'sample',
+        owner_name: owner[0], owner_role: owner[1],
         realized_pnl: Math.round((gross - fee) * 100) / 100, exchange_fee: fee,
         closed_at: `2026-11-${day} ${String(2 + (i % 20)).padStart(2, '0')}:15:00`, increments: 1,
       })
