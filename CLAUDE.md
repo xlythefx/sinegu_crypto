@@ -2855,11 +2855,13 @@ own job). The rule per surface:
   never today's balance, which let a deposit rewrite every earlier day. `pct`
   is null when no capital is on record. The old Amount/% toggle (it divided
   by today's balance) was removed then; **a $ / % switch came back on the
-  trader dashboard's calendar on 2026-11-20** (request via the user), over
-  that same per-day `pct`: it picks which figure leads the cell and what the
-  tint measures, remembered per device (`pixel-alpha.calendar.show-pct`).
-  Below 480px the cell rounds the % to 1 dp so it fits. The admin calendar
-  (`AdminPnlCalendar`) has no switch yet.
+  trader dashboard's calendar and every `AdminPnlCalendar` on 2026-11-20**
+  (request via the user), over that same per-day `pct`: it picks which
+  figure leads the cell and what the tint measures, ONE choice per device
+  for all calendars (`hooks/useCalendarUnit`, `pixel-alpha.calendar.show-pct`;
+  cell text + tint in `lib/pnlCalendar.ts`). Below 480px the cell rounds the
+  % to 1 dp so it fits. A cell tinted at or above `STRONG_TINT` prints in
+  `text-text`, never green-on-green / red-on-red.
 - **Positions page and admin user detail keep `realized_pnl` / `total_pnl`
   (after fees)**: a total beside a list of net trades must sum to them.
 - **Exception: the ADMIN's read of one user leads AFTER fees** (owner,

@@ -14,13 +14,29 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'calendar-readable-on-phones',
+    date: '2026-11-20',
+    kind: 'fixed',
+    area: 'Trading dashboard',
+    title: 'P&L calendars: the biggest days are readable, and phones no longer overlap',
+    summary:
+      'On the brightest green or red days, the figures were green on green (or red on red) and hard to read. They now use plain white text (dark text in the light theme). On phones, the small trade-count badge no longer sits on top of the day number, and the figures fit inside their boxes.',
+    howItWorks: [
+      'Example: a +$107 day, the best of the month, used to show light green text on a bright green box. It now shows white text on that box.',
+      'On a phone the trade-count badge is smaller and tucked into the corner, and the admin calendar shows only the arrows beside the month so the month name stays on one line.',
+    ],
+    technical: [
+      'lib/pnlCalendar.ts STRONG_TINT (0.5): at or above it the cell text is text-text instead of the tone colour. Below 480px both calendars use 4px cell padding and a 4px grid gap, and the badge shrinks to 12px.',
+    ],
+  },
+  {
     id: 'dashboard-calendar-pct-switch',
     date: '2026-11-20',
     kind: 'improved',
     area: 'Trading dashboard',
     title: 'Daily P&L Calendar can show each day in % with one click',
     summary:
-      'The calendar on the trading dashboard has a new $ / % switch beside the month. On %, each day’s big figure is the percentage it made or lost, with the dollar amount under it. The site remembers the choice on that device.',
+      'Every Daily P&L Calendar has a new $ / % switch: on the trading dashboard, on a customer’s profile and under Overview → Platform. On %, each day’s big figure is the percentage it made or lost, with the dollar amount under it. The site remembers the choice on that device, for every calendar.',
     howItWorks: [
       'Example: a day that made +$52 on a $3,231 balance shows +1.61% in % mode, with +$52 underneath.',
       'The percentage is over the balance that day STARTED with, so a later deposit or withdrawal never changes an earlier day.',
@@ -28,8 +44,9 @@ export const ADMIN_CHANGES: AdminChange[] = [
       'On a phone the cells show one decimal (+1.6%) so the figure fits. Tapping the day still shows the exact figure.',
     ],
     technical: [
-      'components/dashboard/DailyPnlCalendar.tsx: Segmented $ / % switch, stored in localStorage pixel-alpha.calendar.show-pct (useStoredFlag). Reads the existing per-day pct from GET /dashboard/daily-pnl; no API change. Below 480px wide the cell rounds the % to 1 dp.',
+      'CalendarUnitSwitch + hooks/useCalendarUnit (localStorage pixel-alpha.calendar.show-pct, shared by DailyPnlCalendar and AdminPnlCalendar) + lib/pnlCalendar.ts (cellFigures, cellTints). Reads the existing per-day pct; no API change. Below 480px wide the cell rounds the % to 1 dp.',
     ],
+    links: [{ label: 'Overview → Platform', href: '/admin' }],
   },
   {
     id: 'strategies-hide-quantlab',

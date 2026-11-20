@@ -7,17 +7,26 @@ import {
   X,
 } from 'lucide-react'
 import { useApiData } from '../../hooks/useApiData'
+import { useCalendarUnit } from '../../hooks/useCalendarUnit'
 import { getAdminDailyPnl } from '../../services/admin'
 import { displaySymbol } from '../../lib/chart'
 import { fmtMediumDate, fmtMoney, fmtSignedMoney, fmtSignedPct } from '../../lib/format'
+import { STRONG_TINT, cellFigures, cellTints, tintBackground } from '../../lib/pnlCalendar'
 import type { DailyPnlDay, DailyPnlMap } from '../../types/admin'
 import FeeLine from '../positions/FeeLine'
+import CalendarUnitSwitch from '../ui/CalendarUnitSwitch'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-/** Base calendar cell (no background — set per-cell to keep blanks transparent). */
+/** Base calendar cell (no background — set per-cell to keep blanks transparent).
+ *  Below 480px the padding shrinks to 4px: a 360px phone's cell is ~35px wide. */
 const cellBase =
-  'relative flex flex-col justify-between items-start min-h-[82px] py-3 px-[13px] rounded-row border-0 text-left transition-[transform,box-shadow] duration-150 max-[700px]:min-h-[60px] max-[700px]:py-[9px] max-[700px]:px-2.5 max-[700px]:rounded-field'
+  'relative flex flex-col justify-between items-start min-h-[82px] py-3 px-[13px] rounded-row border-0 text-left transition-[transform,box-shadow] duration-150 max-[700px]:min-h-[60px] max-[700px]:py-[9px] max-[700px]:px-2.5 max-[700px]:rounded-field max-[480px]:min-h-[50px] max-[480px]:py-1.5 max-[480px]:px-1'
+
+/** Green / red on a light tint; the theme's text colour on a strong one, where
+ *  green-on-green (and red-on-red) could not be read. */
+const toneText = (n: number, strong: boolean) =>
+  n === 0 ? 'text-faint' : strong ? 'text-text' : n > 0 ? 'text-green' : 'text-red'
 
 const navBtn =
   'inline-flex items-center gap-1 h-8 px-3 rounded-btn border border-accent-soft bg-surface text-accent text-[12px] font-semibold cursor-pointer hover:enabled:bg-accent-soft disabled:opacity-45 disabled:cursor-not-allowed'
@@ -65,7 +74,9 @@ interface AdminPnlCalendarProps {
 /**
  * Full-width admin Daily P&L calendar. Cells are tinted red→green by the sign
  * and magnitude of that day's realized P&L; clicking a day opens a panel with
- * every trade closed on it (asset, side, and P&L).
+ * every trade closed on it (asset, side, and P&L). The $ / % switch picks
+ * which figure leads each cell and what the tint measures (shared with the
+ * trader's calendar, see useCalendarUnit).
  */
 export default function AdminPnlCalendar({
   fetchDays = getAdminDailyPnl,
@@ -78,6 +89,7 @@ export default function AdminPnlCalendar({
     () => new Date(now.getFullYear(), now.getMonth(), 1)
   )
   const [selected, setSelected] = useState<string | null>(null)
+  const { showPct, setShowPct, pctDp } = useCalendarUnit()
 
   const daysMap = days ?? {}
 
@@ -96,9 +108,9 @@ export default function AdminPnlCalendar({
       view.getMonth() < now.getMonth())
 
   // Scale color intensity by the biggest move in the visible month
-  const maxAbs = useMemo(
-    () => Math.max(1, ...cells.map((c) => Math.abs(c.data?.total ?? 0))),
-    [cells]
+  const tints = useMemo(
+    () => cellTints(cells.map((c) => c.data), showPct),
+    [cells, showPct]
   )
   const winDays = cells.filter((c) => (c.data?.total ?? 0) > 0).length
   const lossDays = cells.filter((c) => (c.data?.total ?? 0) < 0).length
@@ -126,39 +138,49 @@ export default function AdminPnlCalendar({
       data-aos="fade-up"
       data-aos-delay={aosDelay}
     >
-      <div className="flex items-center gap-2.5 mb-[14px]">
-        <span className="w-7 h-7 rounded-[9px] bg-accent-soft border border-accent-line grid place-items-center text-accent flex-none">
-          <CalendarIcon size={16} />
-        </span>
-        <div>
-          <div className="font-display text-[15px] font-extrabold">
-            Daily P&L Calendar
-          </div>
-          <div className="text-[12px] text-muted mt-px">
-            {subtitle ??
-              `${winDays} green / ${lossDays} red days · click a day for its trades`}
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-[14px]">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="w-7 h-7 rounded-[9px] bg-accent-soft border border-accent-line grid place-items-center text-accent flex-none">
+            <CalendarIcon size={16} />
+          </span>
+          <div className="min-w-0">
+            <div className="font-display text-[15px] font-extrabold">
+              Daily P&L Calendar
+            </div>
+            <div className="text-[12px] text-muted mt-px">
+              {subtitle ??
+                `${winDays} green / ${lossDays} red days · click a day for its trades`}
+            </div>
           </div>
         </div>
+        <CalendarUnitSwitch showPct={showPct} onChange={setShowPct} />
       </div>
 
       <div className="flex items-center justify-between gap-2.5 mb-3">
-        <button type="button" className={navBtn} onClick={() => changeMonth(-1)}>
+        {/* Arrows only on a phone, so the month keeps one line between them. */}
+        <button
+          type="button"
+          className={navBtn}
+          onClick={() => changeMonth(-1)}
+          aria-label="Previous month"
+        >
           <ChevronLeft size={14} />
-          Previous
+          <span className="max-[480px]:hidden">Previous</span>
         </button>
-        <span className="text-[13px] font-extrabold">{monthLabel}</span>
+        <span className="text-[13px] font-extrabold whitespace-nowrap">{monthLabel}</span>
         <button
           type="button"
           className={navBtn}
           disabled={!canGoNext}
           onClick={() => canGoNext && changeMonth(1)}
+          aria-label="Next month"
         >
-          Next
+          <span className="max-[480px]:hidden">Next</span>
           <ChevronRight size={14} />
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-2 mb-2">
+      <div className="grid grid-cols-7 gap-2 mb-2 max-[480px]:gap-1">
         {WEEKDAYS.map((d) => (
           <span
             key={d}
@@ -171,7 +193,7 @@ export default function AdminPnlCalendar({
 
       <div
         key={monthLabel}
-        className="grid grid-cols-7 gap-[9px] animate-[fadeup_0.35s_ease-out]"
+        className="grid grid-cols-7 gap-[9px] animate-[fadeup_0.35s_ease-out] max-[480px]:gap-1"
       >
         {cells.map((c, i) => {
           if (c.day === null)
@@ -180,14 +202,8 @@ export default function AdminPnlCalendar({
             )
 
           const pnl = c.data?.total ?? 0
-          const intensity =
-            pnl !== 0 ? 0.16 + Math.min(0.6, (Math.abs(pnl) / maxAbs) * 0.6) : 0
-          const bg =
-            pnl > 0
-              ? `rgba(47, 214, 122, ${intensity.toFixed(3)})`
-              : pnl < 0
-                ? `rgba(255, 90, 90, ${intensity.toFixed(3)})`
-                : undefined
+          const strong = tints[i] >= STRONG_TINT
+          const { lead, second } = cellFigures(pnl, c.data?.pct ?? null, showPct, pctDp)
           const active =
             c.iso === selected ? ' outline outline-2 outline-accent outline-offset-1' : ''
           const clickable = c.data
@@ -199,36 +215,36 @@ export default function AdminPnlCalendar({
               type="button"
               key={`day-${c.iso}`}
               className={`${cellBase} bg-surface2${active}${clickable}`}
-              style={{ background: bg }}
+              style={{ background: tintBackground(pnl, tints[i]) }}
               onClick={() => c.data && setSelected(c.iso === selected ? null : c.iso)}
               disabled={!c.data}
             >
-              <span className="text-[11px] font-bold text-faint">{c.day}</span>
+              <span
+                className={`text-[11px] font-bold max-[480px]:text-[10px] ${strong ? 'text-text opacity-70' : 'text-faint'}`}
+              >
+                {c.day}
+              </span>
               <span className="flex flex-col items-start max-w-full">
                 <span
-                  className={`font-mono text-[12px] leading-tight max-w-full overflow-hidden text-ellipsis ${
-                    pnl > 0
-                      ? 'font-extrabold text-green'
-                      : pnl < 0
-                        ? 'font-extrabold text-red'
-                        : 'font-semibold text-faint'
-                  }`}
+                  className={`font-mono text-[12px] leading-tight max-w-full overflow-hidden text-ellipsis max-[480px]:text-[9.5px] max-[480px]:overflow-visible ${
+                    pnl !== 0 ? 'font-extrabold' : 'font-semibold'
+                  } ${toneText(pnl, strong)}`}
                 >
-                  {pnl === 0
-                    ? '—'
-                    : `${pnl > 0 ? '+' : '−'}$${Math.abs(pnl).toFixed(0)}`}
+                  {lead}
                 </span>
                 {/* Over the balance the day started with, not today's. */}
-                {c.data?.pct != null && pnl !== 0 && (
+                {second !== null && (
                   <span
-                    className={`font-mono text-[10.5px] font-semibold leading-tight opacity-80 max-[700px]:text-[9px] ${pnl > 0 ? 'text-green' : 'text-red'}`}
+                    className={`font-mono text-[10.5px] font-semibold leading-tight opacity-80 max-[700px]:text-[9px] max-[480px]:text-[8.5px] ${toneText(pnl, strong)}`}
                   >
-                    {fmtSignedPct(c.data.pct, 2)}
+                    {second}
                   </span>
                 )}
               </span>
+              {/* Smaller and tucked into the corner on a phone, where the full
+                  badge sat on top of a two-digit day number. */}
               {c.data && c.data.trades.length > 0 && (
-                <span className="absolute top-1.5 right-1.5 min-w-4 h-4 px-1 inline-flex items-center justify-center rounded-pill bg-surface border border-border font-mono text-[9.5px] font-bold text-muted">
+                <span className="absolute top-1.5 right-1.5 min-w-4 h-4 px-1 inline-flex items-center justify-center rounded-pill bg-surface border border-border font-mono text-[9.5px] font-bold text-muted max-[480px]:top-[3px] max-[480px]:right-[3px] max-[480px]:min-w-3 max-[480px]:h-3 max-[480px]:px-[3px] max-[480px]:text-[7.5px]">
                   {c.data.trades.length}
                 </span>
               )}

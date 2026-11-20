@@ -5,12 +5,18 @@ import { getDashboardDailyPnl } from '../../services/dashboard'
 import type { ExchangeFilter } from '../../context/ExchangeFilterContext'
 import { deleteAdminPastTrade, updateAdminPastTrade } from '../../services/admin'
 import { getApiErrorMessage } from '../../services/api'
-import { useIsMobile } from '../../hooks/useIsMobile'
-import { useStoredFlag } from '../../hooks/useStoredFlag'
+import { useCalendarUnit } from '../../hooks/useCalendarUnit'
 import { canSeeAdmin } from '../../lib/roles'
 import { getUser } from '../../lib/session'
 import { displaySymbol } from '../../lib/chart'
-import { fmtMediumDate, fmtSignedPct } from '../../lib/format'
+import { fmtMediumDate } from '../../lib/format'
+import {
+  STRONG_TINT,
+  cellAmount,
+  cellFigures,
+  cellTints,
+  tintBackground,
+} from '../../lib/pnlCalendar'
 import type { PositionRow } from '../../lib/adminPositionRows'
 import { closedTradeSide } from '../../lib/tradeSide'
 import DayTradesModal from './DayTradesModal'
@@ -19,37 +25,25 @@ import PositionEditModal, {
 } from '../admin/positions/PositionEditModal'
 import ConfirmModal from '../ui/ConfirmModal'
 import PnlBreakdown from '../ui/PnlBreakdown'
-import { Segmented } from '../ui/filters'
+import CalendarUnitSwitch from '../ui/CalendarUnitSwitch'
 import type { DayPnl, DayTrade } from '../../types/dashboard'
 
 const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
-/** Remembered per device, so the calendar opens the way it was last read. */
-const SHOW_PCT_KEY = 'pixel-alpha.calendar.show-pct'
-
-type CellUnit = 'usd' | 'pct'
-
-const UNIT_OPTIONS = [
-  { value: 'usd' as const, label: '$' },
-  { value: 'pct' as const, label: '%' },
-]
-
-/** Base calendar cell (also used by blank cells). Mirrors the old .dcal__cell. */
+/** Base calendar cell (also used by blank cells). Mirrors the old .dcal__cell.
+ *  Below 480px the padding shrinks to 4px: a 360px phone's cell is ~35px wide. */
 const cellBase =
-  'relative min-h-[58px] border border-hair rounded-btn py-[7px] px-2 flex flex-col items-start justify-between bg-surface2 text-left transition-[transform,box-shadow,border-color] duration-150 ease-[ease] max-[900px]:min-h-[46px] max-[900px]:py-[5px] max-[900px]:px-1.5'
+  'relative min-h-[58px] border border-hair rounded-btn py-[7px] px-2 flex flex-col items-start justify-between bg-surface2 text-left transition-[transform,box-shadow,border-color] duration-150 ease-[ease] max-[900px]:min-h-[46px] max-[900px]:py-[5px] max-[900px]:px-1.5 max-[480px]:px-1'
 
 const cellValue =
   'font-mono text-[11.5px] font-bold leading-tight max-[900px]:text-[9.5px]'
 const cellPct =
   'font-mono text-[10px] font-semibold leading-tight opacity-80 max-[900px]:text-[8.5px]'
 
-const toneText = (n: number) => (n > 0 ? 'text-green' : n < 0 ? 'text-red' : 'text-faint')
-
-/** "+$42" / "−$9" — whole dollars; a cell has no room for cents. */
-function cellAmount(pnl: number): string {
-  if (pnl === 0) return '—'
-  return `${pnl > 0 ? '+' : '−'}$${Math.abs(pnl).toFixed(0)}`
-}
+/** Green / red on a light tint; the theme's text colour on a strong one, where
+ *  green-on-green (and red-on-red) could not be read. */
+const toneText = (n: number, strong = false) =>
+  n === 0 ? 'text-faint' : strong ? 'text-text' : n > 0 ? 'text-green' : 'text-red'
 
 interface DailyPnlCalendarProps {
   /** The top-bar scope — the days come from that venue's tables (or all). */
@@ -137,10 +131,7 @@ export default function DailyPnlCalendar({
     () => new Date(now.getFullYear(), now.getMonth(), 1)
   )
   const [selected, setSelected] = useState<string | null>(null)
-  const [showPct, setShowPct] = useStoredFlag(SHOW_PCT_KEY, false)
-  // A phone's cell is ~25px of text wide: "+0.28%" spills over its edge,
-  // "+0.3%" fits. The day's popup still prints two decimals.
-  const pctDp = useIsMobile(480) ? 1 : 2
+  const { showPct, setShowPct, pctDp } = useCalendarUnit()
 
   const daysMap = days ?? {}
 
@@ -155,14 +146,7 @@ export default function DailyPnlCalendar({
   const total = (c: Cell) => c.data?.total ?? 0
   const winDays = cells.filter((c) => c.day && total(c) > 0).length
   const lossDays = cells.filter((c) => c.day && total(c) < 0).length
-  const maxAbs = Math.max(1, ...cells.map((c) => Math.abs(total(c))))
-  // In % mode the tint measures the percentage, so a big day after a
-  // withdrawal reads as big; a day with no capital on record keeps its $ tint.
-  const maxPct = Math.max(0.01, ...cells.map((c) => Math.abs(c.data?.pct ?? 0)))
-  const intensity = (c: Cell) =>
-    showPct && c.data?.pct != null
-      ? Math.abs(c.data.pct) / maxPct
-      : Math.abs(total(c)) / maxAbs
+  const tints = cellTints(cells.map((c) => c.data), showPct)
   const canGoNext =
     view.getFullYear() < now.getFullYear() ||
     (view.getFullYear() === now.getFullYear() &&
@@ -222,13 +206,7 @@ export default function DailyPnlCalendar({
           </div>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap">
-          <Segmented<CellUnit>
-            size="sm"
-            ariaLabel="Show each day in dollars or percent"
-            value={showPct ? 'pct' : 'usd'}
-            onChange={(unit) => setShowPct(unit === 'pct')}
-            options={UNIT_OPTIONS}
-          />
+          <CalendarUnitSwitch showPct={showPct} onChange={setShowPct} />
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -273,7 +251,7 @@ export default function DailyPnlCalendar({
         </p>
       )}
 
-      <div className="grid grid-cols-7 gap-[7px] mb-[7px]">
+      <div className="grid grid-cols-7 gap-[7px] mb-[7px] max-[480px]:gap-1">
         {WEEKDAYS.map((d) => (
           <span
             key={d}
@@ -283,7 +261,7 @@ export default function DailyPnlCalendar({
           </span>
         ))}
       </div>
-      <div className="grid grid-cols-7 gap-[7px]">
+      <div className="grid grid-cols-7 gap-[7px] max-[480px]:gap-1">
         {cells.map((c, i) => {
           if (c.day === null)
             return (
@@ -293,20 +271,8 @@ export default function DailyPnlCalendar({
               />
             )
           const pnl = total(c)
-          const mag =
-            pnl !== 0 ? 0.16 + Math.min(0.6, intensity(c) * 0.6) : 0
-          // The figure the switch asked for leads; the other sits under it.
-          // A day with no capital on record has no % and keeps its $ alone.
-          const pct = c.data?.pct ?? null
-          const lead = showPct && pct !== null ? fmtSignedPct(pct, pctDp) : cellAmount(pnl)
-          const second =
-            pnl === 0 || pct === null ? null : showPct ? cellAmount(pnl) : fmtSignedPct(pct, pctDp)
-          const bg =
-            pnl > 0
-              ? `rgba(47, 214, 122, ${mag.toFixed(3)})`
-              : pnl < 0
-                ? `rgba(255, 90, 90, ${mag.toFixed(3)})`
-                : undefined
+          const strong = tints[i] >= STRONG_TINT
+          const { lead, second } = cellFigures(pnl, c.data?.pct ?? null, showPct, pctDp)
           const toneClass =
             pnl > 0
               ? ' border-[rgba(47,214,122,0.55)]'
@@ -322,11 +288,15 @@ export default function DailyPnlCalendar({
               type="button"
               key={`day-${c.iso}`}
               className={`${cellBase}${toneClass}${clickable}`}
-              style={{ background: bg }}
+              style={{ background: tintBackground(pnl, tints[i]) }}
               onClick={() => c.data && setSelected(c.iso)}
               disabled={!c.data}
             >
-              <span className="text-[11px] font-bold text-faint">{c.day}</span>
+              <span
+                className={`text-[11px] font-bold max-[480px]:text-[10px] ${strong ? 'text-text opacity-70' : 'text-faint'}`}
+              >
+                {c.day}
+              </span>
               {/* A cell is what LANDED that day (after fees); hovering it shows
                   what the strategy made before fees. hoverOnly: the tap is
                   already the popup's, and the popup's header repeats this. */}
@@ -339,19 +309,19 @@ export default function DailyPnlCalendar({
                   note={c.data.fees === 0 ? 'No exchange fee on record for this day.' : undefined}
                 >
                   <span className="flex flex-col items-start">
-                    <span className={`${cellValue} ${toneText(pnl)}`}>
-                      {pnl === 0 ? '—' : lead}
-                    </span>
+                    <span className={`${cellValue} ${toneText(pnl, strong)}`}>{lead}</span>
                     {second !== null && (
-                      <span className={`${cellPct} ${toneText(pnl)}`}>{second}</span>
+                      <span className={`${cellPct} ${toneText(pnl, strong)}`}>{second}</span>
                     )}
                   </span>
                 </PnlBreakdown>
               ) : (
                 <span className={`${cellValue} text-faint`}>{cellAmount(pnl)}</span>
               )}
+              {/* Smaller and tucked into the corner on a phone, where the full
+                  badge sat on top of a two-digit day number. */}
               {count > 0 && (
-                <span className="absolute top-[5px] right-[5px] min-w-[15px] h-[15px] px-1 inline-flex items-center justify-center rounded-pill bg-surface border border-border font-mono text-[9px] font-bold text-muted">
+                <span className="absolute top-[5px] right-[5px] min-w-[15px] h-[15px] px-1 inline-flex items-center justify-center rounded-pill bg-surface border border-border font-mono text-[9px] font-bold text-muted max-[480px]:top-[3px] max-[480px]:right-[3px] max-[480px]:min-w-3 max-[480px]:h-3 max-[480px]:px-[3px] max-[480px]:text-[7.5px]">
                   {count}
                 </span>
               )}
