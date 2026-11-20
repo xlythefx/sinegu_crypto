@@ -15,6 +15,17 @@ import {
   groupTradesByStrategy,
 } from '../../lib/strategyStats'
 
+/**
+ * Strategies hidden from this list for now (owner, 2026-11-20). Both are the
+ * QuantLab test strategies, which stopped on Pixel Alpha on 13 Nov and now run on
+ * Nexa staging. Their trades and their own pages (/admin/strategies/:key) stay;
+ * deleting a name from this list brings the card back.
+ */
+const HIDDEN_STRATEGIES = new Set([
+  'ANN Strategy (Original) - QuantLab',
+  'VWMA Reversion - QuantLab',
+])
+
 export default function AdminStrategies() {
   const { data, loading, error, reload } = useApiData(getStrategies)
   // Read-only collaborator: the Active/Paused state shows, the switch does not.
@@ -33,7 +44,12 @@ export default function AdminStrategies() {
   const [actionError, setActionError] = useState<string | null>(null)
 
   const grouped = useMemo(
-    () => groupTradesByStrategy(data?.trades ?? []),
+    () =>
+      groupTradesByStrategy(
+        (data?.trades ?? []).filter(
+          (t) => !HIDDEN_STRATEGIES.has(t.strategy.trim()),
+        ),
+      ),
     [data],
   )
 

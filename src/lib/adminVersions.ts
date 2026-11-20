@@ -14,6 +14,23 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'strategies-hide-quantlab',
+    date: '2026-11-20',
+    kind: 'improved',
+    area: 'Strategies',
+    title: 'The two QuantLab strategies are hidden from the Strategies page',
+    summary:
+      'The Strategies page no longer shows the “ANN Strategy (Original) - QuantLab” and “VWMA Reversion - QuantLab” cards. Both were test strategies that stopped trading on Pixel Alpha on 13 Nov and now run on the Nexa test site, so the page leads with the live strategy, VWMA-Reversion.',
+    howItWorks: [
+      'Nothing is deleted: their trades stay in the history, and each still has its own page if opened by its link.',
+      'Bringing a card back is a one-line change.',
+    ],
+    technical: [
+      'HIDDEN_STRATEGIES in pages/admin/AdminStrategies.tsx filters the trades before grouping; GET /admin/strategies and the detail route are unchanged.',
+    ],
+    links: [{ label: 'Strategies', href: '/admin/strategies' }],
+  },
+  {
     id: 'strategy-trades-whose-and-master-only',
     date: '2026-11-19',
     kind: 'improved',
