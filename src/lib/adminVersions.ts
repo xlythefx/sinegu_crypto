@@ -14,6 +14,24 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'dashboard-calendar-pct-switch',
+    date: '2026-11-20',
+    kind: 'improved',
+    area: 'Trading dashboard',
+    title: 'Daily P&L Calendar can show each day in % with one click',
+    summary:
+      'The calendar on the trading dashboard has a new $ / % switch beside the month. On %, each day’s big figure is the percentage it made or lost, with the dollar amount under it. The site remembers the choice on that device.',
+    howItWorks: [
+      'Example: a day that made +$52 on a $3,231 balance shows +1.61% in % mode, with +$52 underneath.',
+      'The percentage is over the balance that day STARTED with, so a later deposit or withdrawal never changes an earlier day.',
+      'In % mode the colours follow the percentage too. After a withdrawal, a small-dollar day can be a big percentage day, and it is coloured as one.',
+      'On a phone the cells show one decimal (+1.6%) so the figure fits. Tapping the day still shows the exact figure.',
+    ],
+    technical: [
+      'components/dashboard/DailyPnlCalendar.tsx: Segmented $ / % switch, stored in localStorage pixel-alpha.calendar.show-pct (useStoredFlag). Reads the existing per-day pct from GET /dashboard/daily-pnl; no API change. Below 480px wide the cell rounds the % to 1 dp.',
+    ],
+  },
+  {
     id: 'strategies-hide-quantlab',
     date: '2026-11-20',
     kind: 'improved',

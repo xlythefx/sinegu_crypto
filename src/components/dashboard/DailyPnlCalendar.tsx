@@ -5,6 +5,8 @@ import { getDashboardDailyPnl } from '../../services/dashboard'
 import type { ExchangeFilter } from '../../context/ExchangeFilterContext'
 import { deleteAdminPastTrade, updateAdminPastTrade } from '../../services/admin'
 import { getApiErrorMessage } from '../../services/api'
+import { useIsMobile } from '../../hooks/useIsMobile'
+import { useStoredFlag } from '../../hooks/useStoredFlag'
 import { canSeeAdmin } from '../../lib/roles'
 import { getUser } from '../../lib/session'
 import { displaySymbol } from '../../lib/chart'
@@ -17,9 +19,20 @@ import PositionEditModal, {
 } from '../admin/positions/PositionEditModal'
 import ConfirmModal from '../ui/ConfirmModal'
 import PnlBreakdown from '../ui/PnlBreakdown'
+import { Segmented } from '../ui/filters'
 import type { DayPnl, DayTrade } from '../../types/dashboard'
 
 const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
+
+/** Remembered per device, so the calendar opens the way it was last read. */
+const SHOW_PCT_KEY = 'pixel-alpha.calendar.show-pct'
+
+type CellUnit = 'usd' | 'pct'
+
+const UNIT_OPTIONS = [
+  { value: 'usd' as const, label: '$' },
+  { value: 'pct' as const, label: '%' },
+]
 
 /** Base calendar cell (also used by blank cells). Mirrors the old .dcal__cell. */
 const cellBase =
@@ -100,7 +113,8 @@ function toEditableRow(t: DayTrade): PositionRow {
 /** Daily P&L calendar — month grid tinted by P&L sign + magnitude, with month
  *  navigation and a click-to-open trades modal per day. Each cell carries the
  *  day's amount and its percentage of the balance that day STARTED with
- *  (server-computed, so a later deposit never rewrites an earlier day). */
+ *  (server-computed, so a later deposit never rewrites an earlier day); the
+ *  $ / % switch picks which of the two leads, and the tint follows it. */
 export default function DailyPnlCalendar({
   exchange = 'all',
 }: DailyPnlCalendarProps) {
@@ -123,6 +137,10 @@ export default function DailyPnlCalendar({
     () => new Date(now.getFullYear(), now.getMonth(), 1)
   )
   const [selected, setSelected] = useState<string | null>(null)
+  const [showPct, setShowPct] = useStoredFlag(SHOW_PCT_KEY, false)
+  // A phone's cell is ~25px of text wide: "+0.28%" spills over its edge,
+  // "+0.3%" fits. The day's popup still prints two decimals.
+  const pctDp = useIsMobile(480) ? 1 : 2
 
   const daysMap = days ?? {}
 
@@ -138,6 +156,13 @@ export default function DailyPnlCalendar({
   const winDays = cells.filter((c) => c.day && total(c) > 0).length
   const lossDays = cells.filter((c) => c.day && total(c) < 0).length
   const maxAbs = Math.max(1, ...cells.map((c) => Math.abs(total(c))))
+  // In % mode the tint measures the percentage, so a big day after a
+  // withdrawal reads as big; a day with no capital on record keeps its $ tint.
+  const maxPct = Math.max(0.01, ...cells.map((c) => Math.abs(c.data?.pct ?? 0)))
+  const intensity = (c: Cell) =>
+    showPct && c.data?.pct != null
+      ? Math.abs(c.data.pct) / maxPct
+      : Math.abs(total(c)) / maxAbs
   const canGoNext =
     view.getFullYear() < now.getFullYear() ||
     (view.getFullYear() === now.getFullYear() &&
@@ -196,36 +221,45 @@ export default function DailyPnlCalendar({
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="flex items-center justify-center w-[30px] h-[30px] rounded-btn border border-border bg-surface text-accent cursor-pointer disabled:text-faint disabled:opacity-60 disabled:cursor-not-allowed"
-            onClick={() =>
-              setView(
-                (v) => new Date(v.getFullYear(), v.getMonth() - 1, 1)
-              )
-            }
-            aria-label="Previous month"
-          >
-            <ChevronLeft size={16} />
-          </button>
-          <span className="min-w-[116px] text-center text-[13px] font-extrabold">
-            {monthLabel}
-          </span>
-          <button
-            type="button"
-            className="flex items-center justify-center w-[30px] h-[30px] rounded-btn border border-border bg-surface text-accent cursor-pointer disabled:text-faint disabled:opacity-60 disabled:cursor-not-allowed"
-            disabled={!canGoNext}
-            onClick={() =>
-              canGoNext &&
-              setView(
-                (v) => new Date(v.getFullYear(), v.getMonth() + 1, 1)
-              )
-            }
-            aria-label="Next month"
-          >
-            <ChevronRight size={16} />
-          </button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <Segmented<CellUnit>
+            size="sm"
+            ariaLabel="Show each day in dollars or percent"
+            value={showPct ? 'pct' : 'usd'}
+            onChange={(unit) => setShowPct(unit === 'pct')}
+            options={UNIT_OPTIONS}
+          />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="flex items-center justify-center w-[30px] h-[30px] rounded-btn border border-border bg-surface text-accent cursor-pointer disabled:text-faint disabled:opacity-60 disabled:cursor-not-allowed"
+              onClick={() =>
+                setView(
+                  (v) => new Date(v.getFullYear(), v.getMonth() - 1, 1)
+                )
+              }
+              aria-label="Previous month"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="min-w-[116px] text-center text-[13px] font-extrabold">
+              {monthLabel}
+            </span>
+            <button
+              type="button"
+              className="flex items-center justify-center w-[30px] h-[30px] rounded-btn border border-border bg-surface text-accent cursor-pointer disabled:text-faint disabled:opacity-60 disabled:cursor-not-allowed"
+              disabled={!canGoNext}
+              onClick={() =>
+                canGoNext &&
+                setView(
+                  (v) => new Date(v.getFullYear(), v.getMonth() + 1, 1)
+                )
+              }
+              aria-label="Next month"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -260,9 +294,13 @@ export default function DailyPnlCalendar({
             )
           const pnl = total(c)
           const mag =
-            pnl !== 0
-              ? 0.16 + Math.min(0.6, (Math.abs(pnl) / maxAbs) * 0.6)
-              : 0
+            pnl !== 0 ? 0.16 + Math.min(0.6, intensity(c) * 0.6) : 0
+          // The figure the switch asked for leads; the other sits under it.
+          // A day with no capital on record has no % and keeps its $ alone.
+          const pct = c.data?.pct ?? null
+          const lead = showPct && pct !== null ? fmtSignedPct(pct, pctDp) : cellAmount(pnl)
+          const second =
+            pnl === 0 || pct === null ? null : showPct ? cellAmount(pnl) : fmtSignedPct(pct, pctDp)
           const bg =
             pnl > 0
               ? `rgba(47, 214, 122, ${mag.toFixed(3)})`
@@ -302,12 +340,10 @@ export default function DailyPnlCalendar({
                 >
                   <span className="flex flex-col items-start">
                     <span className={`${cellValue} ${toneText(pnl)}`}>
-                      {cellAmount(pnl)}
+                      {pnl === 0 ? '—' : lead}
                     </span>
-                    {c.data.pct !== null && pnl !== 0 && (
-                      <span className={`${cellPct} ${toneText(pnl)}`}>
-                        {fmtSignedPct(c.data.pct, 2)}
-                      </span>
+                    {second !== null && (
+                      <span className={`${cellPct} ${toneText(pnl)}`}>{second}</span>
                     )}
                   </span>
                 </PnlBreakdown>

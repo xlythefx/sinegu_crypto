@@ -944,7 +944,75 @@ const STRATEGY_TRADES = (() => {
 })()
 const STRATEGIES_BODY = { success: true, enabled: {}, trades: STRATEGY_TRADES }
 
+// The trader dashboard's Daily P&L Calendar opens on the CURRENT month, so its
+// sample days are this month's (invented, like every figure here). Day 9 has a
+// mid-month withdrawal before it: a smaller balance, so $ and % rank differently.
+const DASHBOARD_DAILY_PNL = (() => {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = now.getMonth()
+  const nets = [9, 14, 52, 107, -7, 0, 41, 0, -42, -9, 7, 0, -60, 31, 23, -13, 28, 16, 10]
+  let balance = 3200
+  const days = {}
+  for (let d = 1; d <= Math.min(now.getDate(), nets.length); d++) {
+    const net = nets[d - 1]
+    if (d === 9) balance -= 1400
+    if (net === 0) continue
+    const fee = r2(Math.abs(net) * 0.08 + 0.4)
+    const day = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    days[day] = {
+      total: net, total_gross: r2(net + fee), start_balance: balance,
+      pct: r2((net / balance) * 100), pct_gross: r2(((net + fee) / balance) * 100), fees: fee,
+      wins: net > 0 ? 1 : 0, losses: net > 0 ? 0 : 1,
+      trades: [{
+        id: 950 + d, symbol: 'LTCUSDT', position_side: net > 0 ? 'LONG' : 'SHORT', position_amt: 14,
+        realized_pnl: net, exchange_fee: fee, fee_source: 'actual', exit_price: 92.4, side: 'SELL',
+        strategy: 'ABCD-v1', closed_at: `${day} 14:30:00`,
+      }],
+    }
+    balance = r2(balance + net)
+  }
+  return days
+})()
+
+// The trader dashboard's summary, built from the same sample days.
+const DASHBOARD_SUMMARY = (() => {
+  const days = Object.entries(DASHBOARD_DAILY_PNL).sort(([a], [b]) => a.localeCompare(b))
+  const net = r2(days.reduce((s, [, d]) => s + d.total, 0))
+  const gross = r2(days.reduce((s, [, d]) => s + d.total_gross, 0))
+  const fees = r2(gross - net)
+  const last = days.at(-1)?.[1]
+  const balance = last ? r2(last.start_balance + last.total) : 3200
+  let cum = 0
+  let cumNet = 0
+  const curve = days.map(([date, d]) => {
+    cum = r2(cum + d.total_gross); cumNet = r2(cumNet + d.total)
+    return { date, cum, cum_net: cumNet }
+  })
+  const wins = days.filter(([, d]) => d.total > 0).length
+  const series = (id) => ({ id, total: gross, total_net: net, fees, trades: days.length, win_rate: r2((wins / days.length) * 100), profit_factor: 2.1, curve })
+  const pnl = { daily: last?.total_gross ?? 0, weekly: r2(gross / 3), monthly: gross }
+  const pnlNet = { daily: last?.total ?? 0, weekly: r2(net / 3), monthly: net }
+  return {
+    exchange: 'all', exchanges: ['binance'], accounts: 1, demo_accounts: 0,
+    equity: balance, balance, realized_pnl: net, realized_pnl_gross: gross, unrealized_pnl: 0,
+    total_pnl: net, total_pnl_gross: gross,
+    fees: { total: fees, trades_with_fee: days.length, trades_without_fee: 0, since: '2026-09-11' },
+    net_deposits: 1800, pct_base: 1800,
+    equity_curve: days.map(([date, d]) => ({ date, equity: r2(d.start_balance + d.total), equity_gross: r2(d.start_balance + d.total_gross) })),
+    metrics: { net_pnl: net, gross_pnl: gross, fees, win_rate: r2((wins / days.length) * 100), profit_factor: 2.1, expectancy: r2(net / days.length), avg_rr: 1.6, max_drawdown: -3.4, sharpe: 1.8, trades: days.length },
+    daily_pnl: Object.fromEntries(days.map(([k, d]) => [k, d.total])),
+    daily_pnl_gross: Object.fromEntries(days.map(([k, d]) => [k, d.total_gross])),
+    by_asset: [series('LTCUSDT')], by_strategy: [series('ABCD-v1')],
+    hwm: balance, commissions: { total: 0, month: ISO(new Date()).slice(0, 7), rows: [] },
+    pnl_breakdown: pnl, pnl_breakdown_net: pnlNet,
+    pnl_breakdown_fees: { daily: r2(pnl.daily - pnlNet.daily), weekly: r2(pnl.weekly - pnlNet.weekly), monthly: fees },
+  }
+})()
+
 const GET = {
+  '/dashboard/daily-pnl': { success: true, days: DASHBOARD_DAILY_PNL },
+  '/dashboard/summary': { success: true, summary: DASHBOARD_SUMMARY },
   '/admin/users/': (_user, path) => userProfile(path),
   '/admin/invoices/': (_user, path) => invoiceView(path),
   '/admin/affiliate/users/': { success: true, referrals: [] },

@@ -2853,7 +2853,13 @@ own job). The rule per surface:
   `start_balance` / `pct` / `pct_gross` per day from `dailyPnlDays`, via the
   same `UserStatsService::capitalWalk` Analytics uses for `daily_capital`) —
   never today's balance, which let a deposit rewrite every earlier day. `pct`
-  is null when no capital is on record; the old Amount/% toggle is gone.
+  is null when no capital is on record. The old Amount/% toggle (it divided
+  by today's balance) was removed then; **a $ / % switch came back on the
+  trader dashboard's calendar on 2026-11-20** (request via the user), over
+  that same per-day `pct`: it picks which figure leads the cell and what the
+  tint measures, remembered per device (`pixel-alpha.calendar.show-pct`).
+  Below 480px the cell rounds the % to 1 dp so it fits. The admin calendar
+  (`AdminPnlCalendar`) has no switch yet.
 - **Positions page and admin user detail keep `realized_pnl` / `total_pnl`
   (after fees)**: a total beside a list of net trades must sum to them.
 - **Exception: the ADMIN's read of one user leads AFTER fees** (owner,
