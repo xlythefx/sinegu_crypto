@@ -18,22 +18,6 @@ import type { AdminTodo } from '../types/adminTodos'
  *    the note and the date it was settled stay readable.
  */
 export const ADMIN_TODOS: AdminTodo[] = [
-  // ── Developer error bot (2026-11-22) ─────────────────────────────────────
-  {
-    id: 'dev-bot-rotate-token',
-    feature: 'Developer error bot',
-    kind: 'action',
-    title: 'Replace the error bot’s token (the first one was pasted into a chat)',
-    added: '2026-11-22',
-    why: 'The token of @errorpixel_bot was shared in a chat while setting it up. Anyone holding it could send messages as the bot or read its button taps. A new token closes that; the old one stops working the moment it is replaced.',
-    steps: [
-      'In Telegram, open @BotFather → /mybots → errorpixel_bot → API Token → Revoke current token. Copy the new token it shows.',
-      'Paste it straight into the server’s API settings file as DEV_BOT_TOKEN (never into a chat), then run php artisan config:cache.',
-      'Run php artisan devbot:webhook on the server so the buttons keep working, then php artisan devbot:webhook --info to check it shows the pixel-alpha.com address.',
-      'Send /start to the bot: it should answer “Connected”.',
-    ],
-    envKeys: ['DEV_BOT_TOKEN'],
-  },
   // ── Sub-master account + high-risk alerts (2026-11-18)───────────────────
   {
     id: 'submaster-tradingview-alerts',

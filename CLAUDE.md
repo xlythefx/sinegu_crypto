@@ -1238,14 +1238,18 @@ the admin group). API: `App\Services\DevBot\*`, table `dev_bot_actions`.
   count). Read in a `terminating` callback of `POST /engine/{x}/trade-logs`,
   so the engine never waits on Telegram, Binance or its own size check.
 - **Missing coin (Binance, entry) = size buttons** (`CoinSuggestion`): $5 /
-  $10 / $15 = MARGIN per entry for a $1,000 account (Binance's "Cost") at 25×
-  or the coin's Binance max if lower (engine `/admin/size-check`, base 1 →
+  $10 / $15 = MARGIN per entry for a $1,000 account (Binance's "Cost") at the
+  ALERT's leverage (25× if none) or the coin's Binance max if lower (engine `/admin/size-check`, base 1 →
   each account's entry multiple, the engine's math), floored to the step,
   anything under Binance's minimums dropped. Approximate on purpose (owner).
   One open suggestion per coin; later refusals only count. A tap adds the coin
   through **`App\Services\Assets\AssetCreator`** — the ONE create path, shared
   with `AssetController::store` — side from the signal, max = 3 entries,
   leverage stored; history actor "{name} (Telegram)".
+- **Leverage above Binance's max is always told** (owner): the coin message
+  when the alert asks more than the coin allows, and any entry carrying
+  `leverage_refused`, naming the max and whether the asked number came from
+  the alert's JSON or the coin's own `assets.leverage` (which wins).
 - **Two gates on `POST /api/devbot/telegram`** (a tap changes real money):
   Telegram's `X-Telegram-Bot-Api-Secret-Token` = `DEV_BOT_WEBHOOK_SECRET`
   (none configured = shut, 403), and the tapper's Telegram id =
