@@ -1258,10 +1258,21 @@ the admin group). API: `App\Services\DevBot\*`, table `dev_bot_actions`.
 - Config `DEV_BOT_TOKEN` / `DEV_BOT_CHAT_ID` / `DEV_BOT_WEBHOOK_SECRET`:
   box-local, NOT mirrored (a local box must never DM), pinned empty in
   phpunit. Register with `php artisan devbot:webhook` (`--info`, `--delete`).
-- **Next (not built):** a queue the PC agent polls (dials out — no
-  cloud-ide tunnel needed), Claude on the PC's subscription opens a branch +
-  PR, the bot posts the link. Never auto-merge or auto-deploy; PRs on the
-  public repo never carry customer names or amounts.
+- **The PC agent (`dev-agent/`, 2026-11-22)** — a fourth codebase in this
+  repo (Python stdlib, `dev-agent/README.md`). Jobs: a tap on "🤖 Investigate
+  on my PC" under any problem message, or any text the owner types to the bot
+  (`dev_bot_jobs`, `DevBotJobs`). The PC POLLS `POST /api/devbot/agent/claim`
+  (key `DEV_BOT_AGENT_KEY` = `DEV_AGENT_KEY`, box-local) — it dials out, so no
+  cloud-ide tunnel. Per job: fresh worktrees on `devbot/job-<id>` from main
+  (node_modules / vendor junctioned, the API worktree's .env holds APP_KEY
+  only), `claude -p` on the SUBSCRIPTION (API key env stripped) with the
+  read-only `pixel` MCP connector and a tool allow-list (no push / deploy /
+  ssh / curl / .env reads). Then: refuse to push anything containing
+  `GET /devbot/agent/private-strings` (names, emails, customers' account
+  names — both repos are PUBLIC), refuse while local main is ahead of GitHub,
+  else push + `gh pr create` (or a pre-filled compare link without gh). The
+  summary (private, may name people) goes to the DM only; only github.com
+  links are relayed. Never auto-merge or auto-deploy.
 
 ## Signal delivery proof (2026-10-25)
 

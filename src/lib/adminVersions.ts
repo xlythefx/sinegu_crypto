@@ -14,6 +14,23 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'dev-agent-investigates',
+    date: '2026-11-22',
+    kind: 'new',
+    area: 'Signal Log',
+    title: 'The error bot can hand a problem to an AI developer, who explains it and proposes a fix',
+    summary:
+      'Every problem message from the error bot now has an “Investigate on my PC” button, and anything typed to the bot becomes a task too. An AI developer running on the developer’s own computer looks into it with read-only access to the live data, replies in Telegram with what went wrong, and, when the code needs fixing, prepares the change for review on GitHub.',
+    howItWorks: [
+      'Example: “why did the LTC buy at 14:15 skip?” typed to the bot. The bot answers “Job #3 queued”, then “working on it”, then the explanation: for instance that the main account was already full, so nothing is broken.',
+      'When code really is wrong, the AI writes the fix with a test, and the bot sends a link to the proposed change on GitHub. Nothing goes live until the developer approves it there and it is deployed.',
+      'It never changes the live site or the trading bot itself, and it never publishes customer names or amounts: a change that mentions one is held back.',
+    ],
+    technical: [
+      'API: dev_bot_jobs, App\\Services\\DevBot\\DevBotJobs, /api/devbot/agent/{claim, jobs/{id}/progress, jobs/{id}/finish, private-strings} behind X-Devbot-Agent-Key (DEV_BOT_AGENT_KEY). PC: dev-agent/agent.py polls, runs Claude Code headless in git worktrees with the read-only MCP connector, pushes devbot/job-<id> and opens the pull request.',
+    ],
+  },
+  {
     id: 'dev-error-bot',
     date: '2026-11-22',
     kind: 'new',
