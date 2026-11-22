@@ -1272,7 +1272,34 @@ the admin group). API: `App\Services\DevBot\*`, table `dev_bot_actions`.
   names — both repos are PUBLIC), refuse while local main is ahead of GitHub,
   else push + `gh pr create` (or a pre-filled compare link without gh). The
   summary (private, may name people) goes to the DM only; only github.com
-  links are relayed. Never auto-merge or auto-deploy.
+  links are relayed. Never auto-merge; deploy only on the owner's two taps.
+- **All errors, not just coins (owner, 2026-11-22).** Every exception Laravel
+  reports (`bootstrap/app.php` → `DevBotReporter::exception`, once an hour per
+  class + file + line, with Investigate), every scheduled task ending non-zero
+  (`ScheduledTaskFinished` listener), signal problems, new RiskAlerts.
+- **`/status` = `App\Services\DevBot\SystemStatus`**: engine (+ pollers 4/5/6
+  by venue, retry queue, rate limit), scheduler heartbeat (`Schedule::call`
+  every minute → cache `scheduler:heartbeat`), the CUSTOMERS' TRON network
+  watcher (`TronGateway::lastScanAt` / stalled, unmatched, disputes), Stripe's
+  last webhook, invoicing (engine `monthly_invoices` + unpaid/overdue), the
+  database queue (stuck > 10 min, failed_jobs), open RiskAlerts, disk, the PC
+  agent. Server-side only (works with the PC off). A short typed question with
+  a status word gets the report + "Ask my PC agent instead".
+- **Watchdog `devbot:watch`** (`4-59/5`): the same checks, a DM only on a
+  CHANGE (first sight reports a problem, never health). The scheduler cannot
+  report its own death, so the PC agent's polls run the `scheduler` check
+  (`DevBotJobs::claim`, once a minute) through php-fpm.
+- **Deploy after a merge**: the PC agent tracks the PRs it opened (polls
+  GitHub every 5 min, anonymous 60/h or the `gh` token) → `POST
+  /devbot/agent/merged` → targets from the changed paths
+  (`DevBotJobs::deployTargets`: api repo → api; trading-flask → engine;
+  pixel-telegram → telegram; src/public/package/vite → website; tests and
+  .md alone → nothing) → "🚀 Deploy" → "✅ Yes, deploy now" → a `deploy` job.
+  Typing "deploy" offers website + API the same way. The PC runs it with the
+  normal script (`full`, or backup → deploy-x → verify; engine/telegram add
+  their deploy + verify), after refusing any repo with tracked changes or
+  untracked files that would ship, not on main, or that cannot
+  `pull --ff-only`. It reports the backup path and the RESULT lines.
 
 ## Signal delivery proof (2026-10-25)
 

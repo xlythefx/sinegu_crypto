@@ -14,6 +14,23 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'dev-bot-status-and-deploy',
+    date: '2026-11-23',
+    kind: 'new',
+    area: 'Bot engine',
+    title: 'Ask the error bot whether everything is running, and deploy a merged fix from Telegram',
+    summary:
+      'The error bot now answers “/status” (or “is the crypto listener up?”) in a second with every service: the trading engine, the crypto payment listener, invoicing, the scheduled jobs, background jobs, alerts and disk. It also warns by itself when one of them stops and when it comes back, and reports any server error. When a fix the AI developer prepared is approved on GitHub, the bot offers to put it live.',
+    howItWorks: [
+      'Example: /status shows “🟢 Crypto payment listener (USDT, mainnet) — last scan 20 s ago, 0 unmatched payments” and “🟢 Invoicing — next monthly run 1 Dec 16:00”. Anything red is named in plain words.',
+      'If the crypto listener stops scanning, one message says so; when it scans again, one message says it recovered. It never repeats every few minutes while something is down.',
+      'After a fix is merged on GitHub, the bot says what would change (for example “the website and the trading engine”) and asks “Deploy?”, then “Yes, deploy now?”. Only then does the developer’s computer take a backup, put it live and check the site, and the bot reports the result. Typing “deploy” offers the same for the current version.',
+    ],
+    technical: [
+      'API: App\\Services\\DevBot\\{SystemStatus, DevBotWatch}, devbot:watch (every 5 min), scheduler heartbeat, exception + ScheduledTaskFinished hooks, POST /api/devbot/agent/merged, dd:* buttons → a deploy job. PC: dev-agent/agent.py check_merges() + run_deploy() through .claude/deploy_sinegualcrypto.py, refusing unclean or diverged repos.',
+    ],
+  },
+  {
     id: 'dev-agent-investigates',
     date: '2026-11-22',
     kind: 'new',

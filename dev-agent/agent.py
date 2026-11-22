@@ -270,7 +270,180 @@ def open_pull_request(name: str, path: Path, branch: str, title: str, body: str)
     return {"label": f"Open the pull request ({name})", "url": f"https://github.com/{slug}/compare/main...{branch}?{q}"}
 
 
+# ---- pull requests it opened: tell the bot when one is merged ----------------------
+
+PRS_FILE = WORK / "prs.json"
+MERGE_CHECK_SECONDS = int(ENV.get("DEV_AGENT_MERGE_CHECK_SECONDS", "300"))  # GitHub allows 60 anonymous calls/h
+TRACK_DAYS = 14
+
+
+def _load_prs() -> list[dict]:
+    try:
+        return json.loads(PRS_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+
+
+def _save_prs(prs: list[dict]) -> None:
+    WORK.mkdir(parents=True, exist_ok=True)
+    PRS_FILE.write_text(json.dumps(prs, indent=1), encoding="utf-8")
+
+
+def track_pr(name: str, branch: str, job_id: int) -> None:
+    prs = [p for p in _load_prs() if not (p["repo"] == name and p["branch"] == branch)]
+    prs.append({"repo": name, "slug": REPOS[name][1], "branch": branch, "job_id": job_id, "since": int(time.time())})
+    _save_prs(prs)
+
+
+def github(path: str) -> object | None:
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "pixel-dev-agent/1"}
+    gh = shutil.which("gh")
+    if gh:  # an authenticated token lifts the 60/h anonymous limit
+        tok = subprocess.run([gh, "auth", "token"], capture_output=True, text=True).stdout.strip()
+        if tok:
+            headers["Authorization"] = f"Bearer {tok}"
+    try:
+        with urllib.request.urlopen(urllib.request.Request(f"https://api.github.com{path}", headers=headers), timeout=20) as r:
+            return json.loads(r.read().decode())
+    except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as e:
+        log(f"github {path}: {e}")
+        return None
+
+
+def check_merges() -> None:
+    """For each pull request the agent opened: merged → tell the bot (it offers the deploy)."""
+    keep: list[dict] = []
+    for p in _load_prs():
+        if time.time() - p.get("since", 0) > TRACK_DAYS * 86400:
+            continue
+        owner = p["slug"].split("/")[0]
+        pulls = github(f"/repos/{p['slug']}/pulls?state=all&head={owner}:{urllib.parse.quote(p['branch'])}")
+        if not isinstance(pulls, list):
+            keep.append(p)
+            continue
+        merged = next((x for x in pulls if x.get("merged_at")), None)
+        if merged is None:
+            if not pulls or any(x.get("state") == "open" for x in pulls):
+                keep.append(p)  # not opened yet (compare link) or still open
+            continue  # closed without merging: forget it
+        files = github(f"/repos/{p['slug']}/pulls/{merged['number']}/files?per_page=100")
+        if not isinstance(files, list):
+            keep.append(p)
+            continue
+        answer = api("POST", "/devbot/agent/merged", {
+            "repo": p["repo"], "number": merged["number"], "url": merged["html_url"], "title": merged.get("title") or "",
+            "branch": p["branch"], "files": [f.get("filename", "") for f in files], "job_id": p.get("job_id"),
+        })
+        if answer is None:
+            keep.append(p)  # the server did not take it: try again next round
+        else:
+            log(f"PR {p['slug']}#{merged['number']} merged — deploy offered ({answer.get('targets')})")
+    _save_prs(keep)
+
+
+# ---- deploy (after Christian confirms in Telegram) ---------------------------------
+
+DEPLOY_SCRIPT = REPOS["web"][0] / ".claude" / "deploy_sinegualcrypto.py"
+STEP_TIMEOUT = 25 * 60
+
+
+def deploy_plan(targets: list[str]) -> tuple[list[str], list[list[str]]]:
+    """(repos that must be clean + current, deploy-script steps). `full` = backup → website → API → verify."""
+    steps: list[list[str]] = []
+    if "website" in targets and "api" in targets:
+        steps.append(["full"])
+    elif "website" in targets:
+        steps += [["backup"], ["deploy-dash"], ["verify"]]
+    elif "api" in targets:
+        steps += [["backup"], ["deploy-api"], ["verify"]]
+    if "engine" in targets:
+        steps += [["deploy-engine"], ["verify-engine"]]
+    if "telegram" in targets:
+        steps += [["deploy-telegram"], ["verify-telegram"]]
+    repos = []
+    if {"website", "engine", "telegram"} & set(targets) or "api" in targets:
+        repos.append("web")  # the deploy script lives here
+    if "api" in targets:
+        repos.append("api")
+    return repos, steps
+
+
+def unsafe_changes(name: str, status: str) -> list[str]:
+    """Lines of `git status --porcelain` that a deploy would ship by accident."""
+    bad = []
+    for line in status.splitlines():
+        if not line.strip():
+            continue
+        path = line[3:].strip().strip('"')
+        if not line.startswith("??"):
+            bad.append(line)  # a modified tracked file
+        elif name == "api" or re.match(r"(src|public|trading-flask|pixel-telegram)/", path):
+            bad.append(line)  # an untracked file inside what gets packed
+    return bad
+
+
+def run_deploy(job: dict) -> None:
+    job_id = int(job["id"])
+    targets = list((job.get("context") or {}).get("targets") or [])
+    repos, steps = deploy_plan(targets)
+    if not steps:
+        finish(job_id, False, "Nothing to deploy for that change.")
+        return
+    for name in repos:
+        repo = REPOS[name][0]
+        bad = unsafe_changes(name, git(repo, "status", "--porcelain"))
+        if bad:
+            finish(job_id, False, f"Not deployed: the {name} repo on the PC has unsaved changes that would go live too:\n"
+                   + "\n".join(bad[:10]) + "\nCommit or remove them, then type “deploy”.")
+            return
+        if git(repo, "rev-parse", "--abbrev-ref", "HEAD").strip() != "main":
+            finish(job_id, False, f"Not deployed: the {name} repo on the PC is not on main.")
+            return
+        r = subprocess.run(["git", "pull", "--ff-only", "-q", "origin", "main"], cwd=str(repo),
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if r.returncode != 0:
+            finish(job_id, False, f"Not deployed: could not bring the {name} repo up to date with GitHub "
+                   f"(local main has commits GitHub does not have, or the pull failed):\n{(r.stderr or r.stdout).strip()[:400]}")
+            return
+
+    web = REPOS["web"][0]
+    if "website" in targets:
+        progress(job_id, "Building the website…")
+        r = subprocess.run([shutil.which("npm") or "npm", "run", "build"], cwd=str(web), capture_output=True,
+                           text=True, encoding="utf-8", errors="replace", timeout=STEP_TIMEOUT)
+        if r.returncode != 0:
+            finish(job_id, False, "Not deployed: the website build failed:\n" + (r.stdout + r.stderr).strip()[-1200:])
+            return
+
+    done: list[str] = []
+    backup = verdicts = None
+    for step in steps:
+        progress(job_id, f"Running {' '.join(step)}…")
+        r = subprocess.run([sys.executable, str(DEPLOY_SCRIPT), *step], cwd=str(web), capture_output=True,
+                           text=True, encoding="utf-8", errors="replace", timeout=STEP_TIMEOUT)
+        out = (r.stdout or "") + (r.stderr or "")
+        backup = (re.findall(r"BACKUP DONE: (\S+)", out) or [backup])[-1]
+        verdicts = re.findall(r"RESULT: (\w+)", out) or verdicts
+        if r.returncode != 0 or "Traceback" in out or (verdicts and any(v != "HEALTHY" for v in verdicts)):
+            finish(job_id, False, f"Deploy stopped at “{' '.join(step)}” after: {', '.join(done) or 'nothing'}.\n"
+                   + (f"Backup to restore from: {backup}\n" if backup else "") + out.strip()[-1500:])
+            return
+        done.append(" ".join(step))
+    finish(job_id, True, "Deployed " + ", ".join(targets) + ". Steps: " + ", ".join(done) + "."
+           + (f"\nBackup taken: {backup}" if backup else "") + (f"\nChecks: {', '.join(verdicts)}" if verdicts else ""))
+
+
 def handle(job: dict) -> None:
+    if (job.get("context") or {}).get("kind") == "deploy":
+        log(f"job #{job['id']}: deploy {job['context'].get('targets')}")
+        try:
+            run_deploy(job)
+        except subprocess.TimeoutExpired:
+            finish(int(job["id"]), False, "The deploy took too long and was stopped; check the site and the last backup.")
+        except Exception as e:  # noqa: BLE001
+            log(traceback.format_exc())
+            finish(int(job["id"]), False, f"The deploy hit an error: {str(e)[:800]}")
+        return
     job_id = int(job["id"])
     branch = f"devbot/job-{job_id}"
     log(f"job #{job_id}: {job['prompt'][:120]}")
@@ -305,6 +478,7 @@ def handle(job: dict) -> None:
                 continue
             links.append(open_pull_request(name, path, branch, verdict["pr_title"] or f"Developer agent job #{job_id}",
                                            (verdict["pr_body"] or "") + f"\n\n_Prepared by the Pixel Alpha developer agent (job #{job_id})._"))
+            track_pr(name, branch, job_id)  # a merge then offers the deploy in Telegram
 
         summary = verdict["summary"] + ("\n\n" + "\n".join(notes) if notes else "")
         if not links and not notes:
@@ -339,8 +513,15 @@ def main() -> int:
             return 1
         lock.write_text(str(os.getpid()))
     log(f"developer agent up — polling {API} every {POLL_SECONDS}s")
+    last_merge_check = 0.0
     try:
         while True:
+            if time.time() - last_merge_check >= MERGE_CHECK_SECONDS:
+                last_merge_check = time.time()
+                try:
+                    check_merges()
+                except Exception:  # noqa: BLE001 — never stop the loop over GitHub
+                    log(traceback.format_exc())
             answer = api("POST", "/devbot/agent/claim")
             job = (answer or {}).get("job")
             if job:

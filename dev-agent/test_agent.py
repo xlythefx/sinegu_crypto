@@ -22,6 +22,21 @@ def test_private_strings_are_found_case_insensitively():
     assert agent.find_private("nothing here", ["Alexandre Guyomard"]) == []
 
 
+def test_deploy_plan_uses_full_for_both_and_adds_engine_steps():
+    assert agent.deploy_plan(["website", "api"]) == (["web", "api"], [["full"]])
+    assert agent.deploy_plan(["api"]) == (["web", "api"], [["backup"], ["deploy-api"], ["verify"]])
+    assert agent.deploy_plan(["website", "engine"]) == (
+        ["web"], [["backup"], ["deploy-dash"], ["verify"], ["deploy-engine"], ["verify-engine"]])
+    assert agent.deploy_plan([]) == ([], [])
+
+
+def test_unsafe_changes_block_what_would_ship_by_accident():
+    status = " M src/App.tsx\n?? .cloude-remote.vite.config.mjs\n?? src/new.tsx\n?? notes.txt\n"
+    assert agent.unsafe_changes("web", status) == [" M src/App.tsx", "?? src/new.tsx"]
+    assert agent.unsafe_changes("api", "?? scratch.php\n") == ["?? scratch.php"]
+    assert agent.unsafe_changes("web", "") == []
+
+
 def test_the_prompt_forbids_pushing_and_private_data():
     from pathlib import Path
     p = agent.build_prompt({"id": 7, "prompt": "why?", "context": {"ticker": "LTCUSDT"}},

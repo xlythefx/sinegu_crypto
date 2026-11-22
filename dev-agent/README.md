@@ -16,6 +16,13 @@ sends the summary and the link. **Nothing is merged or deployed here.**
 - A pull request is only opened when local `main` is not ahead of GitHub,
   otherwise it would carry unrelated commits.
 
+**Deploys.** It watches the pull requests it opened (GitHub, every 5 min). When
+one is merged the bot asks “Deploy?” then “Yes, deploy now?”; only then does a
+`deploy` job reach this PC, which pulls `main`, builds, and runs
+`.claude/deploy_sinegualcrypto.py` (backup → deploy → verify). It refuses when a
+repo has unsaved changes that would ship, is not on `main`, or cannot
+fast-forward from GitHub. Typing “deploy” to the bot offers the same.
+
 ## Setup
 
 1. `dev-agent/.env` from `.env.example` (gitignored): `DEV_AGENT_KEY` = the
