@@ -19,6 +19,7 @@ import {
   ArrowDownToLine,
   ListTodo,
   Webhook,
+  Siren,
   Eye,
   Bot,
   Clapperboard,
@@ -85,6 +86,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { label: 'Signal Log', url: '/admin/trade-logs', icon: ScrollText },
   // Every engine address (main + test feed) with copyable links — full admins only.
   { label: 'Webhooks', url: '/admin/webhooks', icon: Webhook },
+  { label: 'Error Bot', url: '/admin/error-bot', icon: Siren },
   // Keys for the read-only AI connector (the employer's Grok) + what it asked — full admins only.
   { label: 'AI Access', url: '/admin/ai-access', icon: Bot },
   { label: 'Invoice History', url: '/admin/invoices', icon: FileText },

@@ -49,6 +49,7 @@ import AdminPositions from './pages/admin/AdminPositions'
 import AdminEngine from './pages/admin/AdminEngine'
 import AdminTradeLogs from './pages/admin/AdminTradeLogs'
 import AdminWebhooks from './pages/admin/AdminWebhooks'
+import AdminErrorBot from './pages/admin/AdminErrorBot'
 import AdminAiAccess from './pages/admin/AdminAiAccess'
 import AdminCreatives from './pages/admin/AdminCreatives'
 // The video editor carries the timeline, the drawing code and (on Export) the
@@ -116,6 +117,7 @@ function App() {
               <Route path="/admin/engine" element={<AdminEngine />} />
               <Route path="/admin/trade-logs" element={<AdminTradeLogs />} />
               <Route path="/admin/webhooks" element={<AdminWebhooks />} />
+              <Route path="/admin/error-bot" element={<AdminErrorBot />} />
               <Route path="/admin/ai-access" element={<AdminAiAccess />} />
               <Route path="/admin/creatives" element={<AdminCreatives />} />
               <Route

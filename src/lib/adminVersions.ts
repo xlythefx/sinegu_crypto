@@ -14,6 +14,24 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'admin-error-bot-page',
+    date: '2026-11-23',
+    kind: 'new',
+    area: 'Bot engine',
+    title: 'Admin → Error Bot: see every service, choose what the bot sends, pause the AI developer',
+    summary:
+      'A new admin page for the private error bot. It shows whether each service is up (the same answer as /status in Telegram), lets you switch off each kind of message or mute everything for 1, 8 or 24 hours, pause the AI developer on the developer’s computer, send a test message, and see every job the AI developer did with its answer.',
+    howItWorks: [
+      'Example: during a busy hour you tap “Mute everything → 1 hour”. The bot stays quiet until then, but still answers /status and anything you ask it.',
+      'Switching off “Failed scheduled jobs” stops only those messages; trade problems, server errors and the others keep arriving.',
+      'Pausing the AI developer keeps new Investigate requests and deploys waiting until you switch it back on. A job that has not started can be cancelled, and a finished one can be run again (a deploy asks first, since it updates the live site).',
+    ],
+    technical: [
+      'GET /admin/devbot, PUT /admin/devbot/settings, POST /admin/devbot/test, POST /admin/devbot/jobs/{id}/cancel|retry (full admins). dev_bot_settings (disabled_kinds, muted_until, agent_paused) read by DevBotSetting::allows() on every first-spoken send; a paused agent’s claim returns no job.',
+    ],
+    links: [{ label: 'Admin → Error Bot', href: '/admin/error-bot' }],
+  },
+  {
     id: 'dev-bot-status-and-deploy',
     date: '2026-11-23',
     kind: 'new',

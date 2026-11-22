@@ -898,6 +898,47 @@ const WEBHOOK_RECEIVERS = {
   test: { binance: { live: 0, demo: 1 }, mexc: { live: 0, demo: 0 }, bybit: { live: 0, demo: 0 } },
   submaster: { binance: { live: 1, demo: 0 }, mexc: { live: 0, demo: 0 }, bybit: { live: 0, demo: 0 } },
 }
+// Admin → Error Bot (sample only: invented jobs and coins, no real customer).
+const DEVBOT_BODY = {
+  success: true,
+  bot: { configured: true, token_set: true, chat_set: true, webhook_secret_set: true, agent_key_set: true,
+    webhook_url: 'https://pixel-alpha.com/api/devbot/telegram', webhook_pending: 0, webhook_error: null },
+  settings: { disabled_kinds: ['scheduled'], muted_until: null, agent_paused: false, updated_by: 'Sample Admin', updated_at: '2026-11-23T08:10:00Z' },
+  kinds: [
+    { key: 'signals', label: 'Trade problems', description: 'A signal an account could not trade: an order refused, a key blocked, a stack unreadable.' },
+    { key: 'coins', label: 'Missing-coin buttons', description: 'A signal for a coin that is not set up, with $5 / $10 / $15 size buttons.' },
+    { key: 'risk', label: 'High-risk alerts', description: 'Kill switch, a close that failed, a house key refused, the engine not answering.' },
+    { key: 'errors', label: 'Server errors', description: 'Any crash on the API: in a page request, a command or a scheduled job.' },
+    { key: 'scheduled', label: 'Failed scheduled jobs', description: 'A scheduled job that ended with a failure code.' },
+    { key: 'watchdog', label: 'Service down / recovered', description: 'The crypto payment listener, the scheduler, background jobs, engine pollers or disk stopping, and coming back.' },
+  ],
+  agent: { online: true, last_seen_at: '2026-11-23T08:59:50Z', paused: false },
+  checks: [
+    { key: 'engine', name: 'Trading engine', ok: true, detail: 'running, trading Binance, MEXC, Bybit, 6/6 data pollers, retry queue 0' },
+    { key: 'scheduler', name: 'Scheduled jobs', ok: true, detail: 'running (last tick 12 s ago)' },
+    { key: 'crypto', name: 'Crypto payment listener (USDT, mainnet)', ok: false, detail: 'last scan 14 min ago, 2 unmatched payments' },
+    { key: 'cards', name: 'Card payments (Stripe)', ok: null, detail: 'last webhook 10 Nov 08:43 UTC (it only hears from Stripe when someone pays)' },
+    { key: 'invoicing', name: 'Invoicing', ok: true, detail: 'next monthly run 1 Dec 16:00 +07, 0 unpaid, 0 overdue' },
+    { key: 'queue', name: 'Background jobs', ok: true, detail: '0 waiting, 0 failed' },
+    { key: 'alerts', name: 'High-risk alerts', ok: true, detail: 'none open' },
+    { key: 'disk', name: 'Disk', ok: true, detail: '98.8 GB free (96%)' },
+    { key: 'agent', name: 'PC developer agent', ok: null, detail: 'online' },
+  ],
+  jobs: [
+    { id: 3, status: 'done', source: 'button', kind: null, prompt: 'Investigate the "Order refused by the exchange" problem on BUY SAMPLEUSDT (Binance, main feed), Signal Log row #1201.',
+      summary: 'Binance refused 25× on this coin (its maximum is 20×). Nothing is wrong in the code: set the coin’s leverage to 20 in Trading Assets.', links: [],
+      created_at: '2026-11-23T07:40:00Z', claimed_at: '2026-11-23T07:40:05Z', finished_at: '2026-11-23T07:41:10Z' },
+    { id: 2, status: 'queued', source: 'message', kind: null, prompt: 'why did the LTC buy at 14:15 skip?', summary: null, links: [],
+      created_at: '2026-11-23T08:55:00Z', claimed_at: null, finished_at: null },
+    { id: 1, status: 'done', source: 'deploy', kind: 'deploy', prompt: 'Deploy the website after PR #12 was merged.', summary: 'Deployed website. Steps: backup, deploy-dash, verify.\nChecks: HEALTHY',
+      links: [{ label: 'Pull request (web)', url: 'https://github.com/example/repo/pull/12' }], created_at: '2026-11-22T10:00:00Z', claimed_at: '2026-11-22T10:00:04Z', finished_at: '2026-11-22T10:03:30Z' },
+  ],
+  actions: [
+    { id: 4, kind: 'add_asset', status: 'applied', subject: 'SAMPLEUSDT LONG', result: '✅ Added by Sample Admin: SAMPLEUSDT LONG, 160 SAMPLE per entry, 480 max, 10× — live for the next signal.', resolved_by: 'Sample Admin', occurrences: 2, created_at: '2026-11-22T04:30:00Z', resolved_at: '2026-11-22T04:31:00Z' },
+    { id: 3, kind: 'deploy', status: 'open', subject: 'Fix the skip reason label', result: null, resolved_by: null, occurrences: 1, created_at: '2026-11-23T08:20:00Z', resolved_at: null },
+  ],
+}
+
 const WEBHOOKS_BODY = {
   success: true,
   engine: { reachable: true, test_feed_enabled: true, submaster_feed_enabled: false },
@@ -1034,6 +1075,7 @@ const GET = {
   '/admin/trade-logs/health': TRADE_LOG_HEALTH,
   '/admin/trade-logs': TRADE_LOGS_BODY,
   '/admin/webhooks': WEBHOOKS_BODY,
+  '/admin/devbot': DEVBOT_BODY,
   '/admin/risk-alerts': {
     success: true,
     alerts: [{

@@ -1289,6 +1289,16 @@ the admin group). API: `App\Services\DevBot\*`, table `dev_bot_actions`.
   CHANGE (first sight reports a problem, never health). The scheduler cannot
   report its own death, so the PC agent's polls run the `scheduler` check
   (`DevBotJobs::claim`, once a minute) through php-fpm.
+- **Admin → Error Bot** (`/admin/error-bot`, `pages/admin/AdminErrorBot.tsx`,
+  `components/admin/errorbot/`, `AdminDevBotController`, full admins only,
+  2026-11-23): the /status checks, per-kind switches + mute 1/8/24 h
+  (`dev_bot_settings`, `DevBotSetting::KINDS` / `allows()` — every message the
+  bot speaks FIRST checks it; replies, job results and button answers never
+  do; an unreadable row = allowed, an alarm must not go quiet by accident),
+  the PC agent's pause (claim returns no job; it still checks in), a test DM,
+  jobs (cancel queued / run again finished, a deploy re-run confirmed as
+  danger) and the buttons' history. A new kind of first-spoken message = a
+  KINDS entry + an `allows()` check.
 - **Deploy after a merge**: the PC agent tracks the PRs it opened (polls
   GitHub every 5 min, anonymous 60/h or the `gh` token) → `POST
   /devbot/agent/merged` → targets from the changed paths
