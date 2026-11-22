@@ -1226,6 +1226,39 @@ hourly. Kinds and where they are raised:
   itself; on where `ENGINE_HEALTH_WATCH`, default production).
 A new serious failure = a new kind here, never a second mailer.
 
+## Developer error bot — @errorpixel_bot (2026-11-22)
+
+Christian's request: trading problems in ONE private Telegram DM, with
+one-tap fixes, and later an AI agent on his PC preparing code fixes as PRs.
+A SEPARATE bot from the engine's (its token can never reach Voltrax Trades or
+the admin group). API: `App\Services\DevBot\*`, table `dev_bot_actions`.
+- **What it sends**: every signal outcome `SignalHealth` calls a PROBLEM
+  (main, sub-master and test feeds), once per (venue, feed, coin, reason) per
+  hour; normal outcomes never. Every NEW `RiskAlerts` row (repeats only
+  count). Read in a `terminating` callback of `POST /engine/{x}/trade-logs`,
+  so the engine never waits on Telegram, Binance or its own size check.
+- **Missing coin (Binance, entry) = size buttons** (`CoinSuggestion`): $5 /
+  $10 / $15 = MARGIN per entry for a $1,000 account (Binance's "Cost") at 25×
+  or the coin's Binance max if lower (engine `/admin/size-check`, base 1 →
+  each account's entry multiple, the engine's math), floored to the step,
+  anything under Binance's minimums dropped. Approximate on purpose (owner).
+  One open suggestion per coin; later refusals only count. A tap adds the coin
+  through **`App\Services\Assets\AssetCreator`** — the ONE create path, shared
+  with `AssetController::store` — side from the signal, max = 3 entries,
+  leverage stored; history actor "{name} (Telegram)".
+- **Two gates on `POST /api/devbot/telegram`** (a tap changes real money):
+  Telegram's `X-Telegram-Bot-Api-Secret-Token` = `DEV_BOT_WEBHOOK_SECRET`
+  (none configured = shut, 403), and the tapper's Telegram id =
+  `DEV_BOT_CHAT_ID` (a DM's chat id IS the user id). A row is answered once
+  (locked, must be open). Always 200 otherwise, or Telegram re-delivers.
+- Config `DEV_BOT_TOKEN` / `DEV_BOT_CHAT_ID` / `DEV_BOT_WEBHOOK_SECRET`:
+  box-local, NOT mirrored (a local box must never DM), pinned empty in
+  phpunit. Register with `php artisan devbot:webhook` (`--info`, `--delete`).
+- **Next (not built):** a queue the PC agent polls (dials out — no
+  cloud-ide tunnel needed), Claude on the PC's subscription opens a branch +
+  PR, the bot posts the link. Never auto-merge or auto-deploy; PRs on the
+  public repo never carry customer names or amounts.
+
 ## Signal delivery proof (2026-10-25)
 
 TradingView gives up on a webhook after ~3 s and marks the alert "failed —

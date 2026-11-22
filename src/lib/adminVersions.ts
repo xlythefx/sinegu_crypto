@@ -14,6 +14,26 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'dev-error-bot',
+    date: '2026-11-22',
+    kind: 'new',
+    area: 'Signal Log',
+    title: 'Trading problems now arrive as a private Telegram message, with one-tap fixes for missing coins',
+    summary:
+      'A private Telegram bot (@errorpixel_bot) messages the developer directly whenever a signal runs into a real problem: an order refused, a key blocked, a coin that is not set up. Serious alerts (kill switch, a close that failed, the bot engine not answering) arrive there too. When a signal names a coin that is not set up yet, the message offers size buttons, and tapping one adds the coin straight away.',
+    howItWorks: [
+      'Example: a sub-master buy on ASR is refused because ASR is not set up. The bot sends: “$5 → 79 ASR (~$50 position)”, “$10 → 159 ASR (~$100 position)”, “$15 → 238 ASR (~$149 position)” and “Skip”. The dollars are the margin one entry puts up on a $1,000 account, like Binance’s Cost line.',
+      'The leverage is 25×, or the coin’s Binance maximum when that is lower (ASR allows 10×, so the positions are smaller). Amounts are rounded to what Binance accepts, and a size Binance would refuse is never offered.',
+      'Tapping a size adds the coin on Trading Assets for the next signal: that size per entry, three entries at most. The change history names who approved it from Telegram. A second tap, or a tap after the coin was added by hand, changes nothing.',
+      'Normal outcomes (stack already full, nothing to close, a coin switched off on purpose) are never sent. The same problem on the same coin is sent once an hour, not on every signal.',
+      'Only the developer’s Telegram account can press the buttons. Anyone else who finds the bot is told it is private.',
+    ],
+    technical: [
+      'API: App\\Services\\DevBot\\{DevBotTelegram, DevBotReporter, CoinSuggestion, DevBotActions}; dev_bot_actions table; POST /api/devbot/telegram (Telegram webhook, X-Telegram-Bot-Api-Secret-Token + the owner’s Telegram id); php artisan devbot:webhook. Signals are read after the engine has its answer (terminating callback); new RiskAlerts are forwarded from RiskAlerts::raise. Coins are added through App\\Services\\Assets\\AssetCreator, now shared with Trading Assets → Add. Config DEV_BOT_TOKEN / DEV_BOT_CHAT_ID / DEV_BOT_WEBHOOK_SECRET, box-local (never mirrored).',
+    ],
+    links: [{ label: 'Signal Log → Issues', href: '/admin/trade-logs?view=issues' }],
+  },
+  {
     id: 'calendar-readable-on-phones',
     date: '2026-11-20',
     kind: 'fixed',
