@@ -14,6 +14,23 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'dev-bot-engine-errors',
+    date: '2026-11-23',
+    kind: 'improved',
+    area: 'Bot engine',
+    title: 'The trading engine’s own failures now reach the error bot too',
+    summary:
+      'When the trading engine itself has a hard failure — one of its data readers crashing, Binance limiting or banning our requests, or monthly billing or the daily recaps switching off — the private error bot now says so as well, with an Investigate button. Until now these only went to the admin Telegram group.',
+    howItWorks: [
+      'Example: if reading closed trades from Binance keeps timing out, the bot sends “Engine error · poller ‘past-positions’ failing” with Binance’s message, once an hour at most while it lasts.',
+      'It can be switched off on Admin → Error Bot (“Engine errors”) without touching the admin group, which still gets every message.',
+    ],
+    technical: [
+      'Engine: notify.notify_error also calls forward_dev_alert → POST /api/engine/binance/dev-alert in a daemon thread (BINANCE_ABCD_DEV_ALERTS, default on, off in tests). API: EngineController::devAlert → DevBotReporter::engineAlert, kind `engine` in DevBotSetting::KINDS.',
+    ],
+    links: [{ label: 'Admin → Error Bot', href: '/admin/error-bot' }],
+  },
+  {
     id: 'admin-error-bot-page',
     date: '2026-11-23',
     kind: 'new',

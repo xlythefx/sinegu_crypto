@@ -328,6 +328,12 @@ TELEGRAM_ADMIN_CHAT_ID = _env_str("TELEGRAM_ADMIN_CHAT_ID", "")
 # PnL (read from userTrades, deferred) before sending with whatever arrived.
 TELEGRAM_PNL_WAIT_SECONDS = _env_float("TELEGRAM_PNL_WAIT_SECONDS", 25.0)
 
+# The developer error bot (2026-11-23): every notify_error (poller crash, rate
+# limit / ban, billing or recaps switched off) is ALSO posted to the API's
+# /engine/{exchange}/dev-alert, which DMs it to Christian's error bot. On by
+# default; the test suite switches it off. Not mirrored to prod (a box flag).
+DEV_ALERTS_ENABLED = _env_bool("DEV_ALERTS", True)
+
 # --- Discord mirror (public messages only) ------------------------------------
 # The PUBLIC messages — entries, exits + PnL percent, scheduled recaps — are
 # also posted to a Discord channel as embeds. Ops alerts are never mirrored:

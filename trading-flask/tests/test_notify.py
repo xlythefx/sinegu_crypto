@@ -66,6 +66,32 @@ def test_admin_falls_back_to_the_main_chat(sent, monkeypatch):
     assert sent[1][1] == "-100999"
 
 
+def test_an_engine_error_is_also_forwarded_to_the_developer_bot(monkeypatch):
+    """notify_error → the API's dev-alert (which DMs the error bot), when switched on."""
+    from binance_abcd import engine_client
+
+    posted = []
+    monkeypatch.setattr(engine_client, "post_json", lambda path, payload, **kw: posted.append((path, payload)))
+    monkeypatch.setattr(hooks, "DEV_ALERTS_ENABLED", True)
+    notify.forward_dev_alert("poller 'balances' failing", "x" * 5000, run_async=False)
+    assert posted == [("dev-alert", {"context": "poller 'balances' failing", "detail": "x" * 1800})]
+
+    monkeypatch.setattr(hooks, "DEV_ALERTS_ENABLED", False)
+    notify.forward_dev_alert("again", "boom", run_async=False)
+    assert len(posted) == 1  # off = nothing leaves the engine
+
+
+def test_a_failing_forward_never_raises(monkeypatch):
+    from binance_abcd import engine_client
+
+    def boom(*a, **kw):
+        raise RuntimeError("API down")
+
+    monkeypatch.setattr(engine_client, "post_json", boom)
+    monkeypatch.setattr(hooks, "DEV_ALERTS_ENABLED", True)
+    notify.forward_dev_alert("poller", "boom", run_async=False)  # must not raise
+
+
 def test_startup_goes_to_the_admin_chat_with_its_counts(sent, monkeypatch):
     """The restart ping is an ops event carrying account counts — it belongs in
     the admin group, never on the channel anyone can read."""

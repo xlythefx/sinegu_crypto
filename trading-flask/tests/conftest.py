@@ -46,6 +46,9 @@ os.environ.setdefault("BINANCE_ABCD_TELEGRAM_ADMIN_CHAT_ID", "")
 os.environ.setdefault("BINANCE_ABCD_DISCORD_ENABLED", "false")
 os.environ.setdefault("BINANCE_ABCD_DISCORD_WEBHOOK_URL", "")
 os.environ.setdefault("BINANCE_ABCD_DISCORD_WINS_WEBHOOK_URL", "")
+# The developer error bot forward (notify.forward_dev_alert): off, or every
+# notify_error in the suite would POST to the API.
+os.environ.setdefault("BINANCE_ABCD_DEV_ALERTS", "false")
 
 import pytest  # noqa: E402
 

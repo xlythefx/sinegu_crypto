@@ -1219,8 +1219,33 @@ def notify_billing_missed(step: str, month: str, late_hours: float) -> None:
 
 
 def notify_error(context: str, detail: str) -> None:
-    """A hard operational error (poller crash, rate limit, job crash)."""
+    """A hard operational error (poller crash, rate limit, job crash).
+
+    To the admin group, and to the developer error bot through the API."""
     _send_admin(f"❌ <b>Error</b> — {_esc(context)}\n{_esc(detail)}")
+    forward_dev_alert(context, detail)
+
+
+def forward_dev_alert(context: str, detail: str, run_async: bool = True) -> None:
+    """POST the error to the API's /engine/binance/dev-alert, which DMs the
+    developer error bot (the API owns that bot and its mute switches). In a
+    daemon thread: a slow or dead API must never hold up a poller or a signal.
+    Best-effort; the admin group already has the message either way."""
+    if not hooks.DEV_ALERTS_ENABLED:
+        return
+
+    def _post() -> None:
+        try:
+            from binance_abcd import engine_client
+
+            engine_client.post_json("dev-alert", {"context": str(context)[:200], "detail": str(detail)[:1800]})
+        except Exception as exc:  # noqa: BLE001 - reporting an error must never cause one
+            log.warning("dev-alert forward failed: %s", exc)
+
+    if run_async:
+        threading.Thread(target=_post, name="dev-alert", daemon=True).start()
+    else:
+        _post()
 
 
 def render_kill_switch(exchange: str, ticker: str, losses: Any, reason: str) -> str:

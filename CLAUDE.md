@@ -1273,6 +1273,11 @@ the admin group). API: `App\Services\DevBot\*`, table `dev_bot_actions`.
   else push + `gh pr create` (or a pre-filled compare link without gh). The
   summary (private, may name people) goes to the DM only; only github.com
   links are relayed. Never auto-merge; deploy only on the owner's two taps.
+- **Engine errors (2026-11-23):** `notify.notify_error` (poller crash, rate limit /
+  ban, billing or recaps off) also `forward_dev_alert`s to `POST
+  /engine/{x}/dev-alert` in a daemon thread (`BINANCE_ABCD_DEV_ALERTS`, default
+  on, off in conftest) → `DevBotReporter::engineAlert`, kind `engine`, hourly per
+  context, Investigate via the `dx:` cache. The admin group still gets them all.
 - **All errors, not just coins (owner, 2026-11-22).** Every exception Laravel
   reports (`bootstrap/app.php` → `DevBotReporter::exception`, once an hour per
   class + file + line, with Investigate), every scheduled task ending non-zero
