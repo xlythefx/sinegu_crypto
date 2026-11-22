@@ -105,6 +105,18 @@ export default function ControlsCard({ data, onPatch, onTest }: ControlsCardProp
             disabled={busy !== null && busy !== 'agent'}
             onChange={(on) => (on ? void run('agent', () => onPatch({ agent_paused: false })) : setConfirmPause(true))} />
         </div>
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-[13.5px] font-bold text-text">Investigate new errors by itself</div>
+            <p className="mt-0.5 text-[12.5px] leading-[1.5] text-muted">
+              The first time a new kind of problem appears, the agent starts looking into it without a tap. The same
+              kind at most once a week, at most 10 a day. It only reads: nothing changes without you.
+            </p>
+          </div>
+          <ToggleSwitch on={settings.auto_investigate} label="Investigate new errors by itself" busy={busy === 'auto'}
+            disabled={busy !== null && busy !== 'auto'}
+            onChange={(on) => void run('auto', () => onPatch({ auto_investigate: on }))} />
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">

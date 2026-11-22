@@ -1304,6 +1304,19 @@ the admin group). API: `App\Services\DevBot\*`, table `dev_bot_actions`.
   jobs (cancel queued / run again finished, a deploy re-run confirmed as
   danger) and the buttons' history. A new kind of first-spoken message = a
   KINDS entry + an `allows()` check.
+- **Auto-investigate + memory (2026-11-23, owner):** a problem message (signal,
+  server error, engine error, watchdog down) starts a job BY ITSELF through
+  `DevBotJobs::autoInvestigate($kind, $buttonKey, $make)`: switch
+  `dev_bot_settings.auto_investigate` (default on, off while paused), the same
+  KIND once per 7 days (`signalKind` = venue:feed:coin:reason, `exc:{sig}`,
+  `watch:{key}`), ≤ 10 per UTC day, and it takes the Investigate button's key so
+  a tap cannot start a second job; the message says so instead of showing the
+  button. Missing coins are never auto-investigated (they have buttons).
+  **Memory** = `dev_bot_memories` (server-side ON PURPOSE: visible/editable on
+  Admin → Error Bot, survives moving the agent off the PC, "Download .md" for a
+  file copy). The claim hands the agent its 60 newest notes; its verdict may
+  carry `memory {title, body, replaces_id}`; `finish` saves it with the job's
+  `signature`. Private: never in a PR (the push guard still applies).
 - **Deploy after a merge**: the PC agent tracks the PRs it opened (polls
   GitHub every 5 min, anonymous 60/h or the `gh` token) → `POST
   /devbot/agent/merged` → targets from the changed paths

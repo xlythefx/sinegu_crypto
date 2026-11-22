@@ -19,6 +19,8 @@ export interface DevBotSettings {
   /** ISO time the mute ends, or null when not muted. */
   muted_until: string | null
   agent_paused: boolean
+  /** Start the PC agent by itself on a new kind of error. */
+  auto_investigate: boolean
   updated_by: string | null
   updated_at: string | null
 }
@@ -28,7 +30,7 @@ export type DevBotJobStatus = 'queued' | 'working' | 'done' | 'failed' | 'cancel
 export interface DevBotJob {
   id: number
   status: DevBotJobStatus
-  /** message (typed to the bot) | button (Investigate) | deploy */
+  /** message (typed to the bot) | button (Investigate) | auto (started by itself) | deploy */
   source: string
   kind: string | null
   prompt: string
@@ -66,8 +68,23 @@ export interface AdminDevBotData {
   kinds: DevBotKind[]
   agent: { online: boolean; last_seen_at: string | null; paused: boolean }
   checks: DevBotCheck[]
+  memories: DevBotMemory[]
   jobs: DevBotJob[]
   actions: DevBotActionRow[]
+}
+
+/** One thing the PC agent learned (or an admin wrote down); read before every job. */
+export interface DevBotMemory {
+  id: number
+  title: string
+  body: string
+  /** The kind of error it explains, e.g. `signal:binance:main:LTCUSDT:order_failed`. */
+  signature: string | null
+  source: 'agent' | 'admin' | string
+  job_id: number | null
+  updated_by: string | null
+  created_at: string | null
+  updated_at: string | null
 }
 
 /** A settings write; an absent key is left unchanged. `mute_minutes: 0` unmutes. */
@@ -75,4 +92,5 @@ export interface DevBotSettingsPatch {
   disabled_kinds?: string[]
   mute_minutes?: 0 | 60 | 480 | 1440
   agent_paused?: boolean
+  auto_investigate?: boolean
 }

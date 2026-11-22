@@ -120,8 +120,11 @@ def progress(job_id: int, text: str) -> None:
     api("POST", f"/devbot/agent/jobs/{job_id}/progress", {"text": text})
 
 
-def finish(job_id: int, ok: bool, summary: str, links: list[dict] | None = None) -> None:
-    api("POST", f"/devbot/agent/jobs/{job_id}/finish", {"ok": ok, "summary": summary[:19000], "links": links or []})
+def finish(job_id: int, ok: bool, summary: str, links: list[dict] | None = None, memory: dict | None = None) -> None:
+    body: dict = {"ok": ok, "summary": summary[:19000], "links": links or []}
+    if memory:
+        body["memory"] = memory
+    api("POST", f"/devbot/agent/jobs/{job_id}/finish", body)
 
 
 # ---- git -------------------------------------------------------------------------
@@ -176,9 +179,19 @@ def remove_worktrees(trees: dict[str, Path]) -> None:
 
 # ---- Claude ----------------------------------------------------------------------
 
+def memory_block(memories: list[dict]) -> str:
+    """What the agent learned before, as the prompt shows it (newest first, from the server)."""
+    if not memories:
+        return "(nothing yet: this is the first thing you will remember)"
+    return "\n".join(f"- [#{m.get('id')}] {m.get('title')}"
+                     + (f"  (about: {m['signature']})" if m.get("signature") else "")
+                     + f"\n  {str(m.get('body') or '').strip()}" for m in memories)
+
+
 def build_prompt(job: dict, trees: dict[str, Path]) -> str:
+    auto = job.get("source") == "auto"
     return f"""You are the developer agent for Pixel Alpha, working headless on Christian's PC.
-Job #{job['id']} came from the private error bot.
+Job #{job['id']} came from the private error bot{' and was started AUTOMATICALLY on a new kind of error: nobody asked yet, so be brief and lead with the verdict' if auto else ''}.
 
 TASK
 {job['prompt']}
@@ -190,6 +203,10 @@ WHERE
   Read its CLAUDE.md first: it is the project's rulebook.
 - {trees['api']}: the Laravel API (sinegutrade-api).
 Both are fresh git worktrees on branch devbot/job-{job['id']}, made from main.
+
+YOUR MEMORY (what you learned on earlier jobs; Christian can read and edit it on Admin → Error Bot)
+{memory_block(job.get('memories') or [])}
+Check it first: if a note already explains this problem, confirm it against the live data and answer from it.
 
 DATA
 The `pixel` MCP tools read LIVE production data (signal log, accounts, assets, invoices), read-only.
@@ -208,10 +225,14 @@ RULES
 
 FINISH with exactly one fenced json block, nothing after it:
 ```json
-{{"summary": "...", "changed": true, "pr_title": "...", "pr_body": "..."}}
+{{"summary": "...", "changed": true, "pr_title": "...", "pr_body": "...",
+ "memory": {{"title": "...", "body": "...", "replaces_id": null}}}}
 ```
 summary: plain words for Christian (private Telegram, names allowed): what was wrong, what you changed or what he
 should do, and how sure you are. pr_title / pr_body: public and technical, no private data; empty when changed is false.
+memory: what is worth knowing NEXT time a problem like this appears: the cause, how to recognise it, and what fixes
+it, in a few plain sentences (no secrets, no API keys). Set replaces_id to a note's # to update that note instead of
+adding a near-copy. Use null for memory when you learned nothing new.
 """
 
 
@@ -242,16 +263,29 @@ def run_claude(prompt: str, trees: dict[str, Path]) -> str:
 
 def parse_verdict(text: str) -> dict:
     """The last ```json block of the answer; the raw text as the summary if there is none."""
-    blocks = re.findall(r"```json\s*(\{.*?\})\s*```", text, re.S)
+    blocks = re.findall(r"```json\s*(.*?)\s*```", text, re.S)
     for raw in reversed(blocks):
         try:
             v = json.loads(raw)
             if isinstance(v, dict) and "summary" in v:
                 return {"summary": str(v.get("summary") or ""), "changed": bool(v.get("changed")),
-                        "pr_title": str(v.get("pr_title") or "").strip(), "pr_body": str(v.get("pr_body") or "").strip()}
+                        "pr_title": str(v.get("pr_title") or "").strip(), "pr_body": str(v.get("pr_body") or "").strip(),
+                        "memory": _memory(v.get("memory"))}
         except json.JSONDecodeError:
             continue
-    return {"summary": text.strip()[:3000] or "The agent gave no summary.", "changed": False, "pr_title": "", "pr_body": ""}
+    return {"summary": text.strip()[:3000] or "The agent gave no summary.", "changed": False, "pr_title": "",
+            "pr_body": "", "memory": None}
+
+
+def _memory(m: object) -> dict | None:
+    """A usable memory note, or None (missing, empty, malformed)."""
+    if not isinstance(m, dict):
+        return None
+    title, body = str(m.get("title") or "").strip(), str(m.get("body") or "").strip()
+    if not title or not body:
+        return None
+    rid = m.get("replaces_id")
+    return {"title": title[:200], "body": body[:6000], "replaces_id": int(rid) if isinstance(rid, int) else None}
 
 
 def find_private(text: str, strings: list[str]) -> list[str]:
@@ -492,7 +526,7 @@ def handle(job: dict) -> None:
         summary = verdict["summary"] + ("\n\n" + "\n".join(notes) if notes else "")
         if not links and not notes:
             summary += "\n\nNo code change was needed."
-        finish(job_id, True, summary, links)
+        finish(job_id, True, summary, links, verdict.get("memory"))
         log(f"job #{job_id} done ({len(links)} link(s))")
     except subprocess.TimeoutExpired:
         finish(job_id, False, f"The agent ran out of time ({CLAUDE_TIMEOUT // 60} min) and stopped.")

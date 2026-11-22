@@ -12,14 +12,30 @@ def test_the_last_json_block_is_the_verdict():
 
 def test_no_json_falls_back_to_the_text():
     v = agent.parse_verdict("Could not reproduce.")
-    assert v == {"summary": "Could not reproduce.", "changed": False, "pr_title": "", "pr_body": ""}
+    assert v == {"summary": "Could not reproduce.", "changed": False, "pr_title": "", "pr_body": "", "memory": None}
+
+
+def test_the_verdict_carries_a_memory_note_even_nested():
+    text = ('```json\n{"summary": "Leverage.", "changed": false, "memory": '
+            '{"title": "SANTOS max 10x", "body": "Binance allows 10x.", "replaces_id": 4}}\n```')
+    assert agent.parse_verdict(text)["memory"] == {"title": "SANTOS max 10x", "body": "Binance allows 10x.", "replaces_id": 4}
+    empty = '```json\n{"summary": "x", "memory": {"title": "", "body": "y"}}\n```'
+    assert agent.parse_verdict(empty)["memory"] is None
+
+
+def test_the_prompt_shows_the_memory_and_marks_automatic_jobs():
+    from pathlib import Path
+    p = agent.build_prompt({"id": 9, "source": "auto", "prompt": "x", "context": {},
+                            "memories": [{"id": 4, "title": "SANTOS max 10x", "body": "Binance allows 10x.", "signature": "signal:a"}]},
+                           {"web": Path("C:/w"), "api": Path("C:/a")})
+    assert "[#4] SANTOS max 10x" in p and "AUTOMATICALLY" in p and "replaces_id" in p
 
 
 def test_private_strings_are_found_case_insensitively():
-    diff = "+ $name = 'alexandre guyomard';\n+ // account dima-submaster"
-    assert agent.find_private(diff, ["Alexandre Guyomard", "Lloyd Example", "dima-submaster"]) == [
-        "Alexandre Guyomard", "dima-submaster"]
-    assert agent.find_private("nothing here", ["Alexandre Guyomard"]) == []
+    diff = "+ $name = 'jane example';\n+ // account sample-submaster"
+    assert agent.find_private(diff, ["Jane Example", "John Sample", "sample-submaster"]) == [
+        "Jane Example", "sample-submaster"]
+    assert agent.find_private("nothing here", ["Jane Example"]) == []
 
 
 def test_deploy_plan_uses_full_for_both_and_adds_engine_steps():

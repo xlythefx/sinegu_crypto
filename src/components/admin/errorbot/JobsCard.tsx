@@ -17,7 +17,12 @@ const STATUS: Record<DevBotJobStatus, [PillTone, string]> = {
   cancelled: ['muted', 'Cancelled'],
 }
 
-const SOURCE: Record<string, string> = { message: 'Typed to the bot', button: 'Investigate button', deploy: 'Deploy' }
+const SOURCE: Record<string, string> = {
+  message: 'Typed to the bot',
+  button: 'Investigate button',
+  auto: 'Started by itself',
+  deploy: 'Deploy',
+}
 
 interface JobsCardProps {
   jobs: DevBotJob[]

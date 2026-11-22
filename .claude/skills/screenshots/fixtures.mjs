@@ -903,7 +903,7 @@ const DEVBOT_BODY = {
   success: true,
   bot: { configured: true, token_set: true, chat_set: true, webhook_secret_set: true, agent_key_set: true,
     webhook_url: 'https://pixel-alpha.com/api/devbot/telegram', webhook_pending: 0, webhook_error: null },
-  settings: { disabled_kinds: ['scheduled'], muted_until: null, agent_paused: false, updated_by: 'Sample Admin', updated_at: '2026-11-23T08:10:00Z' },
+  settings: { disabled_kinds: ['scheduled'], muted_until: null, agent_paused: false, auto_investigate: true, updated_by: 'Sample Admin', updated_at: '2026-11-23T08:10:00Z' },
   kinds: [
     { key: 'signals', label: 'Trade problems', description: 'A signal an account could not trade: an order refused, a key blocked, a stack unreadable.' },
     { key: 'coins', label: 'Missing-coin buttons', description: 'A signal for a coin that is not set up, with $5 / $10 / $15 size buttons.' },
@@ -924,7 +924,15 @@ const DEVBOT_BODY = {
     { key: 'disk', name: 'Disk', ok: true, detail: '98.8 GB free (96%)' },
     { key: 'agent', name: 'PC developer agent', ok: null, detail: 'online' },
   ],
+  memories: [
+    { id: 2, title: 'SAMPLE coin allows at most 20× on Binance', body: 'Alerts send 25×, Binance refuses it (-4028) and the order then fails -2027. Fix: set the coin’s leverage to 20 in Trading Assets, or change "leverage" in the alert.',
+      signature: 'signal:binance:main:SAMPLEUSDT:order_failed', source: 'agent', job_id: 3, updated_by: 'PC agent', created_at: '2026-11-23T07:41:10Z', updated_at: '2026-11-23T07:41:10Z' },
+    { id: 1, title: 'Main account full holds everyone back', body: 'When the master already holds the full stack on a coin, no account adds, even one with room. Skip reason "main account at max". Working as intended.',
+      signature: null, source: 'admin', job_id: null, updated_by: 'Sample Admin', created_at: '2026-11-22T10:00:00Z', updated_at: '2026-11-22T10:00:00Z' },
+  ],
   jobs: [
+    { id: 4, status: 'working', source: 'auto', kind: null, prompt: 'A server error was reported: RuntimeException: sample failure at app/Services/Sample.php:42 (GET /api/sample). Find the cause.', summary: null, links: [],
+      created_at: '2026-11-23T09:00:00Z', claimed_at: '2026-11-23T09:00:05Z', finished_at: null },
     { id: 3, status: 'done', source: 'button', kind: null, prompt: 'Investigate the "Order refused by the exchange" problem on BUY SAMPLEUSDT (Binance, main feed), Signal Log row #1201.',
       summary: 'Binance refused 25× on this coin (its maximum is 20×). Nothing is wrong in the code: set the coin’s leverage to 20 in Trading Assets.', links: [],
       created_at: '2026-11-23T07:40:00Z', claimed_at: '2026-11-23T07:40:05Z', finished_at: '2026-11-23T07:41:10Z' },

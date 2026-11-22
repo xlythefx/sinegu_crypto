@@ -5,13 +5,16 @@ import DataState from '../../components/dashboard/DataState'
 import ActionsCard from '../../components/admin/errorbot/ActionsCard'
 import ControlsCard from '../../components/admin/errorbot/ControlsCard'
 import JobsCard from '../../components/admin/errorbot/JobsCard'
+import MemoryCard from '../../components/admin/errorbot/MemoryCard'
 import StatusCard from '../../components/admin/errorbot/StatusCard'
 import { useApiData } from '../../hooks/useApiData'
 import { ApiError } from '../../services/api'
 import {
   cancelDevBotJob,
+  deleteDevBotMemory,
   getAdminDevBot,
   retryDevBotJob,
+  saveDevBotMemory,
   sendDevBotTest,
   updateDevBotSettings,
 } from '../../services/adminDevBot'
@@ -74,6 +77,11 @@ export default function AdminErrorBot() {
           jobs={data.jobs}
           onCancel={(id) => attempt(() => cancelDevBotJob(id), `Job #${id} cancelled.`)}
           onRetry={(id) => attempt(() => retryDevBotJob(id), 'Queued again for the PC agent.')}
+        />
+        <MemoryCard
+          memories={data.memories ?? []}
+          onSave={(m) => attempt(() => saveDevBotMemory(m), m.id ? 'Note updated.' : 'Note added.')}
+          onDelete={(id) => attempt(() => deleteDevBotMemory(id), 'Note deleted.')}
         />
         <ActionsCard actions={data.actions} />
       </div>

@@ -14,6 +14,24 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'dev-agent-auto-investigate-memory',
+    date: '2026-11-23',
+    kind: 'new',
+    area: 'Bot engine',
+    title: 'The AI developer investigates new errors by itself and remembers what it learns',
+    summary:
+      'The first time a new kind of problem appears, the AI developer on the developer’s computer starts looking into it without anyone tapping a button, and the explanation arrives in Telegram. After every job it writes down what it learned, and it reads those notes before the next job, so a problem it has seen before is answered faster. The notes are on Admin → Error Bot → Memory, where they can be corrected, added to, deleted or downloaded.',
+    howItWorks: [
+      'Example: a new “order refused” on a coin appears. The problem message says “Your PC agent is looking into it by itself (job #12)”, and a minute later the answer follows: Binance allows at most 20× on that coin. The note “allows at most 20× on Binance” is saved, so next time it is recognised straight away.',
+      'The same kind of problem is investigated by itself at most once a week, and at most 10 a day. It only reads: it never changes a setting, the code or the live site by itself.',
+      'It can be switched off on Admin → Error Bot (“Investigate new errors by itself”). Pausing the AI developer stops it too.',
+    ],
+    technical: [
+      'API: DevBotJobs::autoInvestigate (kind key 7 days, 10/UTC day, shares the Investigate button key), source `auto`; dev_bot_memories (claim → `memories`, finish → `memory` {title, body, replaces_id}); dev_bot_settings.auto_investigate; /admin/devbot/memories CRUD. PC: dev-agent prompt carries YOUR MEMORY and asks for a memory note.',
+    ],
+    links: [{ label: 'Admin → Error Bot', href: '/admin/error-bot' }],
+  },
+  {
     id: 'dev-bot-engine-errors',
     date: '2026-11-23',
     kind: 'improved',
