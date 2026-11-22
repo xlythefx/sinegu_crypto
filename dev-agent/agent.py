@@ -84,6 +84,15 @@ DISALLOWED_TOOLS = [
 ]
 
 
+def gh_path() -> str | None:
+    """The GitHub CLI, also when it was installed after this process started (PATH is read at start)."""
+    found = shutil.which("gh")
+    if found:
+        return found
+    default = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "GitHub CLI" / "gh.exe"
+    return str(default) if default.exists() else None
+
+
 def log(msg: str) -> None:
     print(time.strftime("%Y-%m-%d %H:%M:%S"), msg, flush=True)
 
@@ -255,7 +264,7 @@ def find_private(text: str, strings: list[str]) -> list[str]:
 def open_pull_request(name: str, path: Path, branch: str, title: str, body: str) -> dict:
     slug = REPOS[name][1]
     git(path, "push", "-u", "origin", branch)
-    gh = shutil.which("gh")
+    gh = gh_path()
     if gh:
         body_file = WORK / f"pr-body-{name}.md"
         body_file.write_text(body, encoding="utf-8")
@@ -297,7 +306,7 @@ def track_pr(name: str, branch: str, job_id: int) -> None:
 
 def github(path: str) -> object | None:
     headers = {"Accept": "application/vnd.github+json", "User-Agent": "pixel-dev-agent/1"}
-    gh = shutil.which("gh")
+    gh = gh_path()
     if gh:  # an authenticated token lifts the 60/h anonymous limit
         tok = subprocess.run([gh, "auth", "token"], capture_output=True, text=True).stdout.strip()
         if tok:
