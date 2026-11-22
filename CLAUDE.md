@@ -1636,6 +1636,38 @@ registers the app from Admin → To be Done**; tests fake the gateway
   (box) are deliberately not mirrored. A faked `ConnectionException` crashes
   PHP natively on the WAMP box, so that one gateway test skips on Windows.
 
+## One server, two products: report them apart (2026-11-22)
+
+pixel-alpha.com and pay.pixel-alpha.com run on the SAME VPS. A server check
+("are the services running", "any errors on the VPS") reports **three groups:
+Pixel Alpha, Pixel Pay, and the shared box**, never one mixed list. On
+2026-11-22 a Pixel Pay fault (Sandbox5X refusing its sign-in) was reported
+beside the engine and read as a Pixel Alpha problem. It is not.
+
+| | Pixel Alpha | Pixel Pay |
+|---|---|---|
+| Code on the box | `/var/www/sinegualerts/{dashboard,api,engine,telegram}` | `/var/www/pixelpay/{web,api}` |
+| Runs as | `www-data` (PHP), `pixelalpha` (engine, telegram) | `pixelpay` |
+| Services / timers | `sinegualerts-engine`, `pixel-telegram.timer`, `pixel-telegram-watch.timer` | none of its own (cron only) |
+| PHP-FPM pool | `/run/php/php8.3-fpm.sock` | `/run/php/php8.3-fpm-pixelpay.sock` |
+| Scheduler | `/etc/cron.d/sinegualerts` (:00) → `/var/log/sinegualerts-schedule.log` | `/etc/cron.d/pixelpay` (:30) → `/var/log/pixelpay-schedule.log` |
+| App log | `/var/www/sinegualerts/api/storage/logs/` | `/var/www/pixelpay/api/storage/logs/laravel.log` |
+| Database | `sinegu_crypto` | `pixel_pay` |
+| Payment listeners | `payments:watch-tron` (USDT), Stripe + Coinsbuy webhooks | `sandbox5x:check-pending`, `macpay:check-pending`, `coinsbuy:check-payouts`, nightly `reconcile:run` |
+| Deploy script | `.claude/deploy_sinegualcrypto.py` | `.claude/deploy_pixelpay.py` |
+| ClickUp list | Pixel Alpha | Pixel pay |
+
+**Shared box** (belongs to neither): nginx, mysql, the `php8.3-fpm` service
+itself, cron, ufw, certbot (one certificate per domain), disk / memory / load.
+
+Rules:
+- **Sandbox5X and MacPay are Pixel Pay only.** Pixel Alpha uses neither.
+- **Coinsbuy is in BOTH**: Pixel Alpha's hidden deposit rail (its webhook)
+  and Pixel Pay's payout checker. Name the product every time Coinsbuy comes up.
+- **A Pixel Pay finding is never called a Pixel Alpha problem.** Its ClickUp
+  task goes to the Pixel pay list, and fixing it is Pixel Pay work (its own
+  repo and CLAUDE.md, see "Related projects").
+
 ## Related projects (context only — do not modify unless asked)
 
 **NEVER add or touch code in `sinegu-api`, `sinequal-dash-fusion-main`,
