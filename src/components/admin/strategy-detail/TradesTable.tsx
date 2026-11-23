@@ -53,6 +53,8 @@ interface Props {
   /** False when the whole page is already narrowed to the master — the
    *  card's own switch would then have nothing to do. */
   ownerSwitch?: boolean
+  /** False when the page's own filter bar already picks the coins. */
+  assetPills?: boolean
 }
 
 /** Paginated, sortable, searchable closed-trades table with asset filter pills. */
@@ -62,6 +64,7 @@ export default function TradesTable({
   assetFilter,
   onAssetFilter,
   ownerSwitch = true,
+  assetPills = true,
 }: Props) {
   const [search, setSearch] = useState('')
   const [ownerView, setOwnerView] = useState<OwnerView>('all')
@@ -149,7 +152,7 @@ export default function TradesTable({
         )}
       </div>
 
-      {assets.length > 1 && (
+      {assetPills && assets.length > 1 && (
         <div className="flex flex-wrap gap-[7px] mb-3">
           <button
             type="button"

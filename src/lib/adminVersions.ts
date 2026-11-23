@@ -14,6 +14,30 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'strategy-page-filter-bar',
+    date: '2026-11-23',
+    kind: 'new',
+    area: 'Strategies',
+    title: 'Each strategy’s page can now be filtered by coin, exchange, accounts and dates',
+    summary:
+      'A strategy’s page (Admin → Strategies → a strategy) has a filter bar at the top, and every card on the page follows it: the totals, win rate, equity curve, win / loss, rolling, seasonality, heatmap and the trades table. Before, only the trades table could be narrowed, and to one coin.',
+    howItWorks: [
+      'Coins: pick one or several. Example: VWMA-Reversion with only SANTOS picked shows SANTOS’s result alone. Pick SANTOS and LTC to see the two together. Each coin shows how many trades it has under the other filters.',
+      'Exchange: All, Binance, Bybit or MEXC (only the exchanges the strategy traded on). The same coin on two exchanges counts as one coin.',
+      'Accounts: all accounts, the master only (the strategy’s own result), customers only, testers only, or one person picked from a list.',
+      'Dates: last 7 days, last 30 days, this month, last month, or your own From and To dates.',
+      'What is picked shows as small chips under the bar, each with an ✕, plus “Clear all”. The line under the strategy’s name says what the page is measuring, for example “SANTOS/USDT · Binance · master account only · Last month”.',
+      'Clicking a coin in the heatmap or the asset cards narrows the whole page to that coin.',
+      'The filters are kept in the page link, so Back, a refresh or a link sent to a colleague opens the same view. Old “Master only” links still work.',
+    ],
+    technical: [
+      'Frontend only, over the trades GET /admin/strategies already returns (uni_id, owner_name, owner_role, exchange): lib/strategyFilters.ts + hooks/useStrategyFilters.ts (URL keys coins, exchange, owner = all|master|customers|testers|u:<uni_id>, date, from, to) + strategy-detail/StrategyFilterBar.tsx on the shared filter kit.',
+      'Coins are keyed by letters and digits (coinKey in lib/chart.ts), so LTCUSDT and LTC_USDT are one coin, in the filter and in computeStrategyDetail’s per-asset cards. displaySymbol no longer prints “LTC_/USDT”.',
+      'lib/dateRange.ts gained “This month” / “Last month” (MONTH_DATE_PRESETS, opt-in via DateRangeFilter’s presets prop); other pages keep their list. Days are the reader’s calendar days.',
+    ],
+    links: [{ label: 'Strategies', href: '/admin/strategies' }],
+  },
+  {
     id: 'positions-cards-follow-filters',
     date: '2026-11-23',
     kind: 'fixed',

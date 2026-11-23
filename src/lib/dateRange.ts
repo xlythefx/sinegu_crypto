@@ -11,7 +11,7 @@
 import { localIsoDate } from './capture'
 import { fmtMediumDate } from './format'
 
-export type DatePreset = 'all' | 'today' | '24h' | '7d' | '30d' | 'custom'
+export type DatePreset = 'all' | 'today' | '24h' | '7d' | '30d' | 'month' | 'last_month' | 'custom'
 
 export interface DateRange {
   /** 'YYYY-MM-DD', or '' for no lower bound. */
@@ -26,6 +26,20 @@ export const DATE_PRESETS: { value: DatePreset; label: string }[] = [
   { value: '24h', label: 'Last 24 h' },
   { value: '7d', label: 'Last 7 days' },
   { value: '30d', label: 'Last 30 days' },
+  { value: 'custom', label: 'Custom' },
+]
+
+/**
+ * The list with calendar months added ("This month", "Last month") — for
+ * pages that read results per month (the strategy page). Pass it to
+ * `DateRangeFilter`'s `presets`; the default list above is unchanged.
+ */
+export const MONTH_DATE_PRESETS: { value: DatePreset; label: string }[] = [
+  { value: 'all', label: 'All time' },
+  { value: '7d', label: 'Last 7 days' },
+  { value: '30d', label: 'Last 30 days' },
+  { value: 'month', label: 'This month' },
+  { value: 'last_month', label: 'Last month' },
   { value: 'custom', label: 'Custom' },
 ]
 
@@ -56,6 +70,13 @@ export function rangeFor(preset: DatePreset, custom: DateRange, now: Date = new 
       return { from: daysAgo(now, 6), to: today }
     case '30d':
       return { from: daysAgo(now, 29), to: today }
+    case 'month':
+      return { from: localIsoDate(new Date(now.getFullYear(), now.getMonth(), 1)), to: today }
+    case 'last_month':
+      return {
+        from: localIsoDate(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
+        to: localIsoDate(new Date(now.getFullYear(), now.getMonth(), 0)),
+      }
     case 'custom':
       return { from: custom.from, to: custom.to }
     case 'all':
@@ -70,7 +91,7 @@ export function rangeFor(preset: DatePreset, custom: DateRange, now: Date = new 
  */
 export function dateRangeLabel(preset: DatePreset, from: string, to: string): string {
   if (preset !== 'custom') {
-    return DATE_PRESETS.find((p) => p.value === preset)?.label ?? 'All time'
+    return MONTH_DATE_PRESETS.concat(DATE_PRESETS).find((p) => p.value === preset)?.label ?? 'All time'
   }
   if (from && to) return from === to ? fmtMediumDate(from) : `${fmtMediumDate(from)} – ${fmtMediumDate(to)}`
   if (from) return `From ${fmtMediumDate(from)}`

@@ -16,7 +16,7 @@
  *  A trade with no fee on record (closed before the fee ledger existed)
  *  counts the same on both bases. */
 
-import { displaySymbol, seriesColor } from './chart'
+import { coinKey, displaySymbol, seriesColor } from './chart'
 
 export interface StrategyTrade {
   strategy: string
@@ -357,7 +357,8 @@ export function computeStrategyDetail(
 
   sorted.forEach((t, idx) => {
     const pnl = tradePnl(t)
-    const symbol = t.symbol.trim()
+    // One coin across venues (Binance LTCUSDT = MEXC LTC_USDT).
+    const symbol = coinKey(t.symbol)
     pnlValues.push(pnl)
     pnlDates.push(t.closed_at)
     cumulative += pnl
@@ -485,7 +486,7 @@ export function computeStrategyDetail(
     rolling: computeRolling(pnlValues, pnlDates),
     tickers: byAsset.map((a) => a.ticker).sort((a, b) => a.localeCompare(b)),
     trades: sorted.map((t) => ({
-      symbol: t.symbol.trim(),
+      symbol: coinKey(t.symbol),
       owner: t.owner_name ?? null,
       ownerRole: t.owner_role ?? null,
       pnl: tradePnl(t),

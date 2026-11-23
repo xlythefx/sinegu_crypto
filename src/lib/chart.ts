@@ -109,11 +109,19 @@ export function seriesColor(id: string, index: number): string {
   return SYMBOL_COLORS[id] ?? FALLBACK_PALETTE[index % FALLBACK_PALETTE.length]
 }
 
-/** "BTCUSDT" → "BTC/USDT" for display. */
+/**
+ * One coin whatever the venue spells it: Binance "LTCUSDT" and MEXC
+ * "LTC_USDT" → "LTCUSDT" (letters and digits only).
+ */
+export function coinKey(symbol: string): string {
+  return symbol.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+
+/** "BTCUSDT" → "BTC/USDT" for display (MEXC's "BTC_USDT" too). */
 export function displaySymbol(symbol: string): string {
   for (const quote of ['USDT', 'BUSD', 'USDC', 'USD']) {
     if (symbol.endsWith(quote) && symbol.length > quote.length) {
-      return `${symbol.slice(0, -quote.length)}/${quote}`
+      return `${symbol.slice(0, -quote.length).replace(/[_-]+$/, '')}/${quote}`
     }
   }
   return symbol

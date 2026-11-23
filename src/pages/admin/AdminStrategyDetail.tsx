@@ -1,19 +1,25 @@
-import { useMemo } from 'react'
-import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useMemo, useRef } from 'react'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Percent, TrendingUp, Zap } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
 import StrategyDetailBody from '../../components/admin/strategy-detail/StrategyDetailBody'
-import Segmented from '../../components/ui/filters/Segmented'
+import StrategyFilterBar from '../../components/admin/strategy-detail/StrategyFilterBar'
+import { EXCHANGE_META } from '../../components/exchanges/meta'
 import { useApiData } from '../../hooks/useApiData'
+import { useStrategyFilters, type StrategyFilterState } from '../../hooks/useStrategyFilters'
 import { getStrategies } from '../../services/admin'
 import { ApiError } from '../../services/api'
 import {
   computeStrategyDetail,
   groupTradesByStrategy,
-  isMasterTrade,
+  type StrategyTrade,
 } from '../../lib/strategyStats'
+import { coinKey, filterStrategyTrades } from '../../lib/strategyFilters'
+import { dateRangeLabel } from '../../lib/dateRange'
+import { displaySymbol } from '../../lib/chart'
 import { fmtSignedMoney } from '../../lib/format'
+import type { ExchangeKind } from '../../types/exchanges'
 
 const BACK_BTN =
   'inline-flex items-center gap-[7px] py-2 px-[13px] border border-border rounded-field bg-surface text-muted text-[13px] font-semibold cursor-pointer transition-colors hover:bg-accent-soft hover:border-accent-line hover:text-accent'
@@ -22,57 +28,103 @@ const BADGE =
 const BADGE_OUTLINE = 'border border-border bg-surface2 text-text'
 const EMPTY_PAGE =
   'mt-2 py-[30px] px-4 border border-dashed border-border rounded-row bg-surface2 text-center text-[13px] text-muted'
+const CLEAR_BTN =
+  'mt-3 inline-flex items-center py-2 px-3.5 border border-accent-line rounded-btn bg-accent-soft text-accent text-[12.5px] font-bold cursor-pointer transition-colors hover:bg-accent hover:text-on-accent'
 
-type OwnerScope = 'all' | 'master'
+/**
+ * A filter change replays the cards one after another (top first, 60 ms
+ * apart) instead of a hard cut. `both` holds each card on its end frame, so
+ * a card AOS has not revealed yet can never be left invisible.
+ */
+const STAGGER =
+  '[&>*]:animate-[fadeup_0.45s_cubic-bezier(0.22,1,0.36,1)_both] [&>*:nth-child(2)]:[animation-delay:60ms] [&>*:nth-child(3)]:[animation-delay:120ms] [&>*:nth-child(4)]:[animation-delay:180ms] [&>*:nth-child(5)]:[animation-delay:240ms] [&>*:nth-child(6)]:[animation-delay:300ms] [&>*:nth-child(n+7)]:[animation-delay:360ms]'
+
+const exchangeLabel = (kind: string) =>
+  kind in EXCHANGE_META ? EXCHANGE_META[kind as ExchangeKind].label : kind
+
+/** "SANTOS/USDT · Binance · master account only · This month" — what the page measures. */
+function scopeLine(f: StrategyFilterState, trades: StrategyTrade[]): string {
+  const coins =
+    f.coins.length === 0
+      ? 'every coin'
+      : f.coins.length <= 3
+        ? f.coins.map(displaySymbol).join(' + ')
+        : `${f.coins.length} coins`
+  const venue = f.exchange === 'all' ? 'every exchange' : exchangeLabel(f.exchange)
+  let who = 'every account'
+  if (f.owner === 'master') who = 'master account only'
+  else if (f.owner === 'customers') who = 'customers only'
+  else if (f.owner === 'testers') who = 'testers only'
+  else if (f.owner.startsWith('u:')) {
+    who = trades.find((t) => `u:${t.uni_id}` === f.owner)?.owner_name ?? 'one account'
+  }
+  const parts = [coins, venue, who]
+  if (f.date !== 'all') parts.push(dateRangeLabel(f.date, f.from, f.to))
+  return parts.join(' · ')
+}
 
 export default function AdminStrategyDetail() {
   const { key = '' } = useParams<{ key: string }>()
   const decodedKey = decodeURIComponent(key)
   const navigate = useNavigate()
   const { data, loading, error, reload } = useApiData(getStrategies)
-  // Whose trades the WHOLE page measures — in the URL so Back and a refresh
-  // keep it (2026-11-19: "master only" = the strategy's own result).
-  const [params, setParams] = useSearchParams()
-  const scope: OwnerScope = params.get('owner') === 'master' ? 'master' : 'all'
-  const setScope = (v: OwnerScope) => {
-    const next = new URLSearchParams(params)
-    if (v === 'master') next.set('owner', 'master')
-    else next.delete('owner')
-    setParams(next, { replace: true })
-  }
+  // Every filter lives in the URL — Back, a refresh and a shared link keep
+  // the view (old `?owner=master` links still open "Master only").
+  const filters = useStrategyFilters()
+  const barRef = useRef<HTMLDivElement>(null)
 
   const strategyTrades = useMemo(
     () => (data ? (groupTradesByStrategy(data.trades).get(decodedKey) ?? []) : []),
     [data, decodedKey],
   )
-  const masterCount = useMemo(
-    () => strategyTrades.filter(isMasterTrade).length,
-    [strategyTrades],
+  const { coins, exchange, owner, date, from, to } = filters
+  const shown = useMemo(
+    () => filterStrategyTrades(strategyTrades, { coins, exchange, owner, date, from, to }),
+    // coins is a fresh array each render; its joined value is the dependency
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [strategyTrades, coins.join(','), exchange, owner, date, from, to],
+  )
+  const stats = useMemo(
+    () => (shown.length === 0 ? null : computeStrategyDetail(decodedKey, shown)),
+    [shown, decodedKey],
   )
 
-  const stats = useMemo(() => {
-    const trades = scope === 'master' ? strategyTrades.filter(isMasterTrade) : strategyTrades
-    if (trades.length === 0) return null
-    return computeStrategyDetail(decodedKey, trades)
-  }, [strategyTrades, scope, decodedKey])
-
-  const scopeSwitch = (
-    <Segmented<OwnerScope>
-      ariaLabel="Whose trades this page measures"
-      value={scope}
-      onChange={setScope}
-      options={[
-        { value: 'all', label: 'All accounts', count: strategyTrades.length, tone: 'neutral' },
-        { value: 'master', label: 'Master only', count: masterCount },
-      ]}
-    />
-  )
+  // The cards replay their reveal on a filter change — not on first load,
+  // which belongs to AOS's scroll-in.
+  const signature = [coins.join(','), exchange, owner, date, from, to].join('|')
+  const firstSignature = useRef(signature)
+  const changed = signature !== firstSignature.current
 
   if (error instanceof ApiError && error.status === 401) {
     return <Navigate to="/auth" replace />
   }
 
   const back = () => navigate('/admin/strategies')
+
+  // A heatmap / asset-card click narrows the WHOLE page to that coin.
+  const openAsset = (ticker: string) => {
+    filters.setCoins([coinKey(ticker)])
+    barRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const summary =
+    shown.length === strategyTrades.length
+      ? `${strategyTrades.length.toLocaleString()} trades`
+      : `Showing ${shown.length.toLocaleString()} of ${strategyTrades.length.toLocaleString()} trades`
+
+  const backRow = (
+    <div className="flex flex-wrap items-center justify-between gap-3 mb-3.5">
+      <button type="button" className={BACK_BTN} onClick={back}>
+        <ArrowLeft size={16} /> Back to Strategies
+      </button>
+    </div>
+  )
+
+  const filterBar = strategyTrades.length > 0 && (
+    <div ref={barRef} className="scroll-mt-4">
+      <StrategyFilterBar trades={strategyTrades} filters={filters} summary={summary} />
+    </div>
+  )
 
   if (!data) {
     return (
@@ -90,16 +142,20 @@ export default function AdminStrategyDetail() {
   if (!stats) {
     return (
       <AdminLayout title={decodedKey} subtitle="In-depth strategy performance.">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-3.5">
-          <button type="button" className={BACK_BTN} onClick={back}>
-            <ArrowLeft size={16} /> Back to Strategies
-          </button>
-          {strategyTrades.length > 0 && scopeSwitch}
-        </div>
-        <div className={EMPTY_PAGE}>
-          {scope === 'master' && strategyTrades.length > 0
-            ? `The master has no closed trades on “${decodedKey}”.`
-            : `No trades found for strategy “${decodedKey}”.`}
+        {backRow}
+        {filterBar}
+        <div key={signature} className={`${EMPTY_PAGE} animate-[fadeup_0.35s_ease-out]`}>
+          {strategyTrades.length > 0 ? (
+            <>
+              No closed trades on “{decodedKey}” match these filters.
+              <br />
+              <button type="button" className={CLEAR_BTN} onClick={filters.clear}>
+                Clear all filters
+              </button>
+            </>
+          ) : (
+            `No trades found for strategy “${decodedKey}”.`
+          )}
         </div>
       </AdminLayout>
     )
@@ -109,47 +165,42 @@ export default function AdminStrategyDetail() {
 
   return (
     <AdminLayout title={decodedKey} subtitle="In-depth strategy performance.">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-3.5">
-        <button type="button" className={BACK_BTN} onClick={back}>
-          <ArrowLeft size={16} /> Back to Strategies
-        </button>
-        {scopeSwitch}
-      </div>
+      {backRow}
+      {filterBar}
 
-      {/* header */}
-      <div
-        className="flex flex-wrap items-center justify-between gap-3.5 mb-4 p-5 border border-accent-line rounded-card bg-[linear-gradient(to_bottom_right,var(--accentSoft),var(--surface))]"
-        data-aos="fade-up"
-      >
-        <div>
-          <h1 className="font-display text-[24px] font-extrabold tracking-[-0.4px] max-[560px]:text-[20px]">
-            {decodedKey}
-          </h1>
-          <p className="mt-[3px] text-[13px] text-muted">
-            {stats.totalTrades.toLocaleString()} closed trades ·{' '}
-            {scope === 'master' ? 'master account only' : 'every account'} · every exchange · PF {pf}
-          </p>
+      {/* keyed on the filters: every card below replays its reveal */}
+      <div key={signature} className={changed ? STAGGER : ''}>
+        <div
+          className="flex flex-wrap items-center justify-between gap-3.5 mb-4 p-5 border border-accent-line rounded-card bg-[linear-gradient(to_bottom_right,var(--accentSoft),var(--surface))]"
+          data-aos="fade-up"
+        >
+          <div className="min-w-0">
+            <h1 className="font-display text-[24px] font-extrabold tracking-[-0.4px] max-[560px]:text-[20px]">
+              {decodedKey}
+            </h1>
+            <p className="mt-[3px] text-[13px] text-muted">
+              {stats.totalTrades.toLocaleString()} closed trades · {scopeLine(filters, strategyTrades)} · PF {pf}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <span
+              className={`${BADGE} ${stats.totalPnl >= 0 ? 'bg-green text-[#052e16]' : 'bg-red text-[#450a0a]'}`}
+            >
+              <TrendingUp size={14} />
+              {fmtSignedMoney(stats.totalPnl)}
+            </span>
+            <span className={`${BADGE} ${BADGE_OUTLINE}`}>
+              <Percent size={14} />
+              {stats.winrate.toFixed(1)}% WR
+            </span>
+            <span className={`${BADGE} ${BADGE_OUTLINE}`}>
+              <Zap size={14} />
+              Sharpe {stats.sharpe.toFixed(2)}
+            </span>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <span
-            className={`${BADGE} ${stats.totalPnl >= 0 ? 'bg-green text-[#052e16]' : 'bg-red text-[#450a0a]'}`}
-          >
-            <TrendingUp size={14} />
-            {fmtSignedMoney(stats.totalPnl)}
-          </span>
-          <span className={`${BADGE} ${BADGE_OUTLINE}`}>
-            <Percent size={14} />
-            {stats.winrate.toFixed(1)}% WR
-          </span>
-          <span className={`${BADGE} ${BADGE_OUTLINE}`}>
-            <Zap size={14} />
-            Sharpe {stats.sharpe.toFixed(2)}
-          </span>
-        </div>
-      </div>
 
-      <div key={scope} className="animate-[fadeup_0.35s_ease-out]">
-        <StrategyDetailBody stats={stats} ownerSwitch={scope === 'all'} />
+        <StrategyDetailBody stats={stats} ownerSwitch={false} onOpenAsset={openAsset} />
       </div>
     </AdminLayout>
   )

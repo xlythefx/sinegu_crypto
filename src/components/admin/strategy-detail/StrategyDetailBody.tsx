@@ -16,12 +16,19 @@ import type { StrategyDetailStats } from '../../../lib/strategyStats'
 export default function StrategyDetailBody({
   stats,
   ownerSwitch = true,
+  onOpenAsset,
 }: {
   stats: StrategyDetailStats
-  /** False when the page is already narrowed to the master's trades. */
+  /** False when the page is already narrowed (or has its own accounts filter). */
   ownerSwitch?: boolean
+  /**
+   * Set by a page with its own filter bar: a heatmap / asset-card click then
+   * narrows the WHOLE page to that coin, and the table drops its coin pills.
+   */
+  onOpenAsset?: (ticker: string) => void
 }) {
   const [assetFilter, setAssetFilter] = useState<string | null>(null)
+  const pageFilters = onOpenAsset !== undefined
 
   return (
     <>
@@ -39,14 +46,15 @@ export default function StrategyDetailBody({
 
       <SeasonalityCard stats={stats} />
 
-      <HeatmapAssetsCard stats={stats} onOpenAsset={setAssetFilter} />
+      <HeatmapAssetsCard stats={stats} onOpenAsset={onOpenAsset ?? setAssetFilter} />
 
       <TradesTable
         trades={stats.trades}
         assets={stats.byAsset}
-        assetFilter={assetFilter}
+        assetFilter={pageFilters ? null : assetFilter}
         onAssetFilter={setAssetFilter}
         ownerSwitch={ownerSwitch}
+        assetPills={!pageFilters}
       />
     </>
   )

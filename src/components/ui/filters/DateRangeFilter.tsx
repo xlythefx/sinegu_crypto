@@ -12,6 +12,8 @@ export interface DateRangeValue {
 
 interface DateRangeFilterProps extends DateRangeValue {
   onChange: (next: DateRangeValue) => void
+  /** Which presets to offer (default: DATE_PRESETS). */
+  presets?: { value: DatePreset; label: string }[]
 }
 
 const DATE_INPUT = `${FILTER_FIELD} flex-1 cursor-pointer sm:flex-none [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-60 hover:[&::-webkit-calendar-picker-indicator]:opacity-100`
@@ -25,7 +27,13 @@ const DATE_INPUT = `${FILTER_FIELD} flex-1 cursor-pointer sm:flex-none [&::-webk
  * window that was on screen, so "Last 7 days" can be nudged by a day rather
  * than typed from scratch.
  */
-export default function DateRangeFilter({ preset, from, to, onChange }: DateRangeFilterProps) {
+export default function DateRangeFilter({
+  preset,
+  from,
+  to,
+  onChange,
+  presets = DATE_PRESETS,
+}: DateRangeFilterProps) {
   const pick = (next: DatePreset) => {
     if (next === preset) return
     if (next === 'custom') onChange({ preset: next, ...rangeFor(preset, { from, to }) })
@@ -34,7 +42,7 @@ export default function DateRangeFilter({ preset, from, to, onChange }: DateRang
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-2.5 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-      <Segmented size="sm" value={preset} onChange={pick} options={DATE_PRESETS} ariaLabel="Date range" />
+      <Segmented size="sm" value={preset} onChange={pick} options={presets} ariaLabel="Date range" />
 
       {preset === 'custom' && (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
