@@ -46,6 +46,8 @@ export interface ClosedTrade {
   feeSource: FeeSource
   positions: number
   closedAt: string
+  /** UTC calendar day of the close (YYYY-MM-DD) — the API's day buckets. */
+  closedDay?: string
   /** Set when streak sizing sized this trade; staff rows also carry the sizes. */
   streak?: TradeStreak | null
   /**

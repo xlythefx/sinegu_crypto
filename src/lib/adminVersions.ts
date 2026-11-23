@@ -14,6 +14,24 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'positions-cards-follow-filters',
+    date: '2026-11-23',
+    kind: 'fixed',
+    area: 'Positions',
+    title: 'The Positions page’s figures now follow the coin, exchange and strategy filters',
+    summary:
+      'Picking a coin (for example SANTOS) on the Positions page narrowed the trade lists but left the Realized, Unrealized and Total P&L cards — and the analytics tiles under “Show Analytics” — showing the whole account. They now describe exactly the trades the lists show.',
+    howItWorks: [
+      'Example: with SANTOS picked, Realized P&L is the sum of the SANTOS closed trades only, Unrealized is the open SANTOS position, and Total Trades, Win rate, Profit Factor, Average win / loss and Max Drawdown are worked out from those same trades.',
+      'The percentage beside each figure is still measured against the account’s deposits, so a coin’s share of the account’s profit reads at the same scale as the whole account.',
+      'With no filter picked, every figure is exactly what it was before.',
+    ],
+    technical: [
+      'Frontend only: lib/positionFilterStats.ts recomputes the summary cards from the filtered rows with UserStatsService::summary’s rules (after fees for P&L, before fees for the ratios, drawdown on UTC day totals from equity − realized).',
+    ],
+    links: [{ label: 'Positions', href: '/dashboard/positions' }],
+  },
+  {
     id: 'dev-agent-auto-investigate-memory',
     date: '2026-11-23',
     kind: 'new',

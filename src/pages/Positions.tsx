@@ -25,6 +25,7 @@ import {
   getPastPositions,
 } from '../services/dashboard'
 import { ApiError } from '../services/api'
+import { filteredPositionStats } from '../lib/positionFilterStats'
 
 type Tab = 'active' | 'closed'
 
@@ -103,6 +104,18 @@ export default function Positions() {
     [closed, exchange, ticker, strategy]
   )
 
+  // With a chip on, the cards describe the rows the tables list — not the
+  // whole account the summary was computed over.
+  const filtered = exchange !== 'all' || ticker !== 'all' || strategy !== 'all'
+  const stats = useMemo(() => {
+    if (!data) return null
+    const s = data.summary
+    if (!filtered) {
+      return { realized: s.realized_pnl, unrealized: s.unrealized_pnl, total: s.total_pnl, metrics: s.metrics }
+    }
+    return filteredPositionStats(closedFiltered, activeFiltered, s.equity - s.realized_pnl)
+  }, [data, filtered, closedFiltered, activeFiltered])
+
   if (error instanceof ApiError && error.status === 401) {
     return <Navigate to="/auth" replace />
   }
@@ -119,7 +132,7 @@ export default function Positions() {
     setPage(1)
   }
 
-  if (!data) {
+  if (!data || !stats) {
     return (
       <DashboardLayout title="Positions">
         <DataState
@@ -182,16 +195,16 @@ export default function Positions() {
       )}
 
       <PnlOverview
-        realized={data.summary.realized_pnl}
-        unrealized={data.summary.unrealized_pnl}
-        total={data.summary.total_pnl}
+        realized={stats.realized}
+        unrealized={stats.unrealized}
+        total={stats.total}
         pctBase={data.summary.pct_base}
       />
 
       {showAnalytics && (
         <PortfolioMetrics
-          metrics={data.summary.metrics}
-          trades={closed}
+          metrics={stats.metrics}
+          trades={closedFiltered}
           balance={data.summary.equity}
           pctBase={data.summary.pct_base}
         />
