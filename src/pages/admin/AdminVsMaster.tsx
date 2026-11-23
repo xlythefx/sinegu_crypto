@@ -6,6 +6,8 @@ import DataState from '../../components/dashboard/DataState'
 import VsMasterSummary from '../../components/admin/vs-master/VsMasterSummary'
 import VsMasterChart from '../../components/admin/vs-master/VsMasterChart'
 import VsMasterTable from '../../components/admin/vs-master/VsMasterTable'
+import VsLeaderboard from '../../components/admin/vs-master/VsLeaderboard'
+import VsHeadToHead from '../../components/admin/vs-master/VsHeadToHead'
 import { STAGGER_REVEAL } from '../../components/admin/strategy-detail/stagger'
 import {
   ActiveFilters,
@@ -28,7 +30,8 @@ import { fmtMediumDate } from '../../lib/format'
 import { showRow, summarize, type VsShow } from '../../lib/vsMaster'
 
 const ROW = 'flex w-full flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-7 sm:gap-y-3.5'
-const DEFAULTS = { exchange: 'all', date: 'month', from: '', to: '', show: 'all', q: '' }
+// `vs` = the customer open in the head-to-head card (not a filter: no chip).
+const DEFAULTS = { exchange: 'all', date: 'month', from: '', to: '', show: 'all', q: '', vs: '' }
 const EXCHANGES: SegmentedOption[] = [
   { value: 'all', label: 'All', tone: 'neutral' },
   ...(['binance', 'mexc', 'bybit'] as const).map((k) => ({ value: k, label: EXCHANGE_META[k].label })),
@@ -77,6 +80,13 @@ export default function AdminVsMaster() {
 
   // Replay the cards on a filter change — not on the first load (AOS's).
   const signature = [v.exchange, from, to, v.show, v.q].join('|')
+  const duel = data?.customers.find((r) => r.uni_id === v.vs) ?? null
+  const select = (uni: string) => {
+    f.set('vs', uni === v.vs ? '' : uni)
+    if (uni !== v.vs) {
+      window.setTimeout(() => document.getElementById('vs-duel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
+    }
+  }
   const first = useRef(signature)
   const changed = signature !== first.current
 
@@ -150,14 +160,31 @@ export default function AdminVsMaster() {
           aria-busy={loading}
         >
           <VsMasterSummary data={data} summary={summary} />
-          <VsMasterChart rows={rows} masterPct={data.master?.pct ?? null} />
-          <VsMasterTable rows={rows} animateKey={signature} />
+          <div className="mb-4 grid grid-cols-2 items-start gap-4 max-[1100px]:grid-cols-1">
+            <VsLeaderboard rows={rows} master={data.master} onSelect={select} selected={v.vs} />
+            <VsMasterChart rows={rows} masterPct={data.master?.pct ?? null} />
+          </div>
+          <div id="vs-duel" className="scroll-mt-4">
+            {duel && (
+              <VsHeadToHead
+                key={duel.uni_id}
+                row={duel}
+                exchange={v.exchange}
+                from={from}
+                to={to}
+                onClose={() => f.reset('vs')}
+              />
+            )}
+          </div>
+          <VsMasterTable rows={rows} animateKey={signature} selected={v.vs} onSelect={select} />
           <p className="mt-4 flex items-start gap-2 text-[12px] leading-relaxed text-muted">
             <Info size={14} className="mt-0.5 flex-none text-faint" />
             <span>
               Return = each day’s P&amp;L after fees over the money the account started that day with, the days
               added up — the same figure as the P&amp;L calendar, so deposits and withdrawals do not move it.
-              “vs master” is the difference in percentage points. A master trade counts as followed when the
+              “vs master” is the difference in percentage points; “Why the gap” splits it into the same
+              trades doing better or worse, master trades they missed, their own extra closes, and the time
+              before they joined (the parts add up to the gap). A master trade counts as followed when the
               customer closed the same coin and side on the same exchange within 15 minutes; it only counts
               against customers who had an account there at the time. Days are UTC days. Customers only, real
               money only.

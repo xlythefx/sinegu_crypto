@@ -70,7 +70,7 @@ import type {
   CustomerSignals,
 } from '../types/admin'
 import type { AdminSignupInfo } from '../types/signupInfo'
-import type { VsMasterData } from '../types/vsMaster'
+import type { VsHeadToHead, VsMasterData } from '../types/vsMaster'
 
 export async function getMasterStats(): Promise<MasterStats> {
   const res = await apiFetch<{ success: boolean } & MasterStats>(
@@ -1419,4 +1419,20 @@ export async function getVsMaster(params: {
     { auth: true },
   )
   return { from: res.from, to: res.to, exchange: res.exchange, master: res.master, customers: res.customers }
+}
+
+/** GET /admin/insights/vs-master/{uniId} — one customer's daily % beside the master's. */
+export async function getVsMasterHeadToHead(
+  uniId: string,
+  params: { exchange?: string; from?: string; to?: string },
+): Promise<VsHeadToHead> {
+  const qs = new URLSearchParams()
+  if (params.exchange && params.exchange !== 'all') qs.set('exchange', params.exchange)
+  if (params.from) qs.set('from', params.from)
+  if (params.to) qs.set('to', params.to)
+  const res = await apiFetch<{ success: boolean } & VsHeadToHead>(
+    `/admin/insights/vs-master/${encodeURIComponent(uniId)}?${qs.toString()}`,
+    { auth: true },
+  )
+  return { uni_id: res.uni_id, name: res.name, from: res.from, to: res.to, master: res.master, customer: res.customer }
 }

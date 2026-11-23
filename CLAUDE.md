@@ -395,6 +395,12 @@ payment is told exactly once. Rules:
   close is "followed" when the customer closed the same exchange + coin + side
   within 900 s (one to one), and only counts against a customer who had an
   account on that exchange then. Customers only, real money only.
+  `gap_parts` (same / missed / extra / before) split the gap: a close's share
+  is its P&L after fees over its day's start balance — the daily %'s own
+  division — so the parts add up to the gap. The page leads with a P&L
+  leaderboard, master pinned on top. Weekly: `insights:vs-master-weekly`
+  (Mondays 09:13 Manila) → engine `POST /admin/team-report` (`_send_private`,
+  a neutral 📊 — never the risk alert's 🚨) — names who is > 1 pp behind.
 - **Strategy filter bar** (`StrategyFilterBar`, `useStrategyFilters`,
   `lib/strategyFilters.ts`) on the Strategies list AND each strategy's page:
   coins, exchange, side, accounts, dates, all in the URL; every card follows

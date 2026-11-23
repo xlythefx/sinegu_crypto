@@ -14,6 +14,27 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'vs-master-leaderboard-why-weekly',
+    date: '2026-11-23',
+    kind: 'improved',
+    area: 'Customers vs Master',
+    title: 'Customers vs Master: P&L leaderboard, head-to-head chart, why each customer is behind, and a weekly Telegram summary',
+    summary:
+      'The Customers vs Master page gained a P&L leaderboard with the master pinned on top, a head-to-head chart of one customer against the master, and a split of each customer’s gap into its causes. Every Monday the admin Telegram group gets a short summary of the week.',
+    howItWorks: [
+      'P&L leaderboard: the master first (gold, with a crown), then every customer best first, by dollars after fees or by return %. Hover a figure for before fees.',
+      'Click a customer in the leaderboard or the table: a card opens with both running returns over the period (gold = master, blue = the customer) and “Why the gap”.',
+      'Why the gap splits the difference into four parts that add up to it: the same trades doing better or worse, master trades they missed, their own extra closes, and the time before they joined. Example: Tom is −2.72 pp behind; −1.32 pp is the 11 master trades he missed, −1.00 pp is the same trades doing worse, −0.40 pp his own extra closes.',
+      'The table has a “Main reason” column with the biggest of those parts.',
+      'Every Monday at 09:13 (Manila time) the admin Telegram group gets last week’s master return, how many customers kept up, and everyone more than 1 percentage point behind with their main reason, plus a link to the page.',
+    ],
+    technical: [
+      'gap_parts per row in MasterComparison: each close’s share = P&L after fees ÷ its day’s start balance (the same division as the daily %); same / missed / extra / before over the pairing. GET /admin/insights/vs-master/{uniId} = both sides’ daily %.',
+      'php artisan insights:vs-master-weekly [--dry-run] [--from --to], scheduled Mondays 09:13 Asia/Manila → EngineCache::teamReport → engine POST /admin/team-report (admin chat only, 📊).',
+    ],
+    links: [{ label: 'Customers vs Master', href: '/admin/vs-master' }],
+  },
+  {
     id: 'customers-vs-master-page',
     date: '2026-11-23',
     kind: 'new',

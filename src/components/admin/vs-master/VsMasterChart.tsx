@@ -12,7 +12,15 @@ const FIRST = 15
  * return drawn as one line through all of them — left of the line is
  * behind the master, right of it ahead. Bars grow out of the zero line.
  */
-export default function VsMasterChart({ rows, masterPct }: { rows: VsMasterRow[]; masterPct: number | null }) {
+export default function VsMasterChart({
+  rows,
+  masterPct,
+  className = '',
+}: {
+  rows: VsMasterRow[]
+  masterPct: number | null
+  className?: string
+}) {
   const [all, setAll] = useState(false)
   const ranked = rows.filter((r) => r.pct !== null)
   const shown = all ? ranked : ranked.slice(0, FIRST)
@@ -32,13 +40,13 @@ export default function VsMasterChart({ rows, masterPct }: { rows: VsMasterRow[]
       icon={BarChart3}
       title="Return ranking"
       subtitle="Each customer’s return after fees · the gold line is the master"
-      className="mb-4"
+      className={className}
     >
       {ranked.length === 0 ? (
         <EmptyNote>No customer has a return to compare in this window.</EmptyNote>
       ) : (
         <>
-          <div className="relative">
+          <div className="relative pt-[26px]">
             {masterX !== null && (
               <div
                 className="pointer-events-none absolute inset-y-0 z-[1] ml-[136px] max-[560px]:ml-[96px]"
@@ -46,16 +54,16 @@ export default function VsMasterChart({ rows, masterPct }: { rows: VsMasterRow[]
                 aria-hidden="true"
               >
                 <div
-                  className="absolute -top-1 bottom-0 border-l-2 border-dashed border-accent"
+                  className="absolute top-[22px] bottom-0 border-l-2 border-dashed border-accent"
                   style={{ left: `${masterX}%` }}
                 >
-                  <span className="absolute -top-[18px] -translate-x-1/2 whitespace-nowrap rounded-pill bg-accent px-1.5 font-mono text-[10px] font-bold text-on-accent">
+                  <span className="absolute -top-[22px] -translate-x-1/2 whitespace-nowrap rounded-pill bg-accent px-1.5 font-mono text-[10px] font-bold text-on-accent">
                     Master {fmtSignedPct(masterPct as number, 2)}
                   </span>
                 </div>
               </div>
             )}
-            <ol className="m-0 mt-5 flex list-none flex-col gap-1.5 p-0">
+            <ol className="m-0 flex list-none flex-col gap-1.5 p-0">
               {shown.map((r, i) => {
                 const v = r.pct as number
                 const left = Math.min(zero, x(v))

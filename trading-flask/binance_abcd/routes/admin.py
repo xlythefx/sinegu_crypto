@@ -376,6 +376,25 @@ def risk_alert():
     return jsonify({"success": True, "telegram": notify.telegram_enabled()})
 
 
+@admin_bp.route("/team-report", methods=["POST"])
+def team_report():
+    """A scheduled report the API built (the weekly Customers vs master
+    summary) — relay it to the admin Telegram group. Body: ``{"title",
+    "lines": [str], "link"}``. A messenger only, like /risk-alert."""
+    if not _authorized():
+        return jsonify({"error": "Unauthorized"}), 403
+    from binance_abcd import notify
+
+    body = request.get_json(silent=True) or {}
+    title = str(body.get("title") or "").strip()
+    if not title:
+        return jsonify({"error": "title is required"}), 400
+    lines = body.get("lines") if isinstance(body.get("lines"), list) else []
+    notify.notify_team_report(title[:255], [str(x)[:500] for x in lines[:30]],
+                              str(body.get("link") or "")[:500])
+    return jsonify({"success": True, "telegram": notify.telegram_enabled()})
+
+
 @admin_bp.route("/payment-received", methods=["POST"])
 def payment_received():
     """The API settled an invoice — tell the admin Telegram group who paid.

@@ -5,7 +5,7 @@ import { InsightCard, EmptyNote } from '../insights/parts'
 import PnlBreakdown from '../../ui/PnlBreakdown'
 import { EXCHANGE_META } from '../../exchanges/meta'
 import { fmtMoney, fmtSignedMoney, fmtSignedPct } from '../../../lib/format'
-import { fmtGap, followRate, sortRows, type VsSortKey } from '../../../lib/vsMaster'
+import { GAP_PART_LABELS, fmtGap, followRate, mainReason, sortRows, type VsSortKey } from '../../../lib/vsMaster'
 import type { VsMasterRow } from '../../../types/vsMaster'
 import type { ExchangeKind } from '../../../types/exchanges'
 
@@ -26,12 +26,23 @@ const COLUMNS: { key: VsSortKey; label: string; right?: boolean; title?: string 
   { key: 'followed', label: 'Followed', right: true, title: 'Master closes they also closed: same coin and side, within 15 minutes' },
   { key: 'days', label: 'Days ahead', right: true, title: 'Days the master traded on which they did at least as well' },
   { key: 'balance', label: 'Balance', right: true },
+  { key: 'gap', label: 'Main reason', title: 'The part of the gap that moved them most — click the row for the full split' },
 ]
 
 const venue = (kind: string) => (kind in EXCHANGE_META ? EXCHANGE_META[kind as ExchangeKind].label : kind)
 
 /** The full ranking, sortable by any column; each name opens that customer's analytics. */
-export default function VsMasterTable({ rows, animateKey }: { rows: VsMasterRow[]; animateKey: string }) {
+export default function VsMasterTable({
+  rows,
+  animateKey,
+  selected,
+  onSelect,
+}: {
+  rows: VsMasterRow[]
+  animateKey: string
+  selected: string
+  onSelect: (uniId: string) => void
+}) {
   const [sort, setSort] = useState<{ key: VsSortKey; dir: 'asc' | 'desc'; col: number }>({ key: 'rank', dir: 'asc', col: 0 })
   const sorted = sortRows(rows, sort.key, sort.dir)
 
@@ -43,12 +54,12 @@ export default function VsMasterTable({ rows, animateKey }: { rows: VsMasterRow[
     )
 
   return (
-    <InsightCard icon={ListOrdered} title="Ranking" subtitle={`${rows.length} customers · click a name for their analytics`}>
+    <InsightCard icon={ListOrdered} title="Ranking" subtitle={`${rows.length} customers · click a row to compare it with the master`}>
       {rows.length === 0 ? (
         <EmptyNote>No customer matches.</EmptyNote>
       ) : (
         <div className="-mx-1 overflow-x-auto px-1">
-          <table key={`${animateKey}|${sort.col}|${sort.dir}`} className="w-full min-w-[960px] border-collapse text-[12.5px] animate-[fadeup_0.35s_ease-out]">
+          <table key={`${animateKey}|${sort.col}|${sort.dir}`} className="w-full min-w-[1120px] border-collapse text-[12.5px] animate-[fadeup_0.35s_ease-out]">
             <thead>
               <tr className="border-b border-hair">
                 {COLUMNS.map((c, i) => {
@@ -75,8 +86,16 @@ export default function VsMasterTable({ rows, animateKey }: { rows: VsMasterRow[
               {sorted.map((r) => {
                 const rate = followRate(r)
                 const days = r.days_ahead + r.days_behind
+                const reason = mainReason(r)
                 return (
-                  <tr key={r.uni_id} className="border-b border-hair transition-colors last:border-0 hover:bg-surface2">
+                  <tr
+                    key={r.uni_id}
+                    onClick={() => onSelect(r.uni_id)}
+                    aria-selected={selected === r.uni_id}
+                    className={`cursor-pointer border-b border-hair transition-colors last:border-0 hover:bg-surface2 ${
+                      selected === r.uni_id ? 'bg-accent-soft' : ''
+                    }`}
+                  >
                     <td className={TD}>
                       <span
                         className={`inline-grid h-6 min-w-6 place-items-center rounded-pill px-1.5 font-mono text-[11px] font-bold ${
@@ -87,7 +106,11 @@ export default function VsMasterTable({ rows, animateKey }: { rows: VsMasterRow[
                       </span>
                     </td>
                     <td className={TD}>
-                      <Link to={`/admin/users/${r.uni_id}?tab=analytics`} className="font-semibold text-text hover:text-accent">
+                      <Link
+                        to={`/admin/users/${r.uni_id}?tab=analytics`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="font-semibold text-text hover:text-accent"
+                      >
                         {r.name}
                       </Link>
                       <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[10.5px] text-muted">
@@ -137,6 +160,15 @@ export default function VsMasterTable({ rows, animateKey }: { rows: VsMasterRow[
                     </td>
                     <td className={NUM}>{days === 0 ? '—' : `${r.days_ahead}/${days}`}</td>
                     <td className={NUM}>{r.balance === null ? '—' : fmtMoney(r.balance)}</td>
+                    <td className={`${TD} whitespace-nowrap text-[12px]`}>
+                      {reason ? (
+                        <span className={reason.value < 0 ? 'text-red' : 'text-green'}>
+                          {GAP_PART_LABELS[reason.part]} <b className="font-mono">{fmtGap(reason.value)}</b>
+                        </span>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
                   </tr>
                 )
               })}

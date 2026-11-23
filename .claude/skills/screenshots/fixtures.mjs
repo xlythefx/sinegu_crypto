@@ -1017,7 +1017,15 @@ const VS_MASTER_BODY = (() => {
       rank: i + 1, uni_id: `s-${i}`, name, exchanges: i === 3 ? ['binance', 'mexc'] : ['binance'],
       connected: i !== 5, balance: i === 5 ? null : balance,
       pnl, pnl_gross: Math.round(pnl * 1.07 * 100) / 100, fees: Math.round(Math.abs(pnl) * 0.07 * 100) / 100,
-      pct, gap: Math.round((pct - master.pct) * 100) / 100, trades, wins: Math.round(trades * wr / 100), win_rate: wr,
+      pct, gap: Math.round((pct - master.pct) * 100) / 100,
+      // Invented split of the gap: missed trades first, the rest on the same trades.
+      gap_parts: (() => {
+        const gap = Math.round((pct - master.pct) * 100) / 100
+        const missedPart = Math.round(-missed * 0.12 * 100) / 100
+        const extraPart = i === 6 ? -0.4 : 0
+        return { same: Math.round((gap - missedPart - extraPart) * 100) / 100, missed: missedPart, extra: extraPart, before: 0 }
+      })(),
+      trades, wins: Math.round(trades * wr / 100), win_rate: wr,
       best_day: 1.2, worst_day: -0.9, followed, missed, master_closes: closes, extra: Math.max(0, trades - followed),
       days_ahead: ahead, days_behind: behind,
     })),
@@ -1099,6 +1107,16 @@ const GET = {
   '/admin/users': USERS_BODY,
   '/admin/strategies': STRATEGIES_BODY,
   '/admin/insights/vs-master': VS_MASTER_BODY,
+  // One customer beside the master, day by day (invented daily %).
+  '/admin/insights/vs-master/': {
+    success: true, uni_id: 's-6', name: 'Tom Becker', from: '2026-11-01', to: '2026-11-23',
+    master: [0.42, -0.31, 0.65, 0.12, -0.2, 0.55, 0.38, -0.12, 0.47, 0.35].map((pct, i) => ({
+      date: `2026-11-${String(2 + i * 2).padStart(2, '0')}`, pct, pnl: pct * 500, trades: 2,
+    })),
+    customer: [0.4, -0.35, 0, 0.1, -0.45, 0.5, 0, -0.3, 0.2, -0.56].map((pct, i) => ({
+      date: `2026-11-${String(2 + i * 2).padStart(2, '0')}`, pct, pnl: pct * 30, trades: pct === 0 ? 0 : 2,
+    })),
+  },
   // The trader's own closes (Strategy Analysis card + /dashboard/strategies/:key).
   '/binance/past-positions': {
     success: true,

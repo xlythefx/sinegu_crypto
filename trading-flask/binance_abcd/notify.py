@@ -1298,6 +1298,22 @@ def notify_payment_received(payment: dict) -> None:
     _send_private(render_payment_received(payment))
 
 
+def render_team_report(title: str, lines: Sequence[str], link: str = "") -> str:
+    """A scheduled report the API built for the team (e.g. the weekly
+    Customers vs master summary). Neutral, unlike a risk alert."""
+    out = [f"📊 <b>{_esc(title)}</b>"]
+    out += [_esc(str(line)) for line in list(lines)[:30]]
+    if link.startswith("https://"):
+        out.append(f'<a href="{_esc(link)}">Open the page</a>')
+    return "\n".join(out)
+
+
+def notify_team_report(title: str, lines: Sequence[str], link: str = "") -> None:
+    """ADMIN chat only (`_send_private`), never the public fallback: a team
+    report names customers and their results."""
+    _send_private(render_team_report(title, lines, link))
+
+
 def render_risk_alert(label: str, title: str, lines: Sequence[str]) -> str:
     """A HIGH-RISK alert the API found (App\\Services\\Alerts\\RiskAlerts —
     a trade that reached accounts outside its signal feed)."""

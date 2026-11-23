@@ -3,7 +3,7 @@
  * the summary tiles). The API ranks and measures; nothing here recomputes a
  * return, it only reads the rows it was handed. No React.
  */
-import type { VsMasterRow } from '../types/vsMaster'
+import type { VsGapParts, VsHeadToHead, VsMasterData, VsMasterRow } from '../types/vsMaster'
 
 export type VsSortKey = 'rank' | 'name' | 'gap' | 'pnl' | 'trades' | 'win_rate' | 'followed' | 'days' | 'balance'
 export type VsShow = 'all' | 'ahead' | 'behind' | 'missed'
@@ -101,4 +101,111 @@ export function summarize(rows: VsMasterRow[]): VsSummary {
 export function fmtGap(gap: number, dp = 2): string {
   const sign = gap < 0 ? '−' : '+'
   return `${sign}${Math.abs(gap).toFixed(dp)} pp`
+}
+
+/* ---------------------------------------------------------------- why behind */
+
+export type GapPart = keyof VsGapParts
+
+export const GAP_PART_LABELS: Record<GapPart, string> = {
+  same: 'Same trades',
+  missed: 'Missed master trades',
+  extra: 'Own extra closes',
+  before: 'Before they joined',
+}
+
+/**
+ * The part that moved a customer most: the most negative one when they are
+ * behind the master, the most positive when ahead. Null when no part moved.
+ */
+export function mainReason(row: VsMasterRow): { part: GapPart; value: number } | null {
+  if (!row.gap_parts || row.gap === null) return null
+  const entries = Object.entries(row.gap_parts) as [GapPart, number][]
+  const pick = entries.sort((a, b) => (row.gap! < 0 ? a[1] - b[1] : b[1] - a[1]))[0]
+  if (!pick || pick[1] === 0 || (row.gap < 0 ? pick[1] > 0 : pick[1] < 0)) return null
+  return { part: pick[0], value: pick[1] }
+}
+
+/* --------------------------------------------------------------- leaderboard */
+
+export type LeaderBy = 'pnl' | 'pct'
+
+export interface LeaderEntry {
+  key: string
+  name: string
+  isMaster: boolean
+  /** 1-based among customers; null for the master, who is pinned on top. */
+  place: number | null
+  pnl: number
+  pnlGross: number
+  pct: number | null
+  trades: number
+  uniId: string | null
+}
+
+/**
+ * The P&L leaderboard: the master pinned first (the benchmark), then every
+ * customer best first — by dollars after fees, or by return.
+ */
+export function leaderboard(
+  rows: VsMasterRow[],
+  master: VsMasterData['master'],
+  by: LeaderBy,
+): LeaderEntry[] {
+  const score = (r: VsMasterRow) => (by === 'pnl' ? r.pnl : (r.pct ?? Number.NEGATIVE_INFINITY))
+  const customers = [...rows]
+    .sort((a, b) => score(b) - score(a) || b.pnl - a.pnl)
+    .map((r, i) => ({
+      key: r.uni_id,
+      name: r.name,
+      isMaster: false,
+      place: i + 1,
+      pnl: r.pnl,
+      pnlGross: r.pnl_gross,
+      pct: r.pct,
+      trades: r.trades,
+      uniId: r.uni_id,
+    }))
+  if (!master) return customers
+  return [
+    {
+      key: 'master',
+      name: 'Master',
+      isMaster: true,
+      place: null,
+      pnl: master.pnl,
+      pnlGross: master.pnl_gross,
+      pct: master.pct,
+      trades: master.trades,
+      uniId: null,
+    },
+    ...customers,
+  ]
+}
+
+/* ------------------------------------------------------------- head to head */
+
+export interface DuelPoint {
+  date: string
+  /** Running total of the daily %, from the window's start. */
+  master: number
+  customer: number
+}
+
+/**
+ * Both sides' running return over every day either of them traded — the
+ * daily % added up, the same way the page's Return is. A day one side did
+ * not trade adds 0 for it.
+ */
+export function duelSeries(h: Pick<VsHeadToHead, 'master' | 'customer'>): DuelPoint[] {
+  const m = new Map(h.master.map((d) => [d.date, d.pct ?? 0]))
+  const c = new Map(h.customer.map((d) => [d.date, d.pct ?? 0]))
+  const dates = [...new Set([...m.keys(), ...c.keys()])].sort()
+  let mt = 0
+  let ct = 0
+  return dates.map((date) => {
+    mt += m.get(date) ?? 0
+    ct += c.get(date) ?? 0
+    return { date, master: Math.round(mt * 100) / 100, customer: Math.round(ct * 100) / 100 }
+  })
 }

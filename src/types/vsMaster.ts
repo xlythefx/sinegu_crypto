@@ -25,6 +25,8 @@ export interface VsMasterRow extends VsMasterFigures {
   balance: number | null
   /** Their return minus the master's, in percentage points. */
   gap: number | null
+  /** Null when either return is unknown. */
+  gap_parts: VsGapParts | null
   /** Master closes they also closed (same coin + side, ≤ 15 min). */
   followed: number
   missed: number
@@ -42,4 +44,36 @@ export interface VsMasterData {
   exchange: string | null
   master: (VsMasterFigures & { balance: number }) | null
   customers: VsMasterRow[]
+}
+
+/**
+ * Where a customer's gap to the master comes from, in percentage points —
+ * the parts add up to `gap` (give or take the daily rounding).
+ */
+export interface VsGapParts {
+  /** On the trades both took: their result minus the master's. */
+  same: number
+  /** Minus the master's result on trades they could have taken and did not. */
+  missed: number
+  /** Their own closes with no master partner. */
+  extra: number
+  /** Minus the master's result while they had no account there yet. */
+  before: number
+}
+
+/** GET /admin/insights/vs-master/{uniId} — both sides' daily %, for the head-to-head chart. */
+export interface VsDay {
+  date: string
+  pct: number | null
+  pnl: number
+  trades: number
+}
+
+export interface VsHeadToHead {
+  uni_id: string
+  name: string
+  from: string
+  to: string
+  master: VsDay[]
+  customer: VsDay[]
 }
