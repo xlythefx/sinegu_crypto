@@ -14,6 +14,46 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'customers-vs-master-page',
+    date: '2026-11-23',
+    kind: 'new',
+    area: 'Customers vs Master',
+    title: 'New page: every customer’s return ranked beside the master’s',
+    summary:
+      'Admin → Customers vs Master ranks every customer by their return over the same days as the master, shows how far ahead or behind the master each one is, and how many of the master’s trades each one actually took.',
+    howItWorks: [
+      'Four headline tiles: the master’s return (with its profit after fees, trades and win rate), how many customers matched or beat it, the average and median gap, and the share of the master’s trades the customers followed.',
+      'A ranking chart: one bar per customer, with the master’s return drawn as a gold line through them — right of the line is ahead of the master, left of it behind.',
+      'A ranking table you can sort by any column: return, “vs master” (e.g. +1.10 pp means 1.1 percentage points better than the master), profit after fees (before fees on hover), trades, win rate, master trades followed (e.g. 19/22 · 3 missed), days ahead of the master, and balance. Click a name to open that customer’s analytics.',
+      'Example: the master made +2.31% this month. A customer at +2.61% reads “+0.30 pp”; one who missed 6 of the master’s 22 trades and made +1.48% reads “−0.83 pp” and “16/22 · 6 missed”.',
+      'Filters: exchange, dates (this month by default, last month, last 7 / 30 days, all time or your own dates), show everyone / only those ahead / only those behind / only those who missed trades, and a name search. They stay in the page link.',
+      'Return is the same figure as each customer’s P&L calendar: each day’s profit after fees over the money the account started that day with, added up — so a deposit or a withdrawal does not move it. A master trade only counts against a customer who had an account on that exchange at the time.',
+    ],
+    technical: [
+      'GET /admin/insights/vs-master?exchange=&from=&to= (admin group, cached 60 s) → App\\Services\\Admin\\MasterComparison: UserStatsService::dailyReturns per owner (customers type = user, real money, disconnected included), pairing master ↔ customer closes on exchange + coin + side within 900 s one to one, days ahead / behind on the master’s trading days. Test: AdminVsMasterTest.',
+      'Page /admin/vs-master (pages/admin/AdminVsMaster.tsx, components/admin/vs-master/, lib/vsMaster.ts). Full admins only, not in collaboratorMayOpen.',
+    ],
+    links: [{ label: 'Customers vs Master', href: '/admin/vs-master' }],
+  },
+  {
+    id: 'strategy-filters-side-results-list',
+    date: '2026-11-23',
+    kind: 'improved',
+    area: 'Strategies',
+    title: 'Strategies: Long / Short filter, wins or losses only, and the filter bar on the list too',
+    summary:
+      'The strategy filter bar gained a Long / Short choice, the trades table can show only wins or only losses, and the Strategies list page now has the same filter bar as each strategy’s page.',
+    howItWorks: [
+      'Side: Both, Long or Short, each with its trade count. Example: VWMA-Reversion, SANTOS, Short shows whether the short side of that coin is making or losing money.',
+      'Past Positions table: All / Wins / Losses (after fees), to review only the losing trades of a coin.',
+      'Strategies list: pick coins, exchange, side, accounts and dates once and every strategy card is measured on those trades. “View in-depth details” carries the same filters into that strategy’s page.',
+    ],
+    technical: [
+      'GET /admin/strategies trades now carry side (App\\Services\\Positions\\TradeSide::closed — position_side, else the closing order inverted). URL key side=long|short in hooks/useStrategyFilters.ts; StrategyCard takes the list’s query string.',
+    ],
+    links: [{ label: 'Strategies', href: '/admin/strategies' }],
+  },
+  {
     id: 'strategy-page-filter-bar',
     date: '2026-11-23',
     kind: 'new',
@@ -841,7 +881,7 @@ export const ADMIN_CHANGES: AdminChange[] = [
     area: 'Billing',
     title: 'Each invoice opens on its own page and says how it was paid',
     summary:
-      'Clicking an invoice in Invoice History used to open a pop-up. It now opens its own page, which also shows how the invoice was paid: by card through Stripe, or in crypto (USDT). Alexandre Guyomard\'s October invoice ($24.04), for example, now reads "Paid on November 10, 2026 · Stripe".',
+      'Clicking an invoice in Invoice History used to open a pop-up. It now opens its own page, which also shows how the invoice was paid: by card through Stripe, or in crypto (USDT). A customer\'s October invoice ($24.04), for example, now reads "Paid on November 10, 2026 · Stripe".',
     howItWorks: [
       'Open Invoice History and click any invoice (or its View button). The page shows the customer, the amount, the status and, beside the paid date, a Stripe or Crypto badge.',
       'A "How it was paid" card gives the details: the method, when it was paid, the amount, and the payment\'s reference with a Copy button. For a crypto payment it also shows how much USDT actually arrived (it can be a few cents short when the customer\'s exchange takes a withdrawal fee) and a link to the transaction on TronScan. For a card payment, paste the reference into Stripe\'s search to find it there.',
@@ -863,11 +903,11 @@ export const ADMIN_CHANGES: AdminChange[] = [
     area: 'Billing',
     title: 'Everyone hears about it when an invoice is paid',
     summary:
-      'When a customer pays an invoice, the customer gets a thank-you email, the team gets an "Invoice paid" email, and the admin Telegram group gets a message. A new "Payments received" card on the Admin Overview lists the last 7 days. Built after Alexandre Guyomard paid his October invoice ($24.04) by card on 10 Nov: it was paid correctly, but nobody was told and there was no page that showed a card payment.',
+      'When a customer pays an invoice, the customer gets a thank-you email, the team gets an "Invoice paid" email, and the admin Telegram group gets a message. A new "Payments received" card on the Admin Overview lists the last 7 days. Built after a customer paid their October invoice ($24.04) by card on 10 Nov: it was paid correctly, but nobody was told and there was no page that showed a card payment.',
     howItWorks: [
       'Any invoice with a fee counts, however it was paid: by card, by USDT, or marked paid by an admin. Each payment is told once, the moment it lands.',
       'The customer\'s email thanks them, shows the amount, method and invoice number, and says trading is back on if it had been paused for that invoice.',
-      'The team email goes to support@, Dima and Christian. The Telegram message reads, for example: "💰 Invoice paid — Alexandre Guyomard · $24.04 for October 2026 · Card (Stripe) · Invoice #15 · Binance".',
+      'The team email goes to support@, Dima and Christian. The Telegram message reads, for example: "💰 Invoice paid — Sam Carter · $24.04 for October 2026 · Card (Stripe) · Invoice #15 · Binance".',
       'Admin Overview → Needs attention has a "Payments received · last 7 days" card with the total and each payment. A payment in the last 24 hours also shows as a green line on the Platform view; click it to see the list.',
       'Nothing is sent for a $0 month (no money moved) or for test runs in Admin → Sandbox. A developer\'s test payment is labelled "Test payment (not real money)" in Telegram.',
     ],

@@ -28,6 +28,8 @@ export interface StrategyTrade {
   closed_at: string
   /** Which venue's table the row came from (every exchange since 2026-09-27). */
   exchange?: string
+  /** LONG / SHORT (the API derives it; absent from an older API). */
+  side?: 'LONG' | 'SHORT' | null
   uni_id?: string
   /** Owner's name (`user_credentials.name`) — admin payload only. */
   owner_name?: string | null

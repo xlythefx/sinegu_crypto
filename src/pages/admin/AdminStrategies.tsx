@@ -1,10 +1,14 @@
-import { useMemo, useState, type ReactNode } from 'react'
-import { Navigate } from 'react-router-dom'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { Navigate, useLocation } from 'react-router-dom'
 import { Activity, Layers } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import StrategyCard from '../../components/admin/StrategyCard'
+import StrategyFilterBar from '../../components/admin/strategy-detail/StrategyFilterBar'
+import { STAGGER_REVEAL } from '../../components/admin/strategy-detail/stagger'
+import { useStrategyFilters } from '../../hooks/useStrategyFilters'
+import { filterStrategyTrades } from '../../lib/strategyFilters'
 import { useApiData } from '../../hooks/useApiData'
 import { useSessionUser } from '../../hooks/useSessionUser'
 import { isCollaborator } from '../../lib/roles'
@@ -43,15 +47,27 @@ export default function AdminStrategies() {
   const [savingKey, setSavingKey] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
-  const grouped = useMemo(
-    () =>
-      groupTradesByStrategy(
-        (data?.trades ?? []).filter(
-          (t) => !HIDDEN_STRATEGIES.has(t.strategy.trim()),
-        ),
-      ),
+  // The same filter bar as each strategy's page (2026-11-23): every card
+  // below is measured on the trades the bar keeps, and a card's link carries
+  // the filters into that strategy's page.
+  const filters = useStrategyFilters()
+  const { search } = useLocation()
+  const listed = useMemo(
+    () => (data?.trades ?? []).filter((t) => !HIDDEN_STRATEGIES.has(t.strategy.trim())),
     [data],
   )
+  const { coins, exchange, side, owner, date, from, to } = filters
+  const shown = useMemo(
+    () => filterStrategyTrades(listed, { coins, exchange, side, owner, date, from, to }),
+    // coins is a fresh array each render; its joined value is the dependency
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [listed, coins.join(','), exchange, side, owner, date, from, to],
+  )
+  const signature = [coins.join(','), exchange, side, owner, date, from, to].join('|')
+  const firstSignature = useRef(signature)
+  const filtersChanged = signature !== firstSignature.current
+
+  const grouped = useMemo(() => groupTradesByStrategy(shown), [shown])
 
   // Per-strategy stats, ranked by total P&L (recomputed on ticker exclusion).
   const strategies = useMemo(() => {
@@ -150,7 +166,34 @@ export default function AdminStrategies() {
         </p>
       )}
 
-      {strategies.length === 0 ? (
+      {listed.length > 0 && (
+        <StrategyFilterBar
+          trades={listed}
+          filters={filters}
+          summary={
+            shown.length === listed.length
+              ? `${listed.length.toLocaleString()} trades`
+              : `Showing ${shown.length.toLocaleString()} of ${listed.length.toLocaleString()} trades`
+          }
+        />
+      )}
+
+      {strategies.length === 0 && listed.length > 0 ? (
+        <div
+          key={signature}
+          className="py-11 px-5 border border-dashed border-border rounded-card bg-surface2 text-center text-[13px] text-muted animate-[fadeup_0.35s_ease-out]"
+        >
+          No closed trades match these filters.
+          <br />
+          <button
+            type="button"
+            onClick={filters.clear}
+            className="mt-3 inline-flex items-center py-2 px-3.5 border border-accent-line rounded-btn bg-accent-soft text-accent text-[12.5px] font-bold cursor-pointer transition-colors hover:bg-accent hover:text-on-accent"
+          >
+            Clear all filters
+          </button>
+        </div>
+      ) : strategies.length === 0 ? (
         <div
           className="py-11 px-5 border border-dashed border-border rounded-card bg-surface2 text-center text-[13px] text-muted"
           data-aos="fade-up"
@@ -193,8 +236,10 @@ export default function AdminStrategies() {
 
           {/* strategy cards — re-mounts on filter change to replay the reveal */}
           <div
-            key={selected ?? 'all'}
-            className="grid grid-cols-3 gap-[18px] items-start max-[1200px]:grid-cols-2 max-[760px]:grid-cols-1 animate-[fadeup_0.35s_ease-out]"
+            key={`${selected ?? 'all'}|${signature}`}
+            className={`grid grid-cols-3 gap-[18px] items-start max-[1200px]:grid-cols-2 max-[760px]:grid-cols-1 ${
+              filtersChanged ? STAGGER_REVEAL : 'animate-[fadeup_0.35s_ease-out]'
+            }`}
           >
             {visible.map((s) => (
               <StrategyCard
@@ -212,6 +257,7 @@ export default function AdminStrategies() {
                 onClearExcluded={() =>
                   setExcluded((prev) => ({ ...prev, [s.key]: [] }))
                 }
+                search={search}
               />
             ))}
           </div>

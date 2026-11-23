@@ -43,6 +43,8 @@ const ROLE_TAG_TONE: Record<string, string> = {
 type SortField = 'date' | 'ticker' | 'owner' | 'pnl'
 type SortDir = 'asc' | 'desc'
 type OwnerView = 'all' | 'master'
+/** Wins / losses after fees — what landed, like the P&L column. */
+type ResultView = 'all' | 'wins' | 'losses'
 
 interface Props {
   trades: DetailTrade[]
@@ -68,6 +70,9 @@ export default function TradesTable({
 }: Props) {
   const [search, setSearch] = useState('')
   const [ownerView, setOwnerView] = useState<OwnerView>('all')
+  const [resultView, setResultView] = useState<ResultView>('all')
+  const winCount = useMemo(() => trades.filter((t) => t.pnl > 0).length, [trades])
+  const lossCount = useMemo(() => trades.filter((t) => t.pnl <= 0).length, [trades])
   const hasOwners = trades.some((t) => t.owner !== null || t.ownerRole !== null)
   const masterCount = useMemo(
     () => trades.filter((t) => t.ownerRole === 'master').length,
@@ -83,6 +88,8 @@ export default function TradesTable({
     if (showOwnerSwitch && ownerView === 'master')
       list = list.filter((t) => t.ownerRole === 'master')
     if (assetFilter) list = list.filter((t) => t.symbol === assetFilter)
+    if (resultView === 'wins') list = list.filter((t) => t.pnl > 0)
+    else if (resultView === 'losses') list = list.filter((t) => t.pnl <= 0)
     if (search.trim()) {
       const q = search.toLowerCase()
       list = list.filter(
@@ -104,7 +111,7 @@ export default function TradesTable({
       return sortDir === 'asc' ? cmp : -cmp
     })
     return list
-  }, [trades, assetFilter, search, sortField, sortDir, showOwnerSwitch, ownerView])
+  }, [trades, assetFilter, search, sortField, sortDir, showOwnerSwitch, ownerView, resultView])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
   const clampedPage = Math.min(page, totalPages - 1)
@@ -131,10 +138,25 @@ export default function TradesTable({
             {filtered.length} trades · after fees
             {showOwnerSwitch && ownerView === 'master' ? ' · master only' : ''}
             {assetFilter ? ` · filtered by ${displaySymbol(assetFilter)}` : ''}
+            {resultView === 'wins' ? ' · wins only' : resultView === 'losses' ? ' · losses only' : ''}
           </div>
         </div>
+        <div className="ml-auto flex flex-wrap items-center gap-2 max-[560px]:ml-0">
+          <Segmented<ResultView>
+            size="sm"
+            ariaLabel="Wins or losses"
+            value={resultView}
+            onChange={(v) => {
+              setResultView(v)
+              setPage(0)
+            }}
+            options={[
+              { value: 'all', label: 'All', count: trades.length, tone: 'neutral' },
+              { value: 'wins', label: 'Wins', count: winCount, tone: 'green' },
+              { value: 'losses', label: 'Losses', count: lossCount, tone: 'red' },
+            ]}
+          />
         {showOwnerSwitch && (
-          <div className="ml-auto">
             <Segmented<OwnerView>
               size="sm"
               ariaLabel="Whose trades"
@@ -148,8 +170,8 @@ export default function TradesTable({
                 { value: 'master', label: 'Master only', count: masterCount },
               ]}
             />
-          </div>
         )}
+        </div>
       </div>
 
       {assetPills && assets.length > 1 && (
@@ -196,7 +218,7 @@ export default function TradesTable({
       </div>
 
       <div
-        key={`${ownerView}-${assetFilter ?? 'all'}-${search}-${sortField}-${sortDir}-${clampedPage}`}
+        key={`${ownerView}-${resultView}-${assetFilter ?? 'all'}-${search}-${sortField}-${sortDir}-${clampedPage}`}
         className="border border-hair rounded-row overflow-hidden animate-[fadeup_0.35s_ease-out]"
       >
         <table className="w-full border-collapse text-[12.5px]">

@@ -5,6 +5,7 @@ import AdminLayout from '../../components/admin/AdminLayout'
 import DataState from '../../components/dashboard/DataState'
 import StrategyDetailBody from '../../components/admin/strategy-detail/StrategyDetailBody'
 import StrategyFilterBar from '../../components/admin/strategy-detail/StrategyFilterBar'
+import { STAGGER_REVEAL } from '../../components/admin/strategy-detail/stagger'
 import { EXCHANGE_META } from '../../components/exchanges/meta'
 import { useApiData } from '../../hooks/useApiData'
 import { useStrategyFilters, type StrategyFilterState } from '../../hooks/useStrategyFilters'
@@ -31,14 +32,6 @@ const EMPTY_PAGE =
 const CLEAR_BTN =
   'mt-3 inline-flex items-center py-2 px-3.5 border border-accent-line rounded-btn bg-accent-soft text-accent text-[12.5px] font-bold cursor-pointer transition-colors hover:bg-accent hover:text-on-accent'
 
-/**
- * A filter change replays the cards one after another (top first, 60 ms
- * apart) instead of a hard cut. `both` holds each card on its end frame, so
- * a card AOS has not revealed yet can never be left invisible.
- */
-const STAGGER =
-  '[&>*]:animate-[fadeup_0.45s_cubic-bezier(0.22,1,0.36,1)_both] [&>*:nth-child(2)]:[animation-delay:60ms] [&>*:nth-child(3)]:[animation-delay:120ms] [&>*:nth-child(4)]:[animation-delay:180ms] [&>*:nth-child(5)]:[animation-delay:240ms] [&>*:nth-child(6)]:[animation-delay:300ms] [&>*:nth-child(n+7)]:[animation-delay:360ms]'
-
 const exchangeLabel = (kind: string) =>
   kind in EXCHANGE_META ? EXCHANGE_META[kind as ExchangeKind].label : kind
 
@@ -51,6 +44,7 @@ function scopeLine(f: StrategyFilterState, trades: StrategyTrade[]): string {
         ? f.coins.map(displaySymbol).join(' + ')
         : `${f.coins.length} coins`
   const venue = f.exchange === 'all' ? 'every exchange' : exchangeLabel(f.exchange)
+  const side = f.side === 'long' ? 'longs only' : f.side === 'short' ? 'shorts only' : null
   let who = 'every account'
   if (f.owner === 'master') who = 'master account only'
   else if (f.owner === 'customers') who = 'customers only'
@@ -58,7 +52,7 @@ function scopeLine(f: StrategyFilterState, trades: StrategyTrade[]): string {
   else if (f.owner.startsWith('u:')) {
     who = trades.find((t) => `u:${t.uni_id}` === f.owner)?.owner_name ?? 'one account'
   }
-  const parts = [coins, venue, who]
+  const parts = [coins, venue, ...(side ? [side] : []), who]
   if (f.date !== 'all') parts.push(dateRangeLabel(f.date, f.from, f.to))
   return parts.join(' · ')
 }
@@ -77,12 +71,12 @@ export default function AdminStrategyDetail() {
     () => (data ? (groupTradesByStrategy(data.trades).get(decodedKey) ?? []) : []),
     [data, decodedKey],
   )
-  const { coins, exchange, owner, date, from, to } = filters
+  const { coins, exchange, side, owner, date, from, to } = filters
   const shown = useMemo(
-    () => filterStrategyTrades(strategyTrades, { coins, exchange, owner, date, from, to }),
+    () => filterStrategyTrades(strategyTrades, { coins, exchange, side, owner, date, from, to }),
     // coins is a fresh array each render; its joined value is the dependency
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [strategyTrades, coins.join(','), exchange, owner, date, from, to],
+    [strategyTrades, coins.join(','), exchange, side, owner, date, from, to],
   )
   const stats = useMemo(
     () => (shown.length === 0 ? null : computeStrategyDetail(decodedKey, shown)),
@@ -91,7 +85,7 @@ export default function AdminStrategyDetail() {
 
   // The cards replay their reveal on a filter change — not on first load,
   // which belongs to AOS's scroll-in.
-  const signature = [coins.join(','), exchange, owner, date, from, to].join('|')
+  const signature = [coins.join(','), exchange, side, owner, date, from, to].join('|')
   const firstSignature = useRef(signature)
   const changed = signature !== firstSignature.current
 
@@ -169,7 +163,7 @@ export default function AdminStrategyDetail() {
       {filterBar}
 
       {/* keyed on the filters: every card below replays its reveal */}
-      <div key={signature} className={changed ? STAGGER : ''}>
+      <div key={signature} className={changed ? STAGGER_REVEAL : ''}>
         <div
           className="flex flex-wrap items-center justify-between gap-3.5 mb-4 p-5 border border-accent-line rounded-card bg-[linear-gradient(to_bottom_right,var(--accentSoft),var(--surface))]"
           data-aos="fade-up"

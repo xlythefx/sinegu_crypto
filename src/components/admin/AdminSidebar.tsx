@@ -23,6 +23,7 @@ import {
   Eye,
   Bot,
   Clapperboard,
+  Swords,
 } from 'lucide-react'
 import { usePortalSwitch } from '../ui/PortalSwitchOverlay'
 import { getUser } from '../../lib/session'
@@ -79,6 +80,8 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { label: 'Creatives', url: '/admin/creatives', icon: Clapperboard, collaborator: true },
   { label: 'API Keys', url: '/admin/api-keys', icon: KeyRound },
   { label: 'Strategies', url: '/admin/strategies', icon: Target, collaborator: true },
+  // Customers' names, P&L and balances: full admins only, like the API.
+  { label: 'Customers vs Master', url: '/admin/vs-master', icon: Swords },
   { label: 'Trading Assets', url: '/admin/assets', icon: Coins },
   { label: 'Sandbox', url: '/admin/sandbox', icon: FlaskConical },
   { label: 'Positions', url: '/admin/positions', icon: Bell },

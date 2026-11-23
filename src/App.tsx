@@ -45,6 +45,7 @@ import AdminSandbox from './pages/admin/AdminSandbox'
 import AdminEmailTemplates from './pages/admin/AdminEmailTemplates'
 import AdminManualTrade from './pages/admin/AdminManualTrade'
 import AdminStrategyDetail from './pages/admin/AdminStrategyDetail'
+import AdminVsMaster from './pages/admin/AdminVsMaster'
 import AdminPositions from './pages/admin/AdminPositions'
 import AdminEngine from './pages/admin/AdminEngine'
 import AdminTradeLogs from './pages/admin/AdminTradeLogs'
@@ -109,6 +110,7 @@ function App() {
               <Route path="/admin/users" element={<AdminUsers />} />
               <Route path="/admin/api-keys" element={<AdminApiKeys />} />
               <Route path="/admin/strategies/:key" element={<AdminStrategyDetail />} />
+              <Route path="/admin/vs-master" element={<AdminVsMaster />} />
               <Route path="/admin/strategies" element={<AdminStrategies />} />
               <Route path="/admin/assets/new" element={<AdminAssetEditor />} />
               <Route path="/admin/assets/:assetId/edit" element={<AdminAssetEditor />} />

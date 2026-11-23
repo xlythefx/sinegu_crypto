@@ -10,7 +10,7 @@ import {
 import { rangeFor } from './dateRange'
 import type { StrategyTrade } from './strategyStats'
 
-const NONE: StrategyFilters = { coins: [], exchange: 'all', owner: 'all', date: 'all', from: '', to: '' }
+const NONE: StrategyFilters = { coins: [], exchange: 'all', side: 'all', owner: 'all', date: 'all', from: '', to: '' }
 
 function trade(p: Partial<StrategyTrade>): StrategyTrade {
   return {

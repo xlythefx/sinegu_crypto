@@ -70,6 +70,7 @@ import type {
   CustomerSignals,
 } from '../types/admin'
 import type { AdminSignupInfo } from '../types/signupInfo'
+import type { VsMasterData } from '../types/vsMaster'
 
 export async function getMasterStats(): Promise<MasterStats> {
   const res = await apiFetch<{ success: boolean } & MasterStats>(
@@ -1397,4 +1398,25 @@ export async function resolveTronClaim(
     { method: 'POST', auth: true, body: { note } },
   )
   return { message: res.message }
+}
+
+/**
+ * GET /admin/insights/vs-master — every customer's return beside the
+ * master's over the same UTC days (full admins only). No dates = this month.
+ */
+export async function getVsMaster(params: {
+  exchange?: string
+  from?: string
+  to?: string
+}): Promise<VsMasterData> {
+  const qs = new URLSearchParams()
+  if (params.exchange && params.exchange !== 'all') qs.set('exchange', params.exchange)
+  if (params.from) qs.set('from', params.from)
+  if (params.to) qs.set('to', params.to)
+  const q = qs.toString()
+  const res = await apiFetch<{ success: boolean } & VsMasterData>(
+    q ? `/admin/insights/vs-master?${q}` : '/admin/insights/vs-master',
+    { auth: true },
+  )
+  return { from: res.from, to: res.to, exchange: res.exchange, master: res.master, customers: res.customers }
 }

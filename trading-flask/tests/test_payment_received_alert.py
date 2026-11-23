@@ -11,7 +11,7 @@ SECRET = "test-webhook-secret"
 
 PAYMENT = {
     "invoice_id": 15,
-    "name": "Alexandre Guyomard",
+    "name": "Sam Carter",
     "amount": 24.04,
     "period": "October 2026",
     "method": "Card (Stripe)",
@@ -28,7 +28,7 @@ def test_the_payment_goes_to_the_admin_chat_only(client):
     assert response.status_code == 200
     public.assert_not_called()
     (text,), _ = private.call_args
-    assert "Invoice paid — Alexandre Guyomard" in text
+    assert "Invoice paid — Sam Carter" in text
     assert "$24.04 for October 2026 · Card (Stripe)" in text
     assert "Invoice #15 · Binance" in text
     assert "switched back on" not in text
@@ -55,7 +55,7 @@ def test_a_paused_account_is_said_to_be_back_on():
 
 def test_a_test_payment_never_reads_as_revenue():
     text = notify.render_payment_received({**PAYMENT, "test": True, "method": "Card (Stripe test mode)"})
-    assert "Test payment — Alexandre Guyomard" in text
+    assert "Test payment — Sam Carter" in text
     assert "not real money" in text
     assert "Invoice paid" not in text
 

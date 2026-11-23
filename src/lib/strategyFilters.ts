@@ -23,11 +23,14 @@ import type { StrategyTrade } from './strategyStats'
 /** Whose trades: everyone, a role group, or one account owner (`u:<uni_id>`). */
 export type OwnerFilter = 'all' | 'master' | 'customers' | 'testers' | `u:${string}`
 
+export type SideFilter = 'all' | 'long' | 'short'
+
 export interface StrategyFilters {
   /** Coin keys (see `coinKey`); empty = every coin. */
   coins: string[]
   /** 'all' or an exchange kind (binance | mexc | bybit). */
   exchange: string
+  side: SideFilter
   owner: OwnerFilter
   date: DatePreset
   /** Only for date = 'custom'. */
@@ -35,7 +38,7 @@ export interface StrategyFilters {
   to: string
 }
 
-type Facet = 'coins' | 'exchange' | 'owner' | 'date'
+type Facet = 'coins' | 'exchange' | 'side' | 'owner' | 'date'
 
 export { coinKey }
 
@@ -72,6 +75,7 @@ export function filterStrategyTrades(
   return trades.filter((t) => {
     if (coins && !coins.has(coinKey(t.symbol))) return false
     if (skip !== 'exchange' && f.exchange !== 'all' && (t.exchange ?? 'binance') !== f.exchange) return false
+    if (skip !== 'side' && f.side !== 'all' && t.side !== f.side.toUpperCase()) return false
     if (skip !== 'owner' && !ownerMatches(t, f.owner)) return false
     if (range.from || range.to) {
       const day = closedDay(t)
@@ -128,6 +132,16 @@ export function exchangeCounts(all: StrategyTrade[], f: StrategyFilters, now?: D
     venues.set(v, (venues.get(v) ?? 0) + 1)
   }
   return venues
+}
+
+/** Long and short trades under the other filters. */
+export function sideCounts(all: StrategyTrade[], f: StrategyFilters, now?: Date) {
+  const scoped = filterStrategyTrades(all, f, 'side', now)
+  return {
+    all: scoped.length,
+    long: scoped.filter((t) => t.side === 'LONG').length,
+    short: scoped.filter((t) => t.side === 'SHORT').length,
+  }
 }
 
 export interface OwnerCounts {

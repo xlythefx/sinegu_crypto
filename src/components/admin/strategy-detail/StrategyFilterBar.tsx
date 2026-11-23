@@ -1,4 +1,4 @@
-import { Crown, FlaskConical, Users } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, Crown, FlaskConical, Users } from 'lucide-react'
 import {
   ActiveFilters,
   DateRangeFilter,
@@ -17,7 +17,9 @@ import {
   coinOptions,
   exchangeCounts,
   ownerCounts,
+  sideCounts,
   type OwnerFilter,
+  type SideFilter,
 } from '../../../lib/strategyFilters'
 import type { StrategyTrade } from '../../../lib/strategyStats'
 import type { StrategyFilterState } from '../../../hooks/useStrategyFilters'
@@ -38,8 +40,8 @@ const exchangeLabel = (kind: string) =>
   kind in EXCHANGE_META ? EXCHANGE_META[kind as ExchangeKind].label : kind
 
 /**
- * Every filter the strategy page applies — coins (any number), exchange,
- * whose accounts, dates (presets or custom) — on the shared filter kit (see
+ * Every filter the strategy pages apply — coins (any number), exchange,
+ * long / short, whose accounts, dates (presets or custom) — on the shared filter kit (see
  * FilterPanel for the convention). Lives OUTSIDE the re-keyed region so the
  * date inputs never lose focus; the cards below re-key on the filters.
  */
@@ -56,6 +58,13 @@ export default function StrategyFilterBar({
   const coins = coinOptions(trades, f)
   const venues = exchangeCounts(trades, f)
   const owners = ownerCounts(trades, f)
+  const sides = sideCounts(trades, f)
+  const hasSides = trades.some((t) => t.side === 'LONG' || t.side === 'SHORT')
+  const sideOptions: SegmentedOption<SideFilter>[] = [
+    { value: 'all', label: 'Both', count: sides.all, tone: 'neutral' },
+    { value: 'long', label: 'Long', count: sides.long, tone: 'green', icon: ArrowUpRight },
+    { value: 'short', label: 'Short', count: sides.short, tone: 'red', icon: ArrowDownRight },
+  ]
   const hasTesters = trades.some((t) => t.owner_role === 'tester')
   const hasCustomers = trades.some((t) => t.owner_role === 'user')
 
@@ -88,6 +97,9 @@ export default function StrategyFilterBar({
   }
   if (f.exchange !== 'all') {
     chips.push({ key: 'exchange', label: exchangeLabel(f.exchange), onRemove: f.resetExchange })
+  }
+  if (f.side !== 'all') {
+    chips.push({ key: 'side', label: f.side === 'long' ? 'Longs only' : 'Shorts only', onRemove: f.resetSide })
   }
   if (f.owner !== 'all') {
     const label =
@@ -143,6 +155,17 @@ export default function StrategyFilterBar({
                 onChange={f.setExchange}
                 options={exchangeOptions}
                 ariaLabel="Exchange"
+              />
+            </FilterGroup>
+          )}
+          {hasSides && (
+            <FilterGroup label="Side">
+              <Segmented<SideFilter>
+                size="sm"
+                value={f.side}
+                onChange={f.setSide}
+                options={sideOptions}
+                ariaLabel="Long or short"
               />
             </FilterGroup>
           )}

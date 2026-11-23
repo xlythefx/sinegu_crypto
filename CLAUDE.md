@@ -341,7 +341,7 @@ wrong); invoice/pause 72 h. Rules:
   the 4th's enforce step pauses unpaid accounts at the billing hour.
 
 **A paid invoice is ANNOUNCED, and a $0 month reads "No fee" (2026-11-11).**
-Alexandre Guyomard paid by card on 10 Nov; it settled and nobody heard.
+A customer paid by card on 10 Nov; it settled and nobody heard.
 `InvoiceService::settle` → `Billing\PaymentNotifier`, after the commit and only
 from the call that did the settling, sends three things: the customer's
 `payment-received`, the team's `team-invoice-paid`, and an admin-Telegram line
@@ -384,6 +384,22 @@ payment is told exactly once. Rules:
   never the admin. Website: `components/admin/invoices/MarkPaidModal.tsx`.
   Every "Paid" anywhere carries `PaidViaBadge` (Stripe / Crypto / By hand,
   `lib/paymentKind.ts`).
+
+## Customers vs master + strategy filters (2026-11-23)
+
+- **Admin → Customers vs Master** (`/admin/vs-master`, full admins only,
+  `GET /admin/insights/vs-master`, `App\Services\Admin\MasterComparison`):
+  every customer ranked by return beside the master's over the same UTC days.
+  Return = `UserStatsService::dailyReturns` added up (the calendar's figure,
+  never P&L over today's balance); "vs master" = percentage points. A master
+  close is "followed" when the customer closed the same exchange + coin + side
+  within 900 s (one to one), and only counts against a customer who had an
+  account on that exchange then. Customers only, real money only.
+- **Strategy filter bar** (`StrategyFilterBar`, `useStrategyFilters`,
+  `lib/strategyFilters.ts`) on the Strategies list AND each strategy's page:
+  coins, exchange, side, accounts, dates, all in the URL; every card follows
+  it. Coins are `coinKey` (LTCUSDT = LTC_USDT). Trades carry `side` from the
+  API (`TradeSide::closed`).
 
 ## Customer standing, admin audit, timeline (2026-11-11)
 

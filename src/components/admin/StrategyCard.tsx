@@ -35,6 +35,8 @@ interface StrategyCardProps {
   onToggle?: () => void
   onToggleTicker: (ticker: string) => void
   onClearExcluded: () => void
+  /** The list's filter query (`?coins=…&date=…`), carried into the strategy page. */
+  search?: string
 }
 
 /** One strategy: header + toggle, exclude-ticker chips, metric tiles, equity curve. */
@@ -46,6 +48,7 @@ export default function StrategyCard({
   onToggle,
   onToggleTicker,
   onClearExcluded,
+  search,
 }: StrategyCardProps) {
   const curve = useMemo(() => {
     const values = [0, ...stats.equitySeries.map((p) => p.cumulative)]
@@ -88,7 +91,7 @@ export default function StrategyCard({
       <div className="flex flex-wrap items-start justify-between gap-3.5 pb-3.5 border-b border-hair">
         <div>
           <Link
-            to={`/admin/strategies/${encodeURIComponent(stats.key)}`}
+            to={`/admin/strategies/${encodeURIComponent(stats.key)}${search ?? ''}`}
             className="group inline-flex items-center gap-[5px] font-display text-[19px] font-extrabold tracking-[-0.02em] text-text no-underline transition-colors duration-150 hover:text-accent"
           >
             {stats.key}
@@ -312,7 +315,7 @@ export default function StrategyCard({
       </div>
 
       <Link
-        to={`/admin/strategies/${encodeURIComponent(stats.key)}`}
+        to={`/admin/strategies/${encodeURIComponent(stats.key)}${search ?? ''}`}
         className="group flex items-center justify-center gap-1.5 p-[11px] border border-accent-line rounded-row bg-accent-soft text-accent text-[13px] font-bold no-underline transition-[background,border-color] duration-150 hover:bg-accent hover:border-accent hover:text-on-accent"
       >
         View in-depth details

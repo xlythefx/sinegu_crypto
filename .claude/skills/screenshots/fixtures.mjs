@@ -985,6 +985,7 @@ const STRATEGY_TRADES = (() => {
       const month = i % 5 === 4 ? '10' : '11'
       rows.push({
         strategy, symbol: mexc ? symbol.replace('USDT', '_USDT') : symbol,
+        side: i % 3 === 1 ? 'SHORT' : 'LONG',
         exchange: mexc ? 'mexc' : 'binance', uni_id: owner[2],
         owner_name: owner[0], owner_role: owner[1],
         realized_pnl: Math.round((gross - fee) * 100) / 100, exchange_fee: fee,
@@ -996,6 +997,32 @@ const STRATEGY_TRADES = (() => {
   return rows.sort((a, b) => a.closed_at.localeCompare(b.closed_at))
 })()
 const STRATEGIES_BODY = { success: true, enabled: {}, trades: STRATEGY_TRADES }
+
+/** GET /admin/insights/vs-master — invented customers beside an invented master. */
+const VS_MASTER_BODY = (() => {
+  const people = [
+    ['Alex Rivera', 3.42, 412.5, 21, 71, 22, 22, 0, 9, 2, 12040],
+    ['Mia Santos', 2.95, 188.1, 20, 65, 21, 22, 1, 7, 4, 6380],
+    ['Noah Park', 2.61, 96.4, 18, 61, 19, 22, 2, 6, 5, 3690],
+    ['Lena Novak', 2.12, 1021.8, 22, 59, 22, 22, 0, 5, 6, 48200],
+    ['Omar Haddad', 1.48, 31.2, 14, 57, 15, 22, 6, 4, 7, 2110],
+    ['Sara Lind', 0.73, 7.9, 9, 44, 9, 16, 7, 3, 6, 1090],
+    ['Tom Becker', -0.41, -12.6, 11, 36, 11, 22, 11, 2, 9, 3070],
+    ['Ivy Chen', -1.86, -64.3, 8, 25, 6, 22, 16, 1, 10, 3460],
+  ]
+  const master = { pnl: 1284.4, pnl_gross: 1371.9, fees: 87.5, pct: 2.31, trades: 22, wins: 14, win_rate: 63.6, best_day: 1.12, worst_day: -0.84, balance: 55800 }
+  return {
+    success: true, from: '2026-11-01', to: '2026-11-23', exchange: null, master,
+    customers: people.map(([name, pct, pnl, trades, wr, followed, closes, missed, ahead, behind, balance], i) => ({
+      rank: i + 1, uni_id: `s-${i}`, name, exchanges: i === 3 ? ['binance', 'mexc'] : ['binance'],
+      connected: i !== 5, balance: i === 5 ? null : balance,
+      pnl, pnl_gross: Math.round(pnl * 1.07 * 100) / 100, fees: Math.round(Math.abs(pnl) * 0.07 * 100) / 100,
+      pct, gap: Math.round((pct - master.pct) * 100) / 100, trades, wins: Math.round(trades * wr / 100), win_rate: wr,
+      best_day: 1.2, worst_day: -0.9, followed, missed, master_closes: closes, extra: Math.max(0, trades - followed),
+      days_ahead: ahead, days_behind: behind,
+    })),
+  }
+})()
 
 // The trader dashboard's Daily P&L Calendar opens on the CURRENT month, so its
 // sample days are this month's (invented, like every figure here). Day 9 has a
@@ -1071,6 +1098,7 @@ const GET = {
   '/admin/affiliate/users/': { success: true, referrals: [] },
   '/admin/users': USERS_BODY,
   '/admin/strategies': STRATEGIES_BODY,
+  '/admin/insights/vs-master': VS_MASTER_BODY,
   // The trader's own closes (Strategy Analysis card + /dashboard/strategies/:key).
   '/binance/past-positions': {
     success: true,
