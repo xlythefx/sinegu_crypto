@@ -703,7 +703,8 @@ export interface AdminUserDetail {
 /** One line of a customer's Timeline (GET /admin/users/{uniId}/timeline). */
 export interface TimelineEvent {
   at: string
-  kind: 'signup' | 'admin' | 'account' | 'key' | 'trade' | 'invoice' | 'payment' | 'note'
+  /** `customer` = something they did themselves; `signin` = a sign-in (2026-11-23). */
+  kind: 'signup' | 'admin' | 'account' | 'key' | 'trade' | 'invoice' | 'payment' | 'note' | 'customer' | 'signin'
   tone: 'good' | 'bad' | 'neutral' | 'info' | 'note'
   title: string
   detail: string | null

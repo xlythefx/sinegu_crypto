@@ -71,6 +71,7 @@ import type {
 } from '../types/admin'
 import type { AdminSignupInfo } from '../types/signupInfo'
 import type { VsHeadToHead, VsMasterData } from '../types/vsMaster'
+import type { ActivityPage, ActivitySource, TeamNotice } from '../types/activity'
 
 export async function getMasterStats(): Promise<MasterStats> {
   const res = await apiFetch<{ success: boolean } & MasterStats>(
@@ -624,6 +625,48 @@ export async function getAdminUserTimeline(uniId: string): Promise<TimelineEvent
     { auth: true },
   )
   return res.events
+}
+
+/** Admin → Activity: every user's actions, sign-ins and admin actions, newest first. */
+export async function getAdminActivity(params: {
+  source?: ActivitySource | 'all'
+  q?: string
+  from?: string
+  to?: string
+  page?: number
+}): Promise<ActivityPage> {
+  const qs = new URLSearchParams()
+  if (params.source && params.source !== 'all') qs.set('source', params.source)
+  if (params.q) qs.set('q', params.q)
+  if (params.from) qs.set('from', params.from)
+  if (params.to) qs.set('to', params.to)
+  if (params.page && params.page > 1) qs.set('page', String(params.page))
+  const q = qs.toString()
+  const res = await apiFetch<{ success: boolean } & ActivityPage>(q ? `/admin/activity?${q}` : '/admin/activity', {
+    auth: true,
+  })
+  return { items: res.items, total: res.total, page: res.page, per_page: res.per_page }
+}
+
+/** Admin → Notifications: who receives each team email. */
+export async function getAdminNotifications(): Promise<{ notices: TeamNotice[]; delivers: boolean }> {
+  const res = await apiFetch<{ success: boolean; notices: TeamNotice[]; delivers: boolean }>('/admin/notifications', {
+    auth: true,
+  })
+  return { notices: res.notices, delivers: res.delivers }
+}
+
+/** `recipients: null` = back to the server's default list. */
+export async function updateAdminNotification(
+  slug: string,
+  body: { enabled: boolean; recipients: string[] | null },
+): Promise<TeamNotice> {
+  const res = await apiFetch<{ success: boolean; notice: TeamNotice }>(`/admin/notifications/${slug}`, {
+    method: 'PUT',
+    body,
+    auth: true,
+  })
+  return res.notice
 }
 
 export async function addAdminUserNote(uniId: string, body: string): Promise<void> {

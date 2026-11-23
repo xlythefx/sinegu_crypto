@@ -46,6 +46,8 @@ import AdminEmailTemplates from './pages/admin/AdminEmailTemplates'
 import AdminManualTrade from './pages/admin/AdminManualTrade'
 import AdminStrategyDetail from './pages/admin/AdminStrategyDetail'
 import AdminVsMaster from './pages/admin/AdminVsMaster'
+import AdminActivity from './pages/admin/AdminActivity'
+import AdminNotifications from './pages/admin/AdminNotifications'
 import AdminPositions from './pages/admin/AdminPositions'
 import AdminEngine from './pages/admin/AdminEngine'
 import AdminTradeLogs from './pages/admin/AdminTradeLogs'
@@ -111,6 +113,8 @@ function App() {
               <Route path="/admin/api-keys" element={<AdminApiKeys />} />
               <Route path="/admin/strategies/:key" element={<AdminStrategyDetail />} />
               <Route path="/admin/vs-master" element={<AdminVsMaster />} />
+              <Route path="/admin/activity" element={<AdminActivity />} />
+              <Route path="/admin/notifications" element={<AdminNotifications />} />
               <Route path="/admin/strategies" element={<AdminStrategies />} />
               <Route path="/admin/assets/new" element={<AdminAssetEditor />} />
               <Route path="/admin/assets/:assetId/edit" element={<AdminAssetEditor />} />

@@ -27,7 +27,8 @@ export interface ExchangeMeta {
    * Live in the engine, but not yet offered to customers: only staff
    * (`canSeeAdmin`, testers included) may CONNECT one. Bybit is that today —
    * it trades, it just has not run long enough on a real customer account to
-   * sell. MEXC was too until it opened to customers on 2026-11-06.
+   * sell. MEXC opened to customers on 2026-11-06 and was closed again on
+   * 2026-11-23 (owner: "disable MEXC for now").
    *
    * Opening a venue is BOTH halves: the box's EXCHANGES_STAFF_ONLY (server
    * first, so the wizard never offers what the API refuses) and this flag.
@@ -70,7 +71,7 @@ export const EXCHANGE_META: Record<ExchangeKind, ExchangeMeta> = {
     available: true,
     blurb: 'Connect your MEXC futures account with trade-only API keys',
     hasTestnet: true,
-    staffOnly: false,
+    staffOnly: true,
   },
 }
 

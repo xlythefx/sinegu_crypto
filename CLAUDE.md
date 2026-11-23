@@ -152,10 +152,10 @@ three. **All three are wired as of 2026-09-24**; MEXC and Bybit are staff-only
 to connect (below). Canonical labels/brand colors/order live in
 `src/components/exchanges/meta.ts`.
 
-**MEXC is OPEN to customers since 2026-11-06; Bybit is still STAFF-ONLY to
-connect** (staff-only since MEXC 2026-09-23, Bybit 2026-09-24). Prod's
-`api/.env` carries `EXCHANGES_STAFF_ONLY=bybit` and `meta.ts` has
-`mexc.staffOnly: false`. **Opening a venue takes BOTH halves**, server first
+**MEXC and Bybit are both STAFF-ONLY to connect again (owner, 2026-11-23:
+"disable MEXC for now")** — MEXC was open to customers 2026-11-06 → 11-23.
+Prod's `api/.env` carries `EXCHANGES_STAFF_ONLY=mexc,bybit` and `meta.ts` has
+`mexc.staffOnly: true`; existing MEXC accounts keep trading. **Opening a venue takes BOTH halves**, server first
 (so the wizard never offers what the API refuses): the box's key +
 `config:cache`, then the frontend flag + a website deploy — the "never a
 deploy" below predates the wizard's own copy of the lock. **MEXC customers
@@ -406,6 +406,29 @@ payment is told exactly once. Rules:
   coins, exchange, side, accounts, dates, all in the URL; every card follows
   it. Coins are `coinKey` (LTCUSDT = LTC_USDT). Trades carry `side` from the
   API (`TradeSide::closed`).
+
+## Activity log + Notifications (Dima, 2026-11-23)
+
+- **A user's OWN actions are recorded** in `user_activity_logs` by the route
+  middleware `activity:<action>` (`RecordUserActivity` → `App\Services\Activity\UserActivity`),
+  only after a 2xx without `success: false`. **A new customer-facing write
+  route gets an `activity:` entry + a line in `UserActivity::describe`.** Never
+  a credential or a typed contact value — field NAMES only (a test asserts it).
+  Sign-ins stay in `user_access_events`, admin actions in `admin_audit_logs`.
+- **Admin → Activity** (`/admin/activity`, `GET /admin/activity`, full admins)
+  = `ActivityFeed`, a UNION ALL of the three tables (never a copy), paged 50.
+  The customer's Timeline adds kinds `customer` + `signin` and filter chips
+  (`?tl=`); connect/disconnect stay derived from the account rows.
+- **Admin → Notifications** (`/admin/notifications`, full admins):
+  **every team email asks `TeamNotices::recipients(slug)`**, never
+  `AccountMail::teamRecipients()` / `TradeAlerts::recipients()` (those are now
+  only the DEFAULT lists). No `notification_settings` row = the env list, so a
+  box is unchanged until edited. `trade-exit-stuck` and `risk-alert` are
+  CRITICAL: never off, never empty; an unreadable table = the default list. A
+  new team email = a `TeamNotices::NOTICES` entry + its slug in
+  `EmailCatalogue`. Changes are recorded in the admin audit
+  (`notification.updated`, no subject).
+- `team-exchange-connected` is LIVE: customers (`type = 'user'`) only.
 
 ## Customer standing, admin audit, timeline (2026-11-11)
 

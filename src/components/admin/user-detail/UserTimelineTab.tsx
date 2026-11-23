@@ -1,7 +1,8 @@
-import { useCallback, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { History, StickyNote, Trash2 } from 'lucide-react'
 import ConfirmModal from '../../ui/ConfirmModal'
+import Segmented, { type SegmentedOption } from '../../ui/filters/Segmented'
 import { useApiData } from '../../../hooks/useApiData'
 import { addAdminUserNote, deleteAdminUserNote, getAdminUserTimeline } from '../../../services/admin'
 import { getApiErrorMessage } from '../../../services/api'
@@ -25,6 +26,32 @@ const KIND_LABEL: Record<TimelineEvent['kind'], string> = {
   invoice: 'Billing',
   payment: 'Payment',
   note: 'Note',
+  customer: 'Their action',
+  signin: 'Sign-in',
+}
+
+/** The Timeline's filter (`?tl=`): who or what an event is about. */
+type TimelineFilter = 'all' | 'own' | 'signin' | 'admin' | 'billing' | 'exchange'
+
+const FILTER_KINDS: Record<Exclude<TimelineFilter, 'all'>, TimelineEvent['kind'][]> = {
+  own: ['customer'],
+  signin: ['signin', 'signup'],
+  admin: ['admin', 'note'],
+  billing: ['invoice', 'payment'],
+  exchange: ['account', 'key', 'trade'],
+}
+
+const FILTER_LABEL: Record<TimelineFilter, string> = {
+  all: 'All',
+  own: 'Their actions',
+  signin: 'Sign-ins',
+  admin: 'Admin & notes',
+  billing: 'Billing',
+  exchange: 'Exchange & trading',
+}
+
+function isFilter(v: string | null): v is TimelineFilter {
+  return v !== null && v in FILTER_LABEL
 }
 
 /**
@@ -37,6 +64,33 @@ const KIND_LABEL: Record<TimelineEvent['kind'], string> = {
 export default function UserTimelineTab({ uniId, name }: { uniId: string; name: string }) {
   const fetchEvents = useCallback(() => getAdminUserTimeline(uniId), [uniId])
   const { data: events, loading, error, reload } = useApiData(fetchEvents, [fetchEvents])
+
+  const [params, setParams] = useSearchParams()
+  const filter: TimelineFilter = isFilter(params.get('tl')) ? (params.get('tl') as TimelineFilter) : 'all'
+  const setFilter = (next: TimelineFilter) =>
+    setParams(
+      (prev) => {
+        const p = new URLSearchParams(prev)
+        if (next === 'all') p.delete('tl')
+        else p.set('tl', next)
+        return p
+      },
+      { replace: true },
+    )
+  const options = useMemo<SegmentedOption<TimelineFilter>[]>(
+    () =>
+      (Object.keys(FILTER_LABEL) as TimelineFilter[]).map((f) => ({
+        value: f,
+        label: FILTER_LABEL[f],
+        tone: f === 'all' ? 'neutral' : 'accent',
+        count: events ? (f === 'all' ? events.length : events.filter((e) => FILTER_KINDS[f].includes(e.kind)).length) : undefined,
+      })),
+    [events],
+  )
+  const shown = useMemo(
+    () => (events && filter !== 'all' ? events.filter((e) => FILTER_KINDS[filter].includes(e.kind)) : events),
+    [events, filter],
+  )
 
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
@@ -111,20 +165,27 @@ export default function UserTimelineTab({ uniId, name }: { uniId: string; name: 
           <div>
             <div className="font-display text-[15px] font-extrabold">Timeline</div>
             <div className="mt-px text-[12px] text-muted">
-              Newest first. Admin actions are recorded from Nov 11, 2026; invoices, keys and trades go back to the start.
+              Newest first. Admin actions are recorded from Nov 11, 2026, their own actions from Nov 23, 2026, sign-ins
+              from Oct 14, 2026; invoices, keys and trades go back to the start.
             </div>
           </div>
         </div>
 
-        {!events ? (
+        <div className="mb-4">
+          <Segmented value={filter} onChange={setFilter} options={options} ariaLabel="Show on the timeline" size="sm" />
+        </div>
+
+        {!events || !shown ? (
           <p className="py-8 text-center text-[13px] text-muted">
             {loading ? 'Loading the timeline…' : error ? 'Could not load the timeline.' : ''}
           </p>
-        ) : events.length === 0 ? (
-          <p className="py-8 text-center text-[13px] text-muted">Nothing recorded yet.</p>
+        ) : shown.length === 0 ? (
+          <p className="py-8 text-center text-[13px] text-muted">
+            {events.length === 0 ? 'Nothing recorded yet.' : `Nothing under "${FILTER_LABEL[filter]}" yet.`}
+          </p>
         ) : (
-          <ol className="relative ml-1.5 border-l border-hair">
-            {events.map((e, i) => (
+          <ol key={filter} className="relative ml-1.5 animate-[fadeup_0.35s_ease-out] border-l border-hair">
+            {shown.map((e, i) => (
               <li key={`${e.at}-${i}`} className="relative pb-4 pl-5 last:pb-0">
                 <span className={`absolute -left-[5px] top-[6px] h-[9px] w-[9px] rounded-full ring-4 ring-surface ${DOT[e.tone]}`} />
                 <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">

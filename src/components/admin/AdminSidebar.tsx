@@ -24,6 +24,7 @@ import {
   Bot,
   Clapperboard,
   Swords,
+  BellRing,
 } from 'lucide-react'
 import { usePortalSwitch } from '../ui/PortalSwitchOverlay'
 import { getUser } from '../../lib/session'
@@ -73,6 +74,10 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   // The owner's list of things only they can do or decide (lib/adminTodos.ts).
   { label: 'To be Done', url: '/admin/todo', icon: ListTodo },
   { label: 'User Management', url: '/admin/users', icon: UserCog, collaborator: true },
+  // Every user's own actions, sign-ins and admin actions in one list — full admins (Dima, 2026-11-23).
+  { label: 'Activity', url: '/admin/activity', icon: Activity },
+  // Who receives each team email — full admins (Dima, 2026-11-23).
+  { label: 'Notifications', url: '/admin/notifications', icon: BellRing },
   // The public website's traffic — every staff role, IP included (owner, 2026-10-28).
   { label: 'Visitors', url: '/admin/visitors', icon: Eye, collaborator: true },
   // X / TikTok planning + Higgsfield generations — the marketing team's page, and

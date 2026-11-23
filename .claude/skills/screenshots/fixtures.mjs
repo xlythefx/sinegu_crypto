@@ -487,7 +487,13 @@ const ago = (days, h = 10) => new Date(Date.now() - days * 86400000 - h * 360000
 function sampleTimeline() {
   const e = (at, kind, tone, title, detail = null, by = null, invoice_id = null, note_id = null) => ({ at, kind, tone, title, detail, by, invoice_id, note_id })
   return [
+    e(ago(0, 1), 'customer', 'info', 'Opened card payment (Stripe) for invoice #22', 'IP 203.0.113.24'),
+    e(ago(0, 1.5), 'signin', 'neutral', 'Signed in (email + password)', 'Chrome 141 · Windows · desktop · PH · 203.0.113.24'),
     e(ago(0, 2), 'note', 'note', 'Note', 'Asked about raising his deposit to $5,000 next month.', 'Sample Admin', null, 3),
+    e(ago(1, 4), 'customer', 'neutral', 'Rechecked their Binance account (balance and key)', 'IP 203.0.113.24'),
+    e(ago(2, 6), 'customer', 'neutral', 'Updated their contact details (Telegram, WhatsApp)', 'IP 203.0.113.24'),
+    e(ago(2, 6.2), 'signin', 'neutral', 'Signed in (email + password)', 'Safari 18 · iOS 18 · mobile · PH · 198.51.100.7'),
+    e(ago(5, 3), 'customer', 'neutral', 'Changed their password', 'IP 198.51.100.7'),
     e('2026-11-10T08:43:50Z', 'payment', 'good', 'Paid the October 2026 invoice: $34.70', 'Card (Stripe)', null, 22),
     e('2026-11-01T09:00:00Z', 'invoice', 'info', 'October 2026 invoice issued: $34.70', 'Due Nov 4, 2026', null, 22),
     e('2026-10-21T07:12:00Z', 'admin', 'neutral', 'Changed the fees: realized 25% → 20%', null, 'Sample Admin'),
@@ -1098,7 +1104,60 @@ const DASHBOARD_SUMMARY = (() => {
   }
 })()
 
+// ---------------------------------------------------------------- Admin → Activity / Notifications
+function activityPage() {
+  const who = (uni_id, name, type = 'user') => ({ uni_id, name, type })
+  const row = (i, source, area, title, subject, extra = {}) => ({
+    key: `${source}:${900 - i}`, source, at: ago(i * 0.07, 0), action: 'x', area, title,
+    detail: null, ip: null, country: null, subject, actor: null, ...extra,
+  })
+  const daniel = who('u-daniel', 'Daniel Moreau')
+  const lena = who('s-2', 'Lena Fischer')
+  const tom = who('s-6', 'Tom Becker')
+  const admin = { uni_id: 'a-1', name: 'Sample Admin' }
+  const items = [
+    row(0, 'customer', 'billing', 'Opened card payment (Stripe) for invoice #22', daniel, { ip: '203.0.113.24' }),
+    row(1, 'signin', 'signin', 'Signed in (email + password)', daniel, { detail: 'Chrome 141 · Windows · desktop', country: 'PH', ip: '203.0.113.24' }),
+    row(2, 'admin', 'billing', 'Marked invoice #19 paid: bank transfer', lena, { actor: admin }),
+    row(3, 'customer', 'exchange', 'Connected a Binance account "Lena main" (live)', lena, { ip: '198.51.100.40' }),
+    row(4, 'customer', 'account', 'Updated their contact details (Telegram, WhatsApp)', lena, { ip: '198.51.100.40' }),
+    row(5, 'signin', 'signin', 'Signed up (Discord)', who('s-9', 'Marco Silva'), { detail: 'Safari 18 · iOS 18 · mobile', country: 'BR', ip: '192.0.2.77' }),
+    row(6, 'admin', 'account', 'Notification "New sign-up": on, to dima@example.test, team@example.test', null, { actor: admin }),
+    row(7, 'customer', 'exchange', 'Rechecked their Binance account (balance and key)', tom, { ip: '192.0.2.15' }),
+    row(8, 'customer', 'account', 'Changed their password', tom, { ip: '192.0.2.15' }),
+    row(9, 'admin', 'account', 'Approved the account', who('s-9', 'Marco Silva'), { actor: admin }),
+    row(10, 'customer', 'billing', 'Opened the USDT payment for invoice #18', who('s-4', 'Priya Nair'), { ip: '203.0.113.90' }),
+    row(11, 'signin', 'signin', 'Signed in (email + password)', who('a-1', 'Sample Admin', 'admin'), { detail: 'Edge 141 · Windows · desktop', country: 'TH', ip: '203.0.113.5' }),
+  ]
+  return { success: true, items, total: 312, page: 1, per_page: 50 }
+}
+const notice = (slug, group, title, when, recipients, extra = {}) => ({
+  slug, group, title, when, critical: false, enabled: true, uses_default: true, recipients,
+  default_recipients: recipients, default_source: 'MAIL_ADMIN_ADDRESS', updated_at: null, updated_by: null, ...extra,
+})
+const TEAM = ['support@example.test', 'dima@example.test', 'christian@example.test']
+const NOTIFICATIONS_BODY = {
+  success: true,
+  delivers: true,
+  notices: [
+    notice('team-new-registration', 'Customers', 'New sign-up', 'A new person confirms their email address and is waiting for approval.', TEAM),
+    notice('team-exchange-connected', 'Customers', 'A customer connected an exchange', 'A customer connects (or reconnects) a Binance, Bybit or MEXC account, live or demo. Staff accounts are not announced.',
+      ['dima@example.test'], { uses_default: false, updated_at: ago(0, 1), updated_by: 'Sample Admin' }),
+    notice('team-invoice-paid', 'Billing', 'Invoice paid', "A customer's invoice is paid: by card, USDT, or marked paid by an admin.", TEAM),
+    notice('team-payment-disputed', 'Billing', 'Disputed crypto payment', 'A second customer claims a USDT payment that is already on another invoice.', TEAM),
+    notice('team-kill-switch', 'Trading', 'Kill switch switched a coin off', 'The master lost the set number of trades in a row on a coin, so the coin was turned off for everyone.', TEAM),
+    notice('trade-failure-summary', 'Trading', 'Hourly summary of trades that need a look', 'Every hour, only when an order was refused, an entry was shrunk or skipped, or a signal was rejected.',
+      [], { enabled: false, uses_default: false, default_recipients: ['christian@example.test'], default_source: 'TRADE_ALERT_EMAILS', updated_at: ago(1), updated_by: 'Sample Admin' }),
+    notice('trade-exit-stuck', 'Trading', 'A close failed: positions may still be open', 'At once, when the exchange refuses a close or the bot gives up retrying one.',
+      ['christian@example.test'], { critical: true, default_source: 'TRADE_ALERT_EMAILS' }),
+    notice('risk-alert', 'Trading', 'High-risk alert', "At once: a trade reached the wrong accounts, a close failed for good, the kill switch tripped, the master's key was refused, or the bot engine stopped answering.",
+      ['christian@example.test'], { critical: true, default_source: 'TRADE_ALERT_EMAILS' }),
+  ],
+}
+
 const GET = {
+  '/admin/activity': () => activityPage(),
+  '/admin/notifications': NOTIFICATIONS_BODY,
   '/dashboard/daily-pnl': { success: true, days: DASHBOARD_DAILY_PNL },
   '/dashboard/summary': { success: true, summary: DASHBOARD_SUMMARY },
   '/admin/users/': (_user, path) => userProfile(path),

@@ -14,6 +14,63 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'admin-notifications-page',
+    date: '2026-11-23',
+    kind: 'new',
+    area: 'Notifications',
+    title: 'Notifications: choose which team emails are sent, and to whom',
+    summary:
+      'A new page, Admin → Notifications, lists every email the team receives (new sign-up, a customer connected an exchange, invoice paid, disputed payment, kill switch, failed trades, high-risk alerts). Each one can be switched on or off and has its own list of email addresses, which an admin edits on the page — no developer needed.',
+    howItWorks: [
+      'Each email shows when it is sent and who gets it. Type an address and press Add; press × on an address to remove it. Changes save at once.',
+      'Example: “A customer connected an exchange” can go to Dima only, while “New sign-up” keeps going to the whole team.',
+      'Switching an email off asks for confirmation first. “Back to the default list” puts it back to the list the server started with.',
+      'Two alerts are “Always on”: a close that failed and the high-risk alert. They cannot be switched off or left without an address, because they report a position that may still be open or a serious fault on the bot.',
+      'New: the team is now emailed when a customer connects (or reconnects) an exchange account. Staff accounts are not announced.',
+      '“See the email” opens a sample of that email. Every change is recorded on Admin → Activity, with who made it.',
+    ],
+    technical: [
+      'TeamNotices::recipients(slug) is the one answer for every team notice; no notification_settings row (or recipients NULL) = the old env lists MAIL_ADMIN_ADDRESS / TRADE_ALERT_EMAILS. GET|PUT /admin/notifications[/{slug}], full admins. Critical slugs (trade-exit-stuck, risk-alert) refuse NOTICE_CRITICAL / NOTICE_NEEDS_RECIPIENT; an unreadable table falls back to the default list.',
+      'team-exchange-connected is now live: ExchangeAccountController::store, customers (type user) only, best-effort.',
+    ],
+    links: [{ label: 'Notifications', href: '/admin/notifications' }],
+  },
+  {
+    id: 'admin-activity-log',
+    date: '2026-11-23',
+    kind: 'new',
+    area: 'Activity',
+    title: 'Activity log: what every user did, and the same list on each customer’s Timeline',
+    summary:
+      'The system now records what users do themselves — changing a password or email, updating Telegram / WhatsApp, connecting, renaming, rechecking or disconnecting an exchange account, opening a payment, sending a transaction ID, payout wallets — and shows it on a new page, Admin → Activity, together with every sign-in, sign-up and admin action, newest first. Each customer’s Timeline tab shows their own slice.',
+    howItWorks: [
+      'Admin → Activity: one row per event with the user’s name (click it for their profile), what happened, when, and where from (device, country, IP for sign-ins). Filter by Their own actions / Sign-ins & sign-ups / Admin actions, search a name or email, and pick dates.',
+      'Example: “Lena Fischer — Connected a Binance account "Lena main" (live) — IP 198.51.100.40”, followed by “Sample Admin marked invoice #19 paid”.',
+      'User Management → a customer → Timeline now also shows their own actions and sign-ins, with filter buttons: Their actions, Sign-ins, Admin & notes, Billing, Exchange & trading.',
+      'Only successful actions are recorded (a wrong password is not “changed their password”). Passwords, API keys and contact details are never written — only that they changed.',
+      'Users’ own actions are recorded from today (23 Nov 2026); sign-ins go back to 14 Oct 2026 and admin actions to 11 Nov 2026.',
+    ],
+    technical: [
+      'user_activity_logs, written by the `activity:<action>` route middleware (RecordUserActivity → UserActivity) after a 2xx without success:false. ActivityFeed = UNION ALL of user_activity_logs + user_access_events + admin_audit_logs; GET /admin/activity?source=&q=&from=&to=&page=, full admins. CustomerTimeline adds kinds customer + signin.',
+    ],
+    links: [{ label: 'Activity', href: '/admin/activity' }],
+  },
+  {
+    id: 'mexc-closed-to-customers',
+    date: '2026-11-23',
+    kind: 'improved',
+    area: 'Exchange accounts',
+    title: 'MEXC is closed to new customer connections again (Bybit stays closed)',
+    summary:
+      'Customers can no longer connect a new MEXC account; the connect page shows MEXC and Bybit as “Coming soon”. Staff can still connect both. Any MEXC account already connected keeps trading and can still be renamed or disconnected.',
+    howItWorks: [
+      'A customer opening Exchange Accounts → Connect sees Binance only as available.',
+      'Reopening MEXC later is a setting on the server plus a website update — no code change.',
+    ],
+    technical: ['EXCHANGES_STAFF_ONLY=mexc,bybit on the box + EXCHANGE_META.mexc.staffOnly = true.'],
+    links: [],
+  },
+  {
     id: 'vs-master-leaderboard-why-weekly',
     date: '2026-11-23',
     kind: 'improved',
