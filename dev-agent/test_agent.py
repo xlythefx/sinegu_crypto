@@ -38,6 +38,31 @@ def test_private_strings_are_found_case_insensitively():
     assert agent.find_private("nothing here", ["Jane Example"]) == []
 
 
+def test_the_private_check_reads_the_diff_and_message_but_never_the_author(tmp_path):
+    import subprocess
+
+    def g(*args):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
+
+    g("init", "-q", "-b", "main")
+    g("config", "user.name", "Jane Example")
+    g("config", "user.email", "jane.example@example.com")
+    (tmp_path / "a.txt").write_text("one\n")
+    g("add", "-A")
+    g("commit", "-q", "-m", "first")
+    g("checkout", "-q", "-b", "devbot/job-1")
+    (tmp_path / "a.txt").write_text("one\nretry the limiter\n")
+    g("commit", "-q", "-am", "Retry a deadlocked limiter write")
+
+    text = agent.outgoing_text(tmp_path, "devbot/job-1")
+    assert "retry the limiter" in text and "Retry a deadlocked limiter write" in text
+    assert agent.find_private(text, ["Jane Example", "jane.example@example.com"]) == []
+
+    (tmp_path / "a.txt").write_text("one\nretry the limiter\nasked by Jane Example\n")
+    g("commit", "-q", "-am", "Name in the diff")
+    assert agent.find_private(agent.outgoing_text(tmp_path, "devbot/job-1"), ["Jane Example"]) == ["Jane Example"]
+
+
 def test_deploy_plan_uses_full_for_both_and_adds_engine_steps():
     assert agent.deploy_plan(["website", "api"]) == (["web", "api"], [["full"]])
     assert agent.deploy_plan(["api"]) == (["web", "api"], [["backup"], ["deploy-api"], ["verify"]])

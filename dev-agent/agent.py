@@ -142,6 +142,16 @@ def ahead_of_github(repo: Path) -> int:
     return int(out) if out.isdigit() else 0
 
 
+def outgoing_text(path: Path, branch: str) -> str:
+    """What a push of `branch` adds to GitHub: each commit's message and patch.
+
+    Never the Author / Date header. That is the PC's own git identity, already
+    on every commit in the repo, and an email that holds a user's name made
+    the private-data check refuse every change (job #3, 2026-11-25).
+    """
+    return git(path, "log", "-p", "--format=%B", f"main..{branch}")
+
+
 def make_worktrees(job_id: int) -> dict[str, Path]:
     WORK.mkdir(parents=True, exist_ok=True)
     branch = f"devbot/job-{job_id}"
@@ -508,7 +518,7 @@ def handle(job: dict) -> None:
             if private is None:
                 notes.append(f"{name}: change kept on branch {branch} on the PC, NOT pushed: the private-data check could not run.")
                 continue
-            text = git(path, "log", "-p", f"main..{branch}") + verdict["pr_title"] + verdict["pr_body"]
+            text = outgoing_text(path, branch) + verdict["pr_title"] + verdict["pr_body"]
             hits = find_private(text, private)
             if hits:
                 notes.append(f"{name}: NOT pushed: the change mentions private data ({', '.join(hits[:5])}). "
