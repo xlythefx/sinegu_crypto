@@ -86,11 +86,11 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'Can I trade manually on the same account?',
-        a: 'We strongly advise against it. The engine sizes and stacks positions from what it reads on the account; a manual trade or a manual close changes that picture and later signals act on it. Use a separate sub-account for anything you trade yourself.',
+        a: 'No. The Terms and Conditions (section 4.3) ask you not to. We record every trade on a connected account, not only the bot\'s, so a trade you make yourself counts in your profit and loss, your high-water mark and your monthly fee exactly like a bot trade, whether it wins or loses. The exchange also merges it with the bot\'s position in the same coin, so the bot\'s next exit closes both; and closing the bot\'s position yourself leaves your account out of step with later signals. To trade on your own, use a separate exchange account or sub-account that is not connected to Pixel Alpha. Deposits and withdrawals are fine: they are never counted as profit or loss. The one exception is closing your positions when you stop (see "How do I stop?").',
       },
       {
         q: 'How do I stop?',
-        a: 'Disconnect the account from Exchange Accounts — trading on that key stops immediately. Close any open position yourself on the exchange first if you do not want the strategy\'s exit to handle it. You can also delete the key at the exchange, which cuts our access regardless.',
+        a: 'Disconnect the account from Exchange Accounts — trading on that key stops immediately. If a position is still open, either wait for the strategy\'s exit before you disconnect, or close it yourself on the exchange just before you do. Closing out when you stop is allowed, and that close counts like any other trade. You can also delete the key at the exchange, which cuts our access regardless.',
       },
     ],
   },

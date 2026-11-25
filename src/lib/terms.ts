@@ -108,7 +108,7 @@ export const TERMS: LegalDocumentContent = {
         { kind: 'h3', text: '4.3 No Manual Trading on a Connected Account' },
         {
           kind: 'p',
-          text: 'An exchange account connected to the Platform is for the Platform to trade. You agree not to open, close, add to or reduce positions on that account yourself, including by placing your own take-profit or stop-loss orders, and not to change its leverage, margin mode, position mode or other trading settings the Platform relies on.',
+          text: 'An exchange account connected to the Platform is for the Platform to trade. You agree not to open, close, add to or reduce positions on that account yourself, including by placing your own take-profit or stop-loss orders, and not to change its leverage, margin mode, position mode or other trading settings the Platform relies on. The one exception is closing your open positions yourself just before you disconnect the account or stop using the Platform; such a close counts like any other trade on the account.',
         },
         {
           kind: 'p',
