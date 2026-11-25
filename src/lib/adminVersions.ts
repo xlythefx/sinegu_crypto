@@ -20,16 +20,17 @@ export const ADMIN_CHANGES: AdminChange[] = [
     area: 'Sign-up',
     title: 'The "new sign-up" email shows how to reach the person and where they signed up from',
     summary:
-      'The email the team gets when someone new registers now also shows their Telegram, their WhatsApp number, the country they signed up from and their IP address, beside the name and email it already had. Telegram and WhatsApp are links: one tap opens a chat with them. Example: "Telegram @jonathan_meyer · WhatsApp +66812345678 · Location: Thailand (TH) · IP address 203.0.113.42".',
+      'The email the team gets when someone new registers now also shows their Telegram, their WhatsApp number, the country they signed up from, their IP address, the device they used and where they heard about us, beside the name and email it already had. Telegram and WhatsApp are links: one tap opens a chat with them. Example: "Telegram @jonathan_meyer · WhatsApp +66812345678 · Location: Thailand (TH) · IP address 203.0.113.42 · Device: Safari 18 on iOS 18 · phone · Heard about us from: YouTube, Google search".',
     howItWorks: [
-      'The country and IP are the ones they REGISTERED from. The email itself is sent once they enter the code from their inbox, which can happen later from another network, so it never shows that second place by mistake.',
-      'The location is the country only. A city is not known to us today.',
+      'The country, IP and device are the ones they REGISTERED with. The email itself is sent once they enter the code from their inbox, which can happen later from another network or computer, so it never shows that second place by mistake.',
+      'The location is the country only. Showing the city is an open decision on Admin → To be Done.',
+      '"Heard about us from" lists the boxes they ticked on the sign-up form, with their own words when they ticked "Other". It says "Did not say" when they skipped the question.',
       'Telegram and WhatsApp are exactly as the person typed them at sign-up; nobody checks them, and the email says so.',
       'If something is not on record, the email says "Not given" or "Not known" rather than leaving a blank. The email still goes out even if these details cannot be read.',
       'The same details were already on each user’s admin page, under the Sign-up info tab. Who receives the email is unchanged and still set on Admin → Notifications.',
     ],
     technical: [
-      'NewRegistrationNotice gains ip / location / telegram / whatsapp (nullable). AccountMail::registrationPending reads them via signupFacts(): the first user_access_events row with event = register (never the verify request) + ContactHandles::forUser, in its own try so a failed read still sends the notice. AccessLog::location() turns CF-IPCountry into "Thailand (TH)" (intl Locale; "T1" = Tor; code alone without intl). Template now uses emails.partials.facts. Sample data in EmailCatalogue (documentation IP 203.0.113.42). Tests in AccountMailTest.',
+      'NewRegistrationNotice gains ip / location / telegram / whatsapp / device / heardFrom (nullable). AccountMail::registrationPending reads them via signupFacts(): the first user_access_events row with event = register (never the verify request) + ContactHandles::forUser + SignupSources::forUser, in its own try so a failed read still sends the notice. AccessLog::location() turns CF-IPCountry into "Thailand (TH)" (intl Locale; "T1" = Tor; code alone without intl); DeviceInfo::describe() and SignupSources::describe() (+ LABELS, kept in step with lib/signupSources.ts) write the other two lines. Template now uses emails.partials.facts. Sample data in EmailCatalogue (documentation IP 203.0.113.42). Tests in AccountMailTest.',
     ],
   },
   {

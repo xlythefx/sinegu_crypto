@@ -18,6 +18,24 @@ import type { AdminTodo } from '../types/adminTodos'
  *    the note and the date it was settled stay readable.
  */
 export const ADMIN_TODOS: AdminTodo[] = [
+  // ── Sign-up email (2026-11-25) ──────────────────────────────────────────
+  {
+    id: 'signup-email-city',
+    feature: 'Sign-up',
+    kind: 'decision',
+    title: 'Decide whether the "new sign-up" email should show the city, not just the country',
+    added: '2026-11-25',
+    why: 'The team’s email about a new sign-up shows the country they signed up from (for example "Thailand (TH)"), because that is all Cloudflare tells us today. Cloudflare can also tell us the city (for example "Bangkok"), but only once a setting is switched on in its dashboard. The Privacy Policy also says we record the country only, so it would have to say "country and city" before we start keeping the city.',
+    steps: [
+      'Decide whether the city is wanted. If not, write "no" in the note below and tick this item.',
+      'If yes: in the Cloudflare dashboard for pixel-alpha.com, open the Managed Transforms (Rules → Transform Rules → Managed Transforms; in the newer dashboard, Rules → Settings) and switch on "Add visitor location headers".',
+      'Write "yes, setting is on" in the note below. The developer then records the city with each sign-up, shows it in the email as "Bangkok, Thailand (TH)", and updates the Privacy Policy to say "country and city" in the same change.',
+    ],
+    links: [
+      { label: 'Cloudflare dashboard', href: 'https://dash.cloudflare.com/' },
+      { label: 'Privacy Policy', href: '/privacy' },
+    ],
+  },
   // ── New home page (2026-11-25) ──────────────────────────────────────────
   {
     id: 'landing-redesign-review',
