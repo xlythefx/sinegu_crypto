@@ -1218,7 +1218,33 @@ const SAMPLE_MARKET_TICKER = {
   funding: { symbol: 'LTCUSDT', label: 'LTC/USDT', rate_pct: 0.01, next_at: new Date(Date.now() + 3 * 36e5).toISOString() },
 }
 
+// Admin → Dashboard → Open positions (invented people and figures). One
+// customer is paused for an unpaid invoice: their row is still closable.
+const openPosition = (id, uni_id, owner_name, account_name, extra = {}) => ({
+  id, exchange: 'binance', uni_id, account_id: id, account_name, owner_name,
+  owner_type: 'user', feed: 'main', demo: false, key_blocked: false,
+  symbol: 'LTCUSDT', side: 'LONG', size: 42, entry_price: 101.37, mark_price: 104.12,
+  unrealized_pnl: 115.5, updated_at: new Date(Date.now() - 90e3).toISOString(),
+  closable: true, blocked_reason: null, ...extra,
+})
+const OPEN_POSITIONS_BODY = {
+  success: true,
+  positions: [
+    openPosition(1, 'm-1', 'House Master', 'master', { owner_type: 'master', size: 140, unrealized_pnl: 385 }),
+    openPosition(2, 's-2', 'Lena Fischer', 'Lena main'),
+    openPosition(3, 's-3', 'Marco Silva', 'Marco futures', { paused_unpaid: true, size: 28, unrealized_pnl: 77 }),
+    openPosition(4, 's-4', 'Aiko Tanaka', 'Aiko', { size: 56, unrealized_pnl: 154 }),
+  ],
+  master_exchanges: ['binance'],
+  accounts: [
+    { exchange: 'binance', uni_id: 's-2', owner_name: 'Lena Fischer', account_name: 'Lena main', demo: false, feed: 'main' },
+    { exchange: 'binance', uni_id: 's-4', owner_name: 'Aiko Tanaka', account_name: 'Aiko', demo: false, feed: 'main' },
+  ],
+  refresh: { last_at: new Date(Date.now() - 300e3).toISOString(), cooldown_seconds: 30, retry_after: 0 },
+}
+
 const GET = {
+  '/admin/open-positions': OPEN_POSITIONS_BODY,
   '/public/track-record': () => SAMPLE_TRACK_RECORD,
   '/public/order-book': () => sampleOrderBook(),
   '/public/market-ticker': SAMPLE_MARKET_TICKER,
