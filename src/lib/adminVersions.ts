@@ -14,6 +14,25 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'signup-email-contact-and-ip',
+    date: '2026-11-25',
+    kind: 'improved',
+    area: 'Sign-up',
+    title: 'The "new sign-up" email shows how to reach the person and where they signed up from',
+    summary:
+      'The email the team gets when someone new registers now also shows their Telegram, their WhatsApp number, the country they signed up from and their IP address, beside the name and email it already had. Telegram and WhatsApp are links: one tap opens a chat with them. Example: "Telegram @jonathan_meyer · WhatsApp +66812345678 · Location: Thailand (TH) · IP address 203.0.113.42".',
+    howItWorks: [
+      'The country and IP are the ones they REGISTERED from. The email itself is sent once they enter the code from their inbox, which can happen later from another network, so it never shows that second place by mistake.',
+      'The location is the country only. A city is not known to us today.',
+      'Telegram and WhatsApp are exactly as the person typed them at sign-up; nobody checks them, and the email says so.',
+      'If something is not on record, the email says "Not given" or "Not known" rather than leaving a blank. The email still goes out even if these details cannot be read.',
+      'The same details were already on each user’s admin page, under the Sign-up info tab. Who receives the email is unchanged and still set on Admin → Notifications.',
+    ],
+    technical: [
+      'NewRegistrationNotice gains ip / location / telegram / whatsapp (nullable). AccountMail::registrationPending reads them via signupFacts(): the first user_access_events row with event = register (never the verify request) + ContactHandles::forUser, in its own try so a failed read still sends the notice. AccessLog::location() turns CF-IPCountry into "Thailand (TH)" (intl Locale; "T1" = Tor; code alone without intl). Template now uses emails.partials.facts. Sample data in EmailCatalogue (documentation IP 203.0.113.42). Tests in AccountMailTest.',
+    ],
+  },
+  {
     id: 'landing-record-hides-retired-coins',
     date: '2026-11-25',
     kind: 'improved',
