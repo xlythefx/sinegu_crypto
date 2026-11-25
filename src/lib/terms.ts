@@ -15,7 +15,7 @@ import type { LegalDocumentContent } from '../types/legal'
  */
 export const TERMS: LegalDocumentContent = {
   title: 'Terms and Conditions',
-  updatedAt: 'September 1, 2026',
+  updatedAt: 'November 25, 2026',
   lede: 'Please read these Terms and Conditions carefully before using Pixel Alpha. By accessing or using our platform, you agree to be bound by these terms. If you do not agree to these terms, please do not use our services.',
 
   sections: [
@@ -104,6 +104,32 @@ export const TERMS: LegalDocumentContent = {
         {
           kind: 'p',
           text: "When you connect your exchange account, you are responsible for ensuring that you have the legal right to access and use the exchange's API. You agree to comply with your exchange's terms of service. We are not responsible for any issues arising from your relationship with the exchange.",
+        },
+        { kind: 'h3', text: '4.3 No Manual Trading on a Connected Account' },
+        {
+          kind: 'p',
+          text: 'An exchange account connected to the Platform is for the Platform to trade. You agree not to open, close, add to or reduce positions on that account yourself, including by placing your own take-profit or stop-loss orders, and not to change its leverage, margin mode, position mode or other trading settings the Platform relies on.',
+        },
+        {
+          kind: 'p',
+          text: 'The Platform records all trading activity on a connected account, not only the trades it places itself. A trade you make yourself on that account will therefore:',
+        },
+        {
+          kind: 'list',
+          items: [
+            'be included in your profit and loss, your performance records and your trade history on the Platform;',
+            'count towards your high-water mark and towards the success-based usage fee, exactly like a trade placed by the Platform, whether it makes a profit or a loss;',
+            'be merged by the exchange with any position the Platform holds in the same coin and direction, so the Platform may add to, size or close that combined position differently than it would otherwise, and a later exit by the Platform also closes the part you opened yourself; and',
+            'if it closes or changes a position the Platform opened, leave your account out of step with the strategy, so that later signals may open, add to or close positions on your account differently than on other users\' accounts.',
+          ],
+        },
+        {
+          kind: 'p',
+          text: 'Pixel Alpha is not responsible for losses, missed or unintended trades, fees or differences in results caused by trades or setting changes you make yourself on a connected account, and such trades do not reduce or cancel any fee that falls due under section 5. If you want to trade on your own, use a separate exchange account or sub-account that is not connected to the Platform.',
+        },
+        {
+          kind: 'p',
+          text: 'Deposits and withdrawals are not trades: they are recorded as transfers and are never counted as profit or loss.',
         },
       ],
     },

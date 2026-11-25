@@ -14,6 +14,23 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'terms-no-manual-trading',
+    date: '2026-11-25',
+    kind: 'improved',
+    area: 'Legal',
+    title: 'Terms and Conditions: no trading by hand on a connected account',
+    summary:
+      'The Terms and Conditions have a new section 4.3. Customers agree not to trade by hand on the exchange account they connected to Pixel Alpha: no opening or closing positions themselves, no own take-profit or stop-loss, no changing its leverage or settings. The section explains why. We record every trade on that account, not only the bot’s, so a trade made by hand counts in their profit and loss, their high-water mark and their monthly fee, like any other trade. The "Last updated" date is now 25 November 2026.',
+    howItWorks: [
+      'Example: a customer opens a LTC long by hand and closes it at +$100. That +$100 shows in their results and counts towards their monthly fee exactly like a bot trade. If it had closed at −$100, the loss also counts and lowers the month’s result.',
+      'The section also explains the side effects. The exchange merges a hand-made trade with the bot’s position in the same coin, so the bot’s exit closes both. And closing the bot’s position by hand puts the account out of step with everyone else’s on later signals.',
+      'It says Pixel Alpha is not responsible for losses or differences caused by trading by hand, and that such trades do not reduce a fee that is due. Customers who want to trade themselves are pointed to a separate exchange account or sub-account.',
+      'Deposits and withdrawals are not affected: the section says they are never counted as profit or loss.',
+      'The FAQ and the Risk Disclosure already advised against trading by hand; the Terms now make it a rule.',
+    ],
+    links: [{ label: 'Terms and Conditions', href: '/terms' }],
+  },
+  {
     id: 'signup-email-contact-and-ip',
     date: '2026-11-25',
     kind: 'improved',

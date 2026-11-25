@@ -64,10 +64,12 @@ export const ADMIN_TODOS: AdminTodo[] = [
     steps: [
       'Decide whether the 6% on open profit stays, and whether it should be shown on the public pages (the new home page shows it).',
       'Decide which rule is meant for a month that crosses back above the mark: bill its whole profit (what the invoices do today), or only the part above the mark (what the FAQ says).',
-      'Write the decision in the note below. The developer then aligns the FAQ, the billing help text and, if the rule changes, the invoice calculation.',
+      'Write the decision in the note below. The developer then aligns every page that describes the fee: the FAQ, the billing help text, the Risk Disclosure ("Fees Do Not Refund Losses" says the fee is "charged on profit above your account’s previous high-water mark"), the Terms and Conditions (section 5 says the fee "applies only to incremental positive outcomes compared to the previous reference period") and, if the rule changes, the invoice calculation.',
     ],
     links: [
       { label: 'FAQ: fees and billing', href: '/faq' },
+      { label: 'Risk Disclosure: Fees Do Not Refund Losses', href: '/risk' },
+      { label: 'Terms and Conditions: section 5, Fees and Payment', href: '/terms' },
       { label: 'Preview: "You pay when your account reaches a new high"', href: '/preview/landing' },
     ],
   },
