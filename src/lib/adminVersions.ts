@@ -14,6 +14,25 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'admin-sidebar-groups',
+    date: '2026-11-25',
+    kind: 'improved',
+    area: 'Admin portal',
+    title: 'The admin sidebar is grouped into five folders that open on hover',
+    summary:
+      'The admin sidebar had grown to 24 links in one long list. They now sit in five folders — Customers, Trading, Money, Marketing and System — with only Admin Dashboard and To be Done left on top. Rest the mouse on a folder and its pages slide open; on a phone, tap it.',
+    howItWorks: [
+      'Customers: User Management, Customers vs Master, API Keys, Activity, Affiliate. Trading: Strategies, Trading Assets, Positions, Signal Log. Money: Invoice History, Crypto Transfers. Marketing: Visitors, Creatives. System: Bot Engine, Error Bot, Webhooks, System Resources, Notifications, AI Access, Sandbox.',
+      'The folder holding the page you are on is always open, so you can always see where you are. Example: on a customer’s profile, Customers stays open with User Management highlighted.',
+      'Folders you open with the mouse stay open while the mouse is in the sidebar, so nothing jumps under the pointer as you move down; they fold away when you leave it. A folder you click (or tap on a phone) stays open, and this device remembers it.',
+      'Nothing was removed and every page keeps its address. Activity, System Resources and Positions got their own icons (Activity and System Resources used to share one).',
+      'Read-only collaborators see only their own pages, and a folder with a single page for them shows that page directly.',
+    ],
+    technical: [
+      'components/admin/AdminSidebar.tsx (ADMIN_NAV, groups + top items), components/admin/AdminNavGroup.tsx (header + grid-rows 0fr→1fr panel, inert when shut), hooks/useNavGroups.ts (open = holds the current page | pinned in localStorage `pixel-alpha.admin-nav.open` | mouse-hovered for 120 ms, cleared on leaving the rail), types/adminNav.ts.',
+    ],
+  },
+  {
     id: 'rate-limiter-deadlock-retry',
     date: '2026-11-25',
     kind: 'fixed',
@@ -28,7 +47,7 @@ export const ADMIN_CHANGES: AdminChange[] = [
       'Found and fixed by the error bot’s PC agent (job #3), checked and released by hand.',
     ],
     technical: [
-      'App\\Support\\RetryingRateLimiter (bound with extend() in AppServiceProvider, because the cache provider is deferred) re-runs each limiter call on a concurrency error (MySQL 1213) up to 3 times with a 5–25 ms jittered pause; only the outermost call retries, never inside an open transaction on the cache connection, and the last failure is still thrown (never fails open). Seen as a 500 on GET /api/public/market-ticker.',
+      'App\\Support\\RetryingRateLimiter (bound with extend() in AppServiceProvider, because the cache provider is deferred) re-runs each limiter call on a deadlock only (SQLSTATE 40001 / MySQL 1213 — never a 1205 lock wait timeout, which arrives after ~50 s) up to 3 times with a 5–25 ms jittered pause; only the outermost call retries, never inside an open transaction on the cache connection, and the last failure is still thrown (never fails open). Seen as a 500 on GET /api/public/market-ticker.',
     ],
   },
   {
