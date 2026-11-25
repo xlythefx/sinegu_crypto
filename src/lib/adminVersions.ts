@@ -14,6 +14,24 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'rate-limiter-deadlock-retry',
+    date: '2026-11-25',
+    kind: 'fixed',
+    area: 'Website',
+    title: 'The public pages no longer show an occasional error when they load',
+    summary:
+      'Now and then a visitor opening the website got an error instead of the price strip (or the order book, or the track record). Nothing was wrong with the data: two of the page’s requests reached the server’s visit counter at the same instant, and the database turned one of them away. The server now simply tries that step again, so the page loads normally.',
+    howItWorks: [
+      'Every visitor has a small counter on the server that limits how many requests they may send per minute. The landing page asks for several things at once, so those requests all touch the same counter together.',
+      'When two of them collided, the database refused one and the visitor saw an error. Now that step is retried up to 3 times, a split second apart, and the request goes through.',
+      'The limit itself is unchanged: the same counter guards sign-in and password reset, so a request is never let through without being counted.',
+      'Found and fixed by the error bot’s PC agent (job #3), checked and released by hand.',
+    ],
+    technical: [
+      'App\\Support\\RetryingRateLimiter (bound with extend() in AppServiceProvider, because the cache provider is deferred) re-runs each limiter call on a concurrency error (MySQL 1213) up to 3 times with a 5–25 ms jittered pause; only the outermost call retries, never inside an open transaction on the cache connection, and the last failure is still thrown (never fails open). Seen as a 500 on GET /api/public/market-ticker.',
+    ],
+  },
+  {
     id: 'admin-notifications-page',
     date: '2026-11-23',
     kind: 'new',
