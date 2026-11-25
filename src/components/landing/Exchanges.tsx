@@ -65,7 +65,7 @@ export default function Exchanges({ stats }: ExchangesProps) {
             ))}
           </div>
           <p className="text-[11.5px] text-faint mt-4 text-center">
-            From our live master account on Binance — the same record as the
+            From our own live accounts — the same record as the
             chart above.
           </p>
         </>

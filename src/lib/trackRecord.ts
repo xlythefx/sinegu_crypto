@@ -11,15 +11,21 @@ import type { TrackRecordPoint, TrackRecordStats } from '../types/publicStats'
 export type ChartMode = 'cumulative' | 'daily' | 'monthly'
 
 /**
- * Which of the master's markets the landing page publishes (2026-09-18:
- * LTC/USDT alone — the strategy the product is sold on; the other assets the
- * master trades are experiments and are not the pitch). The API filters the
- * trades and echoes the list back, and the section labels itself from that
- * echo, so a page that shows one strategy never claims the whole account.
- * Empty = every trade. The Telegram recaps are NOT filtered: the channel
- * announces every asset's entries and exits, so its recap covers every asset.
+ * Which of the master's markets the landing page publishes. Empty = every
+ * trade, on every coin the master has ever traded.
+ *
+ * 2026-09-18 → 2026-11-25 it was LTC/USDT alone. Widened at the user's
+ * request on 2026-11-25, when no LTC trade had closed for a month and the
+ * page's "latest trades" read a month old. Deliberately EVERY coin rather
+ * than only the ones traded today: BTC and ALGO, no longer traded, lost
+ * −8.46% between them, and a track record that drops retired coins publishes
+ * a higher figure by leaving its losers out (+44.84% vs +36.38% that day).
+ * Now the same scope as the Telegram recaps, which were never filtered.
+ *
+ * If it is ever narrowed again: the API filters the trades and echoes the
+ * list as `symbols`, so the page can say what it covers.
  */
-export const LANDING_TRACK_RECORD_SYMBOLS: readonly string[] = ['LTCUSDT']
+export const LANDING_TRACK_RECORD_SYMBOLS: readonly string[] = []
 
 /**
  * The three views and the basis each one is measured on — printed under the

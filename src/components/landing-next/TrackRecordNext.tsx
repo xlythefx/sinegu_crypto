@@ -14,10 +14,9 @@ interface TrackRecordNextProps {
 /**
  * The published record, trimmed from six stat cards to the three a visitor
  * can read without a glossary, beside the same chart the old page drew.
- * Scope: the record is narrowed to the strategy the page sells
- * (`LANDING_TRACK_RECORD_SYMBOLS`) and, by the owner's call (2026-09-23), the
- * copy neither names that scope nor claims "every trade" — it says "our own
- * account's results", which is true either way.
+ * Scope: every coin since 2026-11-25 (`LANDING_TRACK_RECORD_SYMBOLS` is
+ * empty); the copy says "our own account's results", which stays true if the
+ * scope is ever narrowed again.
  */
 export default function TrackRecordNext({ record, loading, error }: TrackRecordNextProps) {
   const [mode, setMode] = useState<ChartMode>('cumulative')

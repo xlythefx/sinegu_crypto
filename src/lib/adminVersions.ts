@@ -14,6 +14,25 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'landing-record-every-coin',
+    date: '2026-11-25',
+    kind: 'improved',
+    area: 'Website',
+    title: 'The home page’s track record now covers every coin we trade',
+    summary:
+      'The results on the home page used to show Litecoin (LTC) trades only. No LTC trade had closed since 24 October, so the page looked a month old. It now includes every coin our account has traded: today that is RENDER, SANTOS and LTC, plus BTC and ALGO from earlier in the year. The return on capital it shows went from +40.32% (LTC only) to +36.38% (every coin) on the day of the change.',
+    howItWorks: [
+      'Every coin ever traded is included, not only the ones traded today. BTC (May to June) and ALGO (July to August) are no longer traded and lost −8.46% between them. Showing only today’s coins would have printed +44.84%, a better number obtained by leaving losing coins out, which a track record must not do.',
+      'A coin added in future appears on the home page by itself, with nothing to change.',
+      'The home page now covers the same trades as the daily, weekly and monthly recaps on the Telegram channel, which always included every coin.',
+      'Results from both of our live accounts (Binance and MEXC) are included, so the note under the figures now says "From our own live accounts" instead of "on Binance".',
+      'The latest-trades list on the new home page preview now shows the most recent trades on any coin (for example RENDER on 24 Nov) instead of month-old LTC trades.',
+    ],
+    technical: [
+      'LANDING_TRACK_RECORD_SYMBOLS = [] in lib/trackRecord.ts, so GET /public/track-record is called with no ?symbols= (the pooled, unfiltered record: same cache key as the Creatives facts). Rollback: put [\'LTCUSDT\'] back. Live figures on 2026-11-25: every coin ROC 36.38% / 389 trades; LTC only 40.32% / 228; LTC+RENDER+SANTOS 44.84% / 334; BTC+ALGO −8.46% / 55.',
+    ],
+  },
+  {
     id: 'landing-redesign-preview',
     date: '2026-11-25',
     kind: 'new',

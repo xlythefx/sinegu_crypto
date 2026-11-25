@@ -30,19 +30,16 @@ interface PerformanceProps {
 
 /**
  * "See every trade, verified" — the master account's live track record, read
- * from the public (unauthenticated) `/public/track-record` endpoint, narrowed
- * to `LANDING_TRACK_RECORD_SYMBOLS`.
+ * from the public (unauthenticated) `/public/track-record` endpoint, scoped by
+ * `LANDING_TRACK_RECORD_SYMBOLS` (every coin since 2026-11-25).
  *
  * Percentages only, by design: the endpoint publishes returns and counts and
  * never a balance, so nothing here can leak the account's size.
  *
- * The record is still narrowed to one pair, but the page no longer NAMES it
- * (owner's call, 2026-09-23): the pill, the subtitle's "for the … strategy"
- * and the footnote's "closed … trades" were all dropped. Nothing here may
- * claim the numbers cover every strategy — they do not — so the copy simply
- * stays silent on scope. Widening the record is one constant away
- * (`LANDING_TRACK_RECORD_SYMBOLS`), and the API still echoes the applied
- * filter in `data.symbols` if the label is ever wanted back.
+ * Until 2026-11-25 the record was narrowed to LTC/USDT and the copy stayed
+ * silent on scope (owner's call, 2026-09-23). It now covers every coin, so
+ * nothing here narrows it; if it is ever narrowed again, the API echoes the
+ * applied filter in `data.symbols` for a label.
  *
  * The record is FETCHED BY THE PAGE and passed in, because the quote strip at
  * the top of the same page publishes this section's headline figure. One fetch

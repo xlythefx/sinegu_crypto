@@ -3281,16 +3281,22 @@ page publishing **−980%** against a real +46.6%):
   the nearest trading day; the by-group card puts every series on ONE shared
   date axis (carried forward, one point per trading day) for that, where it
   used to space each line by its own trade count.
-- **The landing page shows the LTC/USDT strategy alone** (2026-09-18,
-  `LANDING_TRACK_RECORD_SYMBOLS` in `lib/trackRecord.ts`; empty = every
-  trade). It requests `?symbols=LTCUSDT`; the API filters the TRADES only —
-  the capital stays the whole account's, since every position is backed by
-  all of it — and echoes the applied list as `symbols`, which is what the
-  section labels itself from (subtitle, chart pill, footnote): a page that
-  shows one strategy says so. Names are reduced to `[A-Z0-9]` before
-  matching, so one filter covers Binance's `LTCUSDT` and MEXC's `LTC_USDT`.
-  The filter is caller-chosen and part of the cache key, hence capped at 5
-  and the `/public/*` group throttled 60/min per IP. **The Telegram recaps
-  are NOT filtered**: the channel announces every asset's entries and exits,
-  so its recap covers every asset — the site and the channel now describe
-  two labelled scopes, not one number twice.
+- **The landing page shows EVERY coin (2026-11-25; LTC/USDT alone
+  2026-09-18 → 11-25).** `LANDING_TRACK_RECORD_SYMBOLS` in
+  `lib/trackRecord.ts` is empty = every trade, the same scope as the
+  Telegram recaps. Widened when no LTC trade had closed for a month. **Every
+  coin ever traded, never "only the coins traded today"**: BTC and ALGO,
+  retired, lost −8.46% between them, and dropping them would have published
+  +44.84% instead of the honest +36.38% — a track record that leaves its
+  retired losers out is not a track record. If it is ever narrowed again:
+  the API filters the TRADES only (the capital stays the whole account's),
+  reduces names to `[A-Z0-9]` (one filter covers `LTCUSDT` and `LTC_USDT`),
+  caps the list at 5 (it is caller-chosen and part of the cache key; the
+  `/public/*` group is throttled 60/min per IP), and echoes it as `symbols`
+  so the page can say what it covers.
+- **`recent_closes` on the track record (2026-11-25)** feeds the latest-
+  trades strip of the redesigned home page (`/preview/landing`,
+  `components/landing-next/`): the 5 newest closes in scope, each one's P&L
+  after fees over the capital ITS venue's master started the day with (the
+  Telegram exit message's basis), the pooled list merged from the per-venue
+  slices. A close with no P&L yet is left out, never shown as 0%.
