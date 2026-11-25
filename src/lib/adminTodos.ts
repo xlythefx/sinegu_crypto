@@ -18,6 +18,41 @@ import type { AdminTodo } from '../types/adminTodos'
  *    the note and the date it was settled stay readable.
  */
 export const ADMIN_TODOS: AdminTodo[] = [
+  // ── New home page (2026-11-25) ──────────────────────────────────────────
+  {
+    id: 'landing-redesign-review',
+    feature: 'Website',
+    kind: 'decision',
+    title: 'Review the new home page and decide when it replaces the current one',
+    added: '2026-11-25',
+    why: 'A redesigned home page is ready on a hidden address that search engines are told to skip. Visitors still see the current page until it is switched over. The old one is kept, so switching back is one step.',
+    steps: [
+      'Open the preview (link below) on a computer and on a phone, in both light and dark mode.',
+      'Write any wording or design changes in the note below.',
+      'When it is ready, ask the developer to put it live. Write the date it went live in the note.',
+    ],
+    links: [
+      { label: 'Preview of the new home page', href: '/preview/landing' },
+      { label: 'Current home page', href: '/' },
+    ],
+  },
+  {
+    id: 'fee-wording-public-pages',
+    feature: 'Website',
+    kind: 'decision',
+    title: 'Decide how the public pages describe the fee',
+    added: '2026-11-25',
+    why: 'The current home page and the FAQ say "20% of the profit, nothing else" and "billed only on profit ABOVE the high-water mark". The invoices work slightly differently. First, trades still open at month end are billed at 6% of their open profit. Second, once a month ends above the mark, that month\'s WHOLE closed profit is billed at 20%, not only the part above the mark. Example: the account ends April at $2,250 under a $2,300 mark, then makes $250 in May and ends at $2,500. May is billed 20% of $250 = $50, where the FAQ\'s wording suggests 20% of $200 = $40. The new home page states the 20% and 6% rates and uses an example where both readings agree, so it is accurate either way.',
+    steps: [
+      'Decide whether the 6% on open profit stays, and whether it should be shown on the public pages (the new home page shows it).',
+      'Decide which rule is meant for a month that crosses back above the mark: bill its whole profit (what the invoices do today), or only the part above the mark (what the FAQ says).',
+      'Write the decision in the note below. The developer then aligns the FAQ, the billing help text and, if the rule changes, the invoice calculation.',
+    ],
+    links: [
+      { label: 'FAQ: fees and billing', href: '/faq' },
+      { label: 'Preview: "You pay when your account reaches a new high"', href: '/preview/landing' },
+    ],
+  },
   // ── Sub-master account + high-risk alerts (2026-11-18)───────────────────
   {
     id: 'submaster-tradingview-alerts',

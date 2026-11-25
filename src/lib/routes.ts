@@ -10,3 +10,7 @@
 
 export const SIGN_IN_PATH = '/auth'
 export const REGISTER_PATH = '/auth?mode=register'
+
+/** The redesigned home page's hidden preview (2026-11-25). Not in
+ *  `lib/visitPages.ts`, so its views are not counted, and it sets noindex. */
+export const LANDING_PREVIEW_PATH = '/preview/landing'

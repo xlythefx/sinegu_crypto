@@ -69,6 +69,27 @@ export interface TrackRecordStats {
 }
 
 /**
+ * One of the latest closes — the landing page's "latest closed trades" strip.
+ * `pct` is that close's P&L after exchange fees over the capital its OWN
+ * venue's master account started the day with: the basis the Telegram
+ * channel's exit message uses, so a close reads the same in both places.
+ * Percentages, a ticker, a direction and a time only.
+ */
+export interface RecentClose {
+  /** ISO-8601 Zulu. */
+  closed_at: string
+  /** The record's own calendar day (`TrackRecord`'s timezone), YYYY-MM-DD. */
+  date: string
+  /** As the venue spells it (`LTCUSDT`, `LTC_USDT`). */
+  symbol: string
+  side: 'LONG' | 'SHORT' | null
+  exchange: string
+  pct: number
+  /** Entry-sized increments the close took off. */
+  trades: number
+}
+
+/**
  * `available: false` means there is nothing to publish yet (no master account
  * or no closed trades) — `stats` is null and `series` empty, and the page shows
  * its empty state instead of inventing numbers.
@@ -83,4 +104,7 @@ export interface TrackRecord {
    * a section that shows one strategy must say so.
    */
   symbols: string[]
+  /** The latest closes in scope, newest first. Empty on a payload predating
+   *  the field (2026-11-25) as well as when there is nothing to publish. */
+  recent_closes: RecentClose[]
 }

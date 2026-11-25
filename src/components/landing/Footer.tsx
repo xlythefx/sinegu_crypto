@@ -36,10 +36,20 @@ const COLUMNS: {
   },
 ]
 
-export default function Footer() {
+interface FooterProps {
+  /** The line under the logo. The default is the live home page's wording. */
+  blurb?: string
+  /** Max-width utility, so a page on a narrower grid can line the footer up with it. */
+  maxWidth?: string
+}
+
+const DEFAULT_BLURB =
+  'Automated trading bots that run on your own exchange. Free to use — you only pay 20% of the profit you make.'
+
+export default function Footer({ blurb = DEFAULT_BLURB, maxWidth = 'max-w-[1280px]' }: FooterProps = {}) {
   return (
     <footer className="border-t border-hair">
-      <div className="max-w-[1280px] mx-auto py-11 px-10 grid grid-cols-[1.6fr_1fr_1fr_1fr] gap-8 max-[900px]:grid-cols-2 max-[560px]:grid-cols-1">
+      <div className={`${maxWidth} mx-auto py-11 px-10 max-[560px]:px-5 grid grid-cols-[1.6fr_1fr_1fr_1fr] gap-8 max-[900px]:grid-cols-2 max-[560px]:grid-cols-1`}>
         <div>
           <div className="flex items-center gap-2.5 mb-3.5">
             <img
@@ -51,10 +61,7 @@ export default function Footer() {
               Pixel Alpha
             </span>
           </div>
-          <p className="text-[13px] text-faint leading-[1.6] max-w-[280px]">
-            Automated trading bots that run on your own exchange. Free to use —
-            you only pay 20% of the profit you make.
-          </p>
+          <p className="text-[13px] text-faint leading-[1.6] max-w-[280px]">{blurb}</p>
           {/* Public channels — where to follow, not where to get support. */}
           <SocialLinks className="mt-5" />
         </div>
@@ -92,7 +99,7 @@ export default function Footer() {
           </div>
         ))}
       </div>
-      <div className="max-w-[1280px] mx-auto py-[18px] px-10 border-t border-hair flex justify-between items-center font-mono text-[11px] leading-[1.6] text-faint flex-wrap gap-x-8 gap-y-2">
+      <div className={`${maxWidth} mx-auto py-[18px] px-10 max-[560px]:px-5 border-t border-hair flex justify-between items-center font-mono text-[11px] leading-[1.6] text-faint flex-wrap gap-x-8 gap-y-2`}>
         <span>
           © {new Date().getFullYear()} {COMPANY.name}. All rights reserved.
         </span>

@@ -14,6 +14,28 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'landing-redesign-preview',
+    date: '2026-11-25',
+    kind: 'new',
+    area: 'Website',
+    title: 'A redesigned home page, ready to review on a hidden address',
+    summary:
+      'A new version of the home page, written to read less like a generic template. It shows the strategy’s latest closed trades near the top, uses drawings instead of slogans to show how a trade happens and how the bill works, and says plainly what happens after someone signs up. Visitors still see the current home page until it is switched over.',
+    howItWorks: [
+      'Latest closed trades: the last five trades our own account closed, each as a percentage after exchange fees (for example LTC/USDT, LONG, +1.18%). Losing trades are listed exactly like winning ones. No amounts are ever shown.',
+      'How a trade happens: five steps from the strategy’s signal to the monthly invoice, with the customer’s own Binance account marked as the place the money stays.',
+      'The API key: a drawing of the key settings on Binance (reading on, futures on, withdrawals off), showing why we can trade but never withdraw.',
+      'How the bill works: a worked example. $2,000 deposited; March +$300 → $60 bill; April −$200 → $0; May +$150 but still under the March high → $0. It states the 20% and 6% rates and the 1st / 4th invoice dates.',
+      'What happens after you sign up: create the account (with Telegram and WhatsApp), we approve it, connect Binance (1,000 USDT minimum), and the next signal trades.',
+      'The icons are hand-drawn pixel art, to suit the name Pixel Alpha. The page works in light and dark mode and on phones.',
+      'MEXC and Bybit are shown as coming soon.',
+    ],
+    technical: [
+      'Route /preview/landing (pages/LandingPreview.tsx, noindex meta while mounted, not in lib/visitPages.ts so it is not counted); components/landing-next/*; fee example + standard rates + MIN_DEPOSIT_USDT in lib/pricing.ts (pinned by pricing.test.ts). The latest closes are `recent_closes` on GET /public/track-record: each close’s P&L after fees over the capital ITS venue’s master account started the day with (the Telegram exit message’s basis), pooled record = merge of the per-venue slices, 5 newest, a close with no P&L yet left out. Rollback tag `landing-classic` in both repos.',
+    ],
+    links: [{ label: 'Open the preview', href: '/preview/landing' }],
+  },
+  {
     id: 'landing-mexc-coming-soon',
     date: '2026-11-25',
     kind: 'fixed',

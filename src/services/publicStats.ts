@@ -24,6 +24,8 @@ export async function getTrackRecord(symbols: readonly string[] = []): Promise<T
     // PHP serializes an empty list as [] either way, but guard the shape.
     series: Array.isArray(res.series) ? res.series : [],
     symbols: Array.isArray(res.symbols) ? res.symbols : [],
+    // Absent on a cached payload from before the field existed.
+    recent_closes: Array.isArray(res.recent_closes) ? res.recent_closes : [],
   }
 }
 

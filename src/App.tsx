@@ -8,6 +8,8 @@ import CookieConsent from './components/ui/CookieConsent'
 import VisitTracker from './components/visits/VisitTracker'
 import Landing from './pages/Landing'
 import LandingV2 from './pages/LandingV2'
+import LandingPreview from './pages/LandingPreview'
+import { LANDING_PREVIEW_PATH } from './lib/routes'
 import Auth from './pages/Auth'
 import ForgotPassword from './pages/ForgotPassword'
 import VerifyEmail from './pages/VerifyEmail'
@@ -83,6 +85,8 @@ function App() {
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/v2" element={<LandingV2 />} />
+              {/* The redesigned home page, hidden until approved (noindex). */}
+              <Route path={LANDING_PREVIEW_PATH} element={<LandingPreview />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/auth/forgot" element={<ForgotPassword />} />
               <Route path="/auth/verify" element={<VerifyEmail />} />
