@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { fmtMediumDate, fmtSignedPct } from '../../lib/format'
-import { CHART_MODES, type ChartMode } from '../../lib/trackRecord'
+import { CHART_MODES, recordScopeNote, type ChartMode } from '../../lib/trackRecord'
 import type { TrackRecord } from '../../types/publicStats'
 import TrackRecordChart from '../landing/TrackRecordChart'
 import { CONTAINER, H2, LANDING_IDS, LEAD } from './layout'
@@ -14,14 +14,16 @@ interface TrackRecordNextProps {
 /**
  * The published record, trimmed from six stat cards to the three a visitor
  * can read without a glossary, beside the same chart the old page drew.
- * Scope: every coin since 2026-11-25 (`LANDING_TRACK_RECORD_SYMBOLS` is
- * empty); the copy says "our own account's results", which stays true if the
- * scope is ever narrowed again.
+ * Scope: every coin except the ones we no longer trade
+ * (`LANDING_TRACK_RECORD_EXCLUDE`, 2026-11-25); the footnote names the coins
+ * and says the retired ones are left out (`recordScopeNote`).
  */
 export default function TrackRecordNext({ record, loading, error }: TrackRecordNextProps) {
   const [mode, setMode] = useState<ChartMode>('cumulative')
   const stats = record?.stats ?? null
   const series = record?.series ?? []
+  // Which coins, and that retired ones are left out - required while any are.
+  const scopeNote = record ? recordScopeNote(series, record.excluded_symbols) : null
 
   const figures = stats
     ? [
@@ -96,6 +98,7 @@ export default function TrackRecordNext({ record, loading, error }: TrackRecordN
             <p className="text-[12px] text-faint mt-1.5">
               {stats.trades.toLocaleString('en-US')} closed trades over {stats.trading_days} trading days,{' '}
               {fmtMediumDate(stats.first_trade_at)} to {fmtMediumDate(stats.last_trade_at)}.
+              {scopeNote && <> {scopeNote}</>}
             </p>
           )}
         </div>

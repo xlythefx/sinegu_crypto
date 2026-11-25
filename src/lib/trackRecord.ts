@@ -4,7 +4,7 @@
  * geometry. No React.
  */
 
-import { axisTicks4, linePath } from './chart'
+import { axisTicks4, coinKey, displaySymbol, linePath } from './chart'
 import { fmtShortDate, fmtShortMonth, fmtSignedPct } from './format'
 import type { TrackRecordPoint, TrackRecordStats } from '../types/publicStats'
 
@@ -16,16 +16,55 @@ export type ChartMode = 'cumulative' | 'daily' | 'monthly'
  *
  * 2026-09-18 → 2026-11-25 it was LTC/USDT alone. Widened at the user's
  * request on 2026-11-25, when no LTC trade had closed for a month and the
- * page's "latest trades" read a month old. Deliberately EVERY coin rather
- * than only the ones traded today: BTC and ALGO, no longer traded, lost
- * −8.46% between them, and a track record that drops retired coins publishes
- * a higher figure by leaving its losers out (+44.84% vs +36.38% that day).
- * Now the same scope as the Telegram recaps, which were never filtered.
+ * page's "latest trades" read a month old; the coins no longer traded are
+ * then taken out again by `LANDING_TRACK_RECORD_EXCLUDE` below (same day,
+ * the user's call), so a new coin still appears by itself.
  *
  * If it is ever narrowed again: the API filters the trades and echoes the
  * list as `symbols`, so the page can say what it covers.
  */
 export const LANDING_TRACK_RECORD_SYMBOLS: readonly string[] = []
+
+/**
+ * Coins the landing page leaves OUT: ones the master no longer trades
+ * (2026-11-25, the user's call, the same day the page was widened). An
+ * exclude list, not an include list, so a coin added later appears on its
+ * own. That day: every coin +36.38% / 389 trades; without these two
+ * +44.84% / 334 (BTC and ALGO had lost -8.46% between them). Because that
+ * raises the published figure, the page ALWAYS says it leaves retired coins
+ * out (`recordScopeNote`) - never drop that sentence while this is non-empty.
+ */
+export const LANDING_TRACK_RECORD_EXCLUDE: readonly string[] = ['BTCUSDT', 'ALGOUSDT']
+
+/** The coins a record's trades cover, as short names ("LTC"), A-Z. */
+export function recordCoins(series: TrackRecordPoint[]): string[] {
+  const names = new Map<string, string>()
+  for (const point of series) {
+    for (const asset of point.assets ?? []) {
+      const key = coinKey(asset.symbol)
+      if (!names.has(key)) names.set(key, displaySymbol(asset.symbol).split('/')[0])
+    }
+  }
+  return [...names.values()].sort()
+}
+
+/** "LTC, RENDER and SANTOS" */
+function joinNames(names: string[]): string {
+  if (names.length <= 1) return names.join('')
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
+/**
+ * The sentence that says what the published record covers - and, whenever
+ * coins were excluded, that it leaves them out. Null when there is nothing
+ * to describe (no trades, or an old payload with no per-day assets).
+ */
+export function recordScopeNote(series: TrackRecordPoint[], excluded: readonly string[]): string | null {
+  const coins = recordCoins(series)
+  if (coins.length === 0) return null
+  const covers = `Covers ${joinNames(coins)}.`
+  return excluded.length > 0 ? `${covers} Coins we no longer trade are left out.` : covers
+}
 
 /**
  * The three views and the basis each one is measured on — printed under the

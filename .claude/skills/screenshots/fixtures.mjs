@@ -1181,7 +1181,7 @@ function sampleTrackRecord() {
   const mean = (xs) => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 100) / 100 : null)
   const closedAt = (daysAgo, h) => new Date(Date.now() - daysAgo * 864e5).toISOString().slice(0, 11) + `${String(h).padStart(2, '0')}:14:00Z`
   return {
-    success: true, available: true, exchange: 'all', exchanges: ['binance'], symbols: [], timezone: 'Asia/Manila',
+    success: true, available: true, exchange: 'all', exchanges: ['binance'], symbols: [], excluded_symbols: ['ALGOUSDT', 'BTCUSDT'], timezone: 'Asia/Manila',
     stats: {
       return_on_capital_pct: Math.round(roc * 100) / 100, total_pnl_pct: Math.round((growth - 1) * 10000) / 100,
       win_rate: Math.round((wins.length / pcts.length) * 1000) / 10, trades: series.reduce((a, p) => a + p.trades, 0),

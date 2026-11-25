@@ -3281,19 +3281,22 @@ page publishing **−980%** against a real +46.6%):
   the nearest trading day; the by-group card puts every series on ONE shared
   date axis (carried forward, one point per trading day) for that, where it
   used to space each line by its own trade count.
-- **The landing page shows EVERY coin (2026-11-25; LTC/USDT alone
-  2026-09-18 → 11-25).** `LANDING_TRACK_RECORD_SYMBOLS` in
-  `lib/trackRecord.ts` is empty = every trade, the same scope as the
-  Telegram recaps. Widened when no LTC trade had closed for a month. **Every
-  coin ever traded, never "only the coins traded today"**: BTC and ALGO,
-  retired, lost −8.46% between them, and dropping them would have published
-  +44.84% instead of the honest +36.38% — a track record that leaves its
-  retired losers out is not a track record. If it is ever narrowed again:
-  the API filters the TRADES only (the capital stays the whole account's),
-  reduces names to `[A-Z0-9]` (one filter covers `LTCUSDT` and `LTC_USDT`),
-  caps the list at 5 (it is caller-chosen and part of the cache key; the
-  `/public/*` group is throttled 60/min per IP), and echoes it as `symbols`
-  so the page can say what it covers.
+- **The landing page shows every coin EXCEPT the ones we no longer trade
+  (2026-11-25; LTC/USDT alone 2026-09-18 -> 11-25).** `LANDING_TRACK_RECORD_SYMBOLS`
+  is empty (every trade) and `LANDING_TRACK_RECORD_EXCLUDE` = BTCUSDT,
+  ALGOUSDT, sent as `?exclude_symbols=` (an EXCLUDE list so a new coin
+  appears by itself). The user's call, made knowing the cost: those two had
+  lost -8.46%, so leaving them out publishes +44.84% where every coin reads
+  +36.38%. **Because of that, the page must SAY it leaves retired coins out**
+  (`recordScopeNote`: "Covers LTC, RENDER and SANTOS. Coins we no longer
+  trade are left out.", on both home pages), and the live heading is "See
+  our trades, verified", not "every trade". Never drop that sentence while
+  the exclude list is non-empty. Retiring another coin = adding it to the
+  list. Both filters drop the TRADES (P&L included, so the walk's capital is
+  the deposits plus the coins shown), reduce names to `[A-Z0-9]` (one entry
+  covers `LTCUSDT` and `LTC_USDT`), cap at 5 and are part of the cache key
+  (the `/public/*` group is throttled 60/min per IP); the API echoes them as
+  `symbols` / `excluded_symbols`. The Telegram recaps are not filtered.
 - **`recent_closes` on the track record (2026-11-25)** feeds the latest-
   trades strip of the redesigned home page (`/preview/landing`,
   `components/landing-next/`): the 5 newest closes in scope, each one's P&L

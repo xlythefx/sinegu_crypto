@@ -1,10 +1,10 @@
 import { apiFetch } from './api'
-import { LANDING_TRACK_RECORD_SYMBOLS } from '../lib/trackRecord'
+import { LANDING_TRACK_RECORD_EXCLUDE, LANDING_TRACK_RECORD_SYMBOLS } from '../lib/trackRecord'
 import type { TrackRecord } from '../types/publicStats'
 
 /**
  * The master account's verified track record — daily percentage returns and the
- * headline stats behind the landing page's "See every trade, verified" section.
+ * headline stats behind the landing page's "See our trades, verified" section.
  *
  * Unauthenticated (no `auth: true`): it is the marketing site's only API call,
  * and the backend caches it for 5 minutes (per filter).
@@ -13,8 +13,15 @@ import type { TrackRecord } from '../types/publicStats'
  * punctuation, so `LTCUSDT` also matches MEXC's `LTC_USDT`. The capital base
  * stays the whole account's. Omit it for every trade.
  */
-export async function getTrackRecord(symbols: readonly string[] = []): Promise<TrackRecord> {
-  const query = symbols.length ? `?symbols=${encodeURIComponent(symbols.join(','))}` : ''
+export async function getTrackRecord(
+  symbols: readonly string[] = [],
+  exclude: readonly string[] = [],
+): Promise<TrackRecord> {
+  const params = new URLSearchParams()
+  if (symbols.length) params.set('symbols', symbols.join(','))
+  // The OPPOSITE of `symbols`: these markets' trades are left out.
+  if (exclude.length) params.set('exclude_symbols', exclude.join(','))
+  const query = params.size ? `?${params.toString()}` : ''
   const res = await apiFetch<{ success: boolean } & TrackRecord>(
     `/public/track-record${query}`,
   )
@@ -24,6 +31,7 @@ export async function getTrackRecord(symbols: readonly string[] = []): Promise<T
     // PHP serializes an empty list as [] either way, but guard the shape.
     series: Array.isArray(res.series) ? res.series : [],
     symbols: Array.isArray(res.symbols) ? res.symbols : [],
+    excluded_symbols: Array.isArray(res.excluded_symbols) ? res.excluded_symbols : [],
     // Absent on a cached payload from before the field existed.
     recent_closes: Array.isArray(res.recent_closes) ? res.recent_closes : [],
   }
@@ -37,4 +45,4 @@ export async function getTrackRecord(symbols: readonly string[] = []): Promise<T
  * returns on one page. Module-level so it is a stable `useApiData` fetcher.
  */
 export const fetchLandingTrackRecord = (): Promise<TrackRecord> =>
-  getTrackRecord(LANDING_TRACK_RECORD_SYMBOLS)
+  getTrackRecord(LANDING_TRACK_RECORD_SYMBOLS, LANDING_TRACK_RECORD_EXCLUDE)

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { fmtMediumDate } from '../../lib/format'
-import { CHART_MODES, statCards, type ChartMode } from '../../lib/trackRecord'
+import { CHART_MODES, recordScopeNote, statCards, type ChartMode } from '../../lib/trackRecord'
 import { SECTION_IDS } from '../../lib/scroll'
 import type { TrackRecord } from '../../types/publicStats'
 import TrackRecordChart from './TrackRecordChart'
@@ -29,7 +29,7 @@ interface PerformanceProps {
 }
 
 /**
- * "See every trade, verified" — the master account's live track record, read
+ * "See our trades, verified" — the master account's live track record, read
  * from the public (unauthenticated) `/public/track-record` endpoint, scoped by
  * `LANDING_TRACK_RECORD_SYMBOLS` (every coin since 2026-11-25).
  *
@@ -51,6 +51,7 @@ export default function Performance({ record, loading, error }: PerformanceProps
   const stats = record?.stats ?? null
   const series = record?.series ?? []
   const cards = statCards(stats)
+  const scopeNote = record ? recordScopeNote(series, record.excluded_symbols) : null
 
   const placeholder = loading
     ? 'Loading the verified track record…'
@@ -70,7 +71,7 @@ export default function Performance({ record, loading, error }: PerformanceProps
       className={`${CONTAINER} scroll-mt-6 pt-[60px] pb-[76px]`}
     >
       <div className="text-center mb-9">
-        <h2 className={SECTION_TITLE}>See every trade, verified</h2>
+        <h2 className={SECTION_TITLE}>See our trades, verified</h2>
         <p className={SECTION_SUB}>
           Full, real-time performance analytics — the same numbers we're paid
           on.
@@ -144,6 +145,11 @@ export default function Performance({ record, loading, error }: PerformanceProps
         </div>
         {footnote && (
           <p className="text-[11.5px] text-faint mt-1.5 text-center">{footnote}</p>
+        )}
+        {/* Says which coins the record covers, and that retired ones are left
+            out (LANDING_TRACK_RECORD_EXCLUDE) - required while any are. */}
+        {scopeNote && (
+          <p className="text-[11.5px] text-faint mt-1 text-center">{scopeNote}</p>
         )}
       </div>
     </section>

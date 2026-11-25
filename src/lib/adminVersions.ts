@@ -14,6 +14,23 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'landing-record-hides-retired-coins',
+    date: '2026-11-25',
+    kind: 'improved',
+    area: 'Website',
+    title: 'The home page’s results leave out coins we no longer trade',
+    summary:
+      'Later the same day, BTC and ALGO were taken out of the home page’s results because we no longer trade them. The page now covers LTC, RENDER and SANTOS, and says so under the chart: "Covers LTC, RENDER and SANTOS. Coins we no longer trade are left out." The return on capital it shows went from +36.38% (every coin) to +44.84%, over 334 trades.',
+    howItWorks: [
+      'BTC (traded May to June) and ALGO (July to August) lost −8.46% between them, so leaving them out raises the published figure. That is why the page always states that retired coins are left out; the heading also changed from "See every trade, verified" to "See our trades, verified".',
+      'A coin we start trading later appears on the home page by itself. Retiring another coin means adding it to the list of coins left out.',
+      'The Telegram recaps still cover every coin, as before.',
+    ],
+    technical: [
+      'GET /public/track-record?exclude_symbols=BTCUSDT,ALGOUSDT (new API param: the TRADES of those markets are dropped, P&L included, same parsing / cap / cache-key rule as symbols, echoed as excluded_symbols). LANDING_TRACK_RECORD_EXCLUDE in lib/trackRecord.ts; recordScopeNote() writes the sentence on both home pages (pinned by trackRecord.test.ts). Rollback: empty the list.',
+    ],
+  },
+  {
     id: 'landing-record-every-coin',
     date: '2026-11-25',
     kind: 'improved',

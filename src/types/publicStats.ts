@@ -104,6 +104,10 @@ export interface TrackRecord {
    * a section that shows one strategy must say so.
    */
   symbols: string[]
+  /** Markets the record leaves OUT (`exclude_symbols`), canonical; empty when
+   *  none, and on a payload predating the field. The page must say so when
+   *  this is non-empty (`recordScopeNote`). */
+  excluded_symbols: string[]
   /** The latest closes in scope, newest first. Empty on a payload predating
    *  the field (2026-11-25) as well as when there is nothing to publish. */
   recent_closes: RecentClose[]
