@@ -58,6 +58,14 @@ function Who({ p, showOwner }: { p: AdminOpenPosition; showOwner: boolean }) {
           {meta?.label ?? p.exchange}
           {p.account_name ? ` · ${p.account_name}` : ''}
         </span>
+        {p.paused_unpaid && (
+          <span
+            className="flex-none rounded-pill bg-[color-mix(in_srgb,var(--red)_16%,transparent)] px-1.5 font-mono text-[10px] font-bold text-red"
+            title="Paused for an unpaid invoice: no new trades, but the bot still closes its positions on the exit signal, and you can close them here."
+          >
+            PAUSED · UNPAID
+          </span>
+        )}
       </div>
     </div>
   )

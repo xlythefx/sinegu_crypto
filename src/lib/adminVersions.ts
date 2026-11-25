@@ -14,6 +14,32 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'paused-accounts-get-exits',
+    date: '2026-11-25',
+    kind: 'fixed',
+    area: 'Billing',
+    title: 'An account paused for an unpaid invoice still has its positions closed',
+    summary:
+      'When a customer’s trading is paused because an invoice is unpaid, the bot used to stop working on that account completely. It opened nothing new, which is the point of the pause, but it also ignored the exit signal for positions already open, so a customer could be left holding a position nobody would close. Now a paused account still gets its exits: no new trades until the invoice is paid, but whatever is open is closed when the strategy exits it, like everyone else’s.',
+    howItWorks: [
+      'Example: a customer is in an LTC long when their invoice goes unpaid on the 4th, and trading pauses. On the 6th the strategy exits LTC: the bot closes that customer’s LTC long too. A BUY signal on the 7th is not placed on their account. As soon as they pay, new trades resume by themselves.',
+      'Admin → Dashboard → Open positions now marks such a position "PAUSED · UNPAID" and lets an admin close it. Before, it was greyed out as "the engine does not trade it".',
+      'The Signal Log lists a refused entry as "Paused for an unpaid invoice (exits still run)". It counts as normal, so it never turns the health banner amber.',
+      'The bot also keeps reading a paused account’s balance and trades again, so its closes are recorded and its next invoice uses an up-to-date balance.',
+      'Only a pause for an unpaid invoice works this way. An account an admin switches off by hand, with nothing owed, is still left alone completely.',
+    ],
+    technical: [
+      'Invoice::pausedAccountIds($exchange) = accounts billed by an unpaid-past-due invoice (not SBXINV-).',
+      'GET /engine/{x}/accounts?include_paused=1 adds them with exits_only: true. Only an engine that asks sees them, so either side may deploy first.',
+      'Engine: accounts_api asks; webhook._run_account skips ENTRIES with reason "paused (unpaid invoice)"; exits, pollers and admin close-positions run as usual; size_check ignores them.',
+      'AdminOpenPositionsController: closable + paused_unpaid. SignalHealth: paused_unpaid (normal).',
+    ],
+    links: [
+      { label: 'Open positions', href: '/admin?tab=positions' },
+      { label: 'Signal Log', href: '/admin/trade-logs' },
+    ],
+  },
+  {
     id: 'faq-fees-as-invoiced',
     date: '2026-11-25',
     kind: 'fixed',
@@ -25,7 +51,7 @@ export const ADMIN_CHANGES: AdminChange[] = [
       '"What does it cost?" now names both rates: 20% of the month’s closed profit after exchange fees, and 6% of the profit on positions still open when the bill is made on the 1st. It also says a month with no fee still shows as a $0 invoice with nothing to pay.',
       '"What is the high-water mark?" now explains how deposits and withdrawals move the mark, and that a month above the mark is billed on its whole closed profit. Example: mark $2,300, April ends at $2,250, May closes +$250 to end at $2,500 → May’s fee is $50, not $40.',
       'A new answer, "How are positions still open at month end billed?", explains the 6% on open profit. That 6% is not credited when the trade closes later (its profit is then billed at 20% if that month ends above the mark), and it is not refunded if the trade closes at a loss.',
-      '"What happens if I don’t pay?" now gives the real schedule: bill on the 1st, reminders on the 2nd and 3rd, pause on the 4th. It no longer says open positions are still closed during a pause, because they are not: a paused account is not traded at all.',
+      '"What happens if I don’t pay?" now gives the real schedule: bill on the 1st, reminders on the 2nd and 3rd, pause on the 4th. (For a few hours it said a paused account’s open positions are not closed, which was true then; the same evening the bot was changed to close them, and the answer says so.)',
       '"Does the exchange charge fees too?" now says the 20% is worked out after exchange fees, and the 6% on open profit before the fee for closing.',
       'Whether these rules should change is still the owner’s decision, under "Decide how the public pages describe the fee" in To be Done.',
     ],

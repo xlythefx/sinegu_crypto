@@ -20,6 +20,12 @@ export interface AdminOpenPosition {
   /** Testnet / demo-trading account: closing it moves no real money. */
   demo: boolean
   key_blocked: boolean
+  /**
+   * Switched off for an unpaid invoice: no new trades, but the engine still
+   * runs its exits, so the row stays closable (2026-11-25). Absent on an
+   * older API.
+   */
+  paused_unpaid?: boolean
   symbol: string
   side: 'LONG' | 'SHORT'
   /** Absolute size in coins. */

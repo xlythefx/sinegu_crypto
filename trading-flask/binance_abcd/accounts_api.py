@@ -1,7 +1,13 @@
 """Tradeable accounts from sinegutrade-api, TTL-cached per exchange.
 
 The backend does all the gating (enabled, not deleted, not sandbox, owner not
-suspended) — whatever this returns is safe to trade. Each enabled exchange is
+suspended) — whatever this returns is safe to trade. One exception, asked for
+with ``include_paused=1``: an account PAUSED for an unpaid invoice is listed
+with ``exits_only: true`` (2026-11-25). A pause stops new trades but must
+never strand an open position, so the fan-out skips its ENTRIES
+(routes/webhook._run_account) and still runs its exits; the pollers keep it in
+sync. The API lists such rows only when asked, so an engine that does not
+know the flag can never open a trade on one. Each enabled exchange is
 loaded from its own route (/engine/{exchange}/accounts) and every row is
 stamped with ``exchange`` so the rest of the engine can route reads and writes
 back to the same segment. A Binance account with demo=1 signs against the
@@ -26,7 +32,7 @@ _caches_lock = threading.Lock()
 
 def _loader(exchange: str):
     def _load_accounts() -> list[dict] | None:
-        data = engine_client.get_json("accounts", exchange=exchange)
+        data = engine_client.get_json("accounts", {"include_paused": 1}, exchange=exchange)
         if data is None:
             return None
         accounts = data.get("accounts")

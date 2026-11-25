@@ -359,6 +359,29 @@ def test_a_blocked_key_still_attempts_exits(fake_accounts, fake_assets):
     assert exit_mock.call_count == 3
 
 
+def test_an_account_paused_for_an_unpaid_invoice_is_skipped_on_entry(fake_accounts, fake_assets):
+    """Paused for non-payment (the API's exits_only): no new trades."""
+    fake_accounts[1]["exits_only"] = True
+
+    summary, entry_mock, _, _ = _run_job(fake_accounts, fake_assets, action="BUY")
+
+    assert summary["filled"] == 2
+    assert entry_mock.call_count == 2
+    paused = {r["account"]: r for r in summary["details"]}[fake_accounts[1]["name"]]
+    assert paused["status"] == "skipped"
+    assert paused["reason"] == "paused (unpaid invoice)"
+
+
+def test_an_account_paused_for_an_unpaid_invoice_still_gets_its_exits(fake_accounts, fake_assets):
+    """A pause must never strand an open position: the exit still runs."""
+    fake_accounts[1]["exits_only"] = True
+
+    summary, _, exit_mock, _ = _run_job(fake_accounts, fake_assets, action="EXIT_LONG")
+
+    assert summary["filled"] == 3
+    assert exit_mock.call_count == 3
+
+
 def test_the_stack_cap_scales_with_the_account(fake_accounts, fake_assets):
     """The cap counts THIS account's entries, not raw base sizes.
 

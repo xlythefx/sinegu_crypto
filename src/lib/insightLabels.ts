@@ -6,6 +6,7 @@
 const REASONS: Record<string, string> = {
   'api key blocked': 'API key refused by the exchange',
   'deposit below minimum': 'Deposit below the minimum',
+  'paused (unpaid invoice)': 'Paused for an unpaid invoice (exits still run)',
   'deposit unknown': 'Deposit not known yet',
   'size too small': 'Balance too small for one trade',
   'maxed sizing': 'Already at the maximum position',

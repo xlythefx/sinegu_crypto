@@ -114,7 +114,8 @@ def check(exchange: str, ticker: str, base_size: float, max_size: float, leverag
     from binance_abcd.accounts_api import fetch_accounts
     from binance_abcd.exchanges import client_for
 
-    accounts = [a for a in fetch_accounts(exchange=exchange) if not a.get("demo")]
+    # A paused account (exits_only) takes no entries, so its size is no answer.
+    accounts = [a for a in fetch_accounts(exchange=exchange) if not a.get("demo") and not a.get("exits_only")]
     leverage_assumed = leverage is None
     if leverage is None:
         leverage = hooks.DEFAULT_LEVERAGE if hooks.DEFAULT_LEVERAGE > 0 else None

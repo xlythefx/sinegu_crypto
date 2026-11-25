@@ -811,6 +811,14 @@ def _run_account(
     lock = symbol_locks.lock_for(account["api_key"], symbol, exchange)
     with lock:
         if is_entry:
+            # Paused for an unpaid invoice (the API's `exits_only`): no new
+            # trades until it is paid. Entry-only on purpose — the exit of a
+            # position already open still runs, so a pause never leaves a
+            # customer holding a position nobody closes (2026-11-25).
+            if account.get("exits_only"):
+                _bump("accounts_skipped")
+                return base | {"status": "skipped", "reason": "paused (unpaid invoice)"}
+
             # The exchange itself refuses these credentials from our server
             # (Binance -2015 / MEXC 406: key invalid, our IP not allow-listed,
             # or a permission missing). Opening would burn an API call to be

@@ -64,7 +64,7 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'What happens if I don\'t pay?',
-        a: 'Invoices are made on the 1st and due on the 4th, and we email reminders on the 2nd and 3rd. If an invoice is still unpaid on the 4th, trading on your account is paused and we email you. While it is paused the bot does not trade on your account at all: it opens no new trades, and it does not close positions that are still open either. As soon as you pay, trading turns back on by itself — no need to contact support. A paused account cannot make profit, so we suggest paying every invoice on time.',
+        a: 'Invoices are made on the 1st and due on the 4th, and we email reminders on the 2nd and 3rd. If an invoice is still unpaid on the 4th, trading on your account is paused and we email you. While it is paused the bot opens no new trades on your account, but positions that are still open are closed as usual when the strategy exits them. As soon as you pay, trading turns back on by itself — no need to contact support. A paused account cannot make profit, so we suggest paying every invoice on time.',
       },
       {
         q: 'Does the exchange charge fees too?',

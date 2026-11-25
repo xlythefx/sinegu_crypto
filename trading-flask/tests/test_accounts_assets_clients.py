@@ -73,6 +73,20 @@ def test_accounts_client_filters_incomplete_rows():
     assert [a["api_key"] for a in accounts] == ["k1"]
 
 
+def test_accounts_client_asks_for_paused_accounts():
+    """The API lists an account paused for an unpaid invoice (exits_only)
+    only to an engine that asks — this one knows to skip its entries."""
+    payload = {"success": True, "accounts": [
+        {"api_key": "k1", "secret_key": "s1", "uni_id": "u1", "exits_only": True},
+    ]}
+    with patch.object(accounts_api.engine_client, "get_json", return_value=payload) as get_json:
+        accounts_api.invalidate_accounts_cache()
+        accounts = accounts_api.fetch_accounts(force=True)
+
+    assert get_json.call_args.args[1] == {"include_paused": 1}
+    assert accounts[0]["exits_only"] is True
+
+
 def test_demo_flag_selects_testnet_base():
     assert "demo-fapi" in accounts_api.account_futures_base_url({"demo": True})
     assert "demo-fapi" not in accounts_api.account_futures_base_url({"demo": False})

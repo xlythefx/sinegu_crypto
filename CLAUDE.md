@@ -339,6 +339,16 @@ wrong); invoice/pause 72 h. Rules:
   defaults are the schedule); `/health` shows `monthly_invoices.next`.
 - Due date is the 4th of the following month (`computeForAccount`), and
   the 4th's enforce step pauses unpaid accounts at the billing hour.
+- **A pause stops ENTRIES, never exits (owner, 2026-11-25).** Until then a
+  paused account (`enabled = 0`) left the engine's list entirely, so its
+  open positions were never closed. `Invoice::pausedAccountIds` (unpaid past
+  due, not `SBXINV-`) is the one definition; `GET /engine/{x}/accounts
+  ?include_paused=1` adds those rows with `exits_only: true`, and only an
+  engine that asks sees them (an older one would trade them). The engine
+  skips their entries ("paused (unpaid invoice)", SignalHealth
+  `paused_unpaid`, normal), runs exits and polls them; Admin → Open
+  positions may close them. An account switched off by hand with nothing
+  owed is still left out completely.
 
 **A paid invoice is ANNOUNCED, and a $0 month reads "No fee" (2026-11-11).**
 A customer paid by card on 10 Nov; it settled and nobody heard.
@@ -2711,6 +2721,8 @@ Field contract (`trading-flask/binance_abcd/routes/webhook.py`):
 
 Only enabled, non-sandbox accounts of non-suspended, non-overdue users receive
 the fan-out — that filtering happens in `sinegutrade-api`, not in the alert.
+One exception: an account paused for an unpaid invoice still receives EXITS
+(`exits_only`, 2026-11-25), never entries.
 
 ## `pixel-telegram/` — VPS ops alerts (in this repo)
 
