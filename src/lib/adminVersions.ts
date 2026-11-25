@@ -14,6 +14,20 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'faq-card-payments-and-flagged-keys',
+    date: '2026-11-25',
+    kind: 'fixed',
+    area: 'FAQ',
+    title: 'FAQ: card payments and flagged keys answered as they work today',
+    summary:
+      'Two FAQ answers were out of date. "How do I pay?" still said card payments were not available, although every invoice has a "Pay with Stripe" button and customers already pay by card. "What if my key gets flagged?" said any successful check clears the flag, which is no longer true for a key that is not allowed to trade.',
+    howItWorks: [
+      '"How do I pay?" now names both buttons on an invoice: "Pay with crypto" (USDT on TRON) and "Pay with Stripe" (card). It says each one marks the invoice paid by itself, and that the customer gets an email when the payment arrives.',
+      '"What if my key gets flagged?" now lists the three usual causes and what to do about each: the wrong IP address on the key, futures trading not allowed on the key, or a key that no longer exists. It names the button to press after the fix, says the check also asks whether the key may trade, and keeps the rule that a key still refused 3 days after it was first flagged is disconnected.',
+    ],
+    links: [{ label: 'FAQ', href: '/faq' }],
+  },
+  {
     id: 'terms-no-manual-trading',
     date: '2026-11-25',
     kind: 'improved',

@@ -56,7 +56,7 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'How do I pay?',
-        a: 'Invoices appear under Billing & Invoices in the dashboard. You pay them in USDT on the TRON network (TRC-20): send the exact amount shown to our wallet, and the invoice is marked paid automatically once the transfer lands. Card payments are not available yet.',
+        a: 'Open the invoice under Billing & Invoices in the dashboard and pick one of two buttons. "Pay with crypto" is USDT on the TRON network (TRC-20): send the exact amount shown to our wallet, and the invoice is marked paid automatically once the transfer lands. "Pay with Stripe" takes you to Stripe\'s secure checkout to pay by card, and the invoice is marked paid as soon as Stripe confirms the payment. Either way, we email you when the payment is received.',
       },
       {
         q: 'What happens if I don\'t pay?',
@@ -82,7 +82,7 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'What if my key gets flagged?',
-        a: 'Fix the key\'s settings at the exchange (usually the IP restriction), then press Recheck. Any successful call clears the flag. A key that stays refused for 3 days is disconnected automatically so you can connect a fresh one.',
+        a: 'The dashboard shows a notice that says what is wrong. Usually it is one of three things: the key is restricted to the wrong IP address (allow our server\'s IP, shown in the notice), the key is not allowed to trade futures (turn that permission on at the exchange), or the key no longer exists (disconnect the account and connect a new key). After fixing the IP or the permission, press "I\'ve fixed it — recheck": we check the key with the exchange again, including whether it is allowed to trade, and the notice clears once it passes. A key that is still refused 3 days after it was first flagged is disconnected automatically, so you can connect a fresh one.',
       },
       {
         q: 'Can I trade manually on the same account?',
