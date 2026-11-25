@@ -14,6 +14,27 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'faq-fees-as-invoiced',
+    date: '2026-11-25',
+    kind: 'fixed',
+    area: 'FAQ',
+    title: 'FAQ: fees and billing now describe exactly what the invoices do',
+    summary:
+      'The FAQ’s fee answers described a simpler rule than the invoices actually follow. They said "20% of the profit, nothing else", "billed only on profit above the high-water mark" and "you never pay twice for the same gain". They now describe the invoices as they work today: 20% of the month’s closed profit plus 6% of open profit, the whole month’s closed profit once the month ends above the mark, and the 6% on open profit never credited back. Nothing about the invoices themselves changed.',
+    howItWorks: [
+      '"What does it cost?" now names both rates: 20% of the month’s closed profit after exchange fees, and 6% of the profit on positions still open when the bill is made on the 1st. It also says a month with no fee still shows as a $0 invoice with nothing to pay.',
+      '"What is the high-water mark?" now explains how deposits and withdrawals move the mark, and that a month above the mark is billed on its whole closed profit. Example: mark $2,300, April ends at $2,250, May closes +$250 to end at $2,500 → May’s fee is $50, not $40.',
+      'A new answer, "How are positions still open at month end billed?", explains the 6% on open profit. That 6% is not credited when the trade closes later (its profit is then billed at 20% if that month ends above the mark), and it is not refunded if the trade closes at a loss.',
+      '"What happens if I don’t pay?" now gives the real schedule: bill on the 1st, reminders on the 2nd and 3rd, pause on the 4th. It no longer says open positions are still closed during a pause, because they are not: a paused account is not traded at all.',
+      '"Does the exchange charge fees too?" now says the 20% is worked out after exchange fees, and the 6% on open profit before the fee for closing.',
+      'Whether these rules should change is still the owner’s decision, under "Decide how the public pages describe the fee" in To be Done.',
+    ],
+    links: [
+      { label: 'FAQ: fees and billing', href: '/faq' },
+      { label: 'To be Done', href: '/admin/todo' },
+    ],
+  },
+  {
     id: 'faq-card-payments-and-flagged-keys',
     date: '2026-11-25',
     kind: 'fixed',

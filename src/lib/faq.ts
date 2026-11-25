@@ -48,11 +48,15 @@ export const FAQ: FaqGroup[] = [
     entries: [
       {
         q: 'What does it cost?',
-        a: '20% of the profit we make for you — nothing else. Nothing to connect, nothing per month, and no profit means no invoice.',
+        a: 'A monthly fee, only for a month in which your account ends above its high-water mark (see below). The standard rates are 20% of the month\'s closed profit, after exchange fees, plus 6% of the profit on positions still open when the bill is made on the 1st. Nothing to connect and no subscription. A month with no fee still appears in your invoice list as a $0 invoice, with nothing to pay.',
       },
       {
         q: 'What is the high-water mark?',
-        a: 'The highest level your account has reached at a previous month end. You are only billed on profit ABOVE it, so after a losing month you pay nothing until the account has made the loss back and gone higher. You never pay twice for the same gain.',
+        a: 'The value your account has to beat before any fee is due: the highest value it has reached at a previous month end, counting open positions at their profit or loss at that moment. Your first mark is the money in the account when it started with us. Deposits and withdrawals are never profit or loss: a deposit raises the mark by the same amount and a withdrawal lowers it. A month that ends at or below the mark costs nothing, so after a losing month you pay nothing until the account has made the loss back and gone higher. Once a month ends above the mark, the fee is worked out on that month\'s whole closed profit, not only the part above the mark. Example: the mark is $2,300, April ends at $2,250, and May closes +$250 to end at $2,500. May\'s fee is 20% of $250 = $50.',
+      },
+      {
+        q: 'How are positions still open at month end billed?',
+        a: 'If the month ends above the mark, 6% of the profit on your open positions when the bill is made on the 1st is added to that month\'s invoice. That 6% is not credited back later. When the position closes, its profit counts in the closed profit of the month it closes in, and is billed at 20% if that month also ends above the mark. If it closes at a loss instead, the 6% already billed is not refunded. Example: a position is $500 in profit on the 1st, so the invoice includes 6% of $500 = $30. Next month it closes at +$500, another trade closes at +$100, and the month ends above the mark: that month\'s fee is 20% of $600 = $120.',
       },
       {
         q: 'How do I pay?',
@@ -60,11 +64,11 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'What happens if I don\'t pay?',
-        a: 'Once an invoice is past its due date, the bot stops opening new trades on your account. Positions already open are still closed normally. As soon as you pay, trading turns back on by itself — no need to contact support. While trading is paused your account cannot make profit, so we suggest paying every invoice on time.',
+        a: 'Invoices are made on the 1st and due on the 4th, and we email reminders on the 2nd and 3rd. If an invoice is still unpaid on the 4th, trading on your account is paused and we email you. While it is paused the bot does not trade on your account at all: it opens no new trades, and it does not close positions that are still open either. As soon as you pay, trading turns back on by itself — no need to contact support. A paused account cannot make profit, so we suggest paying every invoice on time.',
       },
       {
         q: 'Does the exchange charge fees too?',
-        a: 'Yes. The exchange takes its own trading commission and funding payments on every trade, regardless of outcome. Those go to the exchange, not to us. To keep it fair, our 20% is taken on your profit AFTER exchange fees, never before. Your dashboard shows profit both before and after them.',
+        a: 'Yes. The exchange takes its own trading commission and funding payments on every trade, regardless of outcome. Those go to the exchange, not to us. Our 20% is worked out on closed profit AFTER those fees, never before. The 6% on positions still open uses the open profit the exchange shows, before the fee for closing them. Your dashboard shows profit both before and after exchange fees.',
       },
     ],
   },
