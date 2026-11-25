@@ -14,6 +14,22 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'landing-mexc-coming-soon',
+    date: '2026-11-25',
+    kind: 'fixed',
+    area: 'Website',
+    title: 'The home page and FAQ no longer say MEXC is open',
+    summary:
+      'MEXC was closed to new customers on 23 Nov, but the home page still showed it as "Live now · Futures", the "how it works" step said "Link your Binance or MEXC account", and the FAQ listed it as a supported exchange. All three now say Binance, with MEXC and Bybit coming soon.',
+    howItWorks: [
+      'The exchange cards on the home page now follow the same switch the connect page uses, so the next time a venue opens or closes, the home page changes with it — nobody has to remember to edit the text.',
+      'Customers who already trade on MEXC are not affected: their accounts keep trading. The FAQ says so.',
+    ],
+    technical: [
+      'components/landing/Exchanges.tsx derives `live` from EXCHANGE_META (`available && !staffOnly`) instead of a hand-kept list; HowItWorks.tsx and lib/faq.ts copy.',
+    ],
+  },
+  {
     id: 'admin-sidebar-groups',
     date: '2026-11-25',
     kind: 'improved',

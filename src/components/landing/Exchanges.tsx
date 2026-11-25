@@ -1,15 +1,17 @@
 import { plainStats } from '../../lib/trackRecord'
+import { EXCHANGE_META, EXCHANGE_ORDER } from '../exchanges/meta'
 import type { TrackRecordStats } from '../../types/publicStats'
 
 const CONTAINER = 'max-w-[1280px] mx-auto px-10 max-[560px]:px-5'
 
-/** Binance and MEXC are open to customers; Bybit is on the way (staff-only in
- *  the app — keep in step with `staffOnly` in exchanges/meta.ts). */
-const EXCHANGES = [
-  { name: 'Binance', live: true },
-  { name: 'MEXC', live: true },
-  { name: 'Bybit', live: false },
-]
+/** "Live" = a customer may connect it today. Read from `staffOnly` in
+ *  exchanges/meta.ts rather than typed here: a hand-kept copy still said MEXC
+ *  was live two days after it was closed to customers (2026-11-23). Open
+ *  venues first, so Binance leads. */
+const EXCHANGES = EXCHANGE_ORDER.map((kind) => ({
+  name: EXCHANGE_META[kind].label,
+  live: EXCHANGE_META[kind].available && !EXCHANGE_META[kind].staffOnly,
+})).sort((a, b) => Number(b.live) - Number(a.live))
 
 interface ExchangesProps {
   /** The page's one track-record fetch — the same figures as Performance. */

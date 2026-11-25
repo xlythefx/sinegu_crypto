@@ -26,7 +26,7 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'Which exchanges can I use?',
-        a: 'Binance and MEXC. Bybit is coming soon.',
+        a: 'Binance. MEXC and Bybit are coming soon — an account already connected on MEXC keeps trading as before.',
       },
       {
         q: 'Do you hold my money?',
