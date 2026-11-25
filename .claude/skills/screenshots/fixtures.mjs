@@ -1155,7 +1155,73 @@ const NOTIFICATIONS_BODY = {
   ],
 }
 
+// ---------------------------------------------------------------- public (home page)
+// Invented, like everything here: a made-up track record, book and quotes.
+function sampleTrackRecord() {
+  const series = []
+  let seed = 7
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+  let roc = 0
+  let growth = 1
+  const day0 = Date.UTC(2026, 5, 1)
+  for (let d = 0; d < 170; d += 1) {
+    if (rand() < 0.35) continue
+    const pct = Math.round((rand() - 0.42) * 2.4 * 1000) / 1000
+    growth *= 1 + pct / 100
+    roc += pct * 0.8
+    series.push({
+      date: new Date(day0 + d * 864e5).toISOString().slice(0, 10),
+      pct, cumulative: Math.round((growth - 1) * 100000) / 1000, roc: Math.round(roc * 1000) / 1000,
+      trades: 1 + Math.floor(rand() * 3), assets: [{ symbol: 'LTCUSDT', pct, trades: 1 }],
+    })
+  }
+  const pcts = series.map((p) => p.pct)
+  const wins = pcts.filter((p) => p > 0)
+  const losses = pcts.filter((p) => p < 0)
+  const mean = (xs) => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 100) / 100 : null)
+  const closedAt = (daysAgo, h) => new Date(Date.now() - daysAgo * 864e5).toISOString().slice(0, 11) + `${String(h).padStart(2, '0')}:14:00Z`
+  return {
+    success: true, available: true, exchange: 'all', exchanges: ['binance'], symbols: ['LTCUSDT'], timezone: 'Asia/Manila',
+    stats: {
+      return_on_capital_pct: Math.round(roc * 100) / 100, total_pnl_pct: Math.round((growth - 1) * 10000) / 100,
+      win_rate: Math.round((wins.length / pcts.length) * 1000) / 10, trades: series.reduce((a, p) => a + p.trades, 0),
+      avg_daily_pct: mean(pcts), avg_win_pct: mean(wins), avg_loss_pct: mean(losses), trading_days: pcts.length,
+      winning_days: wins.length, losing_days: losses.length,
+      first_trade_at: series[0].date, last_trade_at: series[series.length - 1].date,
+    },
+    series,
+    recent_closes: [
+      { closed_at: closedAt(0, 9), date: '', symbol: 'LTCUSDT', side: 'LONG', exchange: 'binance', pct: 1.184, trades: 2 },
+      { closed_at: closedAt(1, 15), date: '', symbol: 'LTCUSDT', side: 'SHORT', exchange: 'binance', pct: -0.412, trades: 1 },
+      { closed_at: closedAt(2, 6), date: '', symbol: 'LTCUSDT', side: 'SHORT', exchange: 'binance', pct: 0.736, trades: 3 },
+      { closed_at: closedAt(3, 20), date: '', symbol: 'LTCUSDT', side: 'LONG', exchange: 'binance', pct: 2.051, trades: 3 },
+      { closed_at: closedAt(5, 11), date: '', symbol: 'LTCUSDT', side: 'LONG', exchange: 'binance', pct: -0.958, trades: 1 },
+    ],
+  }
+}
+const SAMPLE_TRACK_RECORD = sampleTrackRecord()
+
+function sampleOrderBook() {
+  const mid = 96120.5
+  const bids = Array.from({ length: 100 }, (_, i) => [Math.round((mid - 0.1 - i * 0.4) * 10) / 10, Math.round((0.2 + ((i * 37) % 23) / 10) * 1000) / 1000])
+  const asks = Array.from({ length: 100 }, (_, i) => [Math.round((mid + 0.1 + i * 0.4) * 10) / 10, Math.round((0.2 + ((i * 29) % 19) / 10) * 1000) / 1000])
+  return { success: true, available: true, symbol: 'BTCUSDT', label: 'BTC-PERP', bids, asks, price: mid, change_pct: 1.42, quote_volume: 1.84e10, book_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+}
+
+const SAMPLE_MARKET_TICKER = {
+  success: true, available: true, updated_at: new Date().toISOString(),
+  quotes: [
+    { symbol: 'BTCUSDT', label: 'BTC/USDT', price: 96120.5, change_pct: 1.42 },
+    { symbol: 'ETHUSDT', label: 'ETH/USDT', price: 3412.18, change_pct: -0.66 },
+    { symbol: 'LTCUSDT', label: 'LTC/USDT', price: 104.37, change_pct: 2.1 },
+  ],
+  funding: { symbol: 'LTCUSDT', label: 'LTC/USDT', rate_pct: 0.01, next_at: new Date(Date.now() + 3 * 36e5).toISOString() },
+}
+
 const GET = {
+  '/public/track-record': () => SAMPLE_TRACK_RECORD,
+  '/public/order-book': () => sampleOrderBook(),
+  '/public/market-ticker': SAMPLE_MARKET_TICKER,
   '/admin/activity': () => activityPage(),
   '/admin/notifications': NOTIFICATIONS_BODY,
   '/dashboard/daily-pnl': { success: true, days: DASHBOARD_DAILY_PNL },

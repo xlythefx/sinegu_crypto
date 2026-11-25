@@ -15,7 +15,7 @@ node .claude/skills/screenshots/shots.mjs /admin/invoices "/admin?view=attention
 node .claude/skills/screenshots/shots.mjs /dashboard --role user
 ```
 
-Options: `--role admin|user` (the signed-in role, default admin), `--theme
+Options: `--role admin|user|guest` (the signed-in role, default admin; `guest` = signed out, for the public pages), `--theme
 dark|light`, `--only desktop|phone`, `--url http://localhost:5191` (reuse a
 running server), `--no-open` (skip the browser). The gallery lands in
 `%TEMP%\pixel-alpha-shots\<timestamp>\index.html`; the script prints the

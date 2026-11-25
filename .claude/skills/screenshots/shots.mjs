@@ -30,7 +30,11 @@ const option = (name, fallback) => {
 const valued = new Set(['--role', '--theme', '--only', '--url'])
 const routes = argv.filter((a, i) => !a.startsWith('--') && !valued.has(argv[i - 1]))
 const ROUTES = routes.length ? routes.map((r) => (r.startsWith('/') ? r : `/${r}`)) : DEFAULT_ROUTES
-const USER = option('role', 'admin') === 'user' ? TRADER_USER : ADMIN_USER
+const ROLE = option('role', 'admin')
+// `guest` = signed out (the public pages as a visitor sees them). Fixtures
+// still get a user to answer with, so a stray authenticated call cannot crash.
+const GUEST = ROLE === 'guest'
+const USER = ROLE === 'user' ? TRADER_USER : ADMIN_USER
 const THEME = option('theme', 'dark')
 const ONLY = option('only', null)
 const VIEWPORTS = [
@@ -123,11 +127,13 @@ async function capture(browser, base, route, vp) {
     colorScheme: THEME,
   })
   await context.addInitScript(([user, theme]) => {
-    localStorage.setItem('sinegu-token', 'sample-token')
-    localStorage.setItem('sinegu-user', JSON.stringify(user))
+    if (user) {
+      localStorage.setItem('sinegu-token', 'sample-token')
+      localStorage.setItem('sinegu-user', JSON.stringify(user))
+    }
     localStorage.setItem('sinegu-theme', theme)
     localStorage.setItem('pixel-alpha-consent', JSON.stringify({ v: 2, choice: 'essential', at: new Date().toISOString() }))
-  }, [USER, THEME])
+  }, [GUEST ? null : USER, THEME])
 
   await context.route((u) => u.hostname.endsWith('pixel-alpha.com') && !u.pathname.startsWith('/api/'), (r) => r.abort())
   await context.route((u) => u.pathname.startsWith('/api/'), async (r) => {
@@ -190,7 +196,7 @@ h2{font:600 15px ui-monospace,monospace;margin:0 0 12px;color:#d9b45a}.row{displ
 figure{margin:0}figure.desktop{flex:1 1 640px;min-width:0}figure.phone{flex:0 0 280px}figcaption{color:#9a9284;font-size:12px;margin-bottom:6px}
 img{display:block;width:100%;border:1px solid #232733;border-radius:10px}code{color:#d9b45a}
 </style></head><body><header><h1>Pixel Alpha screenshots</h1>
-<p>${shots.length} captures · ${esc(USER.type)} view · ${esc(THEME)} theme · ${esc(new Date().toLocaleString())}</p>
+<p>${shots.length} captures · ${esc(GUEST ? 'signed-out' : USER.type)} view · ${esc(THEME)} theme · ${esc(new Date().toLocaleString())}</p>
 <p>Sample data only: every API answer came from <code>.claude/skills/screenshots/fixtures.mjs</code>; nothing reached the live site. Click an image for full size.</p>${notes}
 </header>${groups}</body></html>`
 }
