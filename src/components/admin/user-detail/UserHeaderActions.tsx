@@ -5,6 +5,7 @@ import ConfirmModal from '../../ui/ConfirmModal'
 import { useSessionUser } from '../../../hooks/useSessionUser'
 import { deleteAdminUser, refreshAdminUser, updateAdminUser } from '../../../services/admin'
 import { getApiErrorMessage } from '../../../services/api'
+import { usersListPath } from '../../../lib/adminUsersReturn'
 import type { AdminUserDetail } from '../../../types/admin'
 
 const BTN =
@@ -58,7 +59,7 @@ export default function UserHeaderActions({ user, onChanged }: UserHeaderActions
     try {
       if (pending === 'delete') {
         await deleteAdminUser(user.uni_id)
-        navigate('/admin/users', { replace: true })
+        navigate(usersListPath(user.type !== 'user' ? 'staff' : 'users'), { replace: true })
         return
       }
       await updateAdminUser(user.uni_id, { status: 'active' })

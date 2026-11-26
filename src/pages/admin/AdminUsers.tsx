@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import {
   Building2,
   Check,
@@ -8,7 +8,6 @@ import {
   ChevronRight,
   Clock,
   Eye,
-  Search,
   ShieldCheck,
   UserCog,
   UserPlus,
@@ -24,8 +23,12 @@ import { BADGE, RoleBadge, StatusBadge } from '../../components/admin/badges'
 import RolePicker from '../../components/admin/RolePicker'
 import UserBalanceCell from '../../components/admin/UserBalanceCell'
 import { EXCHANGE_META, EXCHANGE_ORDER } from '../../components/exchanges/meta'
+import SearchField from '../../components/ui/filters/SearchField'
 import { useApiData } from '../../hooks/useApiData'
 import { useSessionUser } from '../../hooks/useSessionUser'
+import { useUrlFilters } from '../../hooks/useUrlFilters'
+import { rememberUsersList } from '../../lib/adminUsersReturn'
+import type { AllowedValues } from '../../lib/urlFilters'
 import { hasOwnFeed, isCollaborator } from '../../lib/roles'
 import {
   acceptUser,
@@ -203,6 +206,23 @@ const EXCHANGE_FILTERS: { key: ExchangeFilter; label: string; hint: string }[] =
   })),
 ]
 
+/**
+ * Every filter lives in the page address (2026-11-26), so Back from a
+ * customer, a refresh or a pasted link lands on the same list. A value equal
+ * to its default stays out of the address; anything not allowed reads as the
+ * default. `group` is the old `?group=staff`, so existing links still work.
+ */
+const URL_DEFAULTS = { group: 'users', status: 'all', action: 'all', exchange: 'all', role: 'all', q: '', page: '1' }
+type UrlKeys = typeof URL_DEFAULTS
+
+const URL_ALLOWED: AllowedValues<UrlKeys> = {
+  group: ['users', 'staff'],
+  status: STATUS_FILTERS.map((s) => s.key),
+  action: ACTION_FILTERS.map((f) => f.key),
+  exchange: EXCHANGE_FILTERS.map((f) => f.key),
+  role: ROLE_FILTERS.map((r) => r.key),
+}
+
 interface ChipGroupProps<K extends string> {
   label: string
   items: { key: K; label: string; hint: string }[]
@@ -253,14 +273,25 @@ export default function AdminUsers() {
   const readOnly = isCollaborator(sessionUser?.type)
   const { data, loading, error, reload } = useApiData(getAdminUsers)
 
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-  // "Who needs action" (the admin audit, 2026-11-11) — customers only.
-  const [actionFilter, setActionFilter] = useState<ActionFilter>('all')
-  // "Connected exchange" (Dima, 2026-11-26) — customers only, like the chips above.
-  const [exchangeFilter, setExchangeFilter] = useState<ExchangeFilter>('all')
-  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
+  // Search, status, the Users / Staff tab, role, "Needs action" (customers,
+  // the admin audit 2026-11-11), "Exchange" (customers, Dima 2026-11-26) and
+  // the page: all in the URL, see URL_DEFAULTS.
+  const { filters, setMany } = useUrlFilters(URL_DEFAULTS, { allowed: URL_ALLOWED })
+  const group: Group = filters.group === 'staff' ? 'staff' : 'users'
+  const statusFilter = filters.status as StatusFilter
+  const actionFilter = filters.action as ActionFilter
+  const exchangeFilter = filters.exchange as ExchangeFilter
+  const roleFilter = filters.role as RoleFilter
+  const search = filters.q
+  const page = Math.max(1, Number.parseInt(filters.page, 10) || 1)
+  /** Any filter change starts again on page 1 — one history entry for both. */
+  const setFilters = (patch: Partial<UrlKeys>) => setMany({ ...patch, page: '1' })
+  const setPage = (next: number) => setMany({ page: String(next) })
+
+  // "Back to Users" on a customer's page returns to this exact view.
+  const { search: listSearch } = useLocation()
+  useEffect(() => rememberUsersList(listSearch), [listSearch])
+
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   const [pendingRole, setPendingRole] = useState<PendingRole | null>(null)
@@ -270,11 +301,6 @@ export default function AdminUsers() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [createdEmail, setCreatedEmail] = useState<string | null>(null)
-
-  // The tab lives in the URL so "Back to Users" from a staff member's
-  // detail page returns to the Staff tab rather than resetting to Users.
-  const [params, setParams] = useSearchParams()
-  const group: Group = params.get('group') === 'staff' ? 'staff' : 'users'
 
   const users = useMemo(() => data ?? [], [data])
 
@@ -373,19 +399,11 @@ export default function AdminUsers() {
     return <Navigate to="/auth" replace />
   }
 
-  const setFilterAndResetPage = (fn: () => void) => {
-    fn()
-    setPage(1)
-  }
-
-  /** Switch tab; the status chips carry over, the staff-only role filter does not. */
-  const setGroup = (next: Group) =>
-    setFilterAndResetPage(() => {
-      setRoleFilter('all')
-      setActionFilter('all')
-      setExchangeFilter('all')
-      setParams(next === 'staff' ? { group: 'staff' } : {}, { replace: true })
-    })
+  /**
+   * Switch tab; the status chips and the search carry over, the staff-only
+   * role filter and the customers-only chips do not.
+   */
+  const setGroup = (next: Group) => setFilters({ group: next, role: 'all', action: 'all', exchange: 'all' })
 
   const toggleExpanded = (uniId: string) => {
     setExpanded((prev) => {
@@ -424,12 +442,7 @@ export default function AdminUsers() {
       setCreateOpen(false)
       // Clear the filters so the new row is actually visible — creating a
       // user while "Pending" is selected must not look like nothing happened.
-      setFilterAndResetPage(() => {
-        setSearch('')
-        setStatusFilter('all')
-        setRoleFilter('all')
-      })
-      setGroup(user.type === 'user' ? 'users' : 'staff')
+      setFilters({ ...URL_DEFAULTS, group: user.type === 'user' ? 'users' : 'staff' })
       setCreatedEmail(user.email)
       reload()
     } catch (err) {
@@ -539,11 +552,10 @@ export default function AdminUsers() {
             <button
               type="button"
               className="w-full border-t border-accent-line p-2.5 text-[12.5px] font-bold text-accent cursor-pointer hover:bg-accent-soft"
-              onClick={() => {
+              onClick={() =>
                 // Sign-ups are customers until an admin gives them a role.
-                setGroup('users')
-                setStatusFilter('pending')
-              }}
+                setFilters({ group: 'users', role: 'all', action: 'all', exchange: 'all', status: 'pending' })
+              }
             >
               +{pendingUsers.length - 6} more — view all pending
             </button>
@@ -587,18 +599,14 @@ export default function AdminUsers() {
       >
         {/* Search, then status chips (left) + Users / Staff tabs (right) */}
         <div className="flex flex-col gap-3 border-b border-hair px-5 py-[18px]">
-          <label className="flex items-center gap-[9px] h-10 rounded-[11px] border border-border bg-surface2 px-[13px] text-muted">
-            <Search size={14} />
-            <input
-              type="search"
-              placeholder="Search by name or email…"
-              value={search}
-              onChange={(e) =>
-                setFilterAndResetPage(() => setSearch(e.target.value))
-              }
-              className="flex-1 border-0 bg-transparent text-[13px] text-text outline-none placeholder:text-faint"
-            />
-          </label>
+          {/* Shows every keystroke, writes the URL once typing pauses. */}
+          <SearchField
+            value={search}
+            onChange={(q) => setFilters({ q })}
+            placeholder="Search by name or email…"
+            ariaLabel="Search users by name or email"
+            className="h-10! sm:w-full!"
+          />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap gap-1.5">
               {STATUS_FILTERS.map((s) => {
@@ -615,9 +623,7 @@ export default function AdminUsers() {
                           ? 'border-accent-line bg-surface2 text-accent'
                           : 'border-border bg-surface2 text-muted'
                     }`}
-                    onClick={() =>
-                      setFilterAndResetPage(() => setStatusFilter(s.key))
-                    }
+                    onClick={() => setFilters({ status: s.key })}
                   >
                     {s.label}
                     <span
@@ -640,11 +646,7 @@ export default function AdminUsers() {
                   <UserCog size={14} />
                   <select
                     value={roleFilter}
-                    onChange={(e) =>
-                      setFilterAndResetPage(() =>
-                        setRoleFilter(e.target.value as RoleFilter),
-                      )
-                    }
+                    onChange={(e) => setFilters({ role: e.target.value })}
                     aria-label="Filter by role"
                     className="cursor-pointer border-0 bg-transparent text-[12.5px] font-semibold text-text outline-none"
                   >
@@ -682,7 +684,7 @@ export default function AdminUsers() {
               active={actionFilter}
               counts={actionCounts}
               allKey="all"
-              onPick={(key) => setFilterAndResetPage(() => setActionFilter(key))}
+              onPick={(action) => setFilters({ action })}
             />
             <ChipGroup
               label="Exchange"
@@ -690,7 +692,7 @@ export default function AdminUsers() {
               active={exchangeFilter}
               counts={exchangeCounts}
               allKey="all"
-              onPick={(key) => setFilterAndResetPage(() => setExchangeFilter(key))}
+              onPick={(exchange) => setFilters({ exchange })}
             />
           </div>
         )}
@@ -777,7 +779,7 @@ export default function AdminUsers() {
               <button
                 type="button"
                 className={PAG_BTN}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => setPage(Math.max(1, safePage - 1))}
                 disabled={safePage <= 1}
                 aria-label="Previous page"
               >
@@ -789,7 +791,7 @@ export default function AdminUsers() {
               <button
                 type="button"
                 className={PAG_BTN}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() => setPage(Math.min(totalPages, safePage + 1))}
                 disabled={safePage >= totalPages}
                 aria-label="Next page"
               >

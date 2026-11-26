@@ -14,6 +14,24 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'users-filters-in-address',
+    date: '2026-11-26',
+    kind: 'improved',
+    area: 'User Management',
+    title: 'User Management remembers its filters when you go back or refresh',
+    summary:
+      'Opening a customer and pressing "Back to Users" used to reset the list: the search, the status, "Needs action", "Exchange" and the page were all forgotten. They are now kept in the page address, so Back, a refresh, or a link you send to a colleague opens exactly the same list.',
+    howItWorks: [
+      'Example: choose "Connected exchange" and search "daniel". The address becomes …/admin/users?exchange=connected&q=daniel. Open Daniel, look around his tabs, press "Back to Users": the list is still on Connected exchange, still searching "daniel".',
+      'Switching between Users and Staff keeps the search and the status, and drops the customers-only rows ("Needs action", "Exchange").',
+      'The search now waits until you pause typing before it filters, like the other admin lists.',
+    ],
+    technical: [
+      'AdminUsers: useUrlFilters({group, status, action, exchange, role, q, page}) with allowed values; SearchField for q. lib/adminUsersReturn.ts remembers the list’s search in sessionStorage (router state does not survive the profile rewriting its ?tab=); AdminUserDetail’s Back and UserHeaderActions’ post-delete navigate use usersListPath(group). ?group=staff links still work.',
+    ],
+    links: [{ label: 'User Management', href: '/admin/users' }],
+  },
+  {
     id: 'users-connected-exchange-filter',
     date: '2026-11-26',
     kind: 'new',

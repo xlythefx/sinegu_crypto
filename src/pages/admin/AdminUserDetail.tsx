@@ -38,6 +38,7 @@ import { EXCHANGE_META } from '../../components/exchanges/meta'
 import { useApiData } from '../../hooks/useApiData'
 import { useSessionUser } from '../../hooks/useSessionUser'
 import { isCollaborator } from '../../lib/roles'
+import { usersListPath } from '../../lib/adminUsersReturn'
 import {
   getAdminUserDailyPnl,
   getAdminUserDetail,
@@ -151,9 +152,9 @@ export default function AdminUserDetail() {
     return <Navigate to="/auth" replace />
   }
 
-  // Back to the tab this person is listed under (User Management: Users / Staff).
-  const back = () =>
-    navigate(user && user.type !== 'user' ? '/admin/users?group=staff' : '/admin/users')
+  // Back to the tab this person is listed under (User Management: Users / Staff),
+  // with the filters the list had when it was left (2026-11-26).
+  const back = () => navigate(usersListPath(user && user.type !== 'user' ? 'staff' : 'users'))
 
   // Suspended AND nothing connected: every stat below is an empty zero, so the
   // cards are greyed out rather than reading like a real $0.00 account. A
