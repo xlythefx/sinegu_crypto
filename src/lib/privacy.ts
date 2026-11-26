@@ -14,7 +14,7 @@ import type { LegalDocumentContent } from '../types/legal'
  */
 export const PRIVACY: LegalDocumentContent = {
   title: 'Privacy Policy',
-  updatedAt: 'November 16, 2026',
+  updatedAt: 'November 26, 2026',
   lede: `This Privacy Policy explains what personal data ${COMPANY.name} collects when you use pixel-alpha.com and the Pixel Alpha platform, why we collect it, who we share it with, and the choices you have. Please read it together with our Terms and Conditions.`,
 
   sections: [
@@ -142,7 +142,8 @@ export const PRIVACY: LegalDocumentContent = {
           items: [
             'Your exchange (Binance, Bybit or MEXC): the orders our engine places on your behalf. The exchange already holds your identity; we send it trading instructions, not your personal details.',
             'Hosting and network providers: our servers are operated by Contabo GmbH (Germany) and fronted by Cloudflare, Inc., which processes request metadata such as IP addresses to protect the site.',
-            'Payment processors: when you pay an invoice with a card or through our crypto checkout, the processor (currently Coinsbuy) receives the invoice amount and a reference; when you pay in USDT directly, the payment is a public blockchain transaction that anyone can see, and we record its transaction id against your invoice.',
+            'Payment processors: when you pay an invoice by card, Stripe, Inc. takes the payment on its own checkout page. It receives your name, your email address, the invoice amount and billing period, and the card details you type there. Stripe keeps that card with your customer record at Stripe; we never see or store your card number. When you pay in USDT directly, the payment is a public blockchain transaction that anyone can see, and we record its transaction id against your invoice.',
+            'AI assistants our team uses: our staff ask an AI assistant questions about the service, currently Grok (by xAI) and, for our developers investigating errors, Claude (by Anthropic). To answer, the assistant can read account names, balances, trades, profit and invoices, and, where we allow it, the Telegram username you gave us. It never receives your password, your exchange API key or secret, your email address, your IP address or your WhatsApp number. What it reads is processed by that provider to answer the question.',
             'Email delivery: the provider that delivers our service emails receives your email address and the message content.',
             'Referrers: if you registered through someone\'s referral link, that person can see that a referred account exists, the referral commission earned from your fees, and the display name on your account. They never see your email, your API keys or your trades.',
             'Authorities and advisers: where the law requires it, or to establish or defend a legal claim.',

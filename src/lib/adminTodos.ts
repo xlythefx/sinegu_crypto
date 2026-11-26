@@ -23,12 +23,13 @@ export const ADMIN_TODOS: AdminTodo[] = [
     id: 'privacy-policy-ai-provider',
     feature: 'AI Access',
     kind: 'decision',
-    title: 'Decide whether the Privacy Policy should say customer data is read by our AI assistant (Grok)',
+    title: 'Check the Privacy Policy’s new lines about our AI assistants and card payments',
     added: '2026-11-26',
-    why: 'Through AI Access, Grok reads customer names, balances, profit and invoices, and now (on a key you allow) the Telegram username each person gave at sign-up. Everything it reads is sent to its provider, xAI. The Privacy Policy’s “Who we share it with” section does not mention this yet.',
+    why: 'Through AI Access, Grok (and Claude, for the developers’ error investigations) reads customer names, balances, profit and invoices, and now, on a key you allow, the Telegram username each person gave at sign-up. What it reads goes to its provider. On 26 Nov the Privacy Policy’s “Who we share it with” section gained a line saying so, and its card-payment line now names Stripe (it still said Coinsbuy). The wording is yours to approve.',
     steps: [
-      'Decide whether the policy should name it. If not, write "no" and the reason in the note below, then tick this item.',
-      'If yes, write in the note what the line should say (for example: "Our team uses an AI assistant (Grok, by xAI) to answer questions about accounts; it reads names, balances, profit, invoices and Telegram usernames, never passwords, API keys, emails or phone numbers"). The developer then adds it to the Privacy Policy and the update notice.',
+      'Open the Privacy Policy (link below), section 05 “Who We Share It With”, and read the “Payment processors” and “AI assistants our team uses” lines.',
+      'Write any change in the note below, or "approved". Then tick this item.',
+      'Decide whether customers should be told the policy changed. On 16 Nov the dashboard reminder counted as the notice and no email was sent. Write the choice in the note.',
     ],
     links: [
       { label: 'Privacy Policy', href: '/privacy' },

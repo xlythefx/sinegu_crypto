@@ -958,7 +958,12 @@ Rules:
   that key; WhatsApp, Discord, email and phone stay dropped for every key. The
   field is `telegram_username`, never bare `telegram`: bare platform names are
   sign-up-source COUNTS and survive the redactor on purpose
-  (`AiRedactorTest`). Owner to-do `privacy-policy-ai-provider`.
+  (`AiRedactorTest`). The Privacy Policy's "AI assistants our team uses"
+  line (section 05, 2026-11-26) states what the connector reads — keep it in
+  step when a tool starts reading a new kind of personal data. Owner to-do
+  `privacy-policy-ai-provider` (approve the wording).
+- **The users tool says `last_sign_in`, never `last_active`**:
+  `last_activity` is written at sign-in only (same rule as the screens).
 - **Reuse the admin code for the same figure** (Signal Log controller,
   `SignalHealth`, `AdminInsights`, `AssetController`, `InvoiceService::mapList`)
   so Grok and the admin pages cannot disagree. Real money only by default:

@@ -14,6 +14,52 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'users-connected-exchange-filter',
+    date: '2026-11-26',
+    kind: 'new',
+    area: 'User Management',
+    title: 'Filter customers by the exchange they have connected',
+    summary:
+      'Dima asked for a "Connected exchange" filter. Under "Needs action" there is now an "Exchange" row: Any, Connected exchange, Binance, Bybit and MEXC, each with how many customers it holds. Example: press "Binance" to see only the customers with a Binance account still connected.',
+    howItWorks: [
+      '"Connected exchange" shows every customer with at least one exchange account still connected, on any exchange. Each exchange button narrows that to customers connected on that exchange.',
+      'Demo (play-money) accounts count as connected; the customer’s row still marks them as demo. Disconnected accounts and the test accounts used by the invoice scenarios do not count.',
+      'It works together with the other filters, e.g. "Owes money" + "Binance", and with the search box.',
+    ],
+    technical: [
+      'pages/admin/AdminUsers.tsx: ExchangeFilter (all | connected | ExchangeKind) over AdminUser.accounts (deleted_at null and not sandbox); the chip rows share a ChipGroup component. GET /admin/users rows now carry `sandbox` per account (AdminController::users).',
+    ],
+    links: [{ label: 'User Management', href: '/admin/users' }],
+  },
+  {
+    id: 'privacy-policy-stripe-ai-assistants',
+    date: '2026-11-26',
+    kind: 'fixed',
+    area: 'Legal',
+    title: 'Privacy Policy names Stripe for card payments and says what our AI assistants read',
+    summary:
+      'The Privacy Policy still said card payments went through Coinsbuy. They go through Stripe, and Coinsbuy has been hidden since September. It also did not mention that our team’s AI assistants (Grok, and Claude for the developers) read customer data. Both are now written down in section 05, "Who We Share It With", and the policy is dated 26 November 2026.',
+    howItWorks: [
+      'Card payments: Stripe receives the customer’s name, email, the invoice amount and month, and the card typed on its page. Stripe keeps the card on file at Stripe; we never see the card number.',
+      'AI assistants: they can read account names, balances, trades, profit, invoices and, where we allow it, the Telegram username. Never a password, an API key, an email, an IP address or a WhatsApp number.',
+      'The owner approves the wording from Admin → To be Done.',
+    ],
+    technical: ['lib/privacy.ts (sharing section + updatedAt). Owner to-do privacy-policy-ai-provider.'],
+    links: [{ label: 'Privacy Policy', href: '/privacy' }],
+  },
+  {
+    id: 'ai-access-last-sign-in',
+    date: '2026-11-26',
+    kind: 'fixed',
+    area: 'AI Access',
+    title: 'Grok says "last signed in", not "last active"',
+    summary:
+      'Grok’s list of people called the date "last active", but that date only changes when someone signs in, so Grok could tell you a customer was active when they had only signed in. It is now "last sign-in", the same as the admin pages.',
+    howItWorks: ['Ask Grok "when did Juan last sign in?" — the answer is the last time Juan signed in, nothing more.'],
+    technical: ['PeopleTools users: last_active → last_sign_in (from user_credentials.last_activity).'],
+    links: [{ label: 'AI Access', href: '/admin/ai-access' }],
+  },
+  {
     id: 'ai-access-telegram-usernames',
     date: '2026-11-26',
     kind: 'new',

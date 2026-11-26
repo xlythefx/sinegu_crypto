@@ -23,7 +23,7 @@ import CreateUserModal from '../../components/admin/CreateUserModal'
 import { BADGE, RoleBadge, StatusBadge } from '../../components/admin/badges'
 import RolePicker from '../../components/admin/RolePicker'
 import UserBalanceCell from '../../components/admin/UserBalanceCell'
-import { EXCHANGE_META } from '../../components/exchanges/meta'
+import { EXCHANGE_META, EXCHANGE_ORDER } from '../../components/exchanges/meta'
 import { useApiData } from '../../hooks/useApiData'
 import { useSessionUser } from '../../hooks/useSessionUser'
 import { hasOwnFeed, isCollaborator } from '../../lib/roles'
@@ -44,6 +44,7 @@ import type {
   UserRole,
   UserStatus,
 } from '../../types/admin'
+import type { ExchangeKind } from '../../types/exchanges'
 
 type StatusFilter = 'all' | UserStatus
 type RoleFilter = 'all' | UserRole
@@ -174,6 +175,76 @@ const ACTION_FILTERS: { key: ActionFilter; label: string; hint: string }[] = [
   { key: 'never_connected', label: 'Never connected', hint: 'Approved, but no exchange account yet' },
 ]
 
+/**
+ * "Connected exchange" (Dima, 2026-11-26): who has an exchange account still
+ * connected, on any venue or on one. Demo accounts count (the row tags them);
+ * disconnected and sandbox scratch accounts do not — the line the Trading
+ * column's "No exchange" / "Disconnected" already draws.
+ */
+type ExchangeFilter = 'all' | 'connected' | ExchangeKind
+
+const connectedOn = (u: AdminUser, venue?: ExchangeKind) =>
+  (u.accounts ?? []).some((a) => !a.deleted_at && !a.sandbox && (venue === undefined || a.exchange === venue))
+
+const exchangeTest = (f: ExchangeFilter) => (u: AdminUser) =>
+  f === 'all' || connectedOn(u, f === 'connected' ? undefined : f)
+
+const EXCHANGE_FILTERS: { key: ExchangeFilter; label: string; hint: string }[] = [
+  { key: 'all', label: 'Any', hint: 'Every customer, connected or not' },
+  {
+    key: 'connected',
+    label: 'Connected exchange',
+    hint: 'Has at least one exchange account still connected (demo accounts included)',
+  },
+  ...EXCHANGE_ORDER.map((x) => ({
+    key: x,
+    label: EXCHANGE_META[x].label,
+    hint: `Has a ${EXCHANGE_META[x].label} account still connected`,
+  })),
+]
+
+interface ChipGroupProps<K extends string> {
+  label: string
+  items: { key: K; label: string; hint: string }[]
+  active: K
+  counts: Record<K, number>
+  /** The group's "show everyone" key: never highlighted as needing a look. */
+  allKey: K
+  onPick: (key: K) => void
+}
+
+/** One labelled row of filter chips, each with its count. */
+function ChipGroup<K extends string>({ label, items, active, counts, allKey, onPick }: ChipGroupProps<K>) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="mr-1 min-w-[92px] text-[11px] font-bold uppercase tracking-[0.08em] text-faint">{label}</span>
+      {items.map((f) => {
+        const on = active === f.key
+        const count = counts[f.key]
+        return (
+          <button
+            key={f.key}
+            type="button"
+            title={f.hint}
+            aria-pressed={on}
+            onClick={() => onPick(f.key)}
+            className={`inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 text-[12px] font-semibold cursor-pointer ${
+              on
+                ? 'bg-accent border-accent text-on-accent font-bold'
+                : f.key !== allKey && count > 0
+                  ? 'border-accent-line bg-surface2 text-text'
+                  : 'border-border bg-surface2 text-muted'
+            }`}
+          >
+            {f.label}
+            <span className="font-mono text-[11px] opacity-80">{count}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function AdminUsers() {
   const navigate = useNavigate()
   const sessionUser = useSessionUser()
@@ -185,6 +256,8 @@ export default function AdminUsers() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   // "Who needs action" (the admin audit, 2026-11-11) — customers only.
   const [actionFilter, setActionFilter] = useState<ActionFilter>('all')
+  // "Connected exchange" (Dima, 2026-11-26) — customers only, like the chips above.
+  const [exchangeFilter, setExchangeFilter] = useState<ExchangeFilter>('all')
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -265,14 +338,24 @@ export default function AdminUsers() {
     if (group === 'users' && actionFilter !== 'all') {
       list = list.filter(ACTION_TEST[actionFilter])
     }
+    if (group === 'users' && exchangeFilter !== 'all') {
+      list = list.filter(exchangeTest(exchangeFilter))
+    }
     return list
-  }, [inGroup, group, search, statusFilter, roleFilter, actionFilter])
+  }, [inGroup, group, search, statusFilter, roleFilter, actionFilter, exchangeFilter])
 
   const actionCounts = useMemo(
     () =>
       Object.fromEntries(
         ACTION_FILTERS.map((f) => [f.key, f.key === 'all' ? inGroup.length : inGroup.filter(ACTION_TEST[f.key]).length]),
       ) as Record<ActionFilter, number>,
+    [inGroup],
+  )
+  const exchangeCounts = useMemo(
+    () =>
+      Object.fromEntries(
+        EXCHANGE_FILTERS.map((f) => [f.key, inGroup.filter(exchangeTest(f.key)).length]),
+      ) as Record<ExchangeFilter, number>,
     [inGroup],
   )
   // The billing columns exist only for full admins (the API sends them to no one else).
@@ -300,6 +383,7 @@ export default function AdminUsers() {
     setFilterAndResetPage(() => {
       setRoleFilter('all')
       setActionFilter('all')
+      setExchangeFilter('all')
       setParams(next === 'staff' ? { group: 'staff' } : {}, { replace: true })
     })
 
@@ -591,36 +675,29 @@ export default function AdminUsers() {
         </div>
 
         {showStanding && (
-          <div className="flex flex-wrap items-center gap-1.5 border-b border-hair px-5 py-3">
-            <span className="mr-1 text-[11px] font-bold uppercase tracking-[0.08em] text-faint">Needs action</span>
-            {ACTION_FILTERS.map((f) => {
-              const active = actionFilter === f.key
-              const count = actionCounts[f.key]
-              return (
-                <button
-                  key={f.key}
-                  type="button"
-                  title={f.hint}
-                  onClick={() => setFilterAndResetPage(() => setActionFilter(f.key))}
-                  className={`inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 text-[12px] font-semibold cursor-pointer ${
-                    active
-                      ? 'bg-accent border-accent text-on-accent font-bold'
-                      : f.key !== 'all' && count > 0
-                        ? 'border-accent-line bg-surface2 text-text'
-                        : 'border-border bg-surface2 text-muted'
-                  }`}
-                >
-                  {f.label}
-                  <span className="font-mono text-[11px] opacity-80">{count}</span>
-                </button>
-              )
-            })}
+          <div className="flex flex-col gap-2.5 border-b border-hair px-5 py-3">
+            <ChipGroup
+              label="Needs action"
+              items={ACTION_FILTERS}
+              active={actionFilter}
+              counts={actionCounts}
+              allKey="all"
+              onPick={(key) => setFilterAndResetPage(() => setActionFilter(key))}
+            />
+            <ChipGroup
+              label="Exchange"
+              items={EXCHANGE_FILTERS}
+              active={exchangeFilter}
+              counts={exchangeCounts}
+              allKey="all"
+              onPick={(key) => setFilterAndResetPage(() => setExchangeFilter(key))}
+            />
           </div>
         )}
 
         {/* Users table — re-mounts on filter/page switch to replay the reveal */}
         <div
-          key={`${group}-${statusFilter}-${roleFilter}-${actionFilter}-${safePage}`}
+          key={`${group}-${statusFilter}-${roleFilter}-${actionFilter}-${exchangeFilter}-${safePage}`}
           className="overflow-x-auto animate-[fadeup_0.35s_ease-out]"
         >
           <table className="w-full border-collapse text-[13px]">

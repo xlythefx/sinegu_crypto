@@ -64,6 +64,8 @@ export interface AdminUserAccount {
   exchange: ExchangeKind
   api_key: string | null
   demo: boolean
+  /** A sandbox / invoice-scenario scratch account — not a real connection (API from 2026-11-26). */
+  sandbox?: boolean
   enabled: boolean
   balance: number
   unrealized_pnl: number
