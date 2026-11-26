@@ -262,7 +262,13 @@ binance|bybit|mexc — renamed from `binance_invoices`, HWM stored on the row).
 `InvoiceService` (`generateForAccount` + a single idempotent `settle()`) is the reusable
 core; a `PnlSource` adapter per exchange (only `BinancePnlSource` so far). Fees are
 mother-style: per-user `realized_percentage × realized + unrealized_percentage × unrealized`
-(defaults 20% / 6% on `user_credentials`).
+(defaults on `user_credentials`, `UserCredential::DEFAULT_*_PERCENTAGE`).
+**20% flat since 2026-11-26 (owner):** the default is 20% of closed profit and
+0% on positions still open at month end (it was 6%; migration
+`2026_11_26_000002` moved every row on 6 to 0, so November 2026's invoices,
+made on 1 Dec, are the first under it). Terms section 05, the FAQ and the home
+page say "20% of closed profit, nothing on open trades": keep them and the
+default in step. A rate an admin sets on one person still wins.
 **Deposits and withdrawals are neither profit nor loss (2026-11-08)** —
 `InvoiceService::applyHighWaterMark` is the one definition: the HWM test uses
 `performance_equity = equity now − the month's net transfers − transfers made

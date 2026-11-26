@@ -3,7 +3,6 @@ import {
   FEE_EXAMPLE,
   FEE_EXAMPLE_DEPOSIT,
   STANDARD_REALIZED_FEE_PCT,
-  STANDARD_UNREALIZED_FEE_PCT,
   type BilledMonth,
 } from '../../lib/pricing'
 import { CONTAINER, H2, LEAD } from './layout'
@@ -17,21 +16,23 @@ const heightPct = (value: number) => ((value - AXIS_MIN) / (AXIS_MAX - AXIS_MIN)
 /** Share of the chart's height the bars may use; the labels sit above it. */
 const BAND = 78
 
-/** One sentence per month, written from its own figures. */
+/** One sentence per month, written from its own figures — in plain words:
+ *  "its best so far", never "high-water mark" (owner, 2026-11-26). */
 function noteFor(m: BilledMonth, first: boolean): string {
   const closed = `${fmtSignedMoney(m.closedProfit, 0)} closed.`
   const end = fmtMoney(m.endEquity, 0)
-  const mark = fmtMoney(m.markBefore, 0)
+  const best = fmtMoney(m.markBefore, 0)
   if (m.bill > 0) {
-    return `${closed} It ends at ${end}, above its ${mark} ${first ? 'start' : 'high'}: ${STANDARD_REALIZED_FEE_PCT}% of ${fmtMoney(m.closedProfit, 0)}.`
+    return `${closed} It ends at ${end}, above ${first ? `the ${best} deposited` : `its best of ${best}`}: ${STANDARD_REALIZED_FEE_PCT}% of ${fmtMoney(m.closedProfit, 0)}.`
   }
-  if (m.closedProfit < 0) return `${closed} ${end} is under the ${mark} high, so no bill.`
-  return `${closed} A good month, but ${end} is still under the ${mark} high, so no bill.`
+  if (m.closedProfit < 0) return `${closed} ${end} is under its best of ${best}, so no bill.`
+  return `${closed} A good month, but ${end} is still under its best of ${best}, so no bill.`
 }
 
 /**
  * The bars are the account's value at each month end; the dashed step is the
- * high-water mark that month was judged against. Bars are HTML so their
+ * best month end so far (the high-water mark, never called that here) that
+ * month was judged against. Bars are HTML so their
  * labels stay readable on a phone; the mark is one SVG path stretched over
  * the same columns (`preserveAspectRatio="none"` + a non-scaling stroke).
  */
@@ -103,14 +104,15 @@ function MarkChart() {
       </div>
       <p className="flex items-center gap-2 text-[12px] text-muted mt-4">
         <svg width={28} height={6} aria-hidden="true"><line x1={0} y1={3} x2={28} y2={3} stroke="var(--text)" strokeWidth={2} strokeDasharray="6 4" /></svg>
-        High-water mark: the highest month end so far
+        The account&rsquo;s best month end so far
       </p>
     </div>
   )
 }
 
 /**
- * "How the bill works", as a worked example instead of a slogan. The months
+ * "How the bill works", as a worked example instead of a slogan, in plain
+ * words (no "high-water mark") and at the one flat 20% (owner, 2026-11-26). The months
  * are `FEE_EXAMPLE` (lib/pricing.ts), built by the same rule the invoices use
  * and pinned by a test, so the chart, the ledger and the sentences cannot
  * disagree with each other or with how a customer is actually billed.
@@ -122,39 +124,38 @@ export default function FeeExample() {
         <div data-aos="fade-up">
           <h2 className={`${H2} mb-4`}>You pay when your account reaches a new high</h2>
           <p className={`${LEAD} mb-4`}>
-            At the end of each month we compare your account with its high-water
-            mark: the highest it has ended a month before, and at first simply
-            what you deposited. Above the mark, you are billed a share of that
-            month&rsquo;s profit. Not above it, you owe nothing.
+            At the end of each month we compare your account with its best month
+            end so far, which at first is simply what you deposited. If it ended
+            the month higher, you pay {STANDARD_REALIZED_FEE_PCT}% of the profit
+            your closed trades made that month. If not, you pay nothing.
           </p>
           <p className={`${LEAD} mb-8`}>
-            Deposits and withdrawals move the mark with them, so they never
-            count as profit or loss.
+            Money you add or take out never counts as profit or loss.
           </p>
 
           <dl className="grid grid-cols-2 gap-px bg-border border border-border rounded-card overflow-hidden max-[420px]:grid-cols-1">
             <div className="bg-surface p-5">
-              <dt className="text-[13px] text-muted mb-1">Closed trades</dt>
-              <dd className="font-display text-[28px] font-extrabold text-text">{STANDARD_REALIZED_FEE_PCT}%</dd>
-              <dd className="text-[12.5px] text-muted mt-1">of the month&rsquo;s profit</dd>
+              <dt className="text-[13px] text-muted mb-1">Our fee</dt>
+              <dd className="font-display text-[28px] font-extrabold text-accent">{STANDARD_REALIZED_FEE_PCT}%</dd>
+              <dd className="text-[12.5px] text-muted mt-1">of the month&rsquo;s profit from closed trades</dd>
             </div>
             <div className="bg-surface p-5">
-              <dt className="text-[13px] text-muted mb-1">Trades still open on the 1st</dt>
-              <dd className="font-display text-[28px] font-extrabold text-text">{STANDARD_UNREALIZED_FEE_PCT}%</dd>
-              <dd className="text-[12.5px] text-muted mt-1">of their open profit</dd>
+              <dt className="text-[13px] text-muted mb-1">Everything else</dt>
+              <dd className="font-display text-[28px] font-extrabold text-text">$0</dd>
+              <dd className="text-[12.5px] text-muted mt-1">No subscription, no fee to connect</dd>
             </div>
           </dl>
           <p className="text-[13px] leading-[1.6] text-muted mt-4">
-            Standard rates; yours are printed on every invoice. No subscription
-            and no fee for connecting. The invoice arrives on the 1st and is due
-            on the 4th. If it is still unpaid then, the bot pauses on your
-            account until it is paid.
+            Profit is counted after the exchange&rsquo;s own fees, and trades
+            still open on the 1st are not billed. The invoice arrives on the 1st
+            and is due on the 4th. If it is still unpaid then, the bot opens no
+            new trades on your account until it is paid.
           </p>
         </div>
 
         <div className="bg-surface border border-border rounded-card p-6 max-[560px]:p-4" data-aos="fade-up" data-aos-delay={100}>
           <p className="font-semibold text-[15px] mb-1">Example: {fmtMoney(FEE_EXAMPLE_DEPOSIT, 0)} deposited, three months</p>
-          <p className="text-[13px] text-muted mb-6">Closed trades only, nothing open at month end.</p>
+          <p className="text-[13px] text-muted mb-6">Profit from closed trades, after exchange fees.</p>
           <MarkChart />
           <ol className="mt-6 border-t border-hair">
             {FEE_EXAMPLE.map((m, i) => (

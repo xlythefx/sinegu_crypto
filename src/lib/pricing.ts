@@ -4,9 +4,11 @@
  *
  * Every figure here is a twin of a server rule; change the server, change
  * this in the same commit:
- *  - The fee rates are the DEFAULTS on `user_credentials`
- *    (`realized_percentage` 20, `unrealized_percentage` 6). A customer's own
- *    rates can differ and are printed on each invoice.
+ *  - The fee rate is the DEFAULT on `user_credentials`
+ *    (`realized_percentage` 20; `unrealized_percentage` 0 since 2026-11-26,
+ *    when the owner made the fee 20% flat — nothing on trades still open on
+ *    the 1st). A customer's own rate can differ and is printed on each
+ *    invoice.
  *  - `MIN_DEPOSIT_USDT` is the engine's deposit gate (`BINANCE_ABCD_MIN_DEPOSIT`,
  *    and the API's `ENGINE_MIN_DEPOSIT` that the admin funnel reads).
  *  - `billMonth` restates `InvoiceService::applyHighWaterMark` for the simple
@@ -14,11 +16,9 @@
  *    deposits or withdrawals.
  */
 
-/** Share of CLOSED profit billed, in percent. */
+/** Share of the month's CLOSED profit billed, in percent. The whole fee:
+ *  positions still open when the bill is made are not billed. */
 export const STANDARD_REALIZED_FEE_PCT = 20
-
-/** Share of the profit on positions still OPEN at month end, in percent. */
-export const STANDARD_UNREALIZED_FEE_PCT = 6
 
 /** Deposits (net of withdrawals) an account needs before the bot opens a trade. */
 export const MIN_DEPOSIT_USDT = 1000

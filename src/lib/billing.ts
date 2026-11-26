@@ -14,7 +14,8 @@ export type InvoiceFeeSource = 'pnl' | 'manual'
 
 /** Fallback fee shares when a period has no profit to derive the rate from. */
 export const REALIZED_FEE_PERCENT = 20
-export const UNREALIZED_FEE_PERCENT = 6
+// 0 since 2026-11-26 (20% flat): older invoices carry their own rate in the row.
+export const UNREALIZED_FEE_PERCENT = 0
 
 /** View model the billing UI renders. */
 export interface Invoice {

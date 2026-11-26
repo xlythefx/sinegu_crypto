@@ -55,7 +55,7 @@ const STATUSES: { value: UserStatus; label: string; hint: string }[] = [
 ]
 
 /** Fee defaults the API applies when the fields are left blank. */
-const FEE_DEFAULTS = { realized: '20', unrealized: '6', affiliate: '20' }
+const FEE_DEFAULTS = { realized: '20', unrealized: '0', affiliate: '20' }
 
 /** Character pool for the generated password — no ambiguous 0/O/1/l. */
 const PW_POOL = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%'

@@ -14,6 +14,46 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'fee-twenty-percent-flat',
+    date: '2026-11-26',
+    kind: 'improved',
+    area: 'Billing',
+    title: 'One simple fee: 20% of closed profit, nothing on trades still open',
+    summary:
+      'The fee used to be 20% of the month’s closed profit plus 6% of the profit on trades still open when the bill was made on the 1st. It is now just 20% of the month’s closed profit. Trades close within about a day, so the 6% part was small and hard to explain. The invoices made on 1 December (for November) are the first under the new rule.',
+    howItWorks: [
+      'Example: in November a customer’s closed trades make $500, and one trade is still $300 in profit on 1 December. The old rule billed $100 + $18 = $118. The new rule bills $100.',
+      'The open trade is not lost: when it closes, its profit counts in the month it closes in, like every other trade.',
+      'Every customer on the old standard rates moved to 20% flat, and new sign-ups start on it. A different rate an admin sets on one person still applies to that person.',
+      'The Terms and Conditions (section 5), the FAQ and the new home page say the same. Invoices already issued keep their figures.',
+    ],
+    technical: [
+      'user_credentials.unrealized_percentage default 6 → 0; migration 2026_11_26_000002 moves rows at exactly 6 to 0 (down() restores 6 where realized > 0). UserCredential::DEFAULT_REALIZED_PERCENTAGE / DEFAULT_UNREALIZED_PERCENTAGE replace the hardcoded 20 / 6 fallbacks (InvoiceService::applyHighWaterMark, EngineInvoiceController, AdminInvoiceController, AdminUserController, AdminInsights, InvoiceNotifier). GuideTools billing_rules updated. The pay sheet shows the open-P&L line only when it was billed.',
+    ],
+    links: [
+      { label: 'Terms and Conditions', href: '/terms' },
+      { label: 'FAQ', href: '/faq' },
+    ],
+  },
+  {
+    id: 'landing-preview-scroll-and-wording',
+    date: '2026-11-26',
+    kind: 'improved',
+    area: 'Website',
+    title: 'New home page: the highlight follows the scroll, and the words say "exchange"',
+    summary:
+      'Four changes to the new home page (still on its preview address). In "What happens when the strategy trades", the gold highlight now moves from step to step as you scroll, and the step you are on turns gold so it is easy to follow. The API key section and "Connect your exchange" no longer say Binance only. The fee section is in plain words, without "high-water mark", and shows the one 20% fee.',
+    howItWorks: [
+      'On a phone, each step lights up as it reaches the middle of the screen. On a computer the five steps sit side by side, so the highlight sweeps across them as the row moves up the screen. The track behind the highlight stays gold.',
+      'The fee section reads: we compare your account with its best month end so far (at first, what you deposited); if it ended the month higher, you pay 20% of the profit your closed trades made; if not, nothing.',
+      'The main home page is unchanged until the new one is approved.',
+    ],
+    technical: [
+      'landing-next/SignalFlow: hooks/useScrollStep + lib/scrollStep (stepAtLine for stacked steps, stepByTravel side by side; tested). The time-looped pixel runner on the tracks is replaced by the scroll trail. KeyPermissions: exchange-neutral copy and setting names. FeeExample: one 20% card, "best month end so far".',
+    ],
+    links: [{ label: 'New home page (preview)', href: '/preview/landing' }],
+  },
+  {
     id: 'users-filters-in-address',
     date: '2026-11-26',
     kind: 'improved',

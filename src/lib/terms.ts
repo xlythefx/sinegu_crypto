@@ -15,7 +15,7 @@ import type { LegalDocumentContent } from '../types/legal'
  */
 export const TERMS: LegalDocumentContent = {
   title: 'Terms and Conditions',
-  updatedAt: 'November 25, 2026',
+  updatedAt: 'November 26, 2026',
   lede: 'Please read these Terms and Conditions carefully before using Pixel Alpha. By accessing or using our platform, you agree to be bound by these terms. If you do not agree to these terms, please do not use our services.',
 
   sections: [
@@ -145,8 +145,8 @@ export const TERMS: LegalDocumentContent = {
         {
           kind: 'list',
           items: [
-            '20% of realized net positive earnings, meaning profits from completed positions during the applicable billing period; and',
-            '6% of unrealized net positive earnings, meaning gains from open positions that remain active and unclosed.',
+            '20% of realized net positive earnings, meaning profits from completed positions during the applicable billing period.',
+            'No fee is charged on unrealized earnings, meaning gains from open positions that remain active and unclosed at the end of a billing period. Their result counts in the billing period in which they are closed.',
           ],
         },
         {

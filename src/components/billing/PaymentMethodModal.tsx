@@ -522,7 +522,9 @@ export default function PaymentMethodModal({
                 </div>
               )}
 
-              {invoice.feeSource !== 'manual' && invoice.unrealizedPnl !== 0 && (
+              {/* Only when it was billed: since 20% flat (2026-11-26) an
+                  invoice's open P&L carries no fee, and "0% of …" is noise. */}
+              {invoice.feeSource !== 'manual' && invoice.feeUnrealized > 0 && (
                 <div className="flex items-center justify-between gap-4 py-3 border-b border-hair">
                   <div className="flex flex-col gap-[3px] min-w-0">
                     <span className="text-[13px] font-semibold text-text">

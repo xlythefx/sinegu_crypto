@@ -48,7 +48,7 @@ export const FAQ: FaqGroup[] = [
     entries: [
       {
         q: 'What does it cost?',
-        a: 'A monthly fee, only for a month in which your account ends above its high-water mark (see below). The standard rates are 20% of the month\'s closed profit, after exchange fees, plus 6% of the profit on positions still open when the bill is made on the 1st. Nothing to connect and no subscription. A month with no fee still appears in your invoice list as a $0 invoice, with nothing to pay.',
+        a: 'A monthly fee of 20% of the month\'s closed profit, after exchange fees, only for a month in which your account ends above its high-water mark (see below). Nothing is charged on positions still open when the bill is made on the 1st, nothing to connect and no subscription. A month with no fee still appears in your invoice list as a $0 invoice, with nothing to pay.',
       },
       {
         q: 'What is the high-water mark?',
@@ -56,7 +56,7 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'How are positions still open at month end billed?',
-        a: 'If the month ends above the mark, 6% of the profit on your open positions when the bill is made on the 1st is added to that month\'s invoice. That 6% is not credited back later. When the position closes, its profit counts in the closed profit of the month it closes in, and is billed at 20% if that month also ends above the mark. If it closes at a loss instead, the 6% already billed is not refunded. Example: a position is $500 in profit on the 1st, so the invoice includes 6% of $500 = $30. Next month it closes at +$500, another trade closes at +$100, and the month ends above the mark: that month\'s fee is 20% of $600 = $120.',
+        a: 'They are not billed. Only closed trades are. A position still open when the bill is made on the 1st counts in the month it closes in: its profit or loss is part of that month\'s closed profit, which is billed at 20% if that month ends above the mark. Invoices up to October 2026 also charged 6% of the profit on open positions; that charge ended with the November 2026 invoice.',
       },
       {
         q: 'How do I pay?',
@@ -68,7 +68,7 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'Does the exchange charge fees too?',
-        a: 'Yes. The exchange takes its own trading commission and funding payments on every trade, regardless of outcome. Those go to the exchange, not to us. Our 20% is worked out on closed profit AFTER those fees, never before. The 6% on positions still open uses the open profit the exchange shows, before the fee for closing them. Your dashboard shows profit both before and after exchange fees.',
+        a: 'Yes. The exchange takes its own trading commission and funding payments on every trade, regardless of outcome. Those go to the exchange, not to us. Our 20% is worked out on closed profit AFTER those fees, never before. Your dashboard shows profit both before and after exchange fees.',
       },
     ],
   },
