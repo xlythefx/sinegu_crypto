@@ -14,6 +14,22 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'share-preview-says-exchange',
+    date: '2026-11-26',
+    kind: 'fixed',
+    area: 'Website',
+    title: 'Link previews say "your own exchange", not "Binance or MEXC"',
+    summary:
+      'When someone shared a pixel-alpha.com link on Telegram, X or WhatsApp, the preview text and picture said "your own Binance or MEXC account". MEXC is closed to new customers, and more exchanges are coming, so both now just say "your own exchange account".',
+    howItWorks: [
+      'The picture keeps its design; only the line under the headline changed, to "Trade-only API key. Funds never leave your exchange."',
+      'Apps keep old previews for a while. A link shared before today may still show the old text until the app refreshes it.',
+    ],
+    technical: [
+      'index.html description, og:description, twitter:description; public/assets/og-card.png line redrawn; og:image / twitter:image now ?v=2, because /assets/ is served immutable for a year and Cloudflare would keep the old picture.',
+    ],
+  },
+  {
     id: 'fee-twenty-percent-flat',
     date: '2026-11-26',
     kind: 'improved',
