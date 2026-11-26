@@ -2778,6 +2778,16 @@ group **Pixel Alpha Admin Control**. Full docs in `pixel-telegram/README.md`.
   `python -m pixel_telegram.main chat-id`, never guessed. Token lives in the
   gitignored `pixel-telegram/.env` only (this repo is public on GitHub), and the
   deploy mirrors `MIRRORED_TELEGRAM_ENV_KEYS` logging key names only.
+- **That bot's webhook belongs to Nexa staging's "strategy stars" (since
+  2026-11-26).** Nexa's daily 2 PM PH strategy-star review (sinegu-api
+  `cron/strategy_stars_daily.php` on Nexa staging) posts to Pixel Alpha Admin
+  Control as this bot, with buttons. Their presses reach Nexa staging's API through
+  a webhook on this token (callback_query only, secret header). So `getUpdates`
+  on this token fails while it is set, and that includes the `chat-id` helper. Run
+  `php cron/strategy_stars_webhook_setup.php --delete` in Nexa staging's api first,
+  then set it again with no flag. Never add a poller to this bot. Nexa staging
+  holds a copy of the token in its api/.env, so a token rotation here has to
+  update it there too.
 
 ## Design reference
 
