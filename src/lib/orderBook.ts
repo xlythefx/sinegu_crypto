@@ -191,6 +191,17 @@ export function bookIsLive(bookAt: string | null, now: number): boolean {
   return Number.isFinite(stamped) && now - stamped < LIVE_WITHIN_MS
 }
 
+/**
+ * How many of `max` blocks a share (0–100) lights on the pixel card's meters.
+ * Rounded to the nearest block, but never zero for something that is there:
+ * a resting order the size of one cent still reads as one block, so an empty
+ * meter always means an empty slice.
+ */
+export function litCells(pct: number, max: number): number {
+  if (!(pct > 0) || max <= 0) return 0
+  return Math.min(max, Math.max(1, Math.round((pct / 100) * max)))
+}
+
 /** "2.9B" / "412.5M" / "83.1K" — 24h quote volume, in the card's width. */
 export function fmtCompactUsd(value: number): string {
   const units: [number, string][] = [

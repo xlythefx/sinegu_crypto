@@ -1,6 +1,6 @@
-import { EXCHANGE_META, EXCHANGE_ORDER } from '../exchanges/meta'
 import { BinanceMark } from '../ui/BrandIcons'
 import PixelIcon from './PixelIcon'
+import { VENUES } from './venues'
 import { CONTAINER, H2, LEAD } from './layout'
 
 interface Permission {
@@ -34,13 +34,6 @@ function Tick({ on }: { on: boolean }) {
     </svg>
   )
 }
-
-/** Open to customers today = available and not staff-only (meta.ts). */
-const VENUES = EXCHANGE_ORDER.map((kind) => ({
-  kind,
-  label: EXCHANGE_META[kind].label,
-  open: EXCHANGE_META[kind].available && !EXCHANGE_META[kind].staffOnly,
-}))
 
 /**
  * "The key can trade. It can't withdraw." — the security claim shown as the

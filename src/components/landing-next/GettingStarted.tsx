@@ -4,6 +4,7 @@ import { REGISTER_PATH, SIGN_IN_PATH } from '../../lib/routes'
 import { MIN_DEPOSIT_USDT } from '../../lib/pricing'
 import { SUPPORT_EMAIL, SUPPORT_TELEGRAM_HANDLE, SUPPORT_TELEGRAM_URL } from '../../lib/company'
 import PixelIcon from './PixelIcon'
+import { comingSoonSentence } from './venues'
 import type { PixelGlyph } from './pixelGlyphs'
 import { BTN_PRIMARY, CONTAINER, H2, LEAD } from './layout'
 
@@ -36,13 +37,13 @@ const STEPS: Step[] = [
   {
     glyph: 'key',
     title: 'Connect Binance',
-    body: `Create a trade-only API key on Binance and paste it in. The bot starts once your futures wallet has received at least ${MIN_DEPOSIT_USDT.toLocaleString('en-US')} USDT in deposits.`,
+    body: `Create a trade-only API key on Binance and paste it in. The bot starts once your futures wallet has received at least ${MIN_DEPOSIT_USDT.toLocaleString('en-US')} USDT in deposits. ${comingSoonSentence()}`.trim(),
     link: { to: '/docs/binance', label: 'Step-by-step Binance guide' },
   },
   {
     glyph: 'bolt',
     title: 'The next signal trades',
-    body: 'Positions open on your account by themselves. Follow them in your dashboard or the Binance app, and disconnect the key whenever you want to stop.',
+    body: 'Positions open on your account by themselves. Follow them in your dashboard or your exchange’s app, and disconnect the key whenever you want to stop.',
   },
 ]
 

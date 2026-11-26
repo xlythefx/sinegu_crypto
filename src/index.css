@@ -33,6 +33,9 @@
   --font-display: 'Bricolage Grotesque', sans-serif;
   --font-body: 'Plus Jakarta Sans', sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
+  /* Pixel face for the new home page's live price card only — figures and
+     short labels, never running text (it has no lowercase). */
+  --font-pixel: 'Silkscreen', 'IBM Plex Mono', monospace;
 
   /* Radii — our real values, so migrated code reaches for a named token
      (rounded-card, rounded-rail, …) instead of rounding to Tailwind defaults. */
@@ -285,6 +288,17 @@ body {
   }
   50% {
     transform: translate(24px, -18px);
+  }
+}
+/* A hard on/off blink (use with steps(1)) — the pixel card's live square. */
+@keyframes pxblink {
+  0%,
+  60% {
+    opacity: 1;
+  }
+  61%,
+  100% {
+    opacity: 0.25;
   }
 }
 @keyframes fadeup {

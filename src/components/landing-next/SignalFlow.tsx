@@ -24,8 +24,8 @@ const STEPS: Step[] = [
   },
   {
     glyph: 'vault',
-    title: 'The order lands on your Binance',
-    body: 'Placed with the trade-only key you gave us. The position is yours, and you can watch it in the Binance app.',
+    title: 'The order lands on your exchange',
+    body: 'Placed with the trade-only key you gave us. The position is yours, and you can watch it in your exchange’s own app.',
     yours: true,
   },
   {

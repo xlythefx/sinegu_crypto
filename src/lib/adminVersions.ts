@@ -14,6 +14,25 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'landing-preview-pixel-hero',
+    date: '2026-11-26',
+    kind: 'improved',
+    area: 'Website',
+    title: 'New home page preview: the Wall Street photo is back, the price card is pixel art, and it no longer says "Binance" only',
+    summary:
+      'The top of the new home page (still on the hidden preview address, not live for visitors) now shows the same Wall Street photo the current home page uses, turned into a pixel mosaic to suit the name Pixel Alpha. The live Bitcoin price card is redrawn as pixel art. The headline now says "your own exchange account" instead of "your own Binance account", with badges for Binance (live), Bybit and MEXC (coming soon).',
+    howItWorks: [
+      'The photo is the classic page’s own, shown as large square blocks and darkened so the words stay readable, in light and dark mode. It also loads far faster: 15 KB instead of 3 MB.',
+      'The price card still shows Binance’s real Bitcoin futures prices, refreshed every few seconds. Only the drawing changed: blocky corners, depth shown as rows of small squares, the chart at the bottom built from stacked blocks, and a blinking square when the prices are live.',
+      'The exchange badges follow the same switch as the connect page. When Bybit or MEXC opens to customers, its badge turns to "Live" by itself, and the "coming soon" lines further down the page disappear.',
+      'Two lines further down no longer name Binance only: "The order lands on your exchange" and "follow them in your exchange’s app".',
+    ],
+    technical: [
+      'components/landing-next: HeroPhoto (public/assets/hero-wallst-pixel.png, 128×72 px, 32 colours, image-rendering: pixelated; behind nav + hero in one header), PixelOrderBook (notched clip-path frame, litCells meters, Silkscreen as font-pixel), venues.ts (VENUES from EXCHANGE_META available && !staffOnly, shared with KeyPermissions). hooks/useOrderBook shared with the classic landing/OrderBook. PixelField removed. The live home page (/) is unchanged.',
+    ],
+    links: [{ label: 'Open the preview', href: '/preview/landing' }],
+  },
+  {
     id: 'paused-accounts-get-exits',
     date: '2026-11-25',
     kind: 'fixed',

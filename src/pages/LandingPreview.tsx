@@ -7,6 +7,7 @@ import Ticker from '../components/landing/Ticker'
 import Footer from '../components/landing/Footer'
 import NavNext from '../components/landing-next/NavNext'
 import HeroNext from '../components/landing-next/HeroNext'
+import HeroPhoto from '../components/landing-next/HeroPhoto'
 import RecentCloses from '../components/landing-next/RecentCloses'
 import SignalFlow from '../components/landing-next/SignalFlow'
 import KeyPermissions from '../components/landing-next/KeyPermissions'
@@ -49,9 +50,14 @@ export default function LandingPreview() {
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-bg text-text transition-[background,color] duration-[400ms]">
       <Ticker stats={record?.stats ?? null} series={record?.series ?? []} />
-      <NavNext />
-      <main>
+      {/* One backdrop behind the nav AND the hero, so the photo has no seam
+          under the nav. `isolate` keeps its -z layer inside this header. */}
+      <header className="relative isolate">
+        <HeroPhoto />
+        <NavNext />
         <HeroNext />
+      </header>
+      <main>
         <RecentCloses closes={record?.recent_closes ?? []} loading={loading} error={error} />
         <SignalFlow />
         <KeyPermissions />
@@ -61,7 +67,7 @@ export default function LandingPreview() {
       </main>
       <Footer
         maxWidth="max-w-[1200px]"
-        blurb="Automated futures trading on your own Binance account. You pay only out of profit, in a month that ends at a new high."
+        blurb="Automated futures trading on your own exchange account. You pay only out of profit, in a month that ends at a new high."
       />
     </div>
   )

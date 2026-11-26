@@ -1,9 +1,7 @@
-import { Fragment, useState } from 'react'
-import { useApiData } from '../../hooks/useApiData'
-import { usePoll } from '../../hooks/usePoll'
-import { getOrderBook, ORDER_BOOK_REFRESH_MS } from '../../services/market'
+import { Fragment } from 'react'
+import { useOrderBook } from '../../hooks/useOrderBook'
 import { fmtNum, fmtSignedPct } from '../../lib/format'
-import { bookIsLive, buildBookModel, fmtCompactUsd } from '../../lib/orderBook'
+import { fmtCompactUsd } from '../../lib/orderBook'
 
 const CARD =
   'h-full relative bg-surface border border-border rounded-[20px] overflow-hidden shadow-[0_30px_80px_rgba(0,0,0,0.18)]'
@@ -29,16 +27,7 @@ const priceOf = (price: number): string => fmtNum(price, price >= 1 ? 2 : 6)
  * reads as movement instead of a flicker.
  */
 export default function OrderBook() {
-  const { data, reload } = useApiData(getOrderBook)
-  const [now, setNow] = useState(() => Date.now())
-
-  usePoll(() => {
-    setNow(Date.now())
-    reload()
-  }, ORDER_BOOK_REFRESH_MS)
-
-  const book = data ? buildBookModel(data.bids, data.asks) : null
-  const live = bookIsLive(data?.book_at ?? null, now)
+  const { data, book, live } = useOrderBook()
 
   return (
     <div className={CARD}>
