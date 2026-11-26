@@ -12,6 +12,7 @@ const NEVER = [
   'Exchange API keys and secrets',
   'Passwords, login sessions and reset codes',
   'Email addresses and IP addresses of customers',
+  'WhatsApp and phone numbers, and Discord usernames',
   'Any way to place, close or change a trade, an account, a person or an invoice',
 ]
 
@@ -59,8 +60,8 @@ export default function WhatItReadsCard({ tools, create, delay }: WhatItReadsCar
           ))}
         </ul>
         <p className="mt-3 text-[12px] leading-[1.55] text-faint">
-          Customer names, balances and P&amp;L ARE shared, by the owner’s decision. Whatever the AI reads is sent to its
-          provider (xAI for Grok).
+          Customer names, balances and P&amp;L ARE shared, by the owner’s decision. Telegram usernames are shared only
+          with a key you switch on for them. Whatever the AI reads is sent to its provider (xAI for Grok).
         </p>
         {create && (
           <div className="mt-4 rounded-row border border-accent-line bg-accent-soft px-3.5 py-3">

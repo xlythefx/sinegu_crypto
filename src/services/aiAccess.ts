@@ -1,5 +1,5 @@
 import { apiFetch } from './api'
-import type { AiAccessData, AiAccessKey, AiCreatedKey, AiLogPage } from '../types/aiAccess'
+import type { AiAccessData, AiAccessKey, AiCreatedKey, AiKeySwitch, AiLogPage } from '../types/aiAccess'
 
 /**
  * Admin → AI Access: keys for the read-only AI connector (the employer's
@@ -31,12 +31,16 @@ export async function revokeAiKey(id: number): Promise<AiAccessKey> {
   return key
 }
 
-/** Switch on (or off) this key's right to make images / clips and Idea plans in Creatives. */
-export async function setAiKeyCanCreate(id: number, canCreate: boolean): Promise<AiAccessKey> {
+/**
+ * Switch one of a key's extra rights on (or off): `can_create` = make images /
+ * clips and Idea plans in Creatives; `can_see_contacts` = read the Telegram
+ * usernames people gave at sign-up.
+ */
+export async function setAiKeySwitch(id: number, which: AiKeySwitch, on: boolean): Promise<AiAccessKey> {
   const { key } = await apiFetch<{ success: boolean; key: AiAccessKey }>(`/admin/ai-access/keys/${id}`, {
     method: 'PUT',
     auth: true,
-    body: { can_create: canCreate },
+    body: { [which]: on },
   })
   return key
 }

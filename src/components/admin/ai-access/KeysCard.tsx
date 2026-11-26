@@ -4,9 +4,45 @@ import ConfirmModal from '../../ui/ConfirmModal'
 import KeyRow from './KeyRow'
 import NewKeyReveal from './NewKeyReveal'
 import { BTN_PRIMARY, FIELD, HINT, INPUT, LABEL, SELECT, notice } from '../../settings/formClasses'
-import { createAiKey, revokeAiKey, setAiKeyCanCreate } from '../../../services/aiAccess'
+import { createAiKey, revokeAiKey, setAiKeySwitch } from '../../../services/aiAccess'
 import { getApiErrorMessage } from '../../../services/api'
-import type { AiAccessData, AiAccessKey } from '../../../types/aiAccess'
+import type { AiAccessData, AiAccessKey, AiCreateAccess, AiKeySwitch } from '../../../types/aiAccess'
+
+/** A key's switch waiting for its confirmation. */
+interface PendingSwitch {
+  key: AiAccessKey
+  which: AiKeySwitch
+  on: boolean
+}
+
+/** What the confirmation says, per switch and direction. */
+function switchCopy({ key, which, on }: PendingSwitch, limits: AiCreateAccess) {
+  if (which === 'can_see_contacts') {
+    return on
+      ? {
+          title: `Let “${key.name}” see Telegram usernames?`,
+          message:
+            'Its AI can then read the Telegram username each person typed at sign-up and search by it, and that is sent to its provider (xAI for Grok). WhatsApp numbers, emails and phone numbers stay hidden. You can switch it off at any time.',
+          confirm: 'Allow',
+        }
+      : {
+          title: `Stop “${key.name}” seeing Telegram usernames?`,
+          message: 'Its AI no longer gets anyone’s Telegram username from the next question on.',
+          confirm: 'Stop it',
+        }
+  }
+  return on
+    ? {
+        title: `Let “${key.name}” create in Creatives?`,
+        message: `Its AI can then make images and clips on Higgsfield, which SPENDS the team’s Creatives budget, and save post ideas. It always tells the price and asks first; it can never spend more than $${limits.max_per_generation_usd.toFixed(2)} on one generation or $${limits.max_per_key_day_usd.toFixed(0)} a day, and never past the monthly cap. Everything it makes is labelled “${limits.label}”. Reading stays as it is.`,
+        confirm: 'Allow',
+      }
+    : {
+        title: `Stop “${key.name}” creating in Creatives?`,
+        message: 'It goes back to reading only. Anything it already started finishes and stays in the Gallery.',
+        confirm: 'Stop it',
+      }
+}
 
 /** The select's value for a key with no expiry date. */
 const NEVER = 'never'
@@ -28,8 +64,8 @@ export default function KeysCard({ data, onChanged, delay }: KeysCardProps) {
   const [days, setDays] = useState<number | null>(data.default_expiry_days)
   const [confirmCreate, setConfirmCreate] = useState(false)
   const [revoking, setRevoking] = useState<AiAccessKey | null>(null)
-  /** A key's "May create in Creatives" switch, waiting for its confirmation. */
-  const [creating, setCreating] = useState<{ key: AiAccessKey; on: boolean } | null>(null)
+  /** A key's "create in Creatives" or "Telegram usernames" switch, waiting for its confirmation. */
+  const [switching, setSwitching] = useState<PendingSwitch | null>(null)
   const limits = data.create
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -63,14 +99,14 @@ export default function KeysCard({ data, onChanged, delay }: KeysCardProps) {
     }
   }
 
-  const toggleCreate = async () => {
-    if (!creating) return
-    const { key: target, on } = creating
-    setCreating(null)
+  const toggleSwitch = async () => {
+    if (!switching) return
+    const { key: target, which, on } = switching
+    setSwitching(null)
     setBusy(true)
     setError(null)
     try {
-      await setAiKeyCanCreate(target.id, on)
+      await setAiKeySwitch(target.id, which, on)
       onChanged()
     } catch (err) {
       setError(getApiErrorMessage(err, 'Could not change what this key may do.'))
@@ -115,8 +151,8 @@ export default function KeysCard({ data, onChanged, delay }: KeysCardProps) {
           </h2>
           <p className="mt-0.5 text-[12.5px] leading-[1.55] text-muted">
             One key per person or device. It expires after the time you pick (or never), can be revoked at any moment,
-            and only opens read-only questions — unless you switch on “May create in Creatives” for it. {active} of{' '}
-            {data.max_active_keys} active.
+            and only opens read-only questions — unless you switch on “May create in Creatives” for it. Telegram
+            usernames stay hidden until you allow them for a key. {active} of {data.max_active_keys} active.
           </p>
         </div>
       </header>
@@ -175,7 +211,7 @@ export default function KeysCard({ data, onChanged, delay }: KeysCardProps) {
               key={k.id}
               aiKey={k}
               onRevoke={setRevoking}
-              onCreate={(key, on) => setCreating({ key, on })}
+              onSwitch={(key, which, on) => setSwitching({ key, which, on })}
               spent={limits.spent.find((s) => s.key_id === k.id) ?? null}
               busy={busy}
             />
@@ -197,22 +233,14 @@ export default function KeysCard({ data, onChanged, delay }: KeysCardProps) {
         onCancel={() => setConfirmCreate(false)}
       />
       <ConfirmModal
-        open={creating !== null}
-        title={
-          creating?.on
-            ? `Let “${creating.key.name}” create in Creatives?`
-            : `Stop “${creating?.key.name ?? ''}” creating in Creatives?`
-        }
-        message={
-          creating?.on
-            ? `Its AI can then make images and clips on Higgsfield, which SPENDS the team’s Creatives budget, and save post ideas. It always tells the price and asks first; it can never spend more than $${limits.max_per_generation_usd.toFixed(2)} on one generation or $${limits.max_per_key_day_usd.toFixed(0)} a day, and never past the monthly cap. Everything it makes is labelled “${limits.label}”. Reading stays as it is.`
-            : 'It goes back to reading only. Anything it already started finishes and stays in the Gallery.'
-        }
-        confirmLabel={creating?.on ? 'Allow' : 'Stop it'}
+        open={switching !== null}
+        title={switching ? switchCopy(switching, limits).title : ''}
+        message={switching ? switchCopy(switching, limits).message : ''}
+        confirmLabel={switching ? switchCopy(switching, limits).confirm : 'Allow'}
         cancelLabel="Cancel"
-        danger={!creating?.on}
-        onConfirm={toggleCreate}
-        onCancel={() => setCreating(null)}
+        danger={switching !== null && !switching.on}
+        onConfirm={toggleSwitch}
+        onCancel={() => setSwitching(null)}
       />
       <ConfirmModal
         open={revoking !== null}

@@ -947,6 +947,18 @@ Rules:
   NAME at any depth as a second wall. `AiAccessTest` runs every tool and
   asserts no api_key, secret, email or password hash comes back — add a new
   tool to that test.
+- **One exception: Telegram usernames, per key (2026-11-26, Dima's Grok
+  could not find new sign-ups' Telegram).** `ai_access_keys.can_see_contacts`
+  (off until a full admin presses "Allow Telegram usernames", confirmed; same
+  `PUT /admin/ai-access/keys/{id}` as `can_create`). Only then does the
+  `users` tool add `telegram_username` ("@handle" or null — typed, never
+  verified), `with_telegram`, and match the handle in `search`
+  (`PeopleTools` is a `KeyScopedToolset`: told the key on every call, listed
+  for every key). `AiRedactor::allowedFor($key)` keeps that one field name for
+  that key; WhatsApp, Discord, email and phone stay dropped for every key. The
+  field is `telegram_username`, never bare `telegram`: bare platform names are
+  sign-up-source COUNTS and survive the redactor on purpose
+  (`AiRedactorTest`). Owner to-do `privacy-policy-ai-provider`.
 - **Reuse the admin code for the same figure** (Signal Log controller,
   `SignalHealth`, `AdminInsights`, `AssetController`, `InvoiceService::mapList`)
   so Grok and the admin pages cannot disagree. Real money only by default:

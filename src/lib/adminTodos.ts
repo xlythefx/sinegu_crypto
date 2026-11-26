@@ -18,6 +18,23 @@ import type { AdminTodo } from '../types/adminTodos'
  *    the note and the date it was settled stay readable.
  */
 export const ADMIN_TODOS: AdminTodo[] = [
+  // ── AI Access: Telegram usernames (2026-11-26) ──────────────────────────
+  {
+    id: 'privacy-policy-ai-provider',
+    feature: 'AI Access',
+    kind: 'decision',
+    title: 'Decide whether the Privacy Policy should say customer data is read by our AI assistant (Grok)',
+    added: '2026-11-26',
+    why: 'Through AI Access, Grok reads customer names, balances, profit and invoices, and now (on a key you allow) the Telegram username each person gave at sign-up. Everything it reads is sent to its provider, xAI. The Privacy Policy’s “Who we share it with” section does not mention this yet.',
+    steps: [
+      'Decide whether the policy should name it. If not, write "no" and the reason in the note below, then tick this item.',
+      'If yes, write in the note what the line should say (for example: "Our team uses an AI assistant (Grok, by xAI) to answer questions about accounts; it reads names, balances, profit, invoices and Telegram usernames, never passwords, API keys, emails or phone numbers"). The developer then adds it to the Privacy Policy and the update notice.',
+    ],
+    links: [
+      { label: 'Privacy Policy', href: '/privacy' },
+      { label: 'AI Access', href: '/admin/ai-access' },
+    ],
+  },
   // ── Sign-up email (2026-11-25) ──────────────────────────────────────────
   {
     id: 'signup-email-city',

@@ -1,13 +1,14 @@
-import { Ban, CheckCircle2, Clock, Palette } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { Ban, CheckCircle2, Clock, Palette, Send, type LucideIcon } from 'lucide-react'
 import StatusChip from '../webhooks/StatusChip'
 import { fmtAgo, fmtDateTime } from '../../../lib/format'
-import type { AiAccessKey } from '../../../types/aiAccess'
+import type { AiAccessKey, AiKeySwitch } from '../../../types/aiAccess'
 
 interface KeyRowProps {
   aiKey: AiAccessKey
   onRevoke: (key: AiAccessKey) => void
-  /** Ask to switch "May create in Creatives" on or off (confirmed by the card). */
-  onCreate: (key: AiAccessKey, on: boolean) => void
+  /** Ask to switch one of the key's extra rights on or off (confirmed by the card). */
+  onSwitch: (key: AiAccessKey, which: AiKeySwitch, on: boolean) => void
   /** What this key's Grok generations cost (today / this month), if any. */
   spent: { today_usd: number; month_usd: number; generations: number } | null
   busy: boolean
@@ -23,9 +24,49 @@ function StateChip({ state }: { state: AiAccessKey['state'] }) {
 
 const FACT_LABEL = 'font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-faint'
 const FACT_VALUE = 'mt-0.5 text-[12.5px] text-text'
+const SWITCH_BTN =
+  'inline-flex h-8 flex-none cursor-pointer items-center gap-1.5 rounded-field border border-border bg-surface px-3 text-[12px] font-bold text-text transition-[border-color,background] duration-150 hover:border-accent-line hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50'
+
+interface SwitchStripProps {
+  Icon: LucideIcon
+  on: boolean
+  title: string
+  body: ReactNode
+  /** Button label when it is off ("Allow …"); on, it always reads "Switch off". */
+  allowLabel: string
+  /** Only an active key offers the button; a revoked one just shows what it had. */
+  canToggle: boolean
+  busy: boolean
+  onToggle: () => void
+}
+
+/** One extra right on a key: what it means, who switched it on, and the button. */
+function SwitchStrip({ Icon, on, title, body, allowLabel, canToggle, busy, onToggle }: SwitchStripProps) {
+  return (
+    <div
+      className={`flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-row border px-3 py-2.5 ${
+        on ? 'border-accent-line bg-accent-soft' : 'border-hair bg-surface'
+      }`}
+    >
+      <Icon size={15} aria-hidden="true" className="flex-none text-accent" />
+      <div className="min-w-[180px] flex-1">
+        <p className="text-[12.5px] font-bold text-text">{title}</p>
+        <p className="text-[11.5px] leading-[1.5] text-muted">{body}</p>
+      </div>
+      {canToggle && (
+        <button type="button" disabled={busy} onClick={onToggle} aria-pressed={on} className={SWITCH_BTN}>
+          {on ? 'Switch off' : allowLabel}
+        </button>
+      )}
+    </div>
+  )
+}
+
+const by = (name: string | null) => (name ? ` Switched on by ${name}.` : '')
 
 /** One key: what it is called, its state, who made it, when it was last used and from where. */
-export default function KeyRow({ aiKey, onRevoke, onCreate, spent, busy }: KeyRowProps) {
+export default function KeyRow({ aiKey, onRevoke, onSwitch, spent, busy }: KeyRowProps) {
+  const active = aiKey.state === 'active'
   return (
     <li className="flex min-w-0 flex-col gap-3 rounded-row border border-border bg-surface2 p-3.5">
       <div className="flex min-w-0 flex-wrap items-center gap-2.5">
@@ -60,38 +101,42 @@ export default function KeyRow({ aiKey, onRevoke, onCreate, spent, busy }: KeyRo
           <dd className={`${FACT_VALUE} break-all font-mono text-[12px]`}>{aiKey.last_used_ip ?? '—'}</dd>
         </div>
       </dl>
-      {(aiKey.state === 'active' || aiKey.can_create) && (
-        <div
-          className={`flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-row border px-3 py-2.5 ${
-            aiKey.can_create ? 'border-accent-line bg-accent-soft' : 'border-hair bg-surface'
-          }`}
-        >
-          <Palette size={15} aria-hidden="true" className="flex-none text-accent" />
-          <div className="min-w-[180px] flex-1">
-            <p className="text-[12.5px] font-bold text-text">
-              {aiKey.can_create ? 'May create in Creatives' : 'Reads only'}
-            </p>
-            <p className="text-[11.5px] leading-[1.5] text-muted">
+      {(active || aiKey.can_create) && (
+        <SwitchStrip
+          Icon={Palette}
+          on={aiKey.can_create}
+          title={aiKey.can_create ? 'May create in Creatives' : 'Reads only'}
+          body={
+            <>
               {aiKey.can_create
-                ? `Makes images and clips (labelled “Grok”) and saves post ideas.${aiKey.can_create_changed_by_name ? ` Switched on by ${aiKey.can_create_changed_by_name}.` : ''}`
+                ? `Makes images and clips (labelled “Grok”) and saves post ideas.${by(aiKey.can_create_changed_by_name)}`
                 : 'Switch on to let its AI make images and clips and save post ideas in Creatives.'}
               {spent && spent.generations > 0 && ` Spent ${usd(spent.today_usd)} today, ${usd(spent.month_usd)} this month.`}
-            </p>
-          </div>
-          {aiKey.state === 'active' && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onCreate(aiKey, !aiKey.can_create)}
-              aria-pressed={aiKey.can_create}
-              className="inline-flex h-8 flex-none cursor-pointer items-center gap-1.5 rounded-field border border-border bg-surface px-3 text-[12px] font-bold text-text transition-[border-color,background] duration-150 hover:border-accent-line hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {aiKey.can_create ? 'Switch off' : 'Allow creating'}
-            </button>
-          )}
-        </div>
+            </>
+          }
+          allowLabel="Allow creating"
+          canToggle={active}
+          busy={busy}
+          onToggle={() => onSwitch(aiKey, 'can_create', !aiKey.can_create)}
+        />
       )}
-      {aiKey.state === 'active' && (
+      {(active || aiKey.can_see_contacts) && (
+        <SwitchStrip
+          Icon={Send}
+          on={aiKey.can_see_contacts}
+          title={aiKey.can_see_contacts ? 'Sees Telegram usernames' : 'No contact details'}
+          body={
+            aiKey.can_see_contacts
+              ? `Its AI can read the Telegram username each person gave at sign-up, and search by it. Never WhatsApp, email or phone.${by(aiKey.can_see_contacts_changed_by_name)}`
+              : 'Switch on to let its AI read the Telegram usernames people gave at sign-up.'
+          }
+          allowLabel="Allow Telegram usernames"
+          canToggle={active}
+          busy={busy}
+          onToggle={() => onSwitch(aiKey, 'can_see_contacts', !aiKey.can_see_contacts)}
+        />
+      )}
+      {active && (
         <div className="flex justify-end">
           <button
             type="button"

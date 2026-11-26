@@ -14,6 +14,28 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'ai-access-telegram-usernames',
+    date: '2026-11-26',
+    kind: 'new',
+    area: 'AI Access',
+    title: 'Grok can find the Telegram usernames of people who register, on a key you allow',
+    summary:
+      'Dima asked his Grok for the Telegram usernames of new sign-ups and it could not find them: AI Access hid every way of contacting a person on purpose. Each key now has a second switch, “Allow Telegram usernames”. When it is on, Grok can tell you the Telegram username each person gave when they signed up, and find someone by it. WhatsApp numbers, emails and phone numbers stay hidden from every key.',
+    howItWorks: [
+      'In Admin → AI Access, each active key shows “No contact details” with an “Allow Telegram usernames” button. Pressing it asks you to confirm, then the key shows who switched it on. “Switch off” takes it away again from the next question.',
+      'Example: “Who signed up this week, and what are their Telegram usernames?” Grok lists each person with their username, e.g. @juan_trades, or says they gave none.',
+      'You can also ask “Who is @juan_trades?” and Grok finds the person by their username.',
+      'The usernames are what people typed at sign-up. Nobody checks them, so one can be mistyped. Telegram has been required at sign-up since 16 November, so some earlier customers may have none.',
+      'Keys without the switch see exactly what they saw before.',
+    ],
+    technical: [
+      'ai_access_keys.can_see_contacts (+ _changed_by_name / _changed_at); PUT /admin/ai-access/keys/{id} now takes can_create and/or can_see_contacts (422 NOTHING_TO_CHANGE, KEY_NOT_ACTIVE to switch on a revoked/expired key).',
+      'PeopleTools is a KeyScopedToolset (new interface; KeyAwareToolset extends it): the users tool adds telegram_username (“@handle” | null), with_telegram and a search that matches the handle, only for that key. AiRedactor::clean($answer, AiRedactor::allowedFor($key)) keeps telegram_username for it alone; whatsapp / discord_username / email / phone are dropped for every key. Bare `telegram` keys (sign-up source counts) are untouched.',
+      'GuideTools::CONTACT_INSTRUCTIONS is added to the initialize instructions for that key; the guide explains the field.',
+    ],
+    links: [{ label: 'AI Access', href: '/admin/ai-access' }],
+  },
+  {
     id: 'landing-preview-pixel-hero',
     date: '2026-11-26',
     kind: 'improved',

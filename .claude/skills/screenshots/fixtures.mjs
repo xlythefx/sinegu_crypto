@@ -842,12 +842,14 @@ const CREATIVE_GET = {
   '/admin/creatives/character': { success: true, character: { id: 1, name: 'Pixel', look: null, style_prompt: null, rules: null, refs: [], updated_by_name: null, updated_at: null } },
 }
 
-// Admin → AI Access: one key that may create in Creatives, one that only reads.
+// Admin → AI Access: one key that may create in Creatives and see Telegram usernames, one that only reads.
 const AI_ACCESS = () => {
   const key = (id, name, can_create, extra = {}) => ({
     id, name, prefix: `pxa_${id}a9c`, state: 'active', created_by_name: 'Sample Admin', created_at: ago(9), expires_at: ago(-81),
     last_used_at: ago(0, 0.3), last_used_ip: '203.0.113.10', revoked_at: null, revoked_by_name: null,
-    can_create, can_create_changed_by_name: can_create ? 'Sample Admin' : null, can_create_changed_at: can_create ? ago(0, 2) : null, ...extra,
+    can_create, can_create_changed_by_name: can_create ? 'Sample Admin' : null, can_create_changed_at: can_create ? ago(0, 2) : null,
+    can_see_contacts: can_create, can_see_contacts_changed_by_name: can_create ? 'Sample Admin' : null,
+    can_see_contacts_changed_at: can_create ? ago(0, 1) : null, ...extra,
   })
   const tool = (name, title) => ({ name, title, description: `${title}, as the admin pages show it.` })
   return {

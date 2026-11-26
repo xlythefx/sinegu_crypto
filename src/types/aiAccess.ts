@@ -19,7 +19,17 @@ export interface AiAccessKey {
   can_create: boolean
   can_create_changed_by_name: string | null
   can_create_changed_at: string | null
+  /**
+   * May read the Telegram usernames people gave at sign-up (off until a full
+   * admin switches it on, 2026-11-26). Never WhatsApp, email or phone.
+   */
+  can_see_contacts: boolean
+  can_see_contacts_changed_by_name: string | null
+  can_see_contacts_changed_at: string | null
 }
+
+/** The two extra rights a full admin can switch on per key. */
+export type AiKeySwitch = 'can_create' | 'can_see_contacts'
 
 /** What a key switched on for Creatives may also do, its limits, and what each key spent. */
 export interface AiCreateAccess {
