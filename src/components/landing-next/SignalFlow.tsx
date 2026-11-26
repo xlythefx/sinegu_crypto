@@ -1,4 +1,5 @@
 import { MIN_DEPOSIT_USDT } from '../../lib/pricing'
+import { useScrollStep } from '../../hooks/useScrollStep'
 import PixelIcon from './PixelIcon'
 import type { PixelGlyph } from './pixelGlyphs'
 import { CONTAINER, H2, LEAD } from './layout'
@@ -7,7 +8,7 @@ interface Step {
   glyph: PixelGlyph
   title: string
   body: string
-  /** The step where the customer's money is: drawn as the boundary. */
+  /** The step where the customer's money is: labelled as the boundary. */
   yours?: boolean
 }
 
@@ -40,22 +41,13 @@ const STEPS: Step[] = [
   },
 ]
 
-/** One cycle of the moving pixel, across every gap in turn. */
-const CYCLE_S = 6
 const GAPS = STEPS.length - 1
 
 /**
- * The dotted track between two steps, with a pixel that runs along it in its
- * turn so the eye follows a signal from the strategy to the invoice. SMIL
- * keeps the motion inside the SVG (a CSS transform on an SVG child moves it
- * in its OWN box, not the track's). `.motion-safe-only` hides the runner for
- * visitors who asked for reduced motion.
+ * The dotted track between two steps. Once the reader has scrolled past the
+ * step before it, it turns gold: the trail the highlight has left behind.
  */
-function Connector({ index, vertical }: { index: number; vertical: boolean }) {
-  const start = index / GAPS
-  const end = (index + 1) / GAPS
-  const times = `0;${start.toFixed(3)};${end.toFixed(3)};1`
-  const axis = vertical ? 'y' : 'x'
+function Connector({ lit, vertical }: { lit: boolean; vertical: boolean }) {
   return (
     <svg
       aria-hidden="true"
@@ -68,46 +60,28 @@ function Connector({ index, vertical }: { index: number; vertical: boolean }) {
         y1={vertical ? '0' : '50%'}
         x2={vertical ? '50%' : '100%'}
         y2={vertical ? '100%' : '50%'}
-        stroke="var(--border)"
+        stroke={lit ? 'var(--accent)' : 'var(--border)'}
         strokeWidth={2}
         strokeDasharray="4 4"
+        className="motion-safe:transition-[stroke] motion-safe:duration-300"
       />
-      <rect
-        className="motion-reduce:hidden"
-        {...(vertical ? { x: 2, y: '0%' } : { x: '0%', y: 2 })}
-        width={8}
-        height={8}
-        fill="var(--accent)"
-        opacity={0}
-      >
-        <animate
-          attributeName={axis}
-          values="0%;0%;92%;92%"
-          keyTimes={times}
-          dur={`${CYCLE_S}s`}
-          repeatCount="indefinite"
-        />
-        <animate
-          attributeName="opacity"
-          values="0;1;1;0"
-          keyTimes={`0;${start.toFixed(3)};${(end - 0.001).toFixed(3)};${end.toFixed(3)}`}
-          dur={`${CYCLE_S}s`}
-          repeatCount="indefinite"
-          calcMode="discrete"
-        />
-      </rect>
     </svg>
   )
 }
 
 /**
- * "What happens when the strategy trades" — the old "Profitable in four
- * steps" cards, replaced by the actual path one signal takes, with the
- * customer's own account drawn as the place the money stays. Every sentence
- * is a rule the engine or the API enforces (deposit gate, stack cap, sizing
- * to balance, monthly HWM invoice).
+ * "What happens when the strategy trades" — the actual path one signal
+ * takes, with the customer's own account drawn as the place the money stays.
+ * Every sentence is a rule the engine or the API enforces (deposit gate,
+ * stack cap, sizing to balance, monthly invoice).
+ *
+ * The gold highlight follows the scroll, one step at a time (owner,
+ * 2026-11-26: "the yellow will move from first to second and so on"): the
+ * step being read gets a gold tile, icon and title, and the track behind it
+ * stays gold. `useScrollStep` decides which step that is.
  */
 export default function SignalFlow() {
+  const { active, listRef, itemRef } = useScrollStep(STEPS.length)
   return (
     <section className="border-t border-hair">
       <div className={`${CONTAINER} py-20 max-[560px]:py-14`}>
@@ -119,58 +93,79 @@ export default function SignalFlow() {
           </p>
         </div>
 
-        <ol className="grid grid-cols-5 gap-0 pt-7 max-[960px]:grid-cols-1 max-[960px]:pt-0" data-aos="fade-up" data-aos-delay={80}>
-          {STEPS.map((step, i) => (
-            <li
-              key={step.title}
-              className="relative flex flex-col max-[960px]:flex-row max-[960px]:gap-5"
-            >
-              {/* Tile row: the icon, then the track to the next step. */}
-              <div className="flex items-center max-[960px]:flex-col max-[960px]:items-center">
-                <div
-                  className={`relative z-[1] flex h-16 w-16 shrink-0 items-center justify-center rounded-btn border ${
-                    step.yours
-                      ? 'border-accent bg-accent-soft text-accent'
-                      : 'border-border bg-surface text-text'
-                  }`}
-                >
-                  <PixelIcon glyph={step.glyph} size={36} />
-                  {step.yours && (
-                    // Above the tile on a wide screen so every title stays on one line;
-                    // beside the text on a phone (below).
-                    <span className="absolute bottom-full left-0 mb-2.5 inline-flex items-center gap-1.5 whitespace-nowrap font-mono text-[11px] font-semibold text-accent max-[960px]:hidden">
-                      <PixelIcon glyph="lock" size={12} />
-                      Your money stays here
-                    </span>
+        <ol
+          ref={listRef}
+          className="grid grid-cols-5 gap-0 pt-7 max-[960px]:grid-cols-1 max-[960px]:pt-0"
+          data-aos="fade-up"
+          data-aos-delay={80}
+        >
+          {STEPS.map((step, i) => {
+            const on = i === active
+            return (
+              <li
+                key={step.title}
+                ref={itemRef(i)}
+                className="relative flex flex-col max-[960px]:flex-row max-[960px]:gap-5"
+              >
+                {/* Tile row: the icon, then the track to the next step. */}
+                <div className="flex items-center max-[960px]:flex-col max-[960px]:items-center">
+                  <div
+                    className={`relative z-[1] flex h-16 w-16 shrink-0 items-center justify-center rounded-btn border motion-safe:transition-[color,background-color,border-color,box-shadow] motion-safe:duration-300 ${
+                      on
+                        ? 'border-accent bg-accent-soft text-accent shadow-[4px_4px_0_0_var(--accent-line)]'
+                        : 'border-border bg-surface text-muted'
+                    }`}
+                  >
+                    <PixelIcon glyph={step.glyph} size={36} />
+                    {step.yours && (
+                      // Above the tile on a wide screen so every title stays on one line;
+                      // beside the text on a phone (below).
+                      <span className="absolute bottom-full left-0 mb-2.5 inline-flex items-center gap-1.5 whitespace-nowrap font-mono text-[11px] font-semibold text-accent max-[960px]:hidden">
+                        <PixelIcon glyph="lock" size={12} />
+                        Your money stays here
+                      </span>
+                    )}
+                  </div>
+                  {i < GAPS && (
+                    <>
+                      <div className="flex-1 px-2 max-[960px]:hidden">
+                        <Connector lit={i < active} vertical={false} />
+                      </div>
+                      {/* Absolute, so the SVG takes the column's height instead of
+                          adding its own default 150px to it. */}
+                      <div className="hidden max-[960px]:block relative flex-1 w-3 min-h-8 my-2">
+                        <div className="absolute inset-0">
+                          <Connector lit={i < active} vertical />
+                        </div>
+                      </div>
+                    </>
                   )}
                 </div>
-                {i < GAPS && (
-                  <>
-                    <div className="flex-1 px-2 max-[960px]:hidden">
-                      <Connector index={i} vertical={false} />
+                <div className="pt-5 pr-6 max-[960px]:pt-1 max-[960px]:pb-8 max-[960px]:pr-0">
+                  {step.yours && (
+                    <div className="hidden max-[960px]:inline-flex items-center gap-1.5 mb-2 font-mono text-[11px] font-semibold text-accent">
+                      <PixelIcon glyph="lock" size={12} />
+                      Your money stays here
                     </div>
-                    {/* Absolute, so the SVG takes the column's height instead of
-                        adding its own default 150px to it. */}
-                    <div className="hidden max-[960px]:block relative flex-1 w-3 min-h-8 my-2">
-                      <div className="absolute inset-0">
-                        <Connector index={i} vertical />
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-              <div className="pt-5 pr-6 max-[960px]:pt-1 max-[960px]:pb-8 max-[960px]:pr-0">
-                {step.yours && (
-                  <div className="hidden max-[960px]:inline-flex items-center gap-1.5 mb-2 font-mono text-[11px] font-semibold text-accent">
-                    <PixelIcon glyph="lock" size={12} />
-                    Your money stays here
-                  </div>
-                )}
-                <h3 className="font-display text-[17px] font-bold leading-[1.3] mb-2">{step.title}</h3>
-                <p className="text-[14px] leading-[1.6] text-muted">{step.body}</p>
-              </div>
-            </li>
-          ))}
+                  )}
+                  <h3
+                    className={`font-display text-[17px] font-bold leading-[1.3] mb-2 motion-safe:transition-colors motion-safe:duration-300 ${
+                      on ? 'text-accent' : 'text-text'
+                    }`}
+                  >
+                    {step.title}
+                  </h3>
+                  <p
+                    className={`text-[14px] leading-[1.6] motion-safe:transition-colors motion-safe:duration-300 ${
+                      on ? 'text-text' : 'text-muted'
+                    }`}
+                  >
+                    {step.body}
+                  </p>
+                </div>
+              </li>
+            )
+          })}
         </ol>
       </div>
     </section>

@@ -4,16 +4,17 @@ import { VENUES } from './venues'
 import { CONTAINER, H2, LEAD } from './layout'
 
 interface Permission {
-  /** Binance's own name for the setting (exchangeCopy.ts uses the same). */
+  /** The setting in plain words: every exchange names it a little
+   *  differently, and the connect guide names each venue's own. */
   label: string
   on: boolean
   note: string
 }
 
 const PERMISSIONS: Permission[] = [
-  { label: 'Enable Reading', on: true, note: 'So we can see your balance and positions' },
-  { label: 'Enable Futures', on: true, note: 'So orders can be placed' },
-  { label: 'Enable Withdrawals', on: false, note: 'Stays off. We never ask for it' },
+  { label: 'Read account', on: true, note: 'So we can see your balance and positions' },
+  { label: 'Trade futures', on: true, note: 'So orders can be placed' },
+  { label: 'Withdraw', on: false, note: 'Stays off. We never ask for it' },
 ]
 
 /** The tick's pixels on the 10 × 10 box, two pixels tall so it reads at 20px. */
@@ -38,10 +39,11 @@ function Tick({ on }: { on: boolean }) {
 /**
  * "The key can trade. It can't withdraw." — the security claim shown as the
  * setting it rests on: an illustration of the key's restrictions as the
- * customer ticks them on Binance (labelled an illustration, styled in our
- * colours, never a copy of Binance's screen). Our server's IP is NOT printed:
- * the site sits behind Cloudflare and the connect page hands it out to
- * signed-in customers only.
+ * customer ticks them on their exchange (labelled an illustration, styled in
+ * our colours, never a copy of any exchange's screen). Worded for every
+ * exchange, not Binance alone (owner, 2026-11-26: more venues are coming).
+ * Our server's IP is NOT printed: the site sits behind Cloudflare and the
+ * connect page hands it out to signed-in customers only.
  */
 export default function KeyPermissions() {
   const open = VENUES.filter((v) => v.open)
@@ -52,14 +54,14 @@ export default function KeyPermissions() {
         <div data-aos="fade-up">
           <h2 className={`${H2} mb-4`}>The key can trade. It can&rsquo;t withdraw.</h2>
           <p className={`${LEAD} mb-4`}>
-            You create the API key on Binance yourself and paste it into Pixel
-            Alpha. Binance lets you choose what a key may do. Ours needs to read
-            your account and trade futures, and nothing else.
+            You create the API key on your exchange yourself and paste it into
+            Pixel Alpha. The exchange lets you choose what a key may do. Ours
+            needs to read your account and trade futures, and nothing else.
           </p>
           <p className={`${LEAD} mb-8`}>
             Leave withdrawals off. A key without that permission cannot move
             money out of your account, whoever holds it. You can delete the key
-            on Binance at any time, and our access ends that second.
+            on your exchange at any time, and our access ends that second.
           </p>
 
           <div className="border-t border-border pt-6">
@@ -111,13 +113,13 @@ export default function KeyPermissions() {
               <span className="mt-0.5 h-4 w-4 shrink-0 rounded-full border-[5px] border-accent" aria-hidden="true" />
               <span className="text-[13.5px] leading-[1.55] text-muted">
                 <span className="font-semibold text-text">Restrict access to trusted IPs only.</span>{' '}
-                Binance asks for this before a key may trade futures. The connect
+                Your exchange asks for this so the key keeps working. The connect
                 page gives you our server&rsquo;s address to paste in.
               </span>
             </div>
           </div>
           <figcaption className="text-[12px] text-faint mt-3">
-            An illustration of the settings you tick on Binance, not a screenshot.
+            An illustration of the settings you tick on your exchange, not a screenshot.
           </figcaption>
         </figure>
       </div>

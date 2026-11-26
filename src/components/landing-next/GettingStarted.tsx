@@ -36,8 +36,8 @@ const STEPS: Step[] = [
   },
   {
     glyph: 'key',
-    title: 'Connect Binance',
-    body: `Create a trade-only API key on Binance and paste it in. The bot starts once your futures wallet has received at least ${MIN_DEPOSIT_USDT.toLocaleString('en-US')} USDT in deposits. ${comingSoonSentence()}`.trim(),
+    title: 'Connect your exchange',
+    body: `Create a trade-only API key on your exchange and paste it in. The bot starts once your futures wallet has received at least ${MIN_DEPOSIT_USDT.toLocaleString('en-US')} USDT in deposits. ${comingSoonSentence()}`.trim(),
     link: { to: '/docs/binance', label: 'Step-by-step Binance guide' },
   },
   {
