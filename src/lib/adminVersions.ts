@@ -14,6 +14,22 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'home-nav-phone-name',
+    date: '2026-11-27',
+    kind: 'fixed',
+    area: 'Website',
+    title: 'Home page: "Pixel Alpha" is no longer cut off at the top on phones',
+    summary:
+      'On a phone the name next to the logo read "Pixel Alp", squeezed by the buttons beside it. On phones the top bar now has a shorter button ("Sign up" instead of "Create account") and a smaller theme switch, so the name always shows in full.',
+    howItWorks: [
+      'Checked at the usual phone widths (430, 390, 375 and 360 points wide). On the two smallest the light / dark switch is left out of the top bar to make room.',
+    ],
+    technical: [
+      'components/landing-next/NavNext: brand link shrink-0; at max-[560px] text 17px, gaps 3/2, theme button 40px, CTA "Sign up"; theme button hidden at max-[380px] (was max-[420px] for the label only).',
+    ],
+    links: [{ label: 'Home page', href: '/' }],
+  },
+  {
     id: 'strategy-card-real-exchanges',
     date: '2026-11-27',
     kind: 'fixed',
