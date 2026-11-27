@@ -14,6 +14,22 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'home-steps-money-badge',
+    date: '2026-11-27',
+    kind: 'improved',
+    area: 'Website',
+    title: 'Home page: "Your money stays here" is a clear gold badge',
+    summary:
+      'In "What happens when the strategy trades", step 3 (the order lands on your exchange) carried a small gold note, "Your money stays here", that nobody noticed on a phone. It is now a gold badge, and step 3\'s icon has a gold, glowing border, on phones and computers.',
+    howItWorks: [
+      'The rest of the strip stays still and white, as chosen this morning. Step 3 is the only gold one, because it is where the customer\'s money is.',
+    ],
+    technical: [
+      'components/landing-next/SignalFlow: YOURS_BADGE (pill, accent-soft fill, accent-line border, 12px mono bold); the step-3 tile border-2 border-accent + accentLine ring + accent glow; ol pt-7 → pt-10 for the taller badge on the wide layout.',
+    ],
+    links: [{ label: 'Home page', href: '/' }],
+  },
+  {
     id: 'home-nav-phone-name',
     date: '2026-11-27',
     kind: 'fixed',

@@ -42,6 +42,16 @@ const STEPS: Step[] = [
 
 const GAPS = STEPS.length - 1
 
+/**
+ * "Your money stays here" as a gold badge (owner, 2026-11-27: the 11px gold
+ * text was there on a phone but nobody saw it). Same badge on both layouts;
+ * where it sits differs (above the tile wide, above the title on a phone).
+ */
+// No `display` here: each copy sets its own (inline-flex vs hidden), or the
+// two classes fight and the phone copy shows on a computer too.
+const YOURS_BADGE =
+  'items-center gap-1.5 whitespace-nowrap rounded-pill border border-accent-line bg-accent-soft px-2.5 py-1 font-mono text-[12px] font-bold text-accent'
+
 /** The dotted track between two steps. */
 function Connector({ vertical }: { vertical: boolean }) {
   return (
@@ -75,7 +85,9 @@ function Connector({ vertical }: { vertical: boolean }) {
  * earlier it had a gold highlight that moved from step to step as you
  * scrolled, then a version that held the strip still while the gold moved;
  * both are in git history (`useScrollStep`, `lib/scrollStep`) if the owner
- * wants one back. The one colour left is the gold "Your money stays here".
+ * wants one back. The one colour left is step 3, the customer's exchange:
+ * a gold badge "Your money stays here" and a gold-bordered tile (made louder
+ * the same day — on a phone the old 11px gold text went unnoticed).
  */
 export default function SignalFlow() {
   return (
@@ -90,7 +102,7 @@ export default function SignalFlow() {
         </div>
 
         <ol
-          className="grid grid-cols-5 gap-0 pt-7 max-[960px]:grid-cols-1 max-[960px]:pt-0"
+          className="grid grid-cols-5 gap-0 pt-10 max-[960px]:grid-cols-1 max-[960px]:pt-0"
           data-aos="fade-up"
           data-aos-delay={80}
         >
@@ -98,13 +110,19 @@ export default function SignalFlow() {
             <li key={step.title} className="relative flex flex-col max-[960px]:flex-row max-[960px]:gap-5">
               {/* Tile row: the icon, then the track to the next step. */}
               <div className="flex items-center max-[960px]:flex-col max-[960px]:items-center">
-                <div className="relative z-[1] flex h-16 w-16 shrink-0 items-center justify-center rounded-btn border border-muted bg-surface text-text">
+                <div
+                  className={`relative z-[1] flex h-16 w-16 shrink-0 items-center justify-center rounded-btn border bg-surface text-text ${
+                    step.yours
+                      ? 'border-2 border-accent shadow-[0_0_0_4px_var(--accentLine),0_0_22px_-6px_var(--accent)]'
+                      : 'border-muted'
+                  }`}
+                >
                   <PixelIcon glyph={step.glyph} size={36} />
                   {step.yours && (
                     // Above the tile on a wide screen so every title stays on one line;
-                    // beside the text on a phone (below).
-                    <span className="absolute bottom-full left-0 mb-2.5 inline-flex items-center gap-1.5 whitespace-nowrap font-mono text-[11px] font-semibold text-accent max-[960px]:hidden">
-                      <PixelIcon glyph="lock" size={12} />
+                    // above the title on a phone (below).
+                    <span className={`${YOURS_BADGE} absolute bottom-full left-0 mb-2.5 inline-flex max-[960px]:hidden`}>
+                      <PixelIcon glyph="lock" size={13} />
                       Your money stays here
                     </span>
                   )}
@@ -126,8 +144,8 @@ export default function SignalFlow() {
               </div>
               <div className="pt-5 pr-6 max-[960px]:pt-1 max-[960px]:pb-8 max-[960px]:pr-0">
                 {step.yours && (
-                  <div className="hidden max-[960px]:inline-flex items-center gap-1.5 mb-2 font-mono text-[11px] font-semibold text-accent">
-                    <PixelIcon glyph="lock" size={12} />
+                  <div className={`${YOURS_BADGE} hidden max-[960px]:inline-flex mb-2.5`}>
+                    <PixelIcon glyph="lock" size={13} />
                     Your money stays here
                   </div>
                 )}
