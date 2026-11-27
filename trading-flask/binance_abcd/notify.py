@@ -977,6 +977,9 @@ def _test_result_line(name: Any, result: dict) -> str:
         text = f"skipped: {result.get('reason') or 'no reason given'}"
     else:
         text = f"failed: {result.get('error') or 'unknown'}"
+    fallback = result.get("leverage_fallback") or {}
+    if fallback.get("used"):
+        text += f" · {fallback['used']}x ({fallback.get('asked')}x refused)"
     return f"  • {_esc(name)} — {_esc(text)}"
 
 
@@ -1078,6 +1081,28 @@ def notify_max_increments(
         if len(held_back) > 20:
             lines.append(f"  … +{len(held_back) - 20} more")
     lines.append(f"({len(entries) + len(held_back)} account(s) affected)")
+    _send_admin("\n".join(lines))
+
+
+def notify_leverage_fallback(
+    action: str, ticker: str, asked: int, used: int, refusal: Optional[str], accounts: int,
+    label: Optional[str] = None,
+) -> None:
+    """Calm ADMIN note: the exchange refused the leverage this coin's entries
+    ask for, so they traded at a lower one (webhook._maybe_set_leverage, 15x
+    then 10x). Not a failure — the trade went through — but the coin is
+    asking for something the exchange no longer allows, and the margin per
+    trade is higher than intended until someone sets the coin's own leverage.
+    The caller sends it once a day per venue + coin (daily_alerts)."""
+    venue = label or BROKER_LABEL
+    lines = [
+        f"⚙️ <b>Leverage lowered — {_esc(ticker)} ({_esc(action)}) · {_esc(venue)}</b>",
+        f"{_esc(venue)} refused {asked}x"
+        + (f" ({_esc(refusal)})" if refusal else "")
+        + f", so {accounts} account(s) traded at {used}x instead.",
+        f"To stop asking for {asked}x, set this coin's leverage in Admin → Trading Assets.",
+        "Shown once a day per coin.",
+    ]
     _send_admin("\n".join(lines))
 
 

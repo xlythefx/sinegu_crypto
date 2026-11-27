@@ -29,14 +29,14 @@ from typing import Any, Optional, Sequence
 
 from flask import Blueprint, jsonify, request
 
-from binance_abcd import daily_alerts, engine_client, exchange_limit, hooks, notify, stuck_exits, symbol_locks
+from binance_abcd import daily_alerts, engine_client, exchange_limit, hooks, key_status, notify, stuck_exits, symbol_locks
 from binance_abcd.accounts_api import fetch_accounts
 from binance_abcd.assets_api import get_asset
 from binance_abcd.assets_api import rejection as asset_rejection
 from binance_abcd.exchange_api import ExchangeClient
 from binance_abcd.exchanges import client_for, exchange_of, label, labels, tradeable
 from binance_abcd.exchanges import enabled as enabled_exchanges
-from binance_abcd.binance_api import error_summary
+from binance_abcd.binance_api import _parse_binance_error_body, error_summary
 from binance_abcd.hooks import (
     BOOKKEEPING_WORKERS,
     COARSE_STEP_TICKERS,
@@ -44,6 +44,7 @@ from binance_abcd.hooks import (
     DISPATCH_WORKERS,
     FANOUT_WORKERS,
     LEVERAGE_CACHE_TTL,
+    LEVERAGE_FALLBACKS,
     MAIN_FEED,
     MIN_DEPOSIT,
     OUT_DIR,
@@ -93,10 +94,12 @@ _BOOKKEEPING_EXECUTOR = ThreadPoolExecutor(max_workers=BOOKKEEPING_WORKERS, thre
 TRADES_LOG = OUT_DIR / "webhook_trades.log"
 _TRADES_LOG_LOCK = threading.Lock()
 
-# Last leverage applied per (exchange, api_key, symbol) -> (leverage, epoch).
-# Saves one POST /fapi/v1/leverage per account per signal when the value
-# hasn't changed.
-_LEVERAGE_APPLIED: dict[tuple[str, str, str], tuple[int, float]] = {}
+# Last leverage applied per (exchange, api_key, symbol) ->
+# (asked, applied, epoch, refusal of the asked one or None). Saves one
+# POST /fapi/v1/leverage per account per signal when the value hasn't changed,
+# and remembers a fallback (25x refused -> 15x) so it is not re-negotiated
+# on every signal.
+_LEVERAGE_APPLIED: dict[tuple[str, str, str], tuple[int, int, float, Optional[str]]] = {}
 _LEVERAGE_LOCK = threading.Lock()
 
 _metrics_lock = threading.Lock()
@@ -222,38 +225,91 @@ def _effective_leverage(asset: Optional[dict], signal_leverage: Optional[int]) -
     return DEFAULT_LEVERAGE if DEFAULT_LEVERAGE > 0 else None
 
 
-def _maybe_set_leverage(api: ExchangeClient, symbol: str, leverage: Optional[int]) -> Optional[str]:
-    """set_leverage only when the cached last-applied value differs. Returns the
-    exchange's refusal as text (e.g. "-4028 Leverage 25 is not valid"), None
-    when it was applied or nothing was asked.
+def _leverage_failed(result: Any) -> bool:
+    return isinstance(result, dict) and bool(result.get("_error"))
 
-    The order is still placed after a refusal — at whatever leverage the
-    account already holds, which may well be fine — but a failed order then
-    names the refusal, because "-2027 Exceeded the maximum allowable position"
-    on its own sends whoever reads the alert to shrink a size that was never
-    the problem.
 
-    A venue that takes leverage ON the order (MEXC) has nothing to cache: the
-    adapter just remembers the value for the entry it is about to place.
+def _lower_leverage_may_help(api: ExchangeClient, result: dict) -> bool:
+    """True when the venue ANSWERED and said no — the refusal a lower leverage
+    can fix (Binance -4028 "Leverage 25 is not valid": the coin's maximum is
+    lower). Never after a timeout or 5xx (the first request may have landed),
+    a rate limit (every call is refused alike), or a credential refusal (the
+    key is the problem, not the number)."""
+    if result.get("transient") or result.get("rate_limited"):
+        return False
+    parsed = _parse_binance_error_body(str(result.get("response") or ""))
+    if not parsed and isinstance(result.get("code"), int):
+        parsed = {"code": result["code"], "msg": result.get("message")}
+    return key_status.classify(parsed, api.exchange) is None
+
+
+def _maybe_set_leverage(
+    api: ExchangeClient, symbol: str, leverage: Optional[int],
+) -> tuple[Optional[int], Optional[str], tuple[int, ...]]:
+    """Set the entry's leverage; returns (applied, refusal, also_refused).
+
+    - applied: the leverage the account now holds for the coin — the one
+      asked, or a FALLBACK (hooks.LEVERAGE_FALLBACKS: 15x, then 10x) when the
+      exchange refused it. None when nothing was asked or nothing was accepted.
+    - refusal: the exchange's answer to the leverage ASKED, as text
+      ("-4028 Leverage 25 is not valid"); None when it was accepted.
+    - also_refused: the fallbacks the exchange refused too.
+
+    Owner's request 2026-11-27: a refused leverage used to leave the order to
+    run at whatever the account already held, and on SANTOS (9 Nov) that
+    failed every entry -2027 until someone set the coin's leverage by hand.
+    Now the account steps down 15x → 10x first; only values BELOW the refused
+    one are tried, so a coin set to 10x never steps up.
+
+    A refusal everything below failed too is still not fatal: the order is
+    placed at whatever the account holds, and a failed order then names the
+    refusal, because "-2027 Exceeded the maximum allowable position" on its own
+    sends whoever reads the alert to shrink a size that was never the problem.
+
+    Cached per (exchange, api_key, symbol) by the leverage ASKED, so the next
+    signal goes straight to the fallback that worked instead of asking 25x
+    again; after LEVERAGE_CACHE_TTL (a day) the asked one is tried again, in
+    case the exchange raised the coin's maximum. Total refusals are never
+    cached — a corrected coin is tried on the very next signal.
+
+    A venue that takes leverage ON the order (MEXC) has nothing to cache or
+    fall back on here: the adapter just remembers the value for the entry it
+    is about to place.
     """
     if leverage is None:
-        return None
+        return None, None, ()
     if api.LEVERAGE_PER_ORDER:
         api.set_leverage(symbol, leverage)
-        return None
+        return leverage, None, ()
     key = (api.exchange, api.api_key, symbol.upper())
     now = time.time()
     with _LEVERAGE_LOCK:
         cached = _LEVERAGE_APPLIED.get(key)
-        if cached and cached[0] == leverage and (now - cached[1]) < LEVERAGE_CACHE_TTL:
-            return None
+        if cached and cached[0] == leverage and (now - cached[2]) < LEVERAGE_CACHE_TTL:
+            return cached[1], cached[3], ()
     result = api.set_leverage(symbol, leverage)
-    if isinstance(result, dict) and result.get("_error"):
-        log.warning("[%s] set_leverage %sx %s failed: %.200s", api.exchange, leverage, symbol, result.get("response"))
-        return error_summary(result)
-    with _LEVERAGE_LOCK:
-        _LEVERAGE_APPLIED[key] = (leverage, now)
-    return None
+    if not _leverage_failed(result):
+        with _LEVERAGE_LOCK:
+            _LEVERAGE_APPLIED[key] = (leverage, leverage, now, None)
+        return leverage, None, ()
+
+    refusal = error_summary(result)
+    log.warning("[%s] set_leverage %sx %s failed: %.200s", api.exchange, leverage, symbol, result.get("response"))
+    also_refused: list[int] = []
+    if _lower_leverage_may_help(api, result):
+        for lower in (lev for lev in LEVERAGE_FALLBACKS if lev < leverage):
+            attempt = api.set_leverage(symbol, lower)
+            if not _leverage_failed(attempt):
+                log.info("[%s] %s: %sx refused (%s) — using %sx", api.exchange, symbol, leverage, refusal, lower)
+                with _LEVERAGE_LOCK:
+                    _LEVERAGE_APPLIED[key] = (leverage, lower, now, refusal)
+                return lower, refusal, tuple(also_refused)
+            also_refused.append(lower)
+            log.warning("[%s] set_leverage %sx %s (fallback) failed: %.200s",
+                        api.exchange, lower, symbol, attempt.get("response"))
+            if not _lower_leverage_may_help(api, attempt):
+                break
+    return None, refusal, tuple(also_refused)
 
 
 def _normalize_target_uni_ids(raw: Any) -> Optional[set[str]]:
@@ -975,15 +1031,23 @@ def _run_account(
                 }
 
             lev = _effective_leverage(asset, leverage)
-            base["leverage"] = lev
-            leverage_refused = _maybe_set_leverage(api, symbol, lev)
+            applied, refusal, also_refused = _maybe_set_leverage(api, symbol, lev)
+            # Refused outright (no fallback accepted) — the order still goes,
+            # at whatever the account holds, and names the refusal if it fails.
+            leverage_refused = refusal if applied is None else None
+            base["leverage"] = applied if applied is not None else lev
+            if applied is not None and lev is not None and applied != lev:
+                # Stepped down (25x refused -> 15x): the Signal Log, the
+                # private-feed summary and the daily admin note read this.
+                base["leverage_fallback"] = {"asked": lev, "used": applied, "refused": refusal,
+                                             "also_refused": list(also_refused)}
 
             # The exchange's position limit at this leverage (exchange_limit):
             # shrink an entry that would pass it, skip one with no room left —
             # instead of an order Binance refuses -2027. A refused leverage
             # leaves the account's real leverage unknown, so no limit is assumed.
             limit = exchange_limit.fit(
-                api, symbol, position_side, None if leverage_refused else lev, current, quantity, price,
+                api, symbol, position_side, applied, current, quantity, price,
             )
             if limit["action"] == "skip":
                 _bump("accounts_skipped")
@@ -1010,6 +1074,8 @@ def _run_account(
                 error = (result or {}).get("error", "no response")
                 if leverage_refused:
                     error = f"{error} — {lev}x leverage refused ({leverage_refused})"
+                    if also_refused:
+                        error += f"; {' and '.join(f'{x}x' for x in also_refused)} refused too"
                 return base | {
                     "error": error,
                     "retryable": retryable,
@@ -1525,6 +1591,24 @@ def _account_label(row: dict, name_venues: bool) -> str:
     return f"{name} ({label(row.get('exchange', 'binance'))})"
 
 
+def _notify_leverage_fallbacks(action: str, symbol: str, results: list) -> None:
+    """One admin note per venue + coin + (asked -> used) per day when entries
+    stepped down to a fallback leverage. Daily, because the step-down repeats
+    on every signal until the coin's leverage is set — the same reason the
+    "coin turned off" rejection is daily."""
+    groups: dict[tuple[str, int, int], list[dict]] = {}
+    for r in results:
+        fb = r.get("leverage_fallback")
+        if isinstance(fb, dict) and fb.get("asked") and fb.get("used"):
+            groups.setdefault((r.get("exchange", "binance"), int(fb["asked"]), int(fb["used"])), []).append(r)
+    for (ex, asked, used), rows in groups.items():
+        if not daily_alerts.first_today([f"leverage_fallback|{ex}|{symbol}|{asked}|{used}"]):
+            continue
+        notify.notify_leverage_fallback(
+            action, symbol, asked, used, rows[0]["leverage_fallback"].get("refused"), len(rows), label=label(ex),
+        )
+
+
 def _notify_job(
     action: str,
     symbol: str,
@@ -1571,6 +1655,7 @@ def _notify_job(
                     for r in results if r.get("reason") == MAIN_ACCOUNT_FULL
                 ],
             )
+            _notify_leverage_fallbacks(action, symbol, results)
         if failed and not is_retry:
             # Two audiences, one fan-out: what the engine is about to re-place
             # itself, and what will stay broken until someone opens the exchange.

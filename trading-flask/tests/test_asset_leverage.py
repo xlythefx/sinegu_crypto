@@ -6,7 +6,9 @@ size — even 250 SANTOS (~$98). Rules pinned here:
 - the coin's own leverage beats the alert's; the alert's beats the default (25);
 - the Signal Log row records what the entry ASKED for;
 - a refused leverage is named in the failed entry and the admin alert, so a
-  -2027 is not mistaken for "the position is too big".
+  -2027 is not mistaken for "the position is too big";
+- a refused leverage steps down to 15x, then 10x (owner, 2026-11-27), only
+  below the one refused and only when the venue answered "no".
 """
 
 from __future__ import annotations
@@ -111,8 +113,9 @@ def test_a_refused_leverage_is_named_on_the_failed_entry():
     assert result["status"] == "failed"
     assert result["leverage_refused"] == "-4028 Leverage 25 is not valid"
     assert result["error"] == ("-2027 Exceeded the maximum allowable position at current leverage."
-                               " — 25x leverage refused (-4028 Leverage 25 is not valid)")
+                               " — 25x leverage refused (-4028 Leverage 25 is not valid); 15x and 10x refused too")
     assert not result["retryable"]
+    assert "leverage_fallback" not in result
 
 
 def test_a_refusal_is_not_cached_so_a_corrected_coin_is_tried_next_signal():
@@ -120,7 +123,132 @@ def test_a_refusal_is_not_cached_so_a_corrected_coin_is_tried_next_signal():
     _run(api, ASSET, 25, {"error": "-2027"})
     api.refuse = None
     _run(api, {**ASSET, "leverage": 10}, 25, {"result": {}})
-    assert api.calls == [25, 10]
+    assert api.calls == [25, 15, 10, 10]
+
+
+# --- Fallback: 15x, then 10x (owner, 2026-11-27) --------------------------------
+
+_INVALID = '{"code":-4028,"msg":"Leverage %d is not valid"}'
+
+
+class _CappedBinance(_FakeBinance):
+    """Accepts any leverage up to `cap`, refuses the rest with -4028 — the
+    coin-maximum case (SANTOSUSDT, 9 Nov 2026). `answer` overrides the refusal."""
+
+    def __init__(self, cap: int, answer: dict | None = None):
+        super().__init__()
+        self.cap = cap
+        self.answer = answer
+
+    def set_leverage(self, symbol, leverage):
+        self.calls.append(leverage)
+        if leverage <= self.cap:
+            return {"leverage": leverage}
+        return self.answer or {"_error": True, "response": _INVALID % leverage, "transient": False}
+
+
+def test_a_refused_25x_trades_at_15x():
+    api = _CappedBinance(cap=20)
+    result = _run(api, ASSET, 25, {"result": {"avgPrice": "0.394"}})
+    assert api.calls == [25, 15]
+    assert result["status"] == "filled"
+    assert result["leverage"] == 15
+    assert result["leverage_fallback"] == {
+        "asked": 25, "used": 15, "refused": "-4028 Leverage 25 is not valid", "also_refused": [],
+    }
+
+
+def test_no_15x_either_trades_at_10x():
+    api = _CappedBinance(cap=12)
+    result = _run(api, ASSET, 25, {"result": {}})
+    assert api.calls == [25, 15, 10]
+    assert result["leverage"] == 10
+    assert result["leverage_fallback"]["also_refused"] == [15]
+
+
+def test_only_lower_leverages_are_tried():
+    api = _CappedBinance(cap=5)
+    _run(api, {**ASSET, "leverage": 12}, 25, {"error": "-2027"})
+    assert api.calls == [12, 10]  # never 15: that would be HIGHER than the coin asks
+    api.calls.clear()
+    result = _run(api, {**ASSET, "leverage": 10}, 25, {"error": "-2027"})
+    assert api.calls == [10]
+    assert result["leverage_refused"] == "-4028 Leverage 10 is not valid"
+
+
+def test_the_fallback_is_remembered_so_the_next_signal_does_not_ask_25x_again():
+    api = _CappedBinance(cap=20)
+    _run(api, ASSET, 25, {"result": {}})
+    result = _run(api, ASSET, 25, {"result": {}})
+    assert api.calls == [25, 15]
+    assert result["leverage"] == 15
+    assert result["leverage_fallback"]["refused"] == "-4028 Leverage 25 is not valid"
+
+
+@pytest.mark.parametrize("answer", [
+    {"_error": True, "response": "", "transient": True},                      # timeout: 25x may have landed
+    {"_error": True, "response": "", "rate_limited": True},                   # every call refused alike
+    {"_error": True, "response": '{"code":-2015,"msg":"Invalid API-key, IP, or permissions for action."}'},
+])
+def test_no_fallback_when_a_lower_leverage_cannot_be_the_fix(answer):
+    api = _CappedBinance(cap=20, answer=answer)
+    result = _run(api, ASSET, 25, {"error": "-2027"})
+    assert api.calls == [25]
+    assert "leverage_fallback" not in result
+
+
+def test_the_fallback_can_be_switched_off(monkeypatch):
+    monkeypatch.setattr(webhook, "LEVERAGE_FALLBACKS", ())
+    api = _CappedBinance(cap=20)
+    result = _run(api, ASSET, 25, {"error": "-2027"})
+    assert api.calls == [25]
+    assert result["leverage_refused"] == "-4028 Leverage 25 is not valid"
+
+
+def test_the_position_limit_is_measured_at_the_leverage_actually_set():
+    api = _CappedBinance(cap=20)
+    seen = []
+
+    def fit(_api, _symbol, _side, leverage, *_rest):
+        seen.append(leverage)
+        return {"action": "ok"}
+
+    with patch.object(webhook.exchange_limit, "fit", side_effect=fit):
+        _run(api, ASSET, 25, {"result": {}})
+    assert seen == [15]
+
+
+@pytest.mark.parametrize("raw, expected", [
+    ("15,10", (15, 10)), ("10, 15", (15, 10)), ("15,15,x,0,200", (15,)), ("", ()),
+])
+def test_the_fallback_ladder_reads_strictly(raw, expected):
+    from binance_abcd import hooks
+    assert hooks._leverage_ladder(raw) == expected
+
+
+def test_the_test_feed_summary_names_the_step_down():
+    line = notify._test_result_line("Dima", {
+        "status": "filled", "quantity": 400,
+        "leverage_fallback": {"asked": 25, "used": 15, "refused": "-4028 Leverage 25 is not valid"},
+    })
+    assert "15x (25x refused)" in line
+
+
+def test_the_main_feed_note_goes_out_once_a_day_per_coin():
+    rows = [
+        {"exchange": "binance", "status": "filled",
+         "leverage_fallback": {"asked": 25, "used": 15, "refused": "-4028 Leverage 25 is not valid"}},
+        {"exchange": "binance", "status": "filled",
+         "leverage_fallback": {"asked": 25, "used": 15, "refused": "-4028 Leverage 25 is not valid"}},
+        {"exchange": "binance", "status": "filled"},
+    ]
+    sent = []
+    with patch.object(notify, "_send_admin", sent.append):
+        webhook._notify_leverage_fallbacks("SELL", "SANTOSUSDT", rows)
+        webhook._notify_leverage_fallbacks("SELL", "SANTOSUSDT", rows)
+    assert len(sent) == 1
+    assert "refused 25x" in sent[0] and "2 account(s) traded at 15x" in sent[0]
+    assert "Admin → Trading Assets" in sent[0]
 
 
 def test_an_applied_leverage_is_not_set_twice():

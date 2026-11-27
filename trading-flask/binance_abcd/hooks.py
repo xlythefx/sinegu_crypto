@@ -250,6 +250,27 @@ LEVERAGE_CACHE_TTL = _env_float("LEVERAGE_CACHE_TTL", 86400.0)
 # account's existing setting alone (the behaviour before 2026-11-10).
 DEFAULT_LEVERAGE = _env_int("DEFAULT_LEVERAGE", 25)
 
+
+def _leverage_ladder(raw: str | None) -> tuple[int, ...]:
+    """CSV of leverages -> the distinct ones in 1-125, highest first. Anything
+    unreadable is dropped; an empty result switches the fallback off."""
+    out: set[int] = set()
+    for part in (raw or "").split(","):
+        try:
+            lev = int(part.strip())
+        except ValueError:
+            continue
+        if 1 <= lev <= 125:
+            out.add(lev)
+    return tuple(sorted(out, reverse=True))
+
+
+# When the exchange REFUSES the leverage an entry asks for (Binance -4028
+# "Leverage 25 is not valid" — the coin's maximum is lower), try these in
+# order, highest first, before giving up; only values BELOW the one refused
+# are tried. Owner's request 2026-11-27: 15x, then 10x. Empty = no fallback.
+LEVERAGE_FALLBACKS = _leverage_ladder(os.environ.get(_PREFIX + "LEVERAGE_FALLBACKS", "15,10"))
+
 # --- Pollers ------------------------------------------------------------------
 RUN_POLLERS = _env_bool("RUN_POLLERS", True)
 BALANCES_FETCH_INTERVAL = _env_float("BALANCES_FETCH_INTERVAL", 300.0)

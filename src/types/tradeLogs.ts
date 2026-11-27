@@ -105,6 +105,12 @@ export interface TradeLogDetail {
     requestedQty: number | null
     openUsd: number | null
   } | null
+  /**
+   * The exchange refused the leverage the entry asked for, and it traded at a
+   * lower one instead (engine, 2026-11-27: 15×, then 10×). `refused` is the
+   * exchange's own answer. Null when the asked leverage was accepted.
+   */
+  leverageFallback: { asked: number | null; used: number; refused: string | null } | null
   sizing: SizingDecision | null
   /** Stable reason key (`key_blocked`, `nothing_to_close`, …); null for a fill. */
   reasonKey: string | null

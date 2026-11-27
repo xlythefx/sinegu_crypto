@@ -68,6 +68,7 @@ interface ApiDetail {
     requested_qty: number | null
     open_usd: number | null
   } | null
+  leverage_fallback?: { asked: number | null; used: number; refused: string | null } | null
   sizing: ApiSizing | null
   reason_key?: string | null
   reason_label?: string | null
@@ -207,6 +208,7 @@ function mapDetail(d: ApiDetail): TradeLogDetail {
           openUsd: d.limit.open_usd,
         }
       : null,
+    leverageFallback: d.leverage_fallback ?? null,
     sizing: mapSizing(d.sizing),
     reasonKey: d.reason_key ?? null,
     reasonLabel: d.reason_label ?? null,

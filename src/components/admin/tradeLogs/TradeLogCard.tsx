@@ -362,6 +362,18 @@ function AccountRow({
               Shrunk to fit Binance’s limit
             </span>
           )}
+          {detail.leverageFallback && (
+            <span
+              className="rounded-pill bg-accent-soft px-2 py-0.5 text-[10.5px] font-bold text-accent"
+              title={`The exchange refused ${detail.leverageFallback.asked ?? '?'}×${
+                detail.leverageFallback.refused ? ` (${detail.leverageFallback.refused})` : ''
+              }, so this entry used ${detail.leverageFallback.used}× instead. Set the coin’s leverage in Trading Assets to stop asking for ${
+                detail.leverageFallback.asked ?? '?'
+              }×.`}
+            >
+              {detail.leverageFallback.used}× ({detail.leverageFallback.asked ?? '?'}× refused)
+            </span>
+          )}
           {!isEntry && detail.closedQuantity !== null && (
             <span className="font-mono text-[12px] text-muted">
               closed {fmtQty(detail.closedQuantity, 0, 8)}
