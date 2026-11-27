@@ -14,6 +14,52 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'leverage-fallback-15-10',
+    date: '2026-11-27',
+    kind: 'improved',
+    area: 'Trading',
+    title: 'A refused leverage steps down to 15×, then 10×, instead of failing the trade',
+    summary:
+      'When an exchange no longer allows the leverage a signal asks for, the bot now tries 15×, then 10×, and places the trade at the first one the exchange accepts. Before, it kept asking for 25× and the trade often failed. That is what happened to every SANTOS entry on 9 Nov, until someone set the coin\'s leverage by hand.',
+    howItWorks: [
+      'Example: a SANTOS buy asks for 25×, and Binance only allows 20× on SANTOS. The bot asks for 15×, Binance accepts, and the trade goes through at 15×. If 15× were refused too, it would try 10×.',
+      'It only ever goes DOWN: a coin set to 12× tries 10× next, never 15×. It also does not step down when the exchange did not answer, was busy, or refused the API key, because a lower leverage cannot fix those.',
+      'The step-down is remembered for a day, so the next signals go straight to 15×. After a day the bot asks for the full leverage again, in case the exchange raised the coin\'s limit.',
+      'You are told: the admin chat gets one note per coin per day ("Leverage lowered"), the sub-master and test-feed summaries name it on the account\'s line, and the Signal Log shows "15× (25× refused)" on the account.',
+      'The lasting fix is still to set the coin\'s leverage in Trading Assets, so it stops asking for more than the exchange allows.',
+    ],
+    technical: [
+      'Engine routes/webhook._maybe_set_leverage → (applied, refusal, also_refused). Fallback ladder hooks.LEVERAGE_FALLBACKS (env BINANCE_ABCD_LEVERAGE_FALLBACKS, default "15,10"; empty = off); only values below the refused one; never after a transient / rate-limited / credential refusal (key_status.CREDENTIAL_CODES).',
+      '_LEVERAGE_APPLIED caches (asked, applied, ts, refusal) for LEVERAGE_CACHE_TTL; a total refusal is never cached. exchange_limit.fit uses the applied leverage. Entry detail: leverage = applied, leverage_fallback {asked, used, refused, also_refused}; a total refusal\'s error adds "15x and 10x refused too".',
+      'notify.notify_leverage_fallback (main feed, daily_alerts key leverage_fallback|venue|coin|asked|used) and _test_result_line (private feeds). API AdminTradeLogController::mapDetail → leverage_fallback; TradeLogCard pill. MEXC takes leverage on the order and Bybit already caps at the coin\'s max, so in practice this is Binance.',
+    ],
+    links: [
+      { label: 'Trading Assets', href: '/admin/assets' },
+      { label: 'Signal Log', href: '/admin/trade-logs' },
+    ],
+  },
+  {
+    id: 'strategies-quantlab-submaster',
+    date: '2026-11-27',
+    kind: 'new',
+    area: 'Strategies',
+    title: 'QuantLab\'s sub-master trades have their own strategy card',
+    summary:
+      'Admin → Strategies now shows the sub-master\'s trades as their own card, "VWMA-Reversion - QuantLab", beside the master\'s "VWMA-Reversion". Until now they were not on the page at all.',
+    howItWorks: [
+      'QuantLab sends the sub-master\'s signals with the strategy name "VWMA-Reversion - QuantLab", so its results never mix into the master\'s TradingView card.',
+      'The card starts on 20 Nov 2026, when QuantLab took over the sub-master\'s signals. Its trades from before that came from TradingView and are left out.',
+      'The accounts filter has a "Sub-master" choice, like Master and Customers. "Master" and "Customers" still show exactly what they did before.',
+      'Only the strategy name of the sub-master\'s earlier QuantLab trades was changed: no profit, fee, size or date moved.',
+    ],
+    technical: [
+      'AdminInsights::strategyTrades(all) adds submasterAccounts() (type submaster, demo 0) from SUBMASTER_STRATEGIES_SINCE (2026-11-20 03:48 UTC); master / customers scopes unchanged. Rows carry owner_role "submaster".',
+      'Migration 2026_11_27_000001_name_quantlab_submaster_trades: sub-master {venue}_pastpositions closed since then and their open_strategies tags, "VWMA-Reversion" → "VWMA-Reversion - QuantLab"; down() reverses. trade_logs untouched (the Signal Log keeps what each alert said).',
+      'Frontend: OwnerFilter "submaster" (lib/strategyFilters, useStrategyFilters), StrategyFilterBar chip. QuantLab side: the seven "Pixel Alpha Sub-master" rules\' alias (= the webhook\'s `strategy`).',
+    ],
+    links: [{ label: 'Strategies', href: '/admin/strategies?owner=submaster' }],
+  },
+  {
     id: 'landing-preview-pixel-alive-white-steps',
     date: '2026-11-27',
     kind: 'improved',

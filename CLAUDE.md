@@ -1280,6 +1280,13 @@ exchange accounts (demo OR real money) follow the **test feed** and nothing else
   streak run (not in `StreakSizing::MASTER_FOLLOWERS`), same coin sizing.
 - Role changes into/out of it wait until the user is flat (409
   `OPEN_POSITIONS`, any feed change). `trade_logs.feed` is 16 chars since.
+- **Its signals come from QuantLab** (since 2026-11-20 03:48 UTC, seven
+  "Pixel Alpha Sub-master" rules on lab.nexafamily.com, VWMA Reversion 15m).
+  QuantLab's rule ALIAS is the webhook's `strategy`; it is
+  "VWMA-Reversion - QuantLab" so Admin → Strategies gives it its own card
+  instead of folding it into the master's "VWMA-Reversion". The page's `all`
+  scope carries sub-master trades from `AdminInsights::SUBMASTER_STRATEGIES_SINCE`
+  (earlier ones were TradingView's), with a "Sub-master" accounts chip.
 
 ## High-risk alerts (2026-11-18)
 
@@ -2312,6 +2319,15 @@ for the overlay's `position: fixed` and trap it inside.
   leverage is now carried on the failed entry (`leverage_refused`, appended to
   the error) and `notify._leverage_fix` adds a "set it in Trading Assets" line.
   Exits never set leverage.
+  **A refused leverage steps DOWN first (owner, 2026-11-27):** 15×, then 10×
+  (`hooks.LEVERAGE_FALLBACKS`, env `BINANCE_ABCD_LEVERAGE_FALLBACKS`, empty =
+  off), only values below the refused one, and never after a transient,
+  rate-limited or credential refusal (a lower number cannot fix those). The
+  step-down is cached per account + coin by the leverage ASKED for
+  `LEVERAGE_CACHE_TTL`; a total refusal is never cached. The entry carries
+  `leverage_fallback {asked, used, refused}` (Signal Log pill), the admin chat
+  gets one "Leverage lowered" note per venue + coin per day, private feeds name
+  it on the account's line. `leverage_refused` now means even 10× was refused.
 - **Live orders:** accounts with `demo=1` route to the Binance futures testnet;
   everything else is REAL. Entries fail closed on unconfigured assets.
 - **Sizing & the deposit gate** (`_scale_qty` + `_deposit_gate` in
