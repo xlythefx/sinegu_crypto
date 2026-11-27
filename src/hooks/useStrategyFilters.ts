@@ -8,7 +8,7 @@ const SIDES = ['all', 'long', 'short']
 const DATE_VALUES = MONTH_DATE_PRESETS.map((p) => p.value)
 
 function toOwner(raw: string): OwnerFilter {
-  if (raw === 'master' || raw === 'customers' || raw === 'testers') return raw
+  if (raw === 'master' || raw === 'customers' || raw === 'testers' || raw === 'submaster') return raw
   if (raw.startsWith('u:') && raw.length > 2) return raw as OwnerFilter
   return 'all'
 }

@@ -66,4 +66,15 @@ describe('strategy filters', () => {
     expect(owners.all).toBe(2)
     expect(owners.people[0].role).toBe('master')
   })
+
+  it("narrows to the sub-master's trades (QuantLab's feed)", () => {
+    const withSub = [
+      ...TRADES,
+      trade({ strategy: 'VWMA-Reversion - QuantLab', uni_id: 's1', owner_name: 'Dima', owner_role: 'submaster' }),
+    ]
+    const only = filterStrategyTrades(withSub, { ...NONE, owner: 'submaster' })
+    expect(only.map((t) => t.uni_id)).toEqual(['s1'])
+    expect(ownerCounts(withSub, NONE).submaster).toBe(1)
+    expect(filterStrategyTrades(withSub, { ...NONE, owner: 'master' })).toHaveLength(2)
+  })
 })

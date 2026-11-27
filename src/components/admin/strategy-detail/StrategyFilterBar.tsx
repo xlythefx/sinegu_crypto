@@ -1,4 +1,4 @@
-import { ArrowDownRight, ArrowUpRight, Crown, FlaskConical, Users } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, Crown, FlaskConical, Gem, Users } from 'lucide-react'
 import {
   ActiveFilters,
   DateRangeFilter,
@@ -34,7 +34,12 @@ const COIN_ON = `${COIN_BASE} border-accent bg-accent text-on-accent font-bold s
 const COIN_OFF = `${COIN_BASE} border-border bg-surface2 text-muted font-semibold hover:border-accent-line hover:text-text`
 const COUNT = 'font-mono text-[10.5px] opacity-75'
 
-const ROLE_GROUP: Record<string, string> = { master: 'Master', user: 'Customers', tester: 'Testers' }
+const ROLE_GROUP: Record<string, string> = {
+  master: 'Master',
+  user: 'Customers',
+  tester: 'Testers',
+  submaster: 'Sub-master',
+}
 
 const exchangeLabel = (kind: string) =>
   kind in EXCHANGE_META ? EXCHANGE_META[kind as ExchangeKind].label : kind
@@ -67,6 +72,7 @@ export default function StrategyFilterBar({
   ]
   const hasTesters = trades.some((t) => t.owner_role === 'tester')
   const hasCustomers = trades.some((t) => t.owner_role === 'user')
+  const hasSubmaster = trades.some((t) => t.owner_role === 'submaster')
 
   const exchangeOptions: SegmentedOption[] = [
     { value: 'all', label: 'All', tone: 'neutral' },
@@ -78,6 +84,7 @@ export default function StrategyFilterBar({
     { value: 'master', label: 'Master', count: owners.master, icon: Crown },
     ...(hasCustomers ? [{ value: 'customers', label: 'Customers', count: owners.customers, icon: Users }] : []),
     ...(hasTesters ? [{ value: 'testers', label: 'Testers', count: owners.testers, icon: FlaskConical }] : []),
+    ...(hasSubmaster ? [{ value: 'submaster', label: 'Sub-master', count: owners.submaster, icon: Gem }] : []),
   ]
   const person = f.owner.startsWith('u:') ? f.owner : 'any'
   const personOptions: FilterSelectOption[] = [

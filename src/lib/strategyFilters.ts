@@ -21,7 +21,7 @@ import { rangeFor, type DatePreset } from './dateRange'
 import type { StrategyTrade } from './strategyStats'
 
 /** Whose trades: everyone, a role group, or one account owner (`u:<uni_id>`). */
-export type OwnerFilter = 'all' | 'master' | 'customers' | 'testers' | `u:${string}`
+export type OwnerFilter = 'all' | 'master' | 'customers' | 'testers' | 'submaster' | `u:${string}`
 
 export type SideFilter = 'all' | 'long' | 'short'
 
@@ -58,6 +58,8 @@ export function ownerMatches(t: StrategyTrade, owner: OwnerFilter): boolean {
       return t.owner_role === 'user'
     case 'testers':
       return t.owner_role === 'tester'
+    case 'submaster':
+      return t.owner_role === 'submaster'
     default:
       return t.uni_id === owner.slice(2)
   }
@@ -149,6 +151,8 @@ export interface OwnerCounts {
   master: number
   customers: number
   testers: number
+  /** The sub-master's trades (its own feed — QuantLab's signals). */
+  submaster: number
   /** One entry per account owner, master first, then by name. */
   people: (CountedOption & { role: string | null })[]
 }
@@ -171,6 +175,7 @@ export function ownerCounts(all: StrategyTrade[], f: StrategyFilters, now?: Date
     master: scoped.filter((t) => t.owner_role === 'master').length,
     customers: scoped.filter((t) => t.owner_role === 'user').length,
     testers: scoped.filter((t) => t.owner_role === 'tester').length,
+    submaster: scoped.filter((t) => t.owner_role === 'submaster').length,
     people: [...people.entries()]
       .map(([uni, p]) => ({ value: `u:${uni}`, label: p.label, role: p.role, count: p.count }))
       .sort((a, b) => rank(a.role) - rank(b.role) || a.label.localeCompare(b.label)),
