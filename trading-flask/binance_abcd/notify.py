@@ -762,6 +762,10 @@ def reject_hint(
     """
     t, v = _esc(ticker), _esc(venue)
     detail = detail or {}
+    if reason == "strategy_paused":
+        name = _esc(detail.get("strategy") or "this strategy")
+        return (f"⏸️ The strategy <b>{name}</b> is <b>paused</b> on Admin → Strategies, so this entry was not "
+                f"traded on {v}. Open positions still close. Turn the strategy back on there to trade it.")
     if reason == "asset_disabled":
         if detail.get("killed"):
             why = f" ({_esc(detail['killed_reason'])})" if detail.get("killed_reason") else ""

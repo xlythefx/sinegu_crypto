@@ -273,8 +273,8 @@ export default function AdminStrategies() {
         }
         message={
           confirmTarget?.next
-            ? 'The strategy will resume opening positions globally, for every user.'
-            : 'The strategy will stop opening new positions globally, for every user. Open positions are not affected.'
+            ? 'Its signals will open positions again, on every exchange and for every account, from the next signal on.'
+            : 'From the next signal on, its entry signals are refused on every exchange and for every account. Exit signals still close the positions already open.'
         }
         confirmLabel={confirmTarget?.next ? 'Yes, activate' : 'Yes, pause'}
         cancelLabel="No"

@@ -31,7 +31,7 @@ from flask import Blueprint, jsonify, request
 
 from binance_abcd import daily_alerts, engine_client, exchange_limit, hooks, key_status, notify, stuck_exits, symbol_locks
 from binance_abcd.accounts_api import fetch_accounts
-from binance_abcd.assets_api import get_asset
+from binance_abcd.assets_api import STRATEGY_PAUSED, get_asset, strategy_paused
 from binance_abcd.assets_api import rejection as asset_rejection
 from binance_abcd.exchange_api import ExchangeClient
 from binance_abcd.exchanges import client_for, exchange_of, label, labels, tradeable
@@ -1175,11 +1175,14 @@ def _plan_exchange(
     uni_filter: Optional[set[str]],
     main_gate: bool = False,
     feed: Optional[str] = MAIN_FEED,
+    strategy: Optional[str] = None,
 ) -> dict:
     """What one exchange will do with the signal.
 
     ``{"reject": reason}`` when an entry fails this venue's asset gate (plus
-    ``reject_detail`` for a switched-off coin: was it the kill switch?),
+    ``reject_detail`` for a switched-off coin: was it the kill switch?) or
+    names a strategy paused on Admin → Strategies (STRATEGY_PAUSED; exits
+    still run, so a paused strategy's open positions can always close),
     ``{"empty": True}`` when it has no eligible accounts, otherwise the asset,
     the accounts and the batched open-amounts read. Each venue is planned on
     its own so a ticker not configured on MEXC cannot stop Binance trading it.
@@ -1194,6 +1197,10 @@ def _plan_exchange(
     is_entry = action in ENTRY_ACTIONS
     asset = get_asset(symbol, exchange)
     if is_entry:
+        # The strategy's own on/off switch (owner, 2026-11-27 — it was stored
+        # but never read). Checked after get_asset(), which loads the list.
+        if strategy_paused(strategy, exchange):
+            return {"reject": STRATEGY_PAUSED, "reject_detail": {"strategy": strategy}}
         # FAIL CLOSED: entries need an enabled asset row with a base size.
         # The reason says WHICH gap — switched off, never added, or a list
         # that never loaded — so the admin alert can say what to do.
@@ -1241,6 +1248,15 @@ def _plan_exchange(
         "asset": asset, "accounts": accounts, "open_amounts": open_amounts,
         "streak_runs": streak_runs, "main_full": main_full,
     }
+
+
+def _daily_reject_key(reason: str, exchange: str, symbol: str, strategy: Optional[str]) -> str:
+    """The once-a-day key for a "switched off" rejection. A coin's key is the
+    one used since 2026-11-09 (the state file already holds it); a paused
+    strategy's names the strategy, so pausing a second one is told too."""
+    if reason == STRATEGY_PAUSED:
+        return f"{STRATEGY_PAUSED}|{exchange}|{symbol}|{(strategy or '').strip().lower()}"
+    return f"{reason}|{exchange}|{symbol}"
 
 
 def _process_trade_job(
@@ -1309,7 +1325,8 @@ def _process_trade_job(
     main_gate = (is_entry and not is_retry and not targets and target_uni_ids is None
                  and feed not in PRIVATE_FEEDS)
     plans = {
-        ex: _plan_exchange(ex, action, symbol, targets.get(ex) if targets else target_uni_ids, main_gate, feed)
+        ex: _plan_exchange(ex, action, symbol, targets.get(ex) if targets else target_uni_ids, main_gate, feed,
+                           strategy=strategy)
         for ex in run
     }
     runnable = {ex: plan for ex, plan in plans.items() if "accounts" in plan}
@@ -1336,12 +1353,15 @@ def _process_trade_job(
             if (h := notify.reject_hint(reasons[ex], symbol, label(ex), plans[ex].get("reject_detail"), action=action))
         ))
         # A coin switched off is announced ONCE per day per venue (owner,
-        # 2026-11-09) — main and test feed alike, BUY and SELL alike. Any
-        # other cause on any venue still alerts every time: that one needs a
-        # human. The Signal Log row below is written either way.
-        daily = all(r == "asset_disabled" for r in reasons.values())
-        if daily and not daily_alerts.first_today(f"asset_disabled|{ex}|{symbol}" for ex in run):
-            log.info("signal rejected: %s %s — coin off, already announced today", action, symbol)
+        # 2026-11-09) — main and test feed alike, BUY and SELL alike — and so
+        # is a paused strategy (2026-11-27): both are a switch doing what it
+        # was told. Any other cause on any venue still alerts every time: that
+        # one needs a human. The Signal Log row below is written either way.
+        daily = all(r in ("asset_disabled", STRATEGY_PAUSED) for r in reasons.values())
+        if daily and not daily_alerts.first_today(
+            _daily_reject_key(reasons[ex], ex, symbol, strategy) for ex in run
+        ):
+            log.info("signal rejected: %s %s — switched off, already announced today", action, symbol)
         elif is_test:
             notify.notify_test_feed_rejected(action, symbol, reason_text, label=labels(run), hints=hints, daily=daily,
                                              feed=job_feed)

@@ -138,6 +138,56 @@ def test_a_switched_off_coin_is_announced_once_a_day_across_feeds(fake_accounts,
     assert {c.args[0]["details"][0]["reason"] for c in trade_log.call_args_list} == {"asset_disabled"}
 
 
+def test_a_paused_strategy_refuses_entries_and_still_closes(fake_accounts, fake_assets, monkeypatch):
+    """Admin → Strategies' on/off switch (2026-11-27): it was stored and shown
+    but never read, so switching a strategy off stopped nothing. Entries that
+    name it are refused on every venue; exits still close what is open."""
+    import binance_abcd.assets_api as assets_api
+
+    monkeypatch.setattr(assets_api, "_paused_strategies", {"binance": frozenset({"strat"})})
+    with patch.object(webhook.notify, "notify_rejected") as rejected:
+        summary, entry_mock, _, _ = _run_job(fake_accounts, fake_assets)        # strategy "strat"
+    entry_mock.assert_not_called()
+    assert summary["category"] == "rejected"
+    assert summary["details"][0]["reason"] == "strategy_paused"
+    (hint,) = rejected.call_args.kwargs["hints"]
+    assert "<b>strat</b> is <b>paused</b>" in hint
+    assert rejected.call_args.kwargs["daily"] is True
+
+    summary, _, exit_mock, _ = _run_job(fake_accounts, fake_assets, action="EXIT_LONG")
+    assert summary["category"] == "signal"
+    assert exit_mock.call_count == 3
+
+
+def test_only_the_paused_strategy_is_refused(fake_accounts, fake_assets, monkeypatch):
+    import binance_abcd.assets_api as assets_api
+
+    monkeypatch.setattr(assets_api, "_paused_strategies", {"binance": frozenset({"vwma-reversion - quantlab"})})
+    summary, entry_mock, _, _ = _run_job(fake_accounts, fake_assets)
+    assert summary["filled"] == 3
+    with _patched(fake_accounts, fake_assets) as (entry_mock, _, _):
+        summary = webhook._process_trade_job("BUY", "BTCUSDT", 100.0, None, " VWMA-Reversion - QuantLab ")
+    entry_mock.assert_not_called()
+    assert summary["details"][0]["reason"] == "strategy_paused"
+
+
+def test_the_paused_list_is_read_from_the_assets_payload(monkeypatch):
+    import binance_abcd.assets_api as assets_api
+
+    payload = {"assets": [], "disabled": [], "paused_strategies": ["VWMA-Reversion", " ", None]}
+    monkeypatch.setattr(assets_api, "_paused_strategies", {})
+    monkeypatch.setattr(assets_api, "_disabled", {})
+    with patch.object(assets_api.engine_client, "get_json", return_value=payload):
+        assets_api._loader("binance")()
+    assert assets_api.strategy_paused("vwma-reversion", "binance") is True
+    assert assets_api.strategy_paused("ABCD-v1", "binance") is False
+    assert assets_api.strategy_paused(None, "binance") is False
+    # An API older than the key pauses nothing.
+    with patch.object(assets_api.engine_client, "get_json", return_value={"assets": []}):
+        assets_api._loader("binance")()
+    assert assets_api.strategy_paused("vwma-reversion", "binance") is False
+
+
 def test_a_coin_never_added_still_alerts_every_time(fake_accounts, fake_assets):
     """Only "turned off" is a known, deliberate state. A missing coin is a
     setup gap someone must fix, so it keeps paging."""

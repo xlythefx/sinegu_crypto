@@ -49,6 +49,15 @@ _caches_lock = threading.Lock()
 # reads it: what may be TRADED is still the enabled list alone.
 _disabled: dict[str, dict[str, dict] | None] = {}
 
+# Per exchange, from the last SUCCESSFUL load: the strategy names paused on
+# Admin → Strategies (the card's on/off switch), lower-cased. Global — every
+# venue's payload carries the same list. An API older than the key sends none:
+# nothing is paused, as before.
+_paused_strategies: dict[str, frozenset[str]] = {}
+
+# An entry whose alert names a paused strategy (see strategy_paused()).
+STRATEGY_PAUSED = "strategy_paused"
+
 # Why an entry found no tradeable asset row (see rejection()).
 ASSET_DISABLED = "asset_disabled"          # the row exists, switched off
 ASSET_NOT_ADDED = "asset_not_added"        # no row for this ticker on the venue
@@ -85,6 +94,10 @@ def _loader(exchange: str):
             log.warning("[%s] assets payload malformed: %.200s", exchange, data)
             return None
         _disabled[exchange] = _disabled_map(data)
+        _paused_strategies[exchange] = frozenset(
+            str(name).strip().lower() for name in (data.get("paused_strategies") or [])
+            if str(name or "").strip()
+        )
 
         by_ticker: dict[str, dict] = {}
         for asset in assets:
@@ -209,6 +222,18 @@ def rejection(ticker: str, exchange: str = ENGINE_EXCHANGE) -> tuple[str, dict]:
     if info is not None:
         return ASSET_DISABLED, dict(info)
     return ASSET_NOT_ADDED, {}
+
+
+def strategy_paused(strategy: str | None, exchange: str = ENGINE_EXCHANGE) -> bool:
+    """Is the strategy this alert names switched off on Admin → Strategies?
+
+    Until 2026-11-27 that switch was stored and shown but never read here, so
+    switching a strategy off stopped nothing. Matched on the trimmed name,
+    ignoring case — the card's key is the name the trades carry. Asked after
+    get_asset(), which loads the list; an alert with no strategy, or a list
+    that never loaded, is never paused."""
+    name = (strategy or "").strip().lower()
+    return bool(name) and name in _paused_strategies.get(exchange, frozenset())
 
 
 def assets_cache_age(exchange: str = ENGINE_EXCHANGE) -> float | None:
