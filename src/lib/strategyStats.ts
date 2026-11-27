@@ -106,6 +106,17 @@ export interface StrategyStats {
   avgLoss: number
   equitySeries: EquityPoint[]
   tickers: string[]
+  /**
+   * The exchanges the MEASURED trades were on (lower-case kinds, unsorted —
+   * the card orders and labels them). Until 2026-11-27 the card printed
+   * "Binance" for every strategy, whatever venue it traded.
+   */
+  exchanges: string[]
+}
+
+/** The venue a trade's row came from; an API older than the field means Binance. */
+export function tradeExchange(t: StrategyTrade): string {
+  return (t.exchange || 'binance').toLowerCase()
 }
 
 /** Group trades by their raw strategy tag (assumed pre-filtered non-empty). */
@@ -193,6 +204,7 @@ export function computeStrategyStats(
     avgLoss: lossPnls.length ? grossLoss / lossPnls.length : 0,
     equitySeries,
     tickers,
+    exchanges: Array.from(new Set(trades.map(tradeExchange))),
   }
 }
 

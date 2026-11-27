@@ -14,6 +14,22 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'strategy-card-real-exchanges',
+    date: '2026-11-27',
+    kind: 'fixed',
+    area: 'Strategies',
+    title: 'Strategy cards name the exchanges they really traded on',
+    summary:
+      'The line under each strategy\'s name on Admin → Strategies always ended in "Binance", even for a strategy that traded on MEXC or Bybit. It now lists the exchanges its trades were actually on, for example "18 trades · 61.1% WR · PF 2.24 · Binance, MEXC".',
+    howItWorks: [
+      'It follows the card\'s own figures: exclude a coin that was only traded on MEXC, and MEXC drops off the line too.',
+    ],
+    technical: [
+      'lib/strategyStats: StrategyStats.exchanges (distinct tradeExchange of the measured trades; no exchange = binance). StrategyCard labels them via EXCHANGE_META in EXCHANGE_ORDER.',
+    ],
+    links: [{ label: 'Strategies', href: '/admin/strategies' }],
+  },
+  {
     id: 'home-page-redesign-live',
     date: '2026-11-27',
     kind: 'new',

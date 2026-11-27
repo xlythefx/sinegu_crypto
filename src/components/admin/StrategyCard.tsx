@@ -11,6 +11,8 @@ import {
 } from 'lucide-react'
 import { fmtMoney, fmtShortDate, fmtSignedMoney } from '../../lib/format'
 import type { StrategyStats } from '../../lib/strategyStats'
+import type { ExchangeKind } from '../../types/exchanges'
+import { EXCHANGE_META, EXCHANGE_ORDER } from '../exchanges/meta'
 import PnlBreakdown from '../ui/PnlBreakdown'
 
 const W = 600
@@ -25,6 +27,22 @@ const TILE =
 const TILE_LABEL =
   'flex items-center gap-[5px] text-[10px] font-semibold uppercase tracking-[0.07em] text-muted'
 const TILE_VALUE = 'font-mono text-[17px] font-bold'
+
+/**
+ * "Binance, MEXC" — the venues the card's trades were on, in the canonical
+ * order (`EXCHANGE_ORDER`), '' when there are none. An unknown kind shows as
+ * sent rather than vanishing.
+ */
+function venueLabel(kinds: string[]): string {
+  const rank = (k: string) => {
+    const i = EXCHANGE_ORDER.indexOf(k as ExchangeKind)
+    return i === -1 ? EXCHANGE_ORDER.length : i
+  }
+  return [...kinds]
+    .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+    .map((k) => (k in EXCHANGE_META ? EXCHANGE_META[k as ExchangeKind].label : k))
+    .join(', ')
+}
 
 interface StrategyCardProps {
   stats: StrategyStats
@@ -80,6 +98,7 @@ export default function StrategyCard({
   }, [stats.equitySeries])
 
   const pf = stats.profitFactor === null ? '∞' : stats.profitFactor.toFixed(2)
+  const venues = venueLabel(stats.exchanges)
   const gradId = `admst-grad-${stats.key.replace(/[^a-zA-Z0-9]/g, '-')}`
 
   return (
@@ -101,8 +120,8 @@ export default function StrategyCard({
             />
           </Link>
           <div className="mt-[3px] text-[12.5px] text-muted">
-            {stats.totalTrades} trades · {stats.winrate.toFixed(1)}% WR · PF {pf}{' '}
-            · Binance
+            {stats.totalTrades} trades · {stats.winrate.toFixed(1)}% WR · PF {pf}
+            {venues && ` · ${venues}`}
           </div>
         </div>
         <div className="flex items-center gap-3 py-2 px-3.5 border border-border rounded-strip bg-surface2">
