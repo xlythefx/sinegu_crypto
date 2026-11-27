@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ThemeProvider } from './theme'
 import { PortalSwitchProvider } from './components/ui/PortalSwitchOverlay'
 import { ExchangeFilterProvider } from './context/ExchangeFilterContext'
@@ -7,9 +7,9 @@ import ProdApiBadge from './components/ui/ProdApiBadge'
 import CookieConsent from './components/ui/CookieConsent'
 import VisitTracker from './components/visits/VisitTracker'
 import Landing from './pages/Landing'
+import LandingClassic from './pages/LandingClassic'
 import LandingV2 from './pages/LandingV2'
-import LandingPreview from './pages/LandingPreview'
-import { LANDING_PREVIEW_PATH } from './lib/routes'
+import { CLASSIC_LANDING_PATH, LANDING_PREVIEW_PATH } from './lib/routes'
 import Auth from './pages/Auth'
 import ForgotPassword from './pages/ForgotPassword'
 import VerifyEmail from './pages/VerifyEmail'
@@ -84,9 +84,11 @@ function App() {
           <ExchangeFilterProvider>
             <Routes>
               <Route path="/" element={<Landing />} />
+              {/* The home page before the 2026-11-27 redesign (noindex). */}
+              <Route path={CLASSIC_LANDING_PATH} element={<LandingClassic />} />
               <Route path="/v2" element={<LandingV2 />} />
-              {/* The redesigned home page, hidden until approved (noindex). */}
-              <Route path={LANDING_PREVIEW_PATH} element={<LandingPreview />} />
+              {/* The redesign's old preview address: it IS the home page now. */}
+              <Route path={LANDING_PREVIEW_PATH} element={<Navigate to="/" replace />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/auth/forgot" element={<ForgotPassword />} />
               <Route path="/auth/verify" element={<VerifyEmail />} />

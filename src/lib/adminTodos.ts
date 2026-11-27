@@ -68,8 +68,8 @@ export const ADMIN_TODOS: AdminTodo[] = [
       'When it is ready, ask the developer to put it live. Write the date it went live in the note.',
     ],
     links: [
-      { label: 'Preview of the new home page', href: '/preview/landing' },
-      { label: 'Current home page', href: '/' },
+      { label: 'The new home page (live since 2026-11-27)', href: '/' },
+      { label: 'The previous home page, kept at /classic', href: '/classic' },
     ],
   },
   {
@@ -89,7 +89,7 @@ export const ADMIN_TODOS: AdminTodo[] = [
       { label: 'FAQ: fees and billing', href: '/faq' },
       { label: 'Risk Disclosure: Fees Do Not Refund Losses', href: '/risk' },
       { label: 'Terms and Conditions: section 5, Fees and Payment', href: '/terms' },
-      { label: 'Preview: "You pay when your account reaches a new high"', href: '/preview/landing' },
+      { label: 'Home page: "You pay when your account reaches a new high"', href: '/' },
     ],
   },
   // ── Sub-master account + high-risk alerts (2026-11-18)───────────────────

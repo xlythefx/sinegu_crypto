@@ -1,5 +1,5 @@
 /**
- * Shared class strings for the redesigned home page (`pages/LandingPreview`).
+ * Shared class strings for the home page (`pages/Landing`, redesigned 2026-11-25).
  *
  * The rhythm is deliberately NOT one centred heading + one card grid per
  * section — that sameness is what made the old page read as a template.

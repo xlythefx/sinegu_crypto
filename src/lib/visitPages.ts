@@ -1,4 +1,5 @@
 import { BINANCE_OFFER_PATH } from './binanceOffer'
+import { CLASSIC_LANDING_PATH } from './routes'
 
 /**
  * The public pages the visitor counter counts, with the name Admin → Visitors
@@ -10,6 +11,7 @@ import { BINANCE_OFFER_PATH } from './binanceOffer'
  */
 export const VISIT_PAGES: Record<string, string> = {
   '/': 'Home page',
+  [CLASSIC_LANDING_PATH]: 'Home page (classic)',
   '/v2': 'Home page (v2)',
   '/auth': 'Sign in / Register',
   '/trading-bot': 'Trading bot',

@@ -11,6 +11,10 @@
 export const SIGN_IN_PATH = '/auth'
 export const REGISTER_PATH = '/auth?mode=register'
 
-/** The redesigned home page's hidden preview (2026-11-25). Not in
- *  `lib/visitPages.ts`, so its views are not counted, and it sets noindex. */
+/** The home page as it was until 2026-11-27, kept when the redesign took `/`
+ *  (owner's request). Counted in `lib/visitPages.ts`; noindex. */
+export const CLASSIC_LANDING_PATH = '/classic'
+
+/** Where the redesign was previewed (2026-11-25 → 11-27); redirects to `/`,
+ *  so links already shared (to-do list, chats) still land on the home page. */
 export const LANDING_PREVIEW_PATH = '/preview/landing'
