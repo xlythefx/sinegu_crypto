@@ -38,11 +38,6 @@ function useNoIndex() {
  * Same single fetch as the live page: the quote strip, the latest-trades
  * strip and the record section all read one track record, so they can never
  * show two different results.
- *
- * The page CLIPS sideways overflow (`overflow-x-clip`), never hides it:
- * `overflow-x: hidden` makes the wrapper a scroll box of its own, and the
- * "What happens" strip, which sticks to the screen while its highlight moves,
- * would then stick to a box that never scrolls, i.e. not at all.
  */
 export default function LandingPreview() {
   useNoIndex()
@@ -53,7 +48,7 @@ export default function LandingPreview() {
   }, [])
 
   return (
-    <div className="relative min-h-screen overflow-x-clip bg-bg text-text transition-[background,color] duration-[400ms]">
+    <div className="relative min-h-screen overflow-x-hidden bg-bg text-text transition-[background,color] duration-[400ms]">
       <Ticker stats={record?.stats ?? null} series={record?.series ?? []} />
       {/* One backdrop behind the nav AND the hero, so the photo has no seam
           under the nav. `isolate` keeps its -z layer inside this header. */}

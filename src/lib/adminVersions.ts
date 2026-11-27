@@ -14,6 +14,25 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'landing-preview-pixel-alive-white-steps',
+    date: '2026-11-27',
+    kind: 'improved',
+    area: 'Website',
+    title: 'New home page: Pixel moves, the steps strip is still and white',
+    summary:
+      'On the new home page (not live yet), Pixel is no longer a still picture: sitting on the order book, he kicks his feet, looks left and right, blinks, and his antenna light flashes in time with the order book\'s LIVE square. The "What happens when the strategy trades" strip no longer has a moving gold highlight: it stays still, with every step in white. In the footer, "Privacy choices" is now gold like the other links.',
+    howItWorks: [
+      'Every move is one pixel at a time, like an old video game. Visitors who switched on "reduce motion" on their phone or computer see him still.',
+      'He is drawn by the page itself from his saved Creatives picture: no video file and nothing generated, so he costs nothing and loads fast.',
+      'The strip replaces this morning\'s version, which held still while the gold moved from step to step. That version can come back if wanted.',
+    ],
+    technical: [
+      'components/landing-next/PixelMascot: three layers in public/assets/pixel-mascot (base with the eye glints painted out, leg-left, leg-right) plus CSS eyes and an antenna cover; keyframes pxkick / pxlook / pxeyes / pxantenna in index.css, steps(1, end), motion-safe only.',
+      'SignalFlow: static, tiles border-muted text-text, body text-text/85, connectors var(--muted); useScrollStep and lib/scrollStep removed (in git history). LandingPreview back to overflow-x-hidden.',
+      'Footer: the "Privacy choices" button is text-accent, matching the links that take the base `a` colour.',
+    ],
+  },
+  {
     id: 'landing-preview-pixel-readable-pinned',
     date: '2026-11-27',
     kind: 'improved',

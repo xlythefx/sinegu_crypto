@@ -4,6 +4,7 @@ import { scrollToSection } from '../../lib/scroll'
 import { REGISTER_PATH } from '../../lib/routes'
 import ExchangeLogo from '../exchanges/ExchangeLogo'
 import PixelOrderBook from './PixelOrderBook'
+import PixelMascot from './PixelMascot'
 import { VENUES } from './venues'
 import { BTN_PRIMARY, BTN_SECONDARY, CONTAINER, LANDING_IDS } from './layout'
 
@@ -24,16 +25,17 @@ import { BTN_PRIMARY, BTN_SECONDARY, CONTAINER, LANDING_IDS } from './layout'
  * behind both the nav and this section).
  *
  * Pixel, the mascot from Admin → Creatives → Character, sits on the order
- * book's top edge (owner, 2026-11-27). The picture is his stored reference
- * image cut out of its backdrop, with the legs shortened so they hang down the
- * box's front; `PIXEL_SEAT` is where his seat falls in that picture, so the
+ * book's top edge, kicking his feet and looking around (owner, 2026-11-27;
+ * `PixelMascot`). `PIXEL_SEAT` is where his seat falls in his picture, so the
  * seat lands on the edge at any width. The order book keeps a clear band at
- * its top for his feet, so they never cover its header. The column is padded by his height
- * above the edge, so he never covers the nav or the buttons above.
+ * its top for his feet, so they never cover its header. The column is padded
+ * by his height above the edge, so he never covers the nav or the buttons
+ * above.
  */
 
-/** His seat line, as a share of the picture's height (measured on the file). */
-const PIXEL_SEAT = 0.834
+/** His seat line, as a share of his picture's height (measured on the files). */
+const PIXEL_SEAT = 0.8335
+
 export default function HeroNext() {
   const user = useSessionUser()
   return (
@@ -96,14 +98,8 @@ export default function HeroNext() {
         <div className="relative pt-[104px] max-[560px]:pt-[84px] animate-[fadeup_0.7s_cubic-bezier(0.2,0.7,0.2,1)_0.12s_both]">
           <div className="relative">
             <PixelOrderBook />
-            <img
-              src="/assets/pixel-mascot-sitting.png"
-              alt=""
-              aria-hidden="true"
-              width={264}
-              height={413}
-              decoding="async"
-              className="absolute top-0 right-[84px] z-[1] h-auto w-[88px] pointer-events-none select-none max-[560px]:right-[72px] max-[560px]:w-[72px]"
+            <PixelMascot
+              className="absolute top-0 right-[84px] z-[1] w-[88px] max-[560px]:right-[72px] max-[560px]:w-[72px]"
               style={{ transform: `translateY(-${PIXEL_SEAT * 100}%)` }}
             />
           </div>

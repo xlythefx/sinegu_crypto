@@ -301,6 +301,73 @@ body {
     opacity: 0.25;
   }
 }
+/* Pixel, the mascot sitting on the home page's order book (PixelMascot).
+   All four run with steps(1, end), so every move is a whole pixel, never a
+   slide. One art pixel = 2.23% of his height / 6.65% of his visor's width. */
+/* His feet kick in turns for about a second, then rest (the right leg runs
+   the same keyframes 256 ms later). */
+@keyframes pxkick {
+  0% {
+    transform: translateY(0);
+  }
+  8% {
+    transform: translateY(-2.23%);
+  }
+  16% {
+    transform: translateY(0);
+  }
+  24% {
+    transform: translateY(-2.23%);
+  }
+  32%,
+  100% {
+    transform: translateY(0);
+  }
+}
+/* His eyes look left, back, right, back. */
+@keyframes pxlook {
+  0% {
+    transform: translateX(0);
+  }
+  30% {
+    transform: translateX(-6.65%);
+  }
+  46% {
+    transform: translateX(0);
+  }
+  64% {
+    transform: translateX(6.65%);
+  }
+  80%,
+  100% {
+    transform: translateX(0);
+  }
+}
+/* A blink. */
+@keyframes pxeyes {
+  0% {
+    transform: scaleY(1);
+  }
+  88% {
+    transform: scaleY(0.12);
+  }
+  91%,
+  100% {
+    transform: scaleY(1);
+  }
+}
+/* His antenna light, on the same beat as the order book's LIVE square
+   (pxblink): a dark cover that is clear while the light is on. */
+@keyframes pxantenna {
+  0%,
+  60% {
+    opacity: 0;
+  }
+  61%,
+  100% {
+    opacity: 0.7;
+  }
+}
 @keyframes fadeup {
   0% {
     opacity: 0;

@@ -7,6 +7,10 @@ import { openConsentBanner } from '../../lib/consent'
 // 2026-11-27: "these text not visible" — faint measured ~3.3:1 on the dark
 // page, muted ~6.6:1). The risk sentence above all must be readable.
 //
+// The entries are gold: a page link takes the site's link colour (`a` in
+// index.css), so the one entry that is a button ("Privacy choices") says
+// `text-accent` itself, or it would sit grey among gold links.
+//
 // `to` marks the entries that are real pages and `action` the ones that open
 // something in place; anything with neither stays a plain label rather than
 // a dead link.
@@ -87,7 +91,7 @@ export default function Footer({ blurb = DEFAULT_BLURB, maxWidth = 'max-w-[1280p
                 ) : link.action ? (
                   <button
                     type="button"
-                    className="w-fit cursor-pointer border-0 bg-transparent p-0 text-left text-inherit hover:text-text transition-colors"
+                    className="w-fit cursor-pointer border-0 bg-transparent p-0 text-left text-accent hover:text-text transition-colors"
                     key={link.label}
                     onClick={link.action}
                   >
