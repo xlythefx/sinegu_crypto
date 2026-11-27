@@ -14,6 +14,47 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'home-page-redesign-live',
+    date: '2026-11-27',
+    kind: 'new',
+    area: 'Website',
+    title: 'The new home page is live; the old one stays at /classic',
+    summary:
+      'pixel-alpha.com now opens on the redesigned home page: Pixel on the order book, the latest closed trades, how a signal becomes a trade, and the fee example. The previous home page is still there at pixel-alpha.com/classic.',
+    howItWorks: [
+      'The old preview address (/preview/landing) now simply opens the home page, so links already shared still work.',
+      'Search engines are told to skip /classic, so Google only lists one home page.',
+      'Admin → Visitors counts both: "Home page" and "Home page (classic)".',
+    ],
+    technical: [
+      'App.tsx: / → pages/Landing.tsx (was LandingPreview), /classic → pages/LandingClassic.tsx (the old Landing, useNoIndex), /preview/landing → <Navigate to="/" />. hooks/useNoIndex extracted. lib/visitPages + API VisitPages::PATHS gain /classic; robots.txt disallows /classic and /preview. Tag landing-classic still marks the code before the redesign.',
+    ],
+    links: [
+      { label: 'Home page', href: '/' },
+      { label: 'Classic home page', href: '/classic' },
+    ],
+  },
+  {
+    id: 'strategy-switch-pauses-entries',
+    date: '2026-11-27',
+    kind: 'fixed',
+    area: 'Strategies',
+    title: 'Pausing a strategy now really stops its new trades',
+    summary:
+      'The Active / Paused switch on each strategy card in Admin → Strategies was saved and shown, but the bot never read it: a "paused" strategy kept trading. Now a paused strategy\'s entry signals are refused on every exchange and for every account, from the next signal on.',
+    howItWorks: [
+      'Example: pause "VWMA-Reversion - QuantLab". The next QuantLab buy for LTC is refused, and the admin chat says the strategy is paused. A QuantLab exit still closes the LTC position that was already open.',
+      'It works by the strategy name each alert sends, so pausing one strategy never touches another one trading the same coin.',
+      'The admin chat says it once a day per coin, like a coin that is turned off. The Signal Log lists every refused signal as "Strategy paused", which does not count as a problem in the health banner.',
+      'Turning the switch back on takes effect from the next signal.',
+    ],
+    technical: [
+      'API: GET /engine/{x}/assets carries paused_strategies (strategies.enabled = 0); PUT /admin/strategies/{key} pings EngineCache::refreshAssets. SignalHealth: rejected reason strategy_paused → strategy_off (normal).',
+      'Engine: assets_api.strategy_paused (trimmed, case-insensitive); _plan_exchange rejects ENTRIES with STRATEGY_PAUSED (exits untouched); notify.reject_hint line; once a day per venue + coin + strategy via daily_alerts.',
+    ],
+    links: [{ label: 'Strategies', href: '/admin/strategies' }],
+  },
+  {
     id: 'leverage-fallback-15-10',
     date: '2026-11-27',
     kind: 'improved',

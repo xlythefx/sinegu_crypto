@@ -417,6 +417,13 @@ payment is told exactly once. Rules:
   leaderboard, master pinned on top. Weekly: `insights:vs-master-weekly`
   (Mondays 09:13 Manila) → engine `POST /admin/team-report` (`_send_private`,
   a neutral 📊 — never the risk alert's 🚨) — names who is > 1 pp behind.
+- **The strategy card's Active / Paused switch PAUSES ENTRIES (2026-11-27 —
+  until then it was stored and shown but nothing read it).** `strategies.enabled
+  = 0` → `GET /engine/{x}/assets` `paused_strategies` → the engine refuses any
+  ENTRY whose alert's `strategy` matches (trimmed, any case) on every venue,
+  `strategy_paused`; exits always run. The switch pings `refreshAssets`.
+  SignalHealth `strategy_off` (normal); admin chat once a day per venue + coin
+  + strategy, like a coin turned off.
 - **Strategy filter bar** (`StrategyFilterBar`, `useStrategyFilters`,
   `lib/strategyFilters.ts`) on the Strategies list AND each strategy's page:
   coins, exchange, side, accounts, dates, all in the URL; every card follows
@@ -3358,9 +3365,12 @@ page publishing **−980%** against a real +46.6%):
   covers `LTCUSDT` and `LTC_USDT`), cap at 5 and are part of the cache key
   (the `/public/*` group is throttled 60/min per IP); the API echoes them as
   `symbols` / `excluded_symbols`. The Telegram recaps are not filtered.
+- **The redesigned home page is `/` since 2026-11-27** (`pages/Landing.tsx`,
+  `components/landing-next/`); the previous one stays at **`/classic`**
+  (`pages/LandingClassic.tsx`, noindex, counted by Visitors) and
+  `/preview/landing` redirects to `/`. Both still carry `recordScopeNote`.
 - **`recent_closes` on the track record (2026-11-25)** feeds the latest-
-  trades strip of the redesigned home page (`/preview/landing`,
-  `components/landing-next/`): the 5 newest closes in scope, each one's P&L
+  trades strip of the home page (`components/landing-next/`): the 5 newest closes in scope, each one's P&L
   after fees over the capital ITS venue's master started the day with (the
   Telegram exit message's basis), the pooled list merged from the per-venue
   slices. A close with no P&L yet is left out, never shown as 0%.
