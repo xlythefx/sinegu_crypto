@@ -70,6 +70,14 @@ function Connector({ lit, vertical }: { lit: boolean; vertical: boolean }) {
 }
 
 /**
+ * The pinned track's height: one screen for the strip, plus about a third of
+ * a screen of scrolling per step. Wide screens only (the strip's own
+ * side-by-side breakpoint).
+ */
+const PIN_TRACK = 'min-[961px]:h-[280vh]'
+const PIN_STICKY = 'min-[961px]:sticky min-[961px]:top-0 min-[961px]:h-screen min-[961px]:flex min-[961px]:items-center'
+
+/**
  * "What happens when the strategy trades" — the actual path one signal
  * takes, with the customer's own account drawn as the place the money stays.
  * Every sentence is a rule the engine or the API enforces (deposit gate,
@@ -79,94 +87,103 @@ function Connector({ lit, vertical }: { lit: boolean; vertical: boolean }) {
  * 2026-11-26: "the yellow will move from first to second and so on"): the
  * step being read gets a gold tile, icon and title, and the track behind it
  * stays gold. `useScrollStep` decides which step that is.
+ *
+ * On a wide screen the whole strip stays still while the gold moves (owner,
+ * 2026-11-27: "the whole strip fixed and static"): the section is a tall
+ * track (`PIN_TRACK`) and its content sticks to the middle of the screen, so
+ * scrolling moves the highlight one step per fifth of the track, then the page
+ * carries on. On a phone the five steps are stacked and do not fit one screen,
+ * so they stay an ordinary list whose highlight follows the reading line.
  */
 export default function SignalFlow() {
-  const { active, listRef, itemRef } = useScrollStep(STEPS.length)
+  const { active, listRef, trackRef, itemRef } = useScrollStep(STEPS.length)
   return (
-    <section className="border-t border-hair">
-      <div className={`${CONTAINER} py-20 max-[560px]:py-14`}>
-        <div className="max-w-[720px] mb-12" data-aos="fade-up">
-          <h2 className={`${H2} mb-4`}>What happens when the strategy trades</h2>
-          <p className={LEAD}>
-            Every signal takes the same path, on every connected account. Nothing
-            is pooled: each account trades on its own, sized to its own balance.
-          </p>
-        </div>
+    <section ref={trackRef} className={`border-t border-hair ${PIN_TRACK}`}>
+      <div className={PIN_STICKY}>
+        <div className={`${CONTAINER} w-full py-20 min-[961px]:py-10 max-[560px]:py-14`}>
+          <div className="max-w-[720px] mb-12" data-aos="fade-up">
+            <h2 className={`${H2} mb-4`}>What happens when the strategy trades</h2>
+            <p className={LEAD}>
+              Every signal takes the same path, on every connected account. Nothing
+              is pooled: each account trades on its own, sized to its own balance.
+            </p>
+          </div>
 
-        <ol
-          ref={listRef}
-          className="grid grid-cols-5 gap-0 pt-7 max-[960px]:grid-cols-1 max-[960px]:pt-0"
-          data-aos="fade-up"
-          data-aos-delay={80}
-        >
-          {STEPS.map((step, i) => {
-            const on = i === active
-            return (
-              <li
-                key={step.title}
-                ref={itemRef(i)}
-                className="relative flex flex-col max-[960px]:flex-row max-[960px]:gap-5"
-              >
-                {/* Tile row: the icon, then the track to the next step. */}
-                <div className="flex items-center max-[960px]:flex-col max-[960px]:items-center">
-                  <div
-                    className={`relative z-[1] flex h-16 w-16 shrink-0 items-center justify-center rounded-btn border motion-safe:transition-[color,background-color,border-color,box-shadow] motion-safe:duration-300 ${
-                      on
-                        ? 'border-accent bg-accent-soft text-accent shadow-[4px_4px_0_0_var(--accent-line)]'
-                        : 'border-border bg-surface text-muted'
-                    }`}
-                  >
-                    <PixelIcon glyph={step.glyph} size={36} />
-                    {step.yours && (
-                      // Above the tile on a wide screen so every title stays on one line;
-                      // beside the text on a phone (below).
-                      <span className="absolute bottom-full left-0 mb-2.5 inline-flex items-center gap-1.5 whitespace-nowrap font-mono text-[11px] font-semibold text-accent max-[960px]:hidden">
-                        <PixelIcon glyph="lock" size={12} />
-                        Your money stays here
-                      </span>
+          <ol
+            ref={listRef}
+            className="grid grid-cols-5 gap-0 pt-7 max-[960px]:grid-cols-1 max-[960px]:pt-0"
+            data-aos="fade-up"
+            data-aos-delay={80}
+          >
+            {STEPS.map((step, i) => {
+              const on = i === active
+              return (
+                <li
+                  key={step.title}
+                  ref={itemRef(i)}
+                  className="relative flex flex-col max-[960px]:flex-row max-[960px]:gap-5"
+                >
+                  {/* Tile row: the icon, then the track to the next step. */}
+                  <div className="flex items-center max-[960px]:flex-col max-[960px]:items-center">
+                    <div
+                      className={`relative z-[1] flex h-16 w-16 shrink-0 items-center justify-center rounded-btn border motion-safe:transition-[color,background-color,border-color,box-shadow] motion-safe:duration-300 ${
+                        on
+                          ? 'border-accent bg-accent-soft text-accent shadow-[4px_4px_0_0_var(--accent-line)]'
+                          : 'border-border bg-surface text-muted'
+                      }`}
+                    >
+                      <PixelIcon glyph={step.glyph} size={36} />
+                      {step.yours && (
+                        // Above the tile on a wide screen so every title stays on one line;
+                        // beside the text on a phone (below).
+                        <span className="absolute bottom-full left-0 mb-2.5 inline-flex items-center gap-1.5 whitespace-nowrap font-mono text-[11px] font-semibold text-accent max-[960px]:hidden">
+                          <PixelIcon glyph="lock" size={12} />
+                          Your money stays here
+                        </span>
+                      )}
+                    </div>
+                    {i < GAPS && (
+                      <>
+                        <div className="flex-1 px-2 max-[960px]:hidden">
+                          <Connector lit={i < active} vertical={false} />
+                        </div>
+                        {/* Absolute, so the SVG takes the column's height instead of
+                            adding its own default 150px to it. */}
+                        <div className="hidden max-[960px]:block relative flex-1 w-3 min-h-8 my-2">
+                          <div className="absolute inset-0">
+                            <Connector lit={i < active} vertical />
+                          </div>
+                        </div>
+                      </>
                     )}
                   </div>
-                  {i < GAPS && (
-                    <>
-                      <div className="flex-1 px-2 max-[960px]:hidden">
-                        <Connector lit={i < active} vertical={false} />
+                  <div className="pt-5 pr-6 max-[960px]:pt-1 max-[960px]:pb-8 max-[960px]:pr-0">
+                    {step.yours && (
+                      <div className="hidden max-[960px]:inline-flex items-center gap-1.5 mb-2 font-mono text-[11px] font-semibold text-accent">
+                        <PixelIcon glyph="lock" size={12} />
+                        Your money stays here
                       </div>
-                      {/* Absolute, so the SVG takes the column's height instead of
-                          adding its own default 150px to it. */}
-                      <div className="hidden max-[960px]:block relative flex-1 w-3 min-h-8 my-2">
-                        <div className="absolute inset-0">
-                          <Connector lit={i < active} vertical />
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-                <div className="pt-5 pr-6 max-[960px]:pt-1 max-[960px]:pb-8 max-[960px]:pr-0">
-                  {step.yours && (
-                    <div className="hidden max-[960px]:inline-flex items-center gap-1.5 mb-2 font-mono text-[11px] font-semibold text-accent">
-                      <PixelIcon glyph="lock" size={12} />
-                      Your money stays here
-                    </div>
-                  )}
-                  <h3
-                    className={`font-display text-[17px] font-bold leading-[1.3] mb-2 motion-safe:transition-colors motion-safe:duration-300 ${
-                      on ? 'text-accent' : 'text-text'
-                    }`}
-                  >
-                    {step.title}
-                  </h3>
-                  <p
-                    className={`text-[14px] leading-[1.6] motion-safe:transition-colors motion-safe:duration-300 ${
-                      on ? 'text-text' : 'text-muted'
-                    }`}
-                  >
-                    {step.body}
-                  </p>
-                </div>
-              </li>
-            )
-          })}
-        </ol>
+                    )}
+                    <h3
+                      className={`font-display text-[17px] font-bold leading-[1.3] mb-2 motion-safe:transition-colors motion-safe:duration-300 ${
+                        on ? 'text-accent' : 'text-text'
+                      }`}
+                    >
+                      {step.title}
+                    </h3>
+                    <p
+                      className={`text-[14px] leading-[1.6] motion-safe:transition-colors motion-safe:duration-300 ${
+                        on ? 'text-text' : 'text-muted'
+                      }`}
+                    >
+                      {step.body}
+                    </p>
+                  </div>
+                </li>
+              )
+            })}
+          </ol>
+        </div>
       </div>
     </section>
   )

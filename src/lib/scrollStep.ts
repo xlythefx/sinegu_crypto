@@ -28,3 +28,15 @@ export function stepByTravel(top: number, from: number, to: number, count: numbe
   const progress = (from - top) / (from - to)
   return Math.min(count - 1, Math.max(0, Math.floor(progress * count)))
 }
+
+/**
+ * Steps side by side, PINNED (owner, 2026-11-27: "the whole strip fixed and
+ * static"): the section is a tall track whose content sticks to the screen,
+ * so the track's own scroll picks the step. The first while the track's top
+ * has not yet reached the top of the screen, the last once its bottom has
+ * reached the bottom of the screen, evenly in between. A track no taller than
+ * the screen is not pinned, and stays on the first step.
+ */
+export function stepInPin(top: number, height: number, viewport: number, count: number): number {
+  return stepByTravel(top, 0, viewport - height, count)
+}

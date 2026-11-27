@@ -3,6 +3,10 @@ import SocialLinks from '../ui/SocialLinks'
 import { COMPANY } from '../../lib/company'
 import { openConsentBanner } from '../../lib/consent'
 
+// Every line here is at least the muted grey, never `text-faint` (owner,
+// 2026-11-27: "these text not visible" — faint measured ~3.3:1 on the dark
+// page, muted ~6.6:1). The risk sentence above all must be readable.
+//
 // `to` marks the entries that are real pages and `action` the ones that open
 // something in place; anything with neither stays a plain label rather than
 // a dead link.
@@ -61,13 +65,13 @@ export default function Footer({ blurb = DEFAULT_BLURB, maxWidth = 'max-w-[1280p
               Pixel Alpha
             </span>
           </div>
-          <p className="text-[13px] text-faint leading-[1.6] max-w-[280px]">{blurb}</p>
+          <p className="text-[13px] text-muted leading-[1.6] max-w-[280px]">{blurb}</p>
           {/* Public channels — where to follow, not where to get support. */}
           <SocialLinks className="mt-5" />
         </div>
         {COLUMNS.map((col) => (
           <div key={col.title}>
-            <div className="font-mono text-[11px] text-faint mb-3.5">
+            <div className="font-mono text-[11px] text-muted mb-3.5">
               {col.title}
             </div>
             <div className="flex flex-col gap-2.5 text-[13.5px] text-muted">
@@ -99,7 +103,7 @@ export default function Footer({ blurb = DEFAULT_BLURB, maxWidth = 'max-w-[1280p
           </div>
         ))}
       </div>
-      <div className={`${maxWidth} mx-auto py-[18px] px-10 max-[560px]:px-5 border-t border-hair flex justify-between items-center font-mono text-[11px] leading-[1.6] text-faint flex-wrap gap-x-8 gap-y-2`}>
+      <div className={`${maxWidth} mx-auto py-[18px] px-10 max-[560px]:px-5 border-t border-hair flex justify-between items-center font-mono text-[11px] leading-[1.6] text-muted flex-wrap gap-x-8 gap-y-2`}>
         <span>
           © {new Date().getFullYear()} {COMPANY.name}. All rights reserved.
         </span>

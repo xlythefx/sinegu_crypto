@@ -14,6 +14,25 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'landing-preview-pixel-readable-pinned',
+    date: '2026-11-27',
+    kind: 'improved',
+    area: 'Website',
+    title: 'New home page: Pixel sits on the order book, easier text, the steps hold still',
+    summary:
+      'On the new home page (not live yet), Pixel, our robot mascot, now sits on the order book box with his legs hanging over its front. The text at the top was grey on a grey photo and hard to read. It is now lighter and the photo is darker behind it. The footer\'s small grey text was also hard to read, so it is brighter on every page that has it.',
+    howItWorks: [
+      'Pixel is the same character as in Admin → Creatives → Character, cut out of his saved picture. Nothing new was generated and nothing was spent.',
+      'In "What happens when the strategy trades", on a computer the whole strip now stays still in the middle of the screen while you scroll. The gold highlight moves from step 1 to step 5, then the page carries on. On a phone the five steps are too tall for one screen, so they stay a list and the highlight follows as you scroll.',
+      'The footer change (column titles, the line under the logo, the copyright and the risk sentence) is on every public page that uses that footer, including the current home page, the FAQ and Contact.',
+    ],
+    technical: [
+      'HeroNext: public/assets/pixel-mascot-sitting.png placed with translateY(-PIXEL_SEAT); PixelOrderBook header pt-8 so his feet never cover it. HeroPhoto left layer var(--bg) 0–25% → transparent 75% at 0.85 (worst block behind the paragraph 3.6:1 → 8.4:1); hero paragraph and nav links text-text/80.',
+      'SignalFlow: section is a 280vh track (min-width 961px) with a sticky h-screen child; useScrollStep takes trackRef and lib/scrollStep.stepInPin picks the step. LandingPreview uses overflow-x-clip, because overflow-x-hidden makes a scroll box that stops sticky.',
+      'components/landing/Footer: text-faint → text-muted for the headings, blurb and bottom row.',
+    ],
+  },
+  {
     id: 'share-preview-says-exchange',
     date: '2026-11-26',
     kind: 'fixed',

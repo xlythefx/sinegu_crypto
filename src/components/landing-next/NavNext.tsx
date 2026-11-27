@@ -6,7 +6,8 @@ import UserAvatar from '../ui/UserAvatar'
 import { REGISTER_PATH, SIGN_IN_PATH } from '../../lib/routes'
 import { BTN_PRIMARY, CONTAINER } from './layout'
 
-const NAV_LINK = 'text-muted! hover:text-text! transition-colors duration-200'
+/** Lighter than the usual muted grey: these sit on the hero's photo. */
+const NAV_LINK = 'text-text/80! hover:text-text! transition-colors duration-200'
 
 export default function NavNext() {
   const { theme, toggleTheme } = useTheme()

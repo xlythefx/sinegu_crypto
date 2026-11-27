@@ -103,7 +103,9 @@ export default function PixelOrderBook() {
           stepped outline a pixel-art frame has at its corners. */}
       <div className="relative bg-border p-[2px]" style={CLIP}>
         <div className="bg-surface" style={CLIP}>
-          <div className="px-5 pt-4 pb-4 max-[560px]:px-4">
+          {/* pt-8, not pt-4: the band above the header is where Pixel's feet
+              hang (HeroNext), so they never cover the label or LIVE. */}
+          <div className="px-5 pt-8 pb-4 max-[560px]:px-4">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-baseline gap-x-2.5 gap-y-1 min-w-0 flex-wrap">
                 <span className="font-pixel text-[15px] font-bold text-text">{data?.label || 'BTC-PERP'}</span>

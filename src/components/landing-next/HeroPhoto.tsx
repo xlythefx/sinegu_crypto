@@ -8,6 +8,12 @@
  * Three layers keep the words readable in both themes: a wash of the page
  * colour over everything, a stronger one behind the text on the left, and a
  * fade into the page at the bottom so the next section starts clean.
+ *
+ * The left layer is solid for the first quarter and fades out by three
+ * quarters (owner, 2026-11-27: "grey on grey, hard to read"). At half strength
+ * to 65% the paragraph's worst block measured 3.6:1; now it is 8.4:1 with the
+ * hero's lighter body text. The right side, where the order book sits, keeps
+ * the picture as it was.
  */
 export default function HeroPhoto() {
   return (
@@ -19,7 +25,7 @@ export default function HeroPhoto() {
         className="absolute inset-0 h-full w-full max-w-none object-cover object-[center_35%] [image-rendering:pixelated]"
       />
       <div className="absolute inset-0 bg-bg opacity-[0.72]" />
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,var(--bg)_0%,transparent_65%)] opacity-50 max-[960px]:bg-[linear-gradient(180deg,var(--bg)_0%,transparent_55%)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,var(--bg)_0%,var(--bg)_25%,transparent_75%)] opacity-[0.85] max-[960px]:bg-[linear-gradient(180deg,var(--bg)_0%,var(--bg)_20%,transparent_60%)]" />
       <div className="absolute inset-x-0 bottom-0 h-32 bg-[linear-gradient(180deg,transparent,var(--bg))]" />
     </div>
   )
