@@ -14,6 +14,24 @@ import type { AdminChange } from '../types/adminVersions'
  */
 export const ADMIN_CHANGES: AdminChange[] = [
   {
+    id: 'home-steps-phone-pinned-highlight',
+    date: '2026-11-27',
+    kind: 'improved',
+    area: 'Website',
+    title: 'Home page on phones: the steps hold still while the gold moves down',
+    summary:
+      'On a phone, "What happens when the strategy trades" now stays in place on the screen while you scroll, and each scroll moves the gold highlight down one step, from "The strategy sends a signal" to "One invoice on the 1st". After the fifth step the page carries on. Computers keep the still, white version with step 3 in gold.',
+    howItWorks: [
+      'About one flick of the thumb (140 points of scrolling) moves the gold one step. The step\'s icon and title turn gold, and the dotted line behind it fills in.',
+      '"Your money stays here" stays a gold badge on step 3 throughout.',
+      'A phone whose screen is too short to show all five steps at once does not hold the list still; the gold then simply follows the step you are reading.',
+    ],
+    technical: [
+      'components/landing-next/SignalFlow: on max-[960px] a track of calc(100svh + 5 × STEP_SCROLL_PX) with a sticky 100svh child centring the list; compact phone sizes (48px tiles, 16px titles, 13.5px body). hooks/useScrollStep (pinned only when the list fits innerHeight − 48) + lib/scrollStep.stepInPin / stepAtLine (restored from df9fa78 with their tests). pages/Landing root overflow-x-hidden → overflow-x-clip, or sticky never sticks.',
+    ],
+    links: [{ label: 'Home page', href: '/' }],
+  },
+  {
     id: 'home-steps-money-badge',
     date: '2026-11-27',
     kind: 'improved',

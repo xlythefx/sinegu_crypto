@@ -33,7 +33,9 @@ export default function Landing() {
   }, [])
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-bg text-text transition-[background,color] duration-[400ms]">
+    // overflow-x CLIP, never hidden: `hidden` makes this wrapper a scroll box
+    // of its own, which stops the steps section pinning on a phone (sticky).
+    <div className="relative min-h-screen overflow-x-clip bg-bg text-text transition-[background,color] duration-[400ms]">
       <Ticker stats={record?.stats ?? null} series={record?.series ?? []} />
       {/* One backdrop behind the nav AND the hero, so the photo has no seam
           under the nav. `isolate` keeps its -z layer inside this header. */}
